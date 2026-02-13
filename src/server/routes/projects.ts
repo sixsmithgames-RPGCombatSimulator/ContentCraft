@@ -7,13 +7,18 @@ import { Router } from 'express';
 import { ProjectModel } from '../models/index.js';
 import { ProjectSchema, PaginationSchema } from '../../shared/validators/index.js';
 import { APIResponse, PaginatedResponse, ProjectStatus } from '../../shared/types/index.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 export const projectRouter = Router();
 
+// Apply auth middleware to all routes
+projectRouter.use(authMiddleware);
+
 projectRouter.get('/', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const pagination = PaginationSchema.parse(req.query);
-    const { projects, total } = await ProjectModel.findAll(pagination);
+    const { projects, total } = await ProjectModel.findAll(authReq.userId, pagination);
 
     const response: PaginatedResponse<typeof projects[0]> = {
       success: true,
@@ -40,8 +45,9 @@ projectRouter.get('/', async (req, res) => {
 
 projectRouter.get('/:id', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { id } = req.params;
-    const project = await ProjectModel.findById(id);
+    const project = await ProjectModel.findById(authReq.userId, id);
 
     if (!project) {
       const response: APIResponse = {
@@ -69,8 +75,9 @@ projectRouter.get('/:id', async (req, res) => {
 
 projectRouter.post('/', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const payload = ProjectSchema.parse(req.body);
-    const project = await ProjectModel.create({
+    const project = await ProjectModel.create(authReq.userId, {
       title: payload.title,
       description: payload.description ?? '',
       type: payload.type,
@@ -96,9 +103,10 @@ projectRouter.post('/', async (req, res) => {
 
 projectRouter.put('/:id', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { id } = req.params;
     const validatedData = ProjectSchema.partial().parse(req.body);
-    const project = await ProjectModel.update(id, validatedData);
+    const project = await ProjectModel.update(authReq.userId, id, validatedData);
 
     if (!project) {
       const response: APIResponse = {
@@ -127,8 +135,9 @@ projectRouter.put('/:id', async (req, res) => {
 
 projectRouter.delete('/:id', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { id } = req.params;
-    const deleted = ProjectModel.delete(id);
+    const deleted = await ProjectModel.delete(authReq.userId, id);
 
     if (!deleted) {
       const response: APIResponse = {
