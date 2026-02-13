@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(python:*)",
+      "Bash(npm run build:*)",
+      "Bash(test:*)",
+      "Bash(npm start)",
+      "Bash(timeout 3 bash:*)",
+      "Bash(mongod:*)",
+      "Bash(where mongod:*)",
+      "Bash(docker --version:*)",
+      "Bash(choco --version:*)",
+      "Bash(docker pull:*)",
+      "Bash(npx tsc:*)",
+      "Bash(rm:*)",
+      "Bash(mongosh:*)",
+      "Bash(mongo dndgen:*)",
+      "Bash(mongorestore:*)",
+      "Bash(where:*)",
+      "Bash(node restore-mongodb.js:*)",
+      "Bash(curl:*)",
+      "Bash(\"C:\\Program Files\\MongoDB\\Server\\8.0\\bin\\mongod.exe\" --dbpath \"C:\\Program Files\\MongoDB\\data\")",
+      "Bash(timeout 5 bash:*)",
+      "Bash(findstr:*)",
+      "Bash(\"/c/Program Files/MongoDB/Server/8.2/bin/mongod.exe\" --dbpath \"/c/Program Files/MongoDB/data\")",
+      "Bash(\"/c/Program Files/MongoDB/Server/8.2/bin/mongod.exe\" --dbpath \"C:\\SixSmithPublishing\\mongodb-data\")",
+      "Bash(timeout 8 bash:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(timeout 30 npx tsc:*)",
+      "Bash(npm run dev:*)",
+      "Bash(node add-copyright-headers.js:*)",
+      "Bash(node add-copyright-headers.cjs:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

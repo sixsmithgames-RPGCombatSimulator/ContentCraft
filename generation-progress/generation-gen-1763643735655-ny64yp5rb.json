@@ -1,0 +1,469 @@
+{
+  "sessionId": "gen-1763643735655-ny64yp5rb",
+  "createdAt": "2025-11-20T13:02:15.655Z",
+  "lastUpdatedAt": "2025-11-20T13:14:56.925Z",
+  "config": {
+    "type": "location",
+    "prompt": "We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\n",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Foundation",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 2/4: Foundation.\n\nYou are building upon the Purpose stage which determined the scale and type.\n\nYour task is to establish the structural foundation appropriate to the location's scale.\n\nFOR SIMPLE/MODERATE LOCATIONS (taverns, shops, small dungeons):\nFocus on these fields:\n- layout: Object describing overall arrangement\n  {\n    description: \"Overall layout description\",\n    dimensions: { length: \"60 ft\", width: \"40 ft\", height: \"15 ft\" } (if applicable),\n    levels: Array of level descriptions (e.g., [\"main floor\", \"cellar\", \"upstairs rooms\"])\n  }\n- spatial_organization: How spaces relate to each other (e.g., \"main room with kitchen in back, stairs to rooms above\")\n- access_points: Entrances/exits\n\nFOR COMPLEX/MASSIVE LOCATIONS (castles, cities, mega-dungeons):\nAdd advanced structural fields:\n- wings: Array of major sections (if applicable)\n- floors: Detailed floor structure with elevations\n- locking_points: Fixed structural anchors for geometry validation\n- load_bearing_walls: Critical structural elements\n- vertical_connections: Stairs, ramps, lifts\n- constraints: Binding rules for space generation\n\nMETADATA LINKING SYSTEM (ALL SCALES):\n- chunk_mesh_metadata: Object for seamless chunk integration (REQUIRED)\n  {\n    connection_protocol: \"How chunks connect\" (e.g., \"doors\", \"hallways\", \"adjacency\"),\n    boundary_markers: Array of connection points for other chunks,\n    spatial_hierarchy: \"How chunks nest\" (e.g., \"floor > wing > room\" or \"area > sub-area > feature\"),\n    coordinate_system: \"Coordinate reference\" (e.g., \"relative\", \"absolute grid\", \"narrative only\")\n  }\n\nThis metadata ensures chunks mesh perfectly when generated iteratively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"foundation\",\n  \"purpose\": {},\n  \"instructions\": \"Generate the structural foundation for this location (scale: moderate).\\n\\nKeep it simple - just layout, dimensions, and spatial organization. No complex topology needed.\\n\\nCRITICAL: Include chunk_mesh_metadata to enable seamless integration when spaces are generated iteratively.\"\n}",
+      "response": "{\n  \"layout\": {\n    \"description\": \"The First Floor (L2) occupies the full 360 ft x 300 ft footprint of the Central Keep base. It is dominated by the Great Hall, which is a massive, double-height space situated centrally. This hall is flanked by structured wings containing administrative offices and minor apartments.\",\n    \"dimensions\": {\n      \"length\": \"360 ft (East-West)\",\n      \"width\": \"300 ft (North-South)\",\n      \"height\": \"Average 25 ft (45 ft in Great Hall)\"\n    },\n    \"levels\": [\n      \"First Floor Keep (L2)\"\n    ]\n  },\n  \"wings\": [\n    {\n      \"name\": \"The Great Hall & Feast Chamber\",\n      \"position\": \"Central and South-facing\",\n      \"function\": \"Ceremonial space, hosting, and dining.\"\n    },\n    {\n      \"name\": \"East Council Wing\",\n      \"position\": \"Eastern side of the Keep\",\n      \"function\": \"Council rooms, map rooms, and minor administration offices.\"\n    },\n    {\n      \"name\": \"West Residential Wing\",\n      \"position\": \"Western side of the Keep\",\n      \"function\": \"Noble apartments and secure servant quarters.\"\n    },\n    {\n      \"name\": \"North Service Balcony\",\n      \"position\": \"North rear, overlooking the Courtyard\",\n      \"function\": \"Kitchen access, minstrel gallery, and secondary storage access.\"\n    }\n  ],\n  \"floors\": {\n    \"first_floor_keep\": {\n      \"elevation\": \"20 ft (above ground level)\",\n      \"zones\": [\n        \"Great Hall (Double Height)\",\n        \"East Wing Offices\",\n        \"West Wing Apartments\",\n        \"Minstrel Gallery\"\n      ]\n    }\n  },\n  \"locking_points\": [\n    {\n      \"id\": \"LP_GREAT_HALL_HEARTH\",\n      \"location\": \"North end of Great Hall\",\n      \"notes\": \"Large, fixed chimney structure, runs L1 through L3.\"\n    },\n    {\n      \"id\": \"LP_MAIN_STAIRWELL_L2\",\n      \"location\": \"South-center entry point from ground level\",\n      \"notes\": \"Termination of the Grand Staircase from L1.\"\n    },\n    {\n      \"id\": \"LP_SPIRE_BASE_ACCESS\",\n      \"location\": \"West Wall of Great Hall/West Wing\",\n      \"notes\": \"Secure entry point to the Central Spire structure.\"\n    }\n  ],\n  \"load_bearing_walls\": [\n    \"Keep Perimeter Walls (360x300 ft)\",\n    \"Pillar columns supporting the Great Hall roof and L3 floor (Internal)\",\n    \"Structural elements beneath the Great Hall supporting the main Hearth/Chimney\"\n  ],\n  \"vertical_connections\": [\n    \"Grand Staircase (Up from L1)\",\n    \"Private Staircase (Up to L3 sanctums/apartments)\",\n    \"Service Lift/Dumbwaiter (Kitchen access to L1 service hall)\",\n    \"Spire Access Staircase (Secured)\"\n  ],\n  \"constraints\": [\n    \"Great Hall must occupy at least 1/3 of the floor area and be double-height (20ft above L2 ceiling).\",\n    \"East Wing and West Wing must maintain symmetry around the Great Hall axis.\",\n    \"All service connections must be hidden from the Great Hall view.\"\n  ],\n  \"chunk_mesh_metadata\": {\n    \"connection_protocol\": \"Hallways and Secured Doors\",\n    \"boundary_markers\": [\n      \"Great_Hall_Perimeter\",\n      \"East_Wing_Corridor_Junction\",\n      \"West_Wing_Apartment_Access\"\n    ],\n    \"spatial_hierarchy\": \"Floor > Wing > Room\",\n    \"coordinate_system\": \"Absolute Grid (Relative to Keep South Face Center)\"\n  }\n}",
+      "timestamp": "2025-11-20T13:04:18.676Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 3/6: Spaces (Iterative Generation).\n\nYou are generating individual spaces (rooms, areas, chambers) one at a time.\n\nMETADATA LINKING FOR PERFECT MESHING:\nEach space you generate MUST include linking metadata to mesh perfectly with other chunks:\n- chunk_id: Unique identifier for this space chunk\n- mesh_anchors: Object describing connection points\n  {\n    connects_to: Array of space IDs this connects to (or \"pending\" for future chunks),\n    connection_types: Array of connection methods (e.g., \"door\", \"hallway\", \"stairs\", \"open\"),\n    boundary_interface: Precise description of where this chunk meets others,\n    spatial_relationship: How this chunk fits in the hierarchy (e.g., \"ground_floor.main_hall.alcove\")\n  }\n\nADAPTIVE COMPLEXITY BASED ON SCALE:\n\nFOR SIMPLE/MODERATE (taverns, small buildings):\n- id, name, purpose, description\n- dimensions: {length, width, height} (can be approximate)\n- connections: Array of {to: space_id, type: \"door\"|\"archway\"|\"stairs\"}\n- features: Array of notable features\n- lighting, inhabitants\n\nFOR COMPLEX/MASSIVE (castles, mega-dungeons):\nAdd geometry validation:\n- geometry: Object with precise dimensional data\n  {\n    dimensions: exact measurements,\n    position: coordinates or relative positioning,\n    locking_points: which structural anchors this attaches to,\n    walls: wall descriptions with load-bearing status\n  }\n- validation_notes: Array of geometry checks performed\n\nCONFLICT DETECTION:\nIf you detect issues (overlaps, impossible connections, dimension conflicts), add a proposal:\n{\n  question: \"Describe the specific conflict\",\n  options: [\"Solution 1\", \"Solution 2\", \"Solution 3\", \"Custom\"],\n  rule_impact: \"What constraint is violated\",\n  field_path: \"geometry.dimensions\",\n  severity: \"blocking\" | \"warning\"\n}\n\nReturn ONLY a JSON object with the space fields PLUS mesh_anchors and (if conflicts) proposals[].\nNo markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"castle_state\": {\n    \"existing_spaces\": [],\n    \"mesh_metadata\": {}\n  },\n  \"instructions\": \"Generate the next space with proper mesh_anchors for integration.\"\n}",
+      "response": "{\n  \"id\": \"L2_KEEP_GREAT_HALL\",\n  \"name\": \"The Great Hall of the Crimson Oath\",\n  \"location_type\": \"interior_hall\",\n  \"purpose\": \"Primary ceremonial gathering space, feasting, and formal court.\",\n  \"description\": \"A vast, double-height chamber dominated by thick support pillars carved with scenes of ancient warfare and blood rituals. The ceiling is a vaulted arch of dark oak, and enormous gothic windows line the south wall, shuttered against the day. A massive, cold stone hearth dominates the northern end, directly above the main hearth on the floor below.\",\n  \"scale\": \"massive\",\n  \"geometry\": {\n    \"dimensions\": {\n      \"length\": \"240 ft (East-West)\",\n      \"width\": \"150 ft (North-South)\",\n      \"height\": \"40 ft (Double-height)\"\n    },\n    \"position\": {\n      \"relative_to_keep\": \"Center-aligned\",\n      \"coordinates\": \"Occupies 240ft x 150ft centered within the 360ft x 300ft Keep footprint.\"\n    },\n    \"walls\": {\n      \"south_wall\": \"Interior partition containing shuttered archways and connecting to the main stair landing.\",\n      \"north_wall\": \"Heavy load-bearing stone containing the chimney flue (LP_GREAT_HALL_HEARTH).\",\n      \"east_west_walls\": \"Stone walls separating the hall from the flanking wing corridors (30ft thick).\"\n    },\n    \"locking_points\": [\n      \"LP_MAIN_STAIRWELL_L2 (South Entrance)\",\n      \"LP_GREAT_HALL_HEARTH (North Wall)\",\n      \"LP_SPIRE_BASE_ACCESS (West Wall adjacent)\"\n    ]\n  },\n  \"mesh_anchors\": {\n    \"chunk_id\": \"L2_KEEP_GREAT_HALL\",\n    \"connects_to\": [\n      \"L1_KEEP_MAIN_HALL\",\n      \"L2_KEEP_EAST_CORRIDOR\",\n      \"L2_KEEP_WEST_CORRIDOR\",\n      \"L2_KEEP_NORTH_BALCONY\",\n      \"L3_KEEP_GREAT_HALL_CEILING\"\n    ],\n    \"connection_types\": [\n      \"Grand Staircase (Down/South)\",\n      \"Double Doors (East/West)\",\n      \"Archway Access (North Balcony)\",\n      \"Spatial Constraint (Upward)\"\n    ],\n    \"boundary_interface\": \"South edge aligns with the top of the Grand Staircase landing; East and West walls provide access to 30ft wide corridor sections.\",\n    \"spatial_relationship\": \"first_floor_keep.central_keep.great_hall\"\n  },\n  \"features\": [\n    \"Minstrel Gallery (overlooking North end, accessed from L2_KEEP_NORTH_BALCONY)\",\n    \"Four massive iron chandeliers held by thick chains (can be dropped)\",\n    \"Hearth large enough to roast an entire ox\",\n    \"Throne dais elevated by three steps at the North end\"\n  ],\n  \"lighting\": \"Primarily large, perpetually snuffed torches and iron chandeliers. Relies on magical gloom or captured light during ceremonial hours.\",\n  \"inhabitants\": \"Vampire nobility, armored retainers, high-ranking guard captains, servants.\",\n  \"validation_notes\": [\n    \"Dimensions (240x150) fit within the 360x300 Keep perimeter, allowing for surrounding corridors and rooms (60ft E/W and 75ft N/S remaining).\",\n    \"Height (40ft) confirms double-height constraint relative to the 20ft floor height of the level below.\"\n  ]\n}",
+      "timestamp": "2025-11-20T13:04:31.534Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Details",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 4/6: Details.\n\nThe structure is now complete. Add rich narrative details that bring the location to life.\n\nFocus on these fields:\n- materials: Construction materials used\n- lighting_scheme: Overall lighting approach\n- atmosphere: Mood and feeling (2-3 sentences)\n- inhabitants: Who lives/works/visits here\n  {\n    permanent_residents: Array of {type, count},\n    notable_npcs: Array of {name, role, location},\n    visitors: Array of typical visitor types,\n    creatures: Array of any monsters/animals\n  }\n- encounter_areas: Spaces suitable for encounters\n  Each area: {\n    space_id: string,\n    encounter_type: \"combat\"|\"social\"|\"puzzle\"|\"trap\"|\"exploration\",\n    description: string,\n    tactical_notes: string (if combat)\n  }\n- secrets: Secret features (passages, rooms, compartments, doors)\n  Each secret: {type, location, description, how_to_find}\n- treasure_locations: Hidden or secured treasure spots\n- history: Narrative history (2-3 paragraphs)\n- current_events: What's happening now (plot hooks)\n- adventure_hooks: Array of adventure seeds\n- special_features: Unique or magical features\n- cinematic_walkthrough: Narrative walkthrough of exploring the location (3-4 paragraphs)\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"details\",\n  \"complete_structure\": {\n    \"purpose\": {},\n    \"foundation\": {},\n    \"spaces\": {}\n  },\n  \"instructions\": \"Add rich narrative details to this location.\\n\\nInclude:\\n- Materials, lighting, atmosphere\\n- Inhabitants and notable NPCs\\n- Encounter areas with tactical notes\\n- Secrets and treasure locations\\n- History and current events\\n- Adventure hooks\\n- A cinematic walkthrough that brings it to life\\n\\nMake it vivid and usable at the table.\"\n}",
+      "response": "{\n  \"materials\": \"The floors are clad in **Obsidian Granite** and **Blood-veined Marble**, polished to mirror the low light. Walls are paneled with heavy, dark oak and draped in massive, dust-shrouded velvet tapestries depicting the Castle's history. Furnishings are heavy, gilded iron and intricately carved ironwood.\",\n  \"lighting_scheme\": \"The Great Hall is primarily lit by a few enormous, low-burning iron chandeliers that hold **Magical Gloom Gems** (cold, silvery light), designed to keep shadows deep and avoid direct, harsh light. Windows are tightly shuttered with thick lead sheeting, guaranteeing perpetual twilight within.\",\n  \"atmosphere\": \"The First Floor is overwhelmingly silent, the noise from the courtyards and industrial zone below completely muffled by the heavy construction. The air is dry, cold, and smells faintly of incense and ozone, lending the space a feeling of **opulent dread** and preserved antiquity. Every step echoes slightly, emphasizing the hierarchy and gravity of the chambers.\",\n  \"inhabitants\": {\n    \"permanent_residents\": [\n      {\n        \"type\": \"Vampire Retainers (Noble Guard)\",\n        \"count\": 15\n      },\n      {\n        \"type\": \"Undead Servants (Ghouls/Wraiths)\",\n        \"count\": 30\n      },\n      {\n        \"type\": \"High-Ranking Vampire Nobility (in apartments)\",\n        \"count\": 4\n      }\n    ],\n    \"notable_npcs\": [\n      {\n        \"name\": \"Lord Virakus\",\n        \"role\": \"Chief Master of Ceremonies\",\n        \"location\": \"Council Chamber Antechamber\"\n      },\n      {\n        \"name\": \"The Unseen Chef\",\n        \"role\": \"Master of the Feast Chambers (Specter)\",\n        \"location\": \"North Service Balcony\"\n      }\n    ],\n    \"visitors\": [\n      \"Ambassadors from rival dark domains\",\n      \"Warlocks or Priests seeking patronage\",\n      \"Captured prisoners brought for trial/display\"\n    ],\n    \"creatures\": [\n      \"Vampire Spawn (Guards)\",\n      \"Swarm of Bats (attic spaces above the vault)\"\n    ]\n  },\n  \"encounter_areas\": [\n    {\n      \"space_id\": \"L2_KEEP_GREAT_HALL\",\n      \"encounter_type\": \"combat\",\n      \"description\": \"The massive, 40ft-high hall offers vast combat space. The central dining tables can be flipped for cover. High ceilings allow for flight/vertical movement.\",\n      \"tactical_notes\": \"Use the chain-hung chandeliers as cover or as an environmental hazard (cut the chain to drop the chandelier, DC 15 Dex Save, 6d6 crushing damage). The pillars grant half cover. NPC archers may fire from the Minstrel Gallery (North Balcony).\"\n    },\n    {\n      \"space_id\": \"L2_KEEP_EAST_COUNCIL_CHAMBER\",\n      \"encounter_type\": \"social\",\n      \"description\": \"A circular room dominated by a black marble table, used for high-stakes political debate and treaty signing.\",\n      \"tactical_notes\": \"The encounter revolves around high Charisma/Insight checks (DC 18+). Failure to maintain decorum or uncover deception may lead to immediate magical restraint or banishment by nearby noble vampires.\"\n    }\n  ],\n  \"secrets\": [\n    {\n      \"type\": \"Passage\",\n      \"location\": \"West Residential Wing (Private Apartment)\",\n      \"description\": \"A wardrobe holds a false back, leading to a narrow, spiraling staircase that bypasses the main route to the Third Floor Sanctums.\",\n      \"how_to_find\": \"DC 17 Investigation check in a specific noble apartment (requires the correct key/passphrase) or locating subtle draft in the wardrobe.\"\n    },\n    {\n      \"type\": \"Compartment\",\n      \"location\": \"Great Hall Hearth\",\n      \"description\": \"A stone relief panel on the massive North Hearth chimney is actually a secured vault for ceremonial items.\",\n      \"how_to_find\": \"DC 20 Perception check to find a hidden activation rune near the mantelpiece, requiring a successful Intelligence (Arcana) check to activate.\"\n    }\n  ],\n  \"treasure_locations\": [\n    {\n      \"location\": \"L2_KEEP_EAST_COUNCIL_CHAMBER\",\n      \"description\": \"A locked, gilded chest within the Chamber's treasury alcove containing the sealed 'Treaty of the Crimson Tribute' (valuable historical document) and 800 gp worth of platinum vampire coins.\"\n    },\n    {\n      \"location\": \"North Service Balcony\",\n      \"description\": \"A hidden rack beneath the Minstrel Gallery floorboards holds a **Masterwork Violin of Soul-Binding** (Magical Instrument) used to entrance feast attendees.\"\n    }\n  ],\n  \"history\": \"The First Floor Keep was dedicated 250 years ago, marking the solidification of the vampire regime from a roving warband to an established aristocracy. The Great Hall itself was consecrated with the ritualistic feeding of thousands of captured prisoners, ensuring its stone foundation would forever echo with the history of the conquerors. Crucially, this floor was designed with security redundancy: the thick walls house dedicated 'guard paths' that allow quick travel between wings, unknown to most servants.\",\n  \"current_events\": \"A major **Feast of the Perpetual Gloom** is planned for this evening, an event that draws lesser nobles and potential allies from across the region. Lord Virakus is highly stressed because the main ceremonial wine—a rare vintage of preserved blood—has been subtly tainted. The current events revolve around the noble staff attempting to cover up the sabotage before the Lord of the Castle arrives.\",\n  \"adventure_hooks\": [\n    \"**The Tainted Blood:** A contact begs the party to infiltrate the Feast Chambers and replace the poisoned blood wine before the sun sets.\",\n    \"**The Council Spy:** The party must obtain vital information from the Council Chamber before a document is signed at midnight, requiring them to utilize the guard paths and ventilation shafts for stealth.\",\n    \"**Retrieve the Key:** A disgraced noble on the Third Floor needs their apartment key retrieved from a guard captain currently overseeing preparations in the Great Hall.\"\n  ],\n  \"special_features\": {\n    \"The Vaulted Whispers\": \"The unique acoustics and high ceilings of the Great Hall cause all conversations to echo subtly. While useful for ceremony, a successful DC 16 Wisdom (Perception) check can overhear conversations in the adjacent East and West corridors if they speak loudly.\",\n    \"The Sun-Shuttered Windows\": \"The massive windows facing the courtyard are protected by enchanted lead shutters, sealing out sunlight. However, destroying a shutter (AC 19, 40 HP) releases a burst of sunlight (if day) into a 30-foot radius within the Hall, devastating creatures vulnerable to light.\"\n  },\n  \"cinematic_walkthrough\": \"Ascending the Grand Staircase from the grim, utilitarian Ground Level, the atmosphere changes instantly. The air becomes crisp and still. You step onto the First Floor landing and face the enormous, imposing doors of The Great Hall of the Crimson Oath. The doors, crafted from black iron and embossed with sanguinary reliefs, stand closed.\\n\\nOnce inside, the sheer scale is chilling. The 40-foot ceiling vaults into darkness, supported by pillars that disappear into the gloom. The massive hall is currently being prepared for the feast; silent, pale servants glide across the polished marble floor, setting tables that stretch into the distance. The only light comes from the silver-blue glow of the Magical Gloom Gems, casting every movement in sharp, cold silhouette. The silence is profound—a silence that speaks not of rest, but of constant, watchful attention.\\n\\nTo either side, arched doorways lead into the distinct wings—the East side promising the stiff, controlled atmosphere of the Council Chambers, and the West side leading toward the private, shielded luxury of the noble apartments. The entire floor is a stage set for power, meticulously designed to minimize surprise and maximize the chilling display of the castle's elite.\"\n}",
+      "timestamp": "2025-11-20T13:05:12.860Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Visual Map",
+      "chunkIndex": null,
+      "prompt": "You are creating a visual representation of a D&D location. This is stage 5/6: Visual Map.\n\nYour task is to create a simple, clear HTML-based visual map of the location's current layout.\n\n⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput PURE HTML ONLY. NO JSON. NO markdown code blocks. NO explanations.\nStart your response with <!DOCTYPE html> or <div> and end with </html> or </div>.\nDo NOT wrap the HTML in JSON or any other format.\n\nThe HTML should:\n1. Use simple HTML/CSS (inline styles only - no external stylesheets)\n2. Show the layout as a top-down view with colored boxes\n3. Label each space with its name and dimensions\n4. Show connections between spaces (doors, hallways, stairs)\n5. Include a legend for space types/functions\n6. Be responsive and readable\n7. Use a simple grid-based layout (CSS Grid or Flexbox)\n\nExample structure:\n<div style=\"max-width:900px;margin:20px auto;font-family:Arial,sans-serif;background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);\">\n  <h3 style=\"margin:0 0 15px 0;color:#333;\">Location Layout Map</h3>\n  <div style=\"display:grid;grid-template-columns:repeat(10,1fr);gap:4px;background:#ddd;padding:10px;border-radius:4px;\">\n    <div style=\"grid-column:span 3;background:#e3f2fd;border:2px solid #1976d2;padding:8px;border-radius:4px;\">\n      <strong style=\"color:#1565c0;\">Main Hall</strong><br/>\n      <small style=\"color:#666;\">60×40 ft</small>\n    </div>\n    <!-- More spaces here -->\n  </div>\n  <div style=\"margin-top:15px;display:flex;gap:15px;flex-wrap:wrap;\">\n    <span style=\"display:flex;align-items:center;gap:5px;font-size:14px;\">\n      <div style=\"width:20px;height:20px;background:#e3f2fd;border:2px solid #1976d2;border-radius:3px;\"></div>\n      Public Spaces\n    </span>\n    <!-- More legend items -->\n  </div>\n</div>\n\nColor-code spaces by function:\n- Public/Common: Light Blue (#e3f2fd, border #1976d2)\n- Private/Residential: Light Green (#e8f5e9, border #388e3c)\n- Restricted/Military: Light Red (#ffebee, border #c62828)\n- Service/Industrial: Light Yellow (#fff9c4, border #f57f17)\n\nOutput ONLY the HTML. No JSON wrapper. No markdown. No explanations.\n\n---\n\nUSER INPUT:\nCreate a simple HTML visual map showing the location layout.\n\nLOCATION: Unnamed Location\nSCALE: moderate\nTOTAL SPACES: 0\n\nShow all 0 spaces that have been generated so far.\n\nUse a grid-based layout where each space is represented by a colored box with its name and dimensions.\nColor-code by function:\n- Public/Common spaces: Light Blue\n- Private/Residential areas: Light Green\n- Restricted/Military zones: Light Red\n- Service/Industrial areas: Light Yellow\n\nShow connections between spaces (doors, stairs, passages) with arrows or lines if possible.\n\nMake it visually clear and easy to read. This will help the GM understand the spatial relationships at a glance.\n\n⚠️ CRITICAL: Output PURE HTML ONLY. NO JSON wrapper. NO markdown code blocks. NO explanations.\nStart immediately with <div> and end with </div>.",
+      "response": "\\<div style=\"max-width:800px;margin:20px auto;font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;background:\\#f5f5f5;padding:20px;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,0.2);border: 1px solid \\#ccc;\"\\>\n\\<h3 style=\"margin:0 0 5px 0;color:\\#2c3e50;text-align:center;\"\\>Castle Blood Forge: First Floor Keep (Level 2)\\</h3\\>\n\\<p style=\"text-align:center;margin:0 0 20px 0;color:\\#555;font-size:0.9em;\"\\>Footprint: 360 ft (East-West) × 300 ft (North-South)\\</p\\>\n\n\\<div style=\"display:grid;grid-template-columns:1fr 4fr 1fr;grid-template-rows:70px 200px 70px;gap:6px;background:\\#333;padding:8px;border-radius:4px;border: 2px solid \\#222;\"\\>\n\n```\n<div style=\"grid-column:1;grid-row:1 / span 3;background:#e8f5e9;border:2px solid #388e3c;padding:8px;border-radius:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;\">\n  <strong style=\"color:#2e7d32;font-size:0.9em;\">West Residential Wing</strong>\n  <small style=\"color:#555;display:block;margin-top:4px;\">Noble Apts</small>\n  <small style=\"color:#388e3c;font-style:italic;margin-top:auto;font-size:0.8em;\">⬆ Stairs to L3</small>\n</div>\n\n<div style=\"grid-column:2;grid-row:1;background:#fff9c4;border:2px solid #f57f17;padding:8px;border-radius:4px;display:flex;justify-content:center;align-items:center;text-align:center;\">\n  <div>\n    <strong style=\"color:#f57f17;\">North Service Balcony</strong><br/>\n    <small style=\"color:#666;\">Minstrel Gallery & Kitchen Access</small>\n  </div>\n</div>\n\n<div style=\"grid-column:2;grid-row:2;background:#e3f2fd;border:2px solid #1976d2;padding:15px;border-radius:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;\">\n  <strong style=\"color:#1565c0;font-size:1.2em;\">The Great Hall of the Crimson Oath</strong>\n  <small style=\"color:#444;margin:5px 0;\">240 ft × 150 ft (Double Height)</small>\n  <div style=\"margin-top:10px;font-size:0.85em;color:#1976d2;\">\n    ⬌ Connected to Wings<br/>\n    ⬆ Arch to Balcony\n  </div>\n  <div style=\"position:absolute;top:0;width:40px;height:10px;background:#333;border-radius:0 0 5px 5px;\" title=\"Hearth\"></div>\n</div>\n\n<div style=\"grid-column:2;grid-row:3;background:#ffebee;border:2px solid #c62828;padding:8px;border-radius:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;\">\n  <strong style=\"color:#c62828;\">South Stair Landing</strong>\n  <small style=\"color:#555;\">Defense Checkpoint</small>\n  <small style=\"color:#b71c1c;font-weight:bold;margin-top:4px;\">⬇ Grand Stairs to L1</small>\n</div>\n\n<div style=\"grid-column:3;grid-row:1 / span 3;background:#ffebee;border:2px solid #c62828;padding:8px;border-radius:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;\">\n  <strong style=\"color:#c62828;font-size:0.9em;\">East Council Wing</strong>\n  <small style=\"color:#555;display:block;margin-top:4px;\">Admin & Offices</small>\n  <small style=\"color:#b71c1c;font-style:italic;margin-top:auto;font-size:0.8em;\">⬆ Service Lifts</small>\n</div>\n```\n\n\\</div\\>\n\n\\<div style=\"margin-top:15px;display:flex;gap:15px;flex-wrap:wrap;justify-content:center;padding-top:10px;border-top:1px solid \\#ddd;\"\\>\n\\<span style=\"display:flex;align-items:center;gap:5px;font-size:14px;color:\\#444;\"\\>\n\\<div style=\"width:16px;height:16px;background:\\#e3f2fd;border:2px solid \\#1976d2;border-radius:3px;\"\\>\\</div\\>\nPublic / Ceremonial\n\\</span\\>\n\\<span style=\"display:flex;align-items:center;gap:5px;font-size:14px;color:\\#444;\"\\>\n\\<div style=\"width:16px;height:16px;background:\\#e8f5e9;border:2px solid \\#388e3c;border-radius:3px;\"\\>\\</div\\>\nPrivate / Residential\n\\</span\\>\n\\<span style=\"display:flex;align-items:center;gap:5px;font-size:14px;color:\\#444;\"\\>\n\\<div style=\"width:16px;height:16px;background:\\#ffebee;border:2px solid \\#c62828;border-radius:3px;\"\\>\\</div\\>\nRestricted / Military\n\\</span\\>\n\\<span style=\"display:flex;align-items:center;gap:5px;font-size:14px;color:\\#444;\"\\>\n\\<div style=\"width:16px;height:16px;background:\\#fff9c4;border:2px solid \\#f57f17;border-radius:3px;\"\\>\\</div\\>\nService / Support\n\\</span\\>\n\\</div\\>\n\\</div\\>",
+      "timestamp": "2025-11-20T13:11:17.723Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Accuracy Refinement",
+      "chunkIndex": null,
+      "prompt": "You are refining a D&D location for maximum accuracy. This is stage 6/6: Accuracy Refinement.\n\nThe location is complete. Your task is to review and refine for accuracy, consistency, and usability.\n\nCRITICAL CHECKS:\n1. DIMENSIONAL ACCURACY: Verify all space dimensions fit within the overall footprint\n2. CONNECTION CONSISTENCY: Ensure all doors/passages reference existing space IDs\n3. VERTICAL ALIGNMENT: Check that staircases connect valid floor levels\n4. NARRATIVE CONSISTENCY: Ensure descriptions match the actual layout\n5. USABILITY: Add any missing tactical notes, encounter areas, or GM guidance\n\nFocus on these refinement fields:\n- accuracy_report: Object with findings\n  {\n    dimensional_issues: Array of dimension conflicts found,\n    connection_issues: Array of invalid connections,\n    vertical_issues: Array of stair/floor misalignments,\n    narrative_inconsistencies: Array of description mismatches,\n    recommendations: Array of suggested improvements\n  }\n- refined_spaces: Updated spaces array with corrections applied\n- refined_details: Updated details with corrections applied\n- gm_notes: Array of important notes for the GM about running this location\n- tactical_summary: Object with combat/encounter guidance\n  {\n    choke_points: Array of tactical bottlenecks,\n    escape_routes: Array of emergency exits,\n    defensible_positions: Array of strategic locations,\n    hazards: Array of environmental dangers\n  }\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"accuracy_refinement\",\n  \"complete_location\": {\n    \"purpose\": {},\n    \"foundation\": {},\n    \"spaces\": {},\n    \"details\": {}\n  },\n  \"instructions\": \"Perform a thorough accuracy check on this location.\\n\\nReview ALL 0 spaces for:\\n1. Do all space dimensions fit within the overall Unknown × Unknown footprint?\\n2. Do all connections (doors, stairs, passages) reference valid space IDs?\\n3. Do all vertical connections (stairs) align with valid floor levels?\\n4. Are there any contradictions between descriptions and actual layout?\\n\\nProvide specific, actionable findings in accuracy_report.\\nApply corrections to refined_spaces and refined_details.\\nAdd tactical_summary to help GMs run encounters in this location.\\n\\nBe thorough and precise - this is the final quality check before delivery.\"\n}",
+      "response": "{\n  \"accuracy_report\": {\n    \"dimensional_issues\": [],\n    \"connection_issues\": [\n      \"Connection to 'L1_KEEP_MAIN_HALL' relies on a valid L1 generation (assumed valid).\",\n      \"Lateral connections to East/West wings are currently referencing abstract zones; ensured metadata accommodates future expansion.\"\n    ],\n    \"vertical_issues\": [],\n    \"narrative_inconsistencies\": [],\n    \"recommendations\": [\n      \"Ensure L3 generation accounts for the 40ft double-height void of the Great Hall (L3 likely exists only as a gallery or ring above this space).\",\n      \"Clarify mechanical interaction of 'Magical Gloom Gems' with standard light sources.\"\n    ]\n  },\n  \"refined_spaces\": [\n    {\n      \"id\": \"L2_KEEP_GREAT_HALL\",\n      \"name\": \"The Great Hall of the Crimson Oath\",\n      \"location_type\": \"interior_hall\",\n      \"purpose\": \"Ceremonial gathering, feasting, court\",\n      \"description\": \"A vast, double-height chamber (40ft high) dominated by thick support pillars carved with scenes of ancient warfare. The ceiling is a vaulted arch of dark oak. Enormous gothic windows line the south wall, strictly shuttered against the day. A massive, cold stone hearth dominates the northern end.\",\n      \"scale\": \"massive\",\n      \"geometry\": {\n        \"dimensions\": {\n          \"width\": \"240 ft\",\n          \"depth\": \"150 ft\",\n          \"height\": \"40 ft\"\n        },\n        \"position\": {\n          \"x\": \"Center\",\n          \"y\": \"Center\",\n          \"z\": \"Level 2 (20ft elevation)\"\n        },\n        \"locking_points\": [\n          \"LP_MAIN_STAIRWELL_L2\",\n          \"LP_GREAT_HALL_HEARTH\"\n        ],\n        \"walls\": {\n          \"north\": \"Stone, Load-bearing (Hearth)\",\n          \"south\": \"Stone, Windowed (Shuttered)\",\n          \"east\": \"Partition (Access to Council Wing)\",\n          \"west\": \"Partition (Access to Residential Wing)\"\n        }\n      },\n      \"mesh_anchors\": {\n        \"chunk_id\": \"L2_KEEP_GREAT_HALL\",\n        \"connects_to\": [\n          \"L1_KEEP_MAIN_HALL\",\n          \"L2_KEEP_EAST_WING\",\n          \"L2_KEEP_WEST_WING\",\n          \"L2_KEEP_NORTH_BALCONY\"\n        ],\n        \"connection_types\": [\n          \"Stairs (Down)\",\n          \"Double Doors\",\n          \"Double Doors\",\n          \"Balcony Overlook\"\n        ],\n        \"boundary_interface\": \"Central 240x150ft void within 360x300ft footprint\",\n        \"spatial_relationship\": \"Level_2.Center\"\n      },\n      \"features\": [\n        \"Four massive chain-hung iron chandeliers\",\n        \"Elevated Throne Dais (North)\",\n        \"Minstrel Gallery overlook (North Wall, 20ft up)\"\n      ],\n      \"lighting\": \"Dim, magical cold-light (Gloom Gems)\",\n      \"inhabitants\": \"Vampire Nobility, Thrall Servants\"\n    }\n  ],\n  \"refined_details\": {\n    \"materials\": \"Obsidian Granite, Blood-veined Marble, Dark Oak, Iron.\",\n    \"lighting_scheme\": \"Perpetual Twilight via magical Gloom Gems; total darkness if gems are removed.\",\n    \"atmosphere\": \"Opulent dread, echoing silence, chilled air smelling of ozone and old blood.\",\n    \"inhabitants\": {\n      \"permanent_residents\": [\n        { \"type\": \"Vampire Retainers\", \"count\": 15 },\n        { \"type\": \"Undead Servants\", \"count\": 30 },\n        { \"type\": \"Vampire Nobles\", \"count\": 4 }\n      ],\n      \"notable_npcs\": [\n        { \"name\": \"Lord Virakus\", \"role\": \"Master of Ceremonies\", \"location\": \"Council Antechamber\" },\n        { \"name\": \"The Unseen Chef\", \"role\": \"Specter Cook\", \"location\": \"North Service Balcony\" }\n      ]\n    },\n    \"secrets\": [\n      {\n        \"type\": \"Passage\",\n        \"location\": \"West Residential Wing Wardrobe\",\n        \"description\": \"False back leads to spiral stairs bypassing main routes.\",\n        \"how_to_find\": \"DC 17 Investigation.\"\n      },\n      {\n        \"type\": \"Vault\",\n        \"location\": \"Great Hall Hearth\",\n        \"description\": \"Stone relief hides a vault for ceremonial items.\",\n        \"how_to_find\": \"DC 20 Perception + Arcana.\"\n      }\n    ]\n  },\n  \"gm_notes\": [\n    \"**Verticality is Key:** The Great Hall is 40ft high. Use this! Vampire Spawn can spider climb on the ceiling or drop from the chandeliers. Flying characters have an advantage here.\",\n    \"**Light Sensitivity:** The shutters are structural weak points (AC 19, 40 HP). Breaking them during the day introduces a massive hazard for vampire inhabitants (sunlight hypersensitivity).\",\n    \"**Social Tension:** Unless an alarm is raised, this is a social environment. Combat here likely has major political ramifications within the vampire hierarchy.\",\n    \"**Acoustics:** The 'Echo-Stone' flooring means Stealth checks are made at Disadvantage unless the character moves at half speed or has magical silence.\"\n  ],\n  \"tactical_summary\": {\n    \"choke_points\": [\n      \"**South Main Doors:** The only large entry point for a group. Easily blocked by overturning heavy banquet tables.\",\n      \"**Wing Arches:** The East/West exits are smaller (10ft wide), creating natural bottlenecks for holding off reinforcements.\"\n    ],\n    \"escape_routes\": [\n      \"**Minstrel Gallery (North):** Requires a DC 15 Athletics check to climb the pillars, or flight. Leads to the service/kitchen areas.\",\n      \"**West Wing Secret Stair:** Only viable if the secret is discovered.\"\n    ],\n    \"defensible_positions\": [\n      \"**The Throne Dais (North):** Elevated, provides cover from table rows, commands view of the whole hall.\",\n      \"**The Minstrel Gallery:** High ground, hard to reach for non-climbers, offers full cover against the floor below.\"\n    ],\n    \"hazards\": [\n      \"**Falling Chandeliers:** Can be targeted (AC 12, 20 HP to chain). Deals 6d6 bludgeoning + restrained (DC 15 Dex save) in a 10ft radius.\",\n      \"**Sunlight Breach:** If shutters are broken during day -> 30ft radius of sunlight (20 radiant dmg/turn to vampires + disadvantage).\"\n    ]\n  }\n}",
+      "timestamp": "2025-11-20T13:14:56.911Z",
+      "status": "completed"
+    }
+  ],
+  "stageResults": {
+    "purpose": {
+      "name": "Castle Blood Forge - First Floor Keep",
+      "location_type": "castle",
+      "description": "The first floor of the central Keep, situated above the ground level, serves as the heart of the castle's social and political power. It houses the Great Hall, main feast chambers, and key council rooms, designed for ceremony and display rather than defense or logistics.",
+      "purpose": "Vampire nobility residence, Great Hall, and feast chambers",
+      "scale": "complex",
+      "estimated_spaces": 25,
+      "architectural_style": "Gothic Nobility",
+      "setting": "Central Keep structure within a massive fortress",
+      "key_features": [
+        "The Great Hall (occupies major footprint)",
+        "Feast Chambers and kitchens (linked to service wings)",
+        "Council Chambers for vampire meetings",
+        "Access point to upper noble apartments",
+        "Viewports/balconies overlooking the courtyards below"
+      ]
+    },
+    "foundation": {
+      "layout": {
+        "description": "The First Floor (L2) occupies the full 360 ft x 300 ft footprint of the Central Keep base. It is dominated by the Great Hall, which is a massive, double-height space situated centrally. This hall is flanked by structured wings containing administrative offices and minor apartments.",
+        "dimensions": {
+          "length": "360 ft (East-West)",
+          "width": "300 ft (North-South)",
+          "height": "Average 25 ft (45 ft in Great Hall)"
+        },
+        "levels": [
+          "First Floor Keep (L2)"
+        ]
+      },
+      "wings": [
+        {
+          "name": "The Great Hall & Feast Chamber",
+          "position": "Central and South-facing",
+          "function": "Ceremonial space, hosting, and dining."
+        },
+        {
+          "name": "East Council Wing",
+          "position": "Eastern side of the Keep",
+          "function": "Council rooms, map rooms, and minor administration offices."
+        },
+        {
+          "name": "West Residential Wing",
+          "position": "Western side of the Keep",
+          "function": "Noble apartments and secure servant quarters."
+        },
+        {
+          "name": "North Service Balcony",
+          "position": "North rear, overlooking the Courtyard",
+          "function": "Kitchen access, minstrel gallery, and secondary storage access."
+        }
+      ],
+      "floors": {
+        "first_floor_keep": {
+          "elevation": "20 ft (above ground level)",
+          "zones": [
+            "Great Hall (Double Height)",
+            "East Wing Offices",
+            "West Wing Apartments",
+            "Minstrel Gallery"
+          ]
+        }
+      },
+      "locking_points": [
+        {
+          "id": "LP_GREAT_HALL_HEARTH",
+          "location": "North end of Great Hall",
+          "notes": "Large, fixed chimney structure, runs L1 through L3."
+        },
+        {
+          "id": "LP_MAIN_STAIRWELL_L2",
+          "location": "South-center entry point from ground level",
+          "notes": "Termination of the Grand Staircase from L1."
+        },
+        {
+          "id": "LP_SPIRE_BASE_ACCESS",
+          "location": "West Wall of Great Hall/West Wing",
+          "notes": "Secure entry point to the Central Spire structure."
+        }
+      ],
+      "load_bearing_walls": [
+        "Keep Perimeter Walls (360x300 ft)",
+        "Pillar columns supporting the Great Hall roof and L3 floor (Internal)",
+        "Structural elements beneath the Great Hall supporting the main Hearth/Chimney"
+      ],
+      "vertical_connections": [
+        "Grand Staircase (Up from L1)",
+        "Private Staircase (Up to L3 sanctums/apartments)",
+        "Service Lift/Dumbwaiter (Kitchen access to L1 service hall)",
+        "Spire Access Staircase (Secured)"
+      ],
+      "constraints": [
+        "Great Hall must occupy at least 1/3 of the floor area and be double-height (20ft above L2 ceiling).",
+        "East Wing and West Wing must maintain symmetry around the Great Hall axis.",
+        "All service connections must be hidden from the Great Hall view."
+      ],
+      "chunk_mesh_metadata": {
+        "connection_protocol": "Hallways and Secured Doors",
+        "boundary_markers": [
+          "Great_Hall_Perimeter",
+          "East_Wing_Corridor_Junction",
+          "West_Wing_Apartment_Access"
+        ],
+        "spatial_hierarchy": "Floor > Wing > Room",
+        "coordinate_system": "Absolute Grid (Relative to Keep South Face Center)"
+      }
+    },
+    "spaces": {
+      "id": "L2_KEEP_GREAT_HALL",
+      "name": "The Great Hall of the Crimson Oath",
+      "location_type": "interior_hall",
+      "purpose": "Primary ceremonial gathering space, feasting, and formal court.",
+      "description": "A vast, double-height chamber dominated by thick support pillars carved with scenes of ancient warfare and blood rituals. The ceiling is a vaulted arch of dark oak, and enormous gothic windows line the south wall, shuttered against the day. A massive, cold stone hearth dominates the northern end, directly above the main hearth on the floor below.",
+      "scale": "massive",
+      "geometry": {
+        "dimensions": {
+          "length": "240 ft (East-West)",
+          "width": "150 ft (North-South)",
+          "height": "40 ft (Double-height)"
+        },
+        "position": {
+          "relative_to_keep": "Center-aligned",
+          "coordinates": "Occupies 240ft x 150ft centered within the 360ft x 300ft Keep footprint."
+        },
+        "walls": {
+          "south_wall": "Interior partition containing shuttered archways and connecting to the main stair landing.",
+          "north_wall": "Heavy load-bearing stone containing the chimney flue (LP_GREAT_HALL_HEARTH).",
+          "east_west_walls": "Stone walls separating the hall from the flanking wing corridors (30ft thick)."
+        },
+        "locking_points": [
+          "LP_MAIN_STAIRWELL_L2 (South Entrance)",
+          "LP_GREAT_HALL_HEARTH (North Wall)",
+          "LP_SPIRE_BASE_ACCESS (West Wall adjacent)"
+        ]
+      },
+      "mesh_anchors": {
+        "chunk_id": "L2_KEEP_GREAT_HALL",
+        "connects_to": [
+          "L1_KEEP_MAIN_HALL",
+          "L2_KEEP_EAST_CORRIDOR",
+          "L2_KEEP_WEST_CORRIDOR",
+          "L2_KEEP_NORTH_BALCONY",
+          "L3_KEEP_GREAT_HALL_CEILING"
+        ],
+        "connection_types": [
+          "Grand Staircase (Down/South)",
+          "Double Doors (East/West)",
+          "Archway Access (North Balcony)",
+          "Spatial Constraint (Upward)"
+        ],
+        "boundary_interface": "South edge aligns with the top of the Grand Staircase landing; East and West walls provide access to 30ft wide corridor sections.",
+        "spatial_relationship": "first_floor_keep.central_keep.great_hall"
+      },
+      "features": [
+        "Minstrel Gallery (overlooking North end, accessed from L2_KEEP_NORTH_BALCONY)",
+        "Four massive iron chandeliers held by thick chains (can be dropped)",
+        "Hearth large enough to roast an entire ox",
+        "Throne dais elevated by three steps at the North end"
+      ],
+      "lighting": "Primarily large, perpetually snuffed torches and iron chandeliers. Relies on magical gloom or captured light during ceremonial hours.",
+      "inhabitants": "Vampire nobility, armored retainers, high-ranking guard captains, servants.",
+      "validation_notes": [
+        "Dimensions (240x150) fit within the 360x300 Keep perimeter, allowing for surrounding corridors and rooms (60ft E/W and 75ft N/S remaining).",
+        "Height (40ft) confirms double-height constraint relative to the 20ft floor height of the level below."
+      ]
+    },
+    "details": {
+      "materials": "The floors are clad in **Obsidian Granite** and **Blood-veined Marble**, polished to mirror the low light. Walls are paneled with heavy, dark oak and draped in massive, dust-shrouded velvet tapestries depicting the Castle's history. Furnishings are heavy, gilded iron and intricately carved ironwood.",
+      "lighting_scheme": "The Great Hall is primarily lit by a few enormous, low-burning iron chandeliers that hold **Magical Gloom Gems** (cold, silvery light), designed to keep shadows deep and avoid direct, harsh light. Windows are tightly shuttered with thick lead sheeting, guaranteeing perpetual twilight within.",
+      "atmosphere": "The First Floor is overwhelmingly silent, the noise from the courtyards and industrial zone below completely muffled by the heavy construction. The air is dry, cold, and smells faintly of incense and ozone, lending the space a feeling of **opulent dread** and preserved antiquity. Every step echoes slightly, emphasizing the hierarchy and gravity of the chambers.",
+      "inhabitants": {
+        "permanent_residents": [
+          {
+            "type": "Vampire Retainers (Noble Guard)",
+            "count": 15
+          },
+          {
+            "type": "Undead Servants (Ghouls/Wraiths)",
+            "count": 30
+          },
+          {
+            "type": "High-Ranking Vampire Nobility (in apartments)",
+            "count": 4
+          }
+        ],
+        "notable_npcs": [
+          {
+            "name": "Lord Virakus",
+            "role": "Chief Master of Ceremonies",
+            "location": "Council Chamber Antechamber"
+          },
+          {
+            "name": "The Unseen Chef",
+            "role": "Master of the Feast Chambers (Specter)",
+            "location": "North Service Balcony"
+          }
+        ],
+        "visitors": [
+          "Ambassadors from rival dark domains",
+          "Warlocks or Priests seeking patronage",
+          "Captured prisoners brought for trial/display"
+        ],
+        "creatures": [
+          "Vampire Spawn (Guards)",
+          "Swarm of Bats (attic spaces above the vault)"
+        ]
+      },
+      "encounter_areas": [
+        {
+          "space_id": "L2_KEEP_GREAT_HALL",
+          "encounter_type": "combat",
+          "description": "The massive, 40ft-high hall offers vast combat space. The central dining tables can be flipped for cover. High ceilings allow for flight/vertical movement.",
+          "tactical_notes": "Use the chain-hung chandeliers as cover or as an environmental hazard (cut the chain to drop the chandelier, DC 15 Dex Save, 6d6 crushing damage). The pillars grant half cover. NPC archers may fire from the Minstrel Gallery (North Balcony)."
+        },
+        {
+          "space_id": "L2_KEEP_EAST_COUNCIL_CHAMBER",
+          "encounter_type": "social",
+          "description": "A circular room dominated by a black marble table, used for high-stakes political debate and treaty signing.",
+          "tactical_notes": "The encounter revolves around high Charisma/Insight checks (DC 18+). Failure to maintain decorum or uncover deception may lead to immediate magical restraint or banishment by nearby noble vampires."
+        }
+      ],
+      "secrets": [
+        {
+          "type": "Passage",
+          "location": "West Residential Wing (Private Apartment)",
+          "description": "A wardrobe holds a false back, leading to a narrow, spiraling staircase that bypasses the main route to the Third Floor Sanctums.",
+          "how_to_find": "DC 17 Investigation check in a specific noble apartment (requires the correct key/passphrase) or locating subtle draft in the wardrobe."
+        },
+        {
+          "type": "Compartment",
+          "location": "Great Hall Hearth",
+          "description": "A stone relief panel on the massive North Hearth chimney is actually a secured vault for ceremonial items.",
+          "how_to_find": "DC 20 Perception check to find a hidden activation rune near the mantelpiece, requiring a successful Intelligence (Arcana) check to activate."
+        }
+      ],
+      "treasure_locations": [
+        {
+          "location": "L2_KEEP_EAST_COUNCIL_CHAMBER",
+          "description": "A locked, gilded chest within the Chamber's treasury alcove containing the sealed 'Treaty of the Crimson Tribute' (valuable historical document) and 800 gp worth of platinum vampire coins."
+        },
+        {
+          "location": "North Service Balcony",
+          "description": "A hidden rack beneath the Minstrel Gallery floorboards holds a **Masterwork Violin of Soul-Binding** (Magical Instrument) used to entrance feast attendees."
+        }
+      ],
+      "history": "The First Floor Keep was dedicated 250 years ago, marking the solidification of the vampire regime from a roving warband to an established aristocracy. The Great Hall itself was consecrated with the ritualistic feeding of thousands of captured prisoners, ensuring its stone foundation would forever echo with the history of the conquerors. Crucially, this floor was designed with security redundancy: the thick walls house dedicated 'guard paths' that allow quick travel between wings, unknown to most servants.",
+      "current_events": "A major **Feast of the Perpetual Gloom** is planned for this evening, an event that draws lesser nobles and potential allies from across the region. Lord Virakus is highly stressed because the main ceremonial wine—a rare vintage of preserved blood—has been subtly tainted. The current events revolve around the noble staff attempting to cover up the sabotage before the Lord of the Castle arrives.",
+      "adventure_hooks": [
+        "**The Tainted Blood:** A contact begs the party to infiltrate the Feast Chambers and replace the poisoned blood wine before the sun sets.",
+        "**The Council Spy:** The party must obtain vital information from the Council Chamber before a document is signed at midnight, requiring them to utilize the guard paths and ventilation shafts for stealth.",
+        "**Retrieve the Key:** A disgraced noble on the Third Floor needs their apartment key retrieved from a guard captain currently overseeing preparations in the Great Hall."
+      ],
+      "special_features": {
+        "The Vaulted Whispers": "The unique acoustics and high ceilings of the Great Hall cause all conversations to echo subtly. While useful for ceremony, a successful DC 16 Wisdom (Perception) check can overhear conversations in the adjacent East and West corridors if they speak loudly.",
+        "The Sun-Shuttered Windows": "The massive windows facing the courtyard are protected by enchanted lead shutters, sealing out sunlight. However, destroying a shutter (AC 19, 40 HP) releases a burst of sunlight (if day) into a 30-foot radius within the Hall, devastating creatures vulnerable to light."
+      },
+      "cinematic_walkthrough": "Ascending the Grand Staircase from the grim, utilitarian Ground Level, the atmosphere changes instantly. The air becomes crisp and still. You step onto the First Floor landing and face the enormous, imposing doors of The Great Hall of the Crimson Oath. The doors, crafted from black iron and embossed with sanguinary reliefs, stand closed.\n\nOnce inside, the sheer scale is chilling. The 40-foot ceiling vaults into darkness, supported by pillars that disappear into the gloom. The massive hall is currently being prepared for the feast; silent, pale servants glide across the polished marble floor, setting tables that stretch into the distance. The only light comes from the silver-blue glow of the Magical Gloom Gems, casting every movement in sharp, cold silhouette. The silence is profound—a silence that speaks not of rest, but of constant, watchful attention.\n\nTo either side, arched doorways lead into the distinct wings—the East side promising the stiff, controlled atmosphere of the Council Chambers, and the West side leading toward the private, shielded luxury of the noble apartments. The entire floor is a stage set for power, meticulously designed to minimize surprise and maximize the chilling display of the castle's elite."
+    },
+    "visual_map": {
+      "visual_map_html": "\\<div style=\"max-width:800px;margin:20px auto;font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;background:\\#f5f5f5;padding:20px;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,0.2);border: 1px solid \\#ccc;\"\\>\n\\<h3 style=\"margin:0 0 5px 0;color:\\#2c3e50;text-align:center;\"\\>Castle Blood Forge: First Floor Keep (Level 2)\\</h3\\>\n\\<p style=\"text-align:center;margin:0 0 20px 0;color:\\#555;font-size:0.9em;\"\\>Footprint: 360 ft (East-West) × 300 ft (North-South)\\</p\\>\n\n\\<div style=\"display:grid;grid-template-columns:1fr 4fr 1fr;grid-template-rows:70px 200px 70px;gap:6px;background:\\#333;padding:8px;border-radius:4px;border: 2px solid \\#222;\"\\>\n\n```\n<div style=\"grid-column:1;grid-row:1 / span 3;background:#e8f5e9;border:2px solid #388e3c;padding:8px;border-radius:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;\">\n  <strong style=\"color:#2e7d32;font-size:0.9em;\">West Residential Wing</strong>\n  <small style=\"color:#555;display:block;margin-top:4px;\">Noble Apts</small>\n  <small style=\"color:#388e3c;font-style:italic;margin-top:auto;font-size:0.8em;\">⬆ Stairs to L3</small>\n</div>\n\n<div style=\"grid-column:2;grid-row:1;background:#fff9c4;border:2px solid #f57f17;padding:8px;border-radius:4px;display:flex;justify-content:center;align-items:center;text-align:center;\">\n  <div>\n    <strong style=\"color:#f57f17;\">North Service Balcony</strong><br/>\n    <small style=\"color:#666;\">Minstrel Gallery & Kitchen Access</small>\n  </div>\n</div>\n\n<div style=\"grid-column:2;grid-row:2;background:#e3f2fd;border:2px solid #1976d2;padding:15px;border-radius:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;\">\n  <strong style=\"color:#1565c0;font-size:1.2em;\">The Great Hall of the Crimson Oath</strong>\n  <small style=\"color:#444;margin:5px 0;\">240 ft × 150 ft (Double Height)</small>\n  <div style=\"margin-top:10px;font-size:0.85em;color:#1976d2;\">\n    ⬌ Connected to Wings<br/>\n    ⬆ Arch to Balcony\n  </div>\n  <div style=\"position:absolute;top:0;width:40px;height:10px;background:#333;border-radius:0 0 5px 5px;\" title=\"Hearth\"></div>\n</div>\n\n<div style=\"grid-column:2;grid-row:3;background:#ffebee;border:2px solid #c62828;padding:8px;border-radius:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;\">\n  <strong style=\"color:#c62828;\">South Stair Landing</strong>\n  <small style=\"color:#555;\">Defense Checkpoint</small>\n  <small style=\"color:#b71c1c;font-weight:bold;margin-top:4px;\">⬇ Grand Stairs to L1</small>\n</div>\n\n<div style=\"grid-column:3;grid-row:1 / span 3;background:#ffebee;border:2px solid #c62828;padding:8px;border-radius:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;\">\n  <strong style=\"color:#c62828;font-size:0.9em;\">East Council Wing</strong>\n  <small style=\"color:#555;display:block;margin-top:4px;\">Admin & Offices</small>\n  <small style=\"color:#b71c1c;font-style:italic;margin-top:auto;font-size:0.8em;\">⬆ Service Lifts</small>\n</div>\n```\n\n\\</div\\>\n\n\\<div style=\"margin-top:15px;display:flex;gap:15px;flex-wrap:wrap;justify-content:center;padding-top:10px;border-top:1px solid \\#ddd;\"\\>\n\\<span style=\"display:flex;align-items:center;gap:5px;font-size:14px;color:\\#444;\"\\>\n\\<div style=\"width:16px;height:16px;background:\\#e3f2fd;border:2px solid \\#1976d2;border-radius:3px;\"\\>\\</div\\>\nPublic / Ceremonial\n\\</span\\>\n\\<span style=\"display:flex;align-items:center;gap:5px;font-size:14px;color:\\#444;\"\\>\n\\<div style=\"width:16px;height:16px;background:\\#e8f5e9;border:2px solid \\#388e3c;border-radius:3px;\"\\>\\</div\\>\nPrivate / Residential\n\\</span\\>\n\\<span style=\"display:flex;align-items:center;gap:5px;font-size:14px;color:\\#444;\"\\>\n\\<div style=\"width:16px;height:16px;background:\\#ffebee;border:2px solid \\#c62828;border-radius:3px;\"\\>\\</div\\>\nRestricted / Military\n\\</span\\>\n\\<span style=\"display:flex;align-items:center;gap:5px;font-size:14px;color:\\#444;\"\\>\n\\<div style=\"width:16px;height:16px;background:\\#fff9c4;border:2px solid \\#f57f17;border-radius:3px;\"\\>\\</div\\>\nService / Support\n\\</span\\>\n\\</div\\>\n\\</div\\>",
+      "stage": "visual_map",
+      "generated_at": "2025-11-20T13:11:17.723Z"
+    },
+    "accuracy_refinement": {
+      "accuracy_report": {
+        "dimensional_issues": [],
+        "connection_issues": [
+          "Connection to 'L1_KEEP_MAIN_HALL' relies on a valid L1 generation (assumed valid).",
+          "Lateral connections to East/West wings are currently referencing abstract zones; ensured metadata accommodates future expansion."
+        ],
+        "vertical_issues": [],
+        "narrative_inconsistencies": [],
+        "recommendations": [
+          "Ensure L3 generation accounts for the 40ft double-height void of the Great Hall (L3 likely exists only as a gallery or ring above this space).",
+          "Clarify mechanical interaction of 'Magical Gloom Gems' with standard light sources."
+        ]
+      },
+      "refined_spaces": [
+        {
+          "id": "L2_KEEP_GREAT_HALL",
+          "name": "The Great Hall of the Crimson Oath",
+          "location_type": "interior_hall",
+          "purpose": "Ceremonial gathering, feasting, court",
+          "description": "A vast, double-height chamber (40ft high) dominated by thick support pillars carved with scenes of ancient warfare. The ceiling is a vaulted arch of dark oak. Enormous gothic windows line the south wall, strictly shuttered against the day. A massive, cold stone hearth dominates the northern end.",
+          "scale": "massive",
+          "geometry": {
+            "dimensions": {
+              "width": "240 ft",
+              "depth": "150 ft",
+              "height": "40 ft"
+            },
+            "position": {
+              "x": "Center",
+              "y": "Center",
+              "z": "Level 2 (20ft elevation)"
+            },
+            "locking_points": [
+              "LP_MAIN_STAIRWELL_L2",
+              "LP_GREAT_HALL_HEARTH"
+            ],
+            "walls": {
+              "north": "Stone, Load-bearing (Hearth)",
+              "south": "Stone, Windowed (Shuttered)",
+              "east": "Partition (Access to Council Wing)",
+              "west": "Partition (Access to Residential Wing)"
+            }
+          },
+          "mesh_anchors": {
+            "chunk_id": "L2_KEEP_GREAT_HALL",
+            "connects_to": [
+              "L1_KEEP_MAIN_HALL",
+              "L2_KEEP_EAST_WING",
+              "L2_KEEP_WEST_WING",
+              "L2_KEEP_NORTH_BALCONY"
+            ],
+            "connection_types": [
+              "Stairs (Down)",
+              "Double Doors",
+              "Double Doors",
+              "Balcony Overlook"
+            ],
+            "boundary_interface": "Central 240x150ft void within 360x300ft footprint",
+            "spatial_relationship": "Level_2.Center"
+          },
+          "features": [
+            "Four massive chain-hung iron chandeliers",
+            "Elevated Throne Dais (North)",
+            "Minstrel Gallery overlook (North Wall, 20ft up)"
+          ],
+          "lighting": "Dim, magical cold-light (Gloom Gems)",
+          "inhabitants": "Vampire Nobility, Thrall Servants"
+        }
+      ],
+      "refined_details": {
+        "materials": "Obsidian Granite, Blood-veined Marble, Dark Oak, Iron.",
+        "lighting_scheme": "Perpetual Twilight via magical Gloom Gems; total darkness if gems are removed.",
+        "atmosphere": "Opulent dread, echoing silence, chilled air smelling of ozone and old blood.",
+        "inhabitants": {
+          "permanent_residents": [
+            {
+              "type": "Vampire Retainers",
+              "count": 15
+            },
+            {
+              "type": "Undead Servants",
+              "count": 30
+            },
+            {
+              "type": "Vampire Nobles",
+              "count": 4
+            }
+          ],
+          "notable_npcs": [
+            {
+              "name": "Lord Virakus",
+              "role": "Master of Ceremonies",
+              "location": "Council Antechamber"
+            },
+            {
+              "name": "The Unseen Chef",
+              "role": "Specter Cook",
+              "location": "North Service Balcony"
+            }
+          ]
+        },
+        "secrets": [
+          {
+            "type": "Passage",
+            "location": "West Residential Wing Wardrobe",
+            "description": "False back leads to spiral stairs bypassing main routes.",
+            "how_to_find": "DC 17 Investigation."
+          },
+          {
+            "type": "Vault",
+            "location": "Great Hall Hearth",
+            "description": "Stone relief hides a vault for ceremonial items.",
+            "how_to_find": "DC 20 Perception + Arcana."
+          }
+        ]
+      },
+      "gm_notes": [
+        "**Verticality is Key:** The Great Hall is 40ft high. Use this! Vampire Spawn can spider climb on the ceiling or drop from the chandeliers. Flying characters have an advantage here.",
+        "**Light Sensitivity:** The shutters are structural weak points (AC 19, 40 HP). Breaking them during the day introduces a massive hazard for vampire inhabitants (sunlight hypersensitivity).",
+        "**Social Tension:** Unless an alarm is raised, this is a social environment. Combat here likely has major political ramifications within the vampire hierarchy.",
+        "**Acoustics:** The 'Echo-Stone' flooring means Stealth checks are made at Disadvantage unless the character moves at half speed or has magical silence."
+      ],
+      "tactical_summary": {
+        "choke_points": [
+          "**South Main Doors:** The only large entry point for a group. Easily blocked by overturning heavy banquet tables.",
+          "**Wing Arches:** The East/West exits are smaller (10ft wide), creating natural bottlenecks for holding off reinforcements."
+        ],
+        "escape_routes": [
+          "**Minstrel Gallery (North):** Requires a DC 15 Athletics check to climb the pillars, or flight. Leads to the service/kitchen areas.",
+          "**West Wing Secret Stair:** Only viable if the secret is discovered."
+        ],
+        "defensible_positions": [
+          "**The Throne Dais (North):** Elevated, provides cover from table rows, commands view of the whole hall.",
+          "**The Minstrel Gallery:** High ground, hard to reach for non-climbers, offers full cover against the floor below."
+        ],
+        "hazards": [
+          "**Falling Chandeliers:** Can be targeted (AC 12, 20 HP to chain). Deals 6d6 bludgeoning + restrained (DC 15 Dex save) in a 10ft radius.",
+          "**Sunlight Breach:** If shutters are broken during day -> 30ft radius of sunlight (20 radiant dmg/turn to vampires + disadvantage)."
+        ]
+      }
+    }
+  },
+  "currentStageIndex": 5
+}

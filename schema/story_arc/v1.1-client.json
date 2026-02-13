@@ -1,0 +1,228 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/story_arc/v1.1-client.json",
+  "title": "Story Arc Schema v1.1 (Client)",
+  "description": "Comprehensive schema for D&D story arcs with acts, beats, characters, factions, and branching paths",
+  "type": "object",
+  "required": [
+    "title",
+    "synopsis",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1",
+      "description": "Schema version number (must be '1.1')"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 2,
+      "description": "Story arc title"
+    },
+    "synopsis": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Brief summary of the story arc (2-4 sentences)"
+    },
+    "theme": {
+      "type": "string",
+      "description": "Central theme or narrative thread"
+    },
+    "tone": {
+      "type": "string",
+      "description": "Narrative tone (e.g., 'grim', 'heroic', 'mystery', 'political intrigue')"
+    },
+    "setting": {
+      "type": "string",
+      "description": "Where the story takes place"
+    },
+    "level_range": {
+      "type": "string",
+      "description": "Suggested party level range (e.g., '3-7', '10-15')"
+    },
+    "estimated_sessions": {
+      "type": "string",
+      "description": "Approximate number of sessions (e.g., '4-6', '10-12')"
+    },
+    "overarching_goal": {
+      "type": "string",
+      "description": "The primary objective the party is working toward"
+    },
+    "hook": {
+      "type": "string",
+      "description": "The inciting incident that draws the party in"
+    },
+    "acts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "summary"],
+        "properties": {
+          "name": { "type": "string", "description": "Act name (e.g., 'Act 1: The Gathering Storm')" },
+          "summary": { "type": "string", "description": "What happens in this act" },
+          "key_events": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Major events in this act"
+          },
+          "locations": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Key locations visited"
+          },
+          "climax": { "type": "string", "description": "The act's climactic moment" },
+          "transition": { "type": "string", "description": "How this act leads to the next" }
+        }
+      },
+      "description": "Story acts (typically 3-5)"
+    },
+    "beats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "act": { "type": "string", "description": "Which act this beat belongs to" },
+          "type": {
+            "type": "string",
+            "enum": ["plot", "character", "revelation", "combat", "social", "exploration", "milestone"],
+            "description": "Type of beat"
+          },
+          "required": { "type": "boolean", "description": "Whether this beat is required or optional" }
+        }
+      },
+      "description": "Key story beats and milestones"
+    },
+    "characters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "role"],
+        "properties": {
+          "name": { "type": "string" },
+          "role": {
+            "type": "string",
+            "description": "Role in the story (e.g., 'antagonist', 'ally', 'patron', 'rival', 'wildcard')"
+          },
+          "description": { "type": "string" },
+          "motivation": {
+            "type": "object",
+            "properties": {
+              "purpose": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          },
+          "goals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "target": { "type": "string" },
+                "achievement": { "type": "string" }
+              }
+            }
+          },
+          "known_barriers": { "type": "array", "items": { "type": "string" } },
+          "unknown_barriers": { "type": "array", "items": { "type": "string" } },
+          "arc": { "type": "string", "description": "How this character changes over the story" },
+          "first_appearance": { "type": "string", "description": "When/where they first appear" }
+        }
+      },
+      "description": "Key NPCs and their roles in the story"
+    },
+    "factions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "goals": { "type": "array", "items": { "type": "string" } },
+          "resources": { "type": "array", "items": { "type": "string" } },
+          "relationship_to_party": { "type": "string" }
+        }
+      },
+      "description": "Factions involved in the story"
+    },
+    "known_barriers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Known obstacles the party must overcome"
+    },
+    "unknown_barriers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Hidden threats or twists"
+    },
+    "branching_paths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "decision_point": { "type": "string", "description": "Where the party must choose" },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "choice": { "type": "string" },
+                "consequence": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "description": "Key decision points and their consequences"
+    },
+    "rewards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "description": "item, gold, reputation, information, ally, etc." },
+          "when": { "type": "string", "description": "When/how earned" }
+        }
+      },
+      "description": "Major rewards throughout the arc"
+    },
+    "clues_and_secrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "secret": { "type": "string", "description": "The hidden information" },
+          "discovery_method": { "type": "string", "description": "How the party can discover it" },
+          "impact": { "type": "string", "description": "What changes when revealed" }
+        }
+      },
+      "description": "Secrets and clues woven throughout the arc"
+    },
+    "dm_notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "GM guidance, pacing tips, and adaptation notes"
+    },
+    "rule_base": { "type": "string" },
+    "sources_used": { "type": "array", "items": { "type": "string" } },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" } },
+          "rule_impact": { "type": "string" },
+          "recommendation": { "type": "string" }
+        }
+      }
+    },
+    "canon_update": { "type": "string" }
+  },
+  "additionalProperties": true
+}

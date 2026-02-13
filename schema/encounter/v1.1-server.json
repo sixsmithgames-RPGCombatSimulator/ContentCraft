@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/encounter/v1.1-server.json",
+  "title": "Encounter Schema v1.1 (Server Validation)",
+  "description": "Permissive validation schema for encounter data integrity",
+  "type": "object",
+  "required": [
+    "title",
+    "description",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1",
+      "description": "Schema version number (must be '1.1')"
+    },
+    "title": { "type": "string", "minLength": 3 },
+    "description": { "type": "string", "minLength": 20 },
+    "encounter_type": { "type": "string" },
+    "difficulty_tier": { "type": "string" },
+    "party_level": { "type": "integer" },
+    "party_size": { "type": "integer" },
+    "xp_budget": { "type": "integer" },
+    "adjusted_xp": { "type": "integer" },
+    "expected_duration_rounds": { "type": "integer" },
+    "location": { "type": "string" },
+    "setting_context": { "type": "string" },
+    "objectives": { "type": "array", "items": { "type": "string" } },
+    "failure_conditions": { "type": "array", "items": { "type": "string" } },
+    "monsters": { "type": "array", "items": { "type": "object" } },
+    "npcs": { "type": "array", "items": { "type": "object" } },
+    "terrain": { "type": "object" },
+    "hazards": { "type": "array", "items": { "type": "object" } },
+    "traps": { "type": "array", "items": { "type": "object" } },
+    "tactics": { "type": "object" },
+    "event_clock": { "type": "object" },
+    "treasure": { "type": "object" },
+    "consequences": { "type": "object" },
+    "scaling": { "type": "object" },
+    "rule_base": { "type": "string" },
+    "sources_used": { "type": "array", "items": { "type": "string" } },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "proposals": { "type": "array", "items": { "type": "object" } },
+    "canon_update": { "type": "string" },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

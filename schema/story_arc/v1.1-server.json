@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/story_arc/v1.1-server.json",
+  "title": "Story Arc Schema v1.1 (Server Validation)",
+  "description": "Permissive validation schema for story arc data integrity",
+  "type": "object",
+  "required": [
+    "title",
+    "synopsis",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.1" },
+    "title": { "type": "string", "minLength": 2 },
+    "synopsis": { "type": "string" },
+    "theme": { "type": "string" },
+    "tone": { "type": "string" },
+    "setting": { "type": "string" },
+    "level_range": { "type": "string" },
+    "estimated_sessions": { "type": "string" },
+    "overarching_goal": { "type": "string" },
+    "hook": { "type": "string" },
+    "acts": { "type": "array", "items": { "type": "object" } },
+    "beats": { "type": "array", "items": { "type": "object" } },
+    "characters": { "type": "array", "items": { "type": "object" } },
+    "factions": { "type": "array", "items": { "type": "object" } },
+    "known_barriers": { "type": "array", "items": { "type": "string" } },
+    "unknown_barriers": { "type": "array", "items": { "type": "string" } },
+    "branching_paths": { "type": "array", "items": { "type": "object" } },
+    "rewards": { "type": "array", "items": { "type": "object" } },
+    "clues_and_secrets": { "type": "array", "items": { "type": "object" } },
+    "dm_notes": { "type": "array", "items": { "type": "string" } },
+    "rule_base": { "type": "string" },
+    "sources_used": { "type": "array" },
+    "assumptions": { "type": "array" },
+    "proposals": { "type": "array" },
+    "canon_update": { "type": "string" }
+  },
+  "additionalProperties": true
+}

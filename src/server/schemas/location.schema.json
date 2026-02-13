@@ -1,0 +1,500 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "location.schema.json",
+  "title": "D&D Location Schema",
+  "description": "Schema for complex D&D locations with geometric validation (castles, dungeons, cities)",
+  "type": "object",
+  "required": [
+    "name",
+    "location_type",
+    "description",
+    "overall_dimensions"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "description": "The location's name"
+    },
+    "location_type": {
+      "type": "string",
+      "enum": ["castle", "dungeon", "city", "fortress", "manor", "temple", "tower", "wilderness", "other"],
+      "description": "Type of location"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Overall description of the location"
+    },
+    "purpose": {
+      "type": "string",
+      "description": "Primary function (e.g., 'military stronghold', 'noble residence')"
+    },
+    "historical_context": {
+      "type": "string",
+      "description": "Brief history or background"
+    },
+    "architectural_style": {
+      "type": "string",
+      "description": "Dominant architectural style"
+    },
+    "overall_dimensions": {
+      "type": "object",
+      "required": ["footprint"],
+      "properties": {
+        "footprint": {
+          "type": "object",
+          "properties": {
+            "length": { "type": "string" },
+            "width": { "type": "string" }
+          }
+        },
+        "height": {
+          "type": "object",
+          "properties": {
+            "total": { "type": "string" },
+            "floors": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "notes": { "type": "string" }
+      },
+      "description": "Overall footprint and height measurements"
+    },
+    "setting": {
+      "type": "string",
+      "description": "Where this location exists in the world"
+    },
+    "access_points": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Primary entrances and exits"
+    },
+    "wings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "dimensions"],
+        "properties": {
+          "name": { "type": "string" },
+          "dimensions": {
+            "type": "object",
+            "properties": {
+              "length": { "type": "string" },
+              "width": { "type": "string" }
+            }
+          },
+          "purpose": { "type": "string" },
+          "position": { "type": "string" }
+        }
+      },
+      "description": "Major structural sections"
+    },
+    "floors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["level", "name"],
+        "properties": {
+          "level": {
+            "type": "integer",
+            "description": "Floor level (0=ground, -1=basement, 1=first floor above)"
+          },
+          "name": { "type": "string" },
+          "elevation": { "type": "string" },
+          "ceiling_height": { "type": "string" },
+          "purpose": { "type": "string" },
+          "spaces": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/space" },
+            "description": "Rooms/spaces on this floor"
+          }
+        }
+      },
+      "description": "Vertical levels/floors"
+    },
+    "locking_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["wall", "courtyard", "tower", "stairwell", "axis_line", "symmetry_line", "external_wall"]
+          },
+          "description": { "type": "string" },
+          "dimensions": { "type": "object" },
+          "constraints": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "description": "Fixed structural features that cannot be moved"
+    },
+    "load_bearing_walls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "position"],
+        "properties": {
+          "id": { "type": "string" },
+          "position": { "type": "string" },
+          "dimensions": {
+            "type": "object",
+            "properties": {
+              "length": { "type": "string" },
+              "thickness": { "type": "string" },
+              "height": { "type": "string" }
+            }
+          },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Walls that support the structure"
+    },
+    "vertical_connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["staircase", "spiral_stair", "ramp", "lift", "ladder"]
+          },
+          "connects_floors": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "approximate_position": { "type": "string" },
+          "dimensions": {
+            "type": "object",
+            "properties": {
+              "footprint": { "type": "string" },
+              "vertical_clearance": { "type": "string" }
+            }
+          }
+        }
+      },
+      "description": "Stairs, ramps, lifts connecting floors"
+    },
+    "constraints": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Binding rules that all spaces must obey"
+    },
+    "hallways": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "connects"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "connects": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Array of space IDs this hallway links"
+          },
+          "dimensions": {
+            "type": "object",
+            "properties": {
+              "length": { "type": "string" },
+              "width": { "type": "string" },
+              "height": { "type": "string" }
+            }
+          },
+          "position": { "type": "string" },
+          "features": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "description": "Corridor connections between spaces"
+    },
+    "doors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "connects"],
+        "properties": {
+          "id": { "type": "string" },
+          "connects": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "type": { "type": "string" },
+          "position": { "type": "string" },
+          "security": { "type": "string" }
+        }
+      },
+      "description": "All doors throughout the location"
+    },
+    "staircases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "connects_floors"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["straight", "spiral", "grand", "secret"]
+          },
+          "connects_floors": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "dimensions": { "type": "object" },
+          "position": { "type": "string" },
+          "features": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "description": "All staircases in the location"
+    },
+    "circulation_analysis": {
+      "type": "object",
+      "properties": {
+        "main_routes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "service_routes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "defense_routes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "bottlenecks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "security_assessment": { "type": "string" }
+      },
+      "description": "Traffic flow analysis"
+    },
+    "validation_results": {
+      "type": "object",
+      "properties": {
+        "all_spaces_connected": { "type": "boolean" },
+        "no_dead_ends": { "type": "boolean" },
+        "vertical_alignment_valid": { "type": "boolean" },
+        "dimensional_coherence": { "type": "boolean" },
+        "conflicts": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "description": "Final geometry validation results"
+    },
+    "materials": {
+      "type": "string",
+      "description": "Construction materials used"
+    },
+    "lighting_scheme": {
+      "type": "string",
+      "description": "Overall approach to lighting"
+    },
+    "atmosphere": {
+      "type": "string",
+      "description": "Mood and feeling of the location"
+    },
+    "inhabitants": {
+      "type": "object",
+      "properties": {
+        "permanent_residents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "count": { "type": "integer" }
+            }
+          }
+        },
+        "visitors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "notable_npcs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "role": { "type": "string" },
+              "location": { "type": "string" }
+            }
+          }
+        },
+        "creatures": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "description": "Who lives/works here"
+    },
+    "encounter_areas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["space_id", "encounter_type"],
+        "properties": {
+          "space_id": { "type": "string" },
+          "encounter_type": {
+            "type": "string",
+            "enum": ["combat", "social", "puzzle", "trap", "exploration"]
+          },
+          "description": { "type": "string" },
+          "tactical_notes": { "type": "string" }
+        }
+      },
+      "description": "Spaces suitable for encounters"
+    },
+    "treasure_locations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" },
+          "description": { "type": "string" },
+          "difficulty": { "type": "string" }
+        }
+      },
+      "description": "Hidden or secured treasure spots"
+    },
+    "secrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "location"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["passage", "room", "compartment", "door"]
+          },
+          "location": { "type": "string" },
+          "description": { "type": "string" },
+          "how_to_find": { "type": "string" }
+        }
+      },
+      "description": "Secret features"
+    },
+    "history": {
+      "type": "string",
+      "description": "Narrative history (2-3 paragraphs)"
+    },
+    "current_events": {
+      "type": "string",
+      "description": "What's happening now"
+    },
+    "adventure_hooks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Potential adventure hooks"
+    },
+    "special_features": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unique or magical features"
+    },
+    "cinematic_walkthrough": {
+      "type": "string",
+      "description": "Narrative walkthrough (3-4 paragraphs)"
+    }
+  },
+  "definitions": {
+    "space": {
+      "type": "object",
+      "required": ["id", "name", "purpose", "geometry"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "purpose": { "type": "string" },
+        "floor_level": { "type": "integer" },
+        "geometry": {
+          "type": "object",
+          "required": ["dimensions"],
+          "properties": {
+            "dimensions": {
+              "type": "object",
+              "required": ["length", "width", "height"],
+              "properties": {
+                "length": { "type": "string" },
+                "width": { "type": "string" },
+                "height": { "type": "string" }
+              }
+            },
+            "position": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "x": { "type": "string" },
+                    "y": { "type": "string" }
+                  }
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "relative_to": { "type": "string" },
+                    "direction": { "type": "string" },
+                    "offset": { "type": "string" }
+                  }
+                }
+              ]
+            },
+            "locking_points": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "walls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "direction": { "type": "string" },
+                  "length": { "type": "string" },
+                  "load_bearing": { "type": "boolean" },
+                  "material": { "type": "string" }
+                }
+              }
+            },
+            "connections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": { "type": "string" },
+                  "type": {
+                    "type": "string",
+                    "enum": ["door", "archway", "passage", "stairs"]
+                  },
+                  "position": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "description": { "type": "string" },
+        "features": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "lighting": { "type": "string" },
+        "inhabitants": { "type": "string" }
+      }
+    }
+  }
+}

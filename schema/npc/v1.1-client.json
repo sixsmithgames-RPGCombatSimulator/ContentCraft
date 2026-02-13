@@ -1,0 +1,850 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/npc/v1.1-client.json",
+  "title": "NPC Schema v1.1 (Client)",
+  "description": "Comprehensive schema for NPCs with D&D 5E support, custom world-building fields, and non-D&D flexibility",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1",
+      "description": "Schema version number (must be '1.1')"
+    },
+    "genre": {
+      "type": "string",
+      "enum": ["D&D", "Pathfinder", "Sci-Fi", "Modern", "Fantasy", "Historical", "Custom"],
+      "description": "Genre/system for this NPC. Affects which fields are required."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "description": "The NPC's canonical name"
+    },
+    "title": { "type": "string", "description": "Title or role (e.g., 'Knight Commander', 'Master Thief')" },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Alternative names, nicknames, or code names"
+    },
+    "role": { "type": "string", "description": "Narrative role in the story" },
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Physical appearance, demeanor, and narrative summary"
+    },
+    "appearance": { "type": "string", "description": "Physical description" },
+    "background": { "type": "string", "description": "Personal history and backstory" },
+    "race": { "type": "string", "description": "Character race (e.g., 'Human', 'Elf', 'Dwarf')" },
+    "size": { "type": "string", "description": "Creature size (e.g., 'Medium', 'Large')" },
+    "creature_type": { "type": "string", "description": "Creature type (e.g., 'Humanoid', 'Undead')" },
+    "subtype": { "type": "string", "description": "Creature subtype (e.g., 'Human', 'Elf')" },
+    "alignment": { "type": "string", "description": "Alignment (e.g., 'Lawful Good', 'Chaotic Evil')" },
+    "affiliation": { "type": "string", "description": "Faction or organization membership" },
+    "location": { "type": "string", "description": "Current or home location" },
+    "era": { "type": "string", "description": "Time period or era" },
+    "challenge_rating": { "type": "string", "description": "Challenge Rating for combat encounters" },
+    "experience_points": { "type": "integer", "minimum": 0, "description": "XP awarded for defeating this NPC" },
+    "hooks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Story hooks and adventure seeds"
+    },
+    "tactics": { "type": "string", "description": "Combat tactics and strategy" },
+    "class_levels": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["class", "level"],
+            "properties": {
+              "class": { "type": "string" },
+              "level": { "type": "integer", "minimum": 1, "maximum": 20 },
+              "subclass": { "type": "string" },
+              "notes": { "type": "string" }
+            }
+          },
+          "description": "Array of class objects (preferred format)"
+        },
+        {
+          "type": "string",
+          "description": "Legacy string format (e.g., 'Artificer 16 / Vampire 9')"
+        }
+      ],
+      "description": "Class levels and subclasses"
+    },
+    "multiclass_features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "source_classes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Classes that combine to create this feature"
+          },
+          "description": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Features gained from multiclassing or hybrid class mechanics"
+    },
+    "class_features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string", "description": "Feature name (e.g., 'Arcane Recovery', 'Spell Mastery')" },
+          "description": { "type": "string", "description": "Full mechanical description of the feature" },
+          "level": { "type": "integer", "minimum": 1, "maximum": 20, "description": "Class level this feature is gained" },
+          "source": { "type": "string", "description": "Source class (e.g., 'Wizard', 'Fighter')" },
+          "uses": { "type": "string", "description": "Usage limits (e.g., '1/long rest', 'At will')" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Base class features gained from class levels (e.g., Arcane Recovery, Extra Attack, Spell Mastery)"
+    },
+    "subclass_features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string", "description": "Feature name (e.g., 'Portent', 'Expert Divination')" },
+          "description": { "type": "string", "description": "Full mechanical description of the feature" },
+          "level": { "type": "integer", "minimum": 1, "maximum": 20, "description": "Class level this subclass feature is gained" },
+          "source": { "type": "string", "description": "Subclass name (e.g., 'School of Divination', 'Battle Master')" },
+          "uses": { "type": "string", "description": "Usage limits (e.g., '2/long rest', 'At will')" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Subclass/archetype features (e.g., Divination Wizard's Portent, Champion Fighter's Improved Critical)"
+    },
+    "racial_features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string", "description": "Feature name (e.g., 'Darkvision', 'Fey Ancestry', 'Relentless Endurance')" },
+          "description": { "type": "string", "description": "Full mechanical description" },
+          "source": { "type": "string", "description": "Race or subrace (e.g., 'Elf', 'High Elf', 'Human (Variant)')" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Racial traits and features (e.g., Darkvision, Fey Ancestry, Breath Weapon, Relentless Endurance)"
+    },
+    "feats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string", "description": "Feat name (e.g., 'War Caster', 'Alert', 'Lucky')" },
+          "description": { "type": "string", "description": "Full mechanical description of the feat" },
+          "source": { "type": "string", "description": "How obtained (e.g., 'ASI (Level 4)', 'Background', 'Racial Bonus Feat')" },
+          "prerequisite": { "type": "string", "description": "Any prerequisites for this feat" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Feats taken (from ASI, background origin feat, racial bonus feat, etc.)"
+    },
+    "asi_choices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["level", "choice"],
+        "properties": {
+          "level": { "type": "integer", "minimum": 1, "maximum": 20, "description": "Class level of the ASI" },
+          "choice": { "type": "string", "description": "'ASI' or feat name taken at this level" },
+          "details": { "type": "string", "description": "e.g., '+2 INT' or 'War Caster feat'" },
+          "source_class": { "type": "string", "description": "Which class provided this ASI (for multiclass)" }
+        }
+      },
+      "description": "Ability Score Improvement choices at each ASI level (tracking what was taken: ASI or Feat)"
+    },
+    "background_feature": {
+      "type": "object",
+      "properties": {
+        "background_name": { "type": "string", "description": "Background name (e.g., 'Sage', 'Noble', 'Criminal')" },
+        "feature_name": { "type": "string", "description": "Background feature name (e.g., 'Researcher', 'Position of Privilege')" },
+        "description": { "type": "string", "description": "Full description of the background feature" },
+        "origin_feat": { "type": "string", "description": "Origin feat granted by background (2024 rules, e.g., 'Magic Initiate', 'Alert')" },
+        "skill_proficiencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Skills granted by this background"
+        },
+        "tool_proficiencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tool proficiencies granted by this background"
+        },
+        "languages_granted": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Languages granted by this background"
+        },
+        "equipment_granted": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Starting equipment from background"
+        },
+        "notes": { "type": "string" }
+      },
+      "description": "Background details including feature, origin feat (2024), skill/tool proficiencies, and equipment"
+    },
+    "ability_scores": {
+      "type": "object",
+      "required": ["str", "dex", "con", "int", "wis", "cha"],
+      "properties": {
+        "str": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "dex": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "con": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "int": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "wis": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "cha": { "type": "integer", "minimum": 1, "maximum": 30 }
+      },
+      "description": "The six ability scores (optional for non-D&D NPCs)"
+    },
+    "armor_class": {
+      "oneOf": [
+        { "type": "integer", "minimum": 5, "maximum": 30 },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["value"],
+            "properties": {
+              "value": { "type": "integer", "minimum": 5, "maximum": 30 },
+              "type": { "type": "string" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      ],
+      "description": "Armor Class value or list of AC values with armor types"
+    },
+    "hit_points": {
+      "oneOf": [
+        { "type": "integer", "minimum": 1 },
+        {
+          "type": "object",
+          "properties": {
+            "average": { "type": "integer", "minimum": 1 },
+            "formula": { "type": "string" },
+            "notes": { "type": "string" }
+          }
+        }
+      ],
+      "description": "Hit points as integer or object with average/formula"
+    },
+    "hit_dice": { "type": "string", "description": "Hit dice formula (e.g., '8d8+16')" },
+    "proficiency_bonus": {
+      "oneOf": [
+        { "type": "integer", "minimum": 2, "maximum": 10 },
+        { "type": "string" }
+      ],
+      "description": "Proficiency bonus value"
+    },
+    "speed": {
+      "type": "object",
+      "description": "Movement speeds by type",
+      "properties": {
+        "walk": { "type": "string" },
+        "fly": { "type": "string" },
+        "swim": { "type": "string" },
+        "climb": { "type": "string" },
+        "burrow": { "type": "string" },
+        "hover": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "saving_throws": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value"],
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Saving throw proficiencies with bonuses"
+    },
+    "skill_proficiencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value"],
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Skill proficiencies with bonuses"
+    },
+    "senses": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Special senses (darkvision, blindsight, etc.)"
+    },
+    "passive_perception": { "type": "integer", "minimum": 0, "description": "Passive Perception score" },
+    "languages": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Languages known"
+    },
+    "damage_resistances": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Damage types resisted"
+    },
+    "damage_immunities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Damage types immune to"
+    },
+    "damage_vulnerabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Damage types vulnerable to"
+    },
+    "condition_immunities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Conditions immune to"
+    },
+    "abilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" },
+          "source": { "type": "string", "description": "Where this ability comes from (e.g., 'Vampire', 'Artificer')" }
+        }
+      },
+      "description": "Special abilities and traits (also accepts 'traits' as alias)"
+    },
+    "additional_traits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Additional traits not listed elsewhere"
+    },
+    "vampire_traits": {
+      "type": "object",
+      "description": "Vampire-specific mechanics (if NPC has vampire template)",
+      "properties": {
+        "vampire_level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Vampire template level (1-20)"
+        },
+        "regeneration": {
+          "type": "object",
+          "properties": {
+            "hit_points_per_turn": { "type": "integer", "minimum": 0 },
+            "disable_conditions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Conditions that disable regeneration (e.g., 'radiant damage', 'running water')"
+            }
+          }
+        },
+        "weaknesses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "effect"],
+            "properties": {
+              "type": { "type": "string", "description": "e.g., 'Stake to Heart', 'Sunlight', 'Holy Water'" },
+              "effect": { "type": "string", "description": "What happens when exposed" }
+            }
+          }
+        },
+        "blood_requirements": {
+          "type": "object",
+          "properties": {
+            "frequency": { "type": "string", "description": "e.g., 'daily', 'weekly'" },
+            "amount": { "type": "string", "description": "How much blood needed" },
+            "consequences": { "type": "string", "description": "What happens if not fed" }
+          }
+        },
+        "shapechanger_forms": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Forms the vampire can take (e.g., 'bat', 'mist', 'wolf')"
+        }
+      }
+    },
+    "equipment": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Mundane equipment carried"
+    },
+    "attuned_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "rarity": {
+            "type": "string",
+            "enum": ["Common", "Uncommon", "Rare", "Very Rare", "Legendary", "Artifact"]
+          },
+          "requires_attunement": { "type": "boolean" },
+          "attuned": { "type": "boolean", "description": "Whether currently attuned" },
+          "description": { "type": "string" },
+          "properties": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Special properties of the item"
+          },
+          "charges": {
+            "type": "object",
+            "properties": {
+              "current": { "type": "integer", "minimum": 0 },
+              "maximum": { "type": "integer", "minimum": 0 },
+              "recharge": { "type": "string", "description": "e.g., '1d6+1 at dawn'" }
+            }
+          }
+        }
+      },
+      "description": "Magic items requiring attunement"
+    },
+    "magic_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "rarity": {
+            "type": "string",
+            "enum": ["Common", "Uncommon", "Rare", "Very Rare", "Legendary", "Artifact"]
+          },
+          "description": { "type": "string" }
+        }
+      },
+      "description": "Magic items not requiring attunement"
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entity", "relationship"],
+        "properties": {
+          "entity": { "type": "string" },
+          "relationship": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Basic relationships with other entities"
+    },
+    "allies_friends": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "relationship"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "description": "e.g., 'vampire spawn', 'construct', 'NPC'" },
+          "relationship": { "type": "string", "description": "e.g., 'Childe', 'Servant', 'Ally'" },
+          "location": { "type": "string" },
+          "stat_summary": { "type": "string", "description": "e.g., 'CR 5 vampire spawn'" },
+          "stat_block_ref": { "type": "string", "description": "Reference to full NPC file if it exists" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Detailed ally and friend stat blocks for complex NPCs with networks"
+    },
+    "factions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "role"],
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": "string", "description": "e.g., 'Leader', 'Member', 'Enemy', 'Rival'" },
+          "standing": { "type": "string", "description": "e.g., 'Exalted', 'Honored', 'Neutral', 'Hostile'" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Faction affiliations and standings"
+    },
+    "minions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "description": "Type of minion (e.g., 'Vampire Spawn', 'Construct')" },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "loyalty": { "type": "string", "description": "e.g., 'Absolute', 'Strong', 'Conditional'" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Controlled creatures, constructs, or servants"
+    },
+    "personality": {
+      "type": "object",
+      "required": ["traits", "ideals", "bonds", "flaws"],
+      "properties": {
+        "traits": { "type": "array", "items": { "type": "string" } },
+        "ideals": { "type": "array", "items": { "type": "string" } },
+        "bonds": { "type": "array", "items": { "type": "string" } },
+        "flaws": { "type": "array", "items": { "type": "string" } }
+      },
+      "description": "Personality traits, ideals, bonds, and flaws"
+    },
+    "motivations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Character motivations and goals"
+    },
+    "spellcasting": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "description": "e.g., 'Innate', 'Prepared', 'Known', 'Artificer'" },
+        "ability": { "type": "string", "description": "Spellcasting ability (e.g., 'INT', 'WIS', 'CHA')" },
+        "save_dc": { "type": "integer", "minimum": 0 },
+        "attack_bonus": { "type": "integer" },
+        "notes": { "type": "string" },
+        "cantrips": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Cantrips known (separate from known_spells)"
+        },
+        "spellcasting_focus": {
+          "type": "string",
+          "description": "e.g., 'arcane focus', 'component pouch', 'holy symbol'"
+        },
+        "spell_storing_items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["item", "spell"],
+            "properties": {
+              "item": { "type": "string", "description": "e.g., 'Ring of Spell Storing'" },
+              "spell": { "type": "string" },
+              "level": { "type": "integer", "minimum": 0, "maximum": 9 },
+              "uses": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "description": "Artificer spell-storing items or similar mechanics"
+        },
+        "spell_slots": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "description": "Spell slots by level (e.g., {'1st': 4, '2nd': 3})"
+        },
+        "prepared_spells": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } },
+          "description": "Prepared spells by level (e.g., {'1st': ['Shield', 'Cure Wounds']})"
+        },
+        "innate_spells": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } },
+          "description": "Innate spells by uses per day (e.g., {'At will': ['Detect Magic'], '3/day': ['Fireball']})"
+        },
+        "known_spells": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "All spells known (excluding cantrips)"
+        }
+      },
+      "description": "Spellcasting information with enhanced Artificer support"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Actions available in combat"
+    },
+    "bonus_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Bonus actions available"
+    },
+    "reactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Reactions available"
+    },
+    "legendary_actions": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string" },
+        "count": { "type": "integer", "minimum": 1, "description": "Number of legendary actions per round" },
+        "reset": { "type": "string", "description": "When legendary actions reset (e.g., 'start of turn', 'short rest')" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "cost": { "type": "integer", "minimum": 1, "description": "How many legendary actions this costs" },
+              "uses": { "type": "string" },
+              "recharge": { "type": "string" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      },
+      "description": "Legendary actions with enhanced tracking"
+    },
+    "mythic_actions": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string" },
+        "trigger": { "type": "string", "description": "What triggers mythic actions (e.g., 'reduced to 0 HP')" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "uses": { "type": "string" },
+              "recharge": { "type": "string" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      },
+      "description": "Mythic actions"
+    },
+    "lair_description": {
+      "type": "string",
+      "description": "Description of the NPC's lair or base of operations"
+    },
+    "lair_actions": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Simple lair actions (legacy format)"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["action", "description"],
+            "properties": {
+              "initiative": { "type": "integer", "minimum": 0, "maximum": 30, "description": "Initiative count when action occurs" },
+              "action": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          },
+          "description": "Enhanced lair actions with initiative tracking"
+        }
+      ],
+      "description": "Actions available in the NPC's lair"
+    },
+    "regional_effects": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Simple regional effects (legacy format)"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["effect", "description"],
+            "properties": {
+              "radius": { "type": "string", "description": "e.g., '1 mile', '5 miles'" },
+              "effect": { "type": "string" },
+              "description": { "type": "string" },
+              "duration": { "type": "string", "description": "How long effect lasts after death/departure" }
+            }
+          },
+          "description": "Enhanced regional effects with radius/duration"
+        }
+      ],
+      "description": "Regional effects around the NPC's lair"
+    },
+    "treasure": {
+      "type": "object",
+      "properties": {
+        "coinage": { "type": "string", "description": "Coins carried/hoarded (e.g., '2,500 gp, 1,200 pp')" },
+        "art_objects": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "magic_items_list": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of magic item names (deprecated - use magic_items/attuned_items instead)"
+        },
+        "notes": { "type": "string" }
+      },
+      "description": "Treasure carried or hoarded by the NPC"
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Additional notes and GM guidance"
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Source books and references"
+    },
+    "stat_block": {
+      "type": "object",
+      "description": "Raw stat block data captured from the generator",
+      "additionalProperties": true
+    },
+    "rule_base": {
+      "type": "string",
+      "enum": ["2024RAW", "2014RAW"],
+      "pattern": "^(2024RAW|2014RAW|HouseRules:.+)$",
+      "description": "Rules version being used (D&D only)"
+    },
+    "sources_used": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Canon sources referenced during generation"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Assumptions made during generation"
+    },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["question", "options", "rule_impact"],
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 10
+          },
+          "options": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 2,
+            "maxItems": 5
+          },
+          "rule_impact": {
+            "type": "string",
+            "minLength": 10
+          },
+          "recommendation": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Open questions requiring user input"
+    },
+    "canon_update": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Summary of canon changes or additions"
+    },
+    "generation_metadata": {
+      "type": "object",
+      "description": "Metadata about the AI generation process",
+      "properties": {
+        "generated_date": { "type": "string", "format": "date-time" },
+        "ai_model": { "type": "string", "description": "AI model used for generation" },
+        "validation_notes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Notes from validation process"
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field", "issue"],
+            "properties": {
+              "field": { "type": "string" },
+              "issue": { "type": "string" },
+              "severity": {
+                "type": "string",
+                "enum": ["info", "warning", "error"]
+              }
+            }
+          },
+          "description": "Conflicts or issues found during generation"
+        },
+        "canon_alignment_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "How well the NPC aligns with established canon (0-100)"
+        }
+      }
+    },
+    "custom_fields": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Completely flexible custom fields for non-D&D NPCs or unique mechanics"
+    }
+  }
+}

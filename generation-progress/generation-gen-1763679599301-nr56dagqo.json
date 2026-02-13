@@ -1,0 +1,23 @@
+{
+  "sessionId": "gen-1763679599301-nr56dagqo",
+  "createdAt": "2025-11-20T22:59:59.301Z",
+  "lastUpdatedAt": "2025-11-20T22:59:59.301Z",
+  "config": {
+    "type": "location",
+    "prompt": "We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\n",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [],
+  "stageResults": {},
+  "currentStageIndex": 0
+}

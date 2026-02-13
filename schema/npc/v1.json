@@ -1,0 +1,330 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/npc/v1.json",
+  "type": "object",
+  "allOf": [{ "$ref": "../base/base.schema.json#/definitions/baseOutput" }],
+  "required": [
+    "name",
+    "description",
+    "race",
+    "class_levels",
+    "ability_scores",
+    "proficiency_bonus",
+    "personality",
+    "motivations"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 2
+    },
+    "title": { "type": "string" },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "role": { "type": "string" },
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Physical appearance, demeanor, and narrative summary"
+    },
+    "appearance": { "type": "string" },
+    "background": { "type": "string" },
+    "race": {
+      "type": "string"
+    },
+    "size": { "type": "string" },
+    "creature_type": { "type": "string" },
+    "subtype": { "type": "string" },
+    "alignment": { "type": "string" },
+    "affiliation": { "type": "string" },
+    "location": { "type": "string" },
+    "era": { "type": "string" },
+    "challenge_rating": { "type": "string" },
+    "experience_points": { "type": "integer", "minimum": 0 },
+    "hooks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tactics": { "type": "string" },
+    "class_levels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["class", "level"],
+        "properties": {
+          "class": { "type": "string" },
+          "level": { "type": "integer", "minimum": 1, "maximum": 20 },
+          "subclass": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "ability_scores": {
+      "type": "object",
+      "required": ["str", "dex", "con", "int", "wis", "cha"],
+      "properties": {
+        "str": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "dex": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "con": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "int": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "wis": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "cha": { "type": "integer", "minimum": 1, "maximum": 30 }
+      }
+    },
+    "armor_class": {
+      "oneOf": [
+        { "type": "integer", "minimum": 5, "maximum": 30 },
+        { "$ref": "#/definitions/armorClassList" }
+      ]
+    },
+    "hit_points": {
+      "oneOf": [
+        { "type": "integer", "minimum": 1 },
+        { "$ref": "#/definitions/hitPoints" }
+      ]
+    },
+    "hit_dice": { "type": "string" },
+    "proficiency_bonus": {
+      "oneOf": [
+        { "type": "integer", "minimum": 2, "maximum": 10 },
+        { "type": "string" }
+      ]
+    },
+    "speed": { "$ref": "#/definitions/speed" },
+    "saving_throws": { "$ref": "#/definitions/scoredList" },
+    "skill_proficiencies": { "$ref": "#/definitions/scoredList" },
+    "senses": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "passive_perception": { "type": "integer", "minimum": 0 },
+    "languages": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "damage_resistances": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "damage_immunities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "damage_vulnerabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "condition_immunities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "abilities": { "$ref": "#/definitions/featureList" },
+    "additional_traits": { "$ref": "#/definitions/featureList" },
+    "equipment": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "relationships": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/relationship" }
+    },
+    "personality": {
+      "type": "object",
+      "required": ["traits", "ideals", "bonds", "flaws"],
+      "properties": {
+        "traits": { "type": "array", "items": { "type": "string" } },
+        "ideals": { "type": "array", "items": { "type": "string" } },
+        "bonds": { "type": "array", "items": { "type": "string" } },
+        "flaws": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "motivations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "spellcasting": { "$ref": "#/definitions/spellcasting" },
+    "actions": { "$ref": "#/definitions/featureList" },
+    "bonus_actions": { "$ref": "#/definitions/featureList" },
+    "reactions": { "$ref": "#/definitions/featureList" },
+    "legendary_actions": { "$ref": "#/definitions/legendaryActions" },
+    "mythic_actions": { "$ref": "#/definitions/legendaryActions" },
+    "lair_actions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "regional_effects": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "stat_block": { "$ref": "#/definitions/statBlock" }
+  },
+  "definitions": {
+    "relationship": {
+      "type": "object",
+      "required": ["entity", "relationship"],
+      "properties": {
+        "entity": { "type": "string" },
+        "relationship": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "feature": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "uses": { "type": "string" },
+        "recharge": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "featureList": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/feature" }
+    },
+    "armorClassList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": { "type": "integer", "minimum": 5, "maximum": 30 },
+          "type": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "hitPoints": {
+      "type": "object",
+      "properties": {
+        "average": { "type": "integer", "minimum": 1 },
+        "formula": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "speed": {
+      "type": "object",
+      "description": "Movement speeds keyed by movement type",
+      "additionalProperties": { "type": "string" },
+      "properties": {
+        "walk": { "type": "string" },
+        "fly": { "type": "string" },
+        "swim": { "type": "string" },
+        "climb": { "type": "string" },
+        "burrow": { "type": "string" },
+        "hover": { "type": "string" }
+      }
+    },
+    "scoredList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value"],
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "spellcasting": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "ability": { "type": "string" },
+        "save_dc": { "type": "integer", "minimum": 0 },
+        "attack_bonus": { "type": "integer" },
+        "notes": { "type": "string" },
+        "spell_slots": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "prepared_spells": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } }
+        },
+        "innate_spells": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } }
+        },
+        "known_spells": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "legendaryActions": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string" },
+        "options": { "$ref": "#/definitions/featureList" }
+      }
+    },
+    "statBlock": {
+      "type": "object",
+      "description": "Raw stat block data captured from the generator",
+      "properties": {
+        "actions": { "$ref": "#/definitions/featureList" },
+        "bonus_actions": { "$ref": "#/definitions/featureList" },
+        "reactions": { "$ref": "#/definitions/featureList" },
+        "legendary_actions": { "$ref": "#/definitions/legendaryActions" },
+        "mythic_actions": { "$ref": "#/definitions/legendaryActions" },
+        "lair_actions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "regional_effects": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "speed": { "$ref": "#/definitions/speed" },
+        "saving_throws": { "$ref": "#/definitions/scoredList" },
+        "skills": { "$ref": "#/definitions/scoredList" },
+        "senses": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "damage_resistances": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "damage_immunities": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "damage_vulnerabilities": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "condition_immunities": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "armor_class": { "$ref": "#/definitions/armorClassList" },
+        "hit_points": { "$ref": "#/definitions/hitPoints" },
+        "proficiency_bonus": {
+          "oneOf": [
+            { "type": "integer" },
+            { "type": "string" }
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

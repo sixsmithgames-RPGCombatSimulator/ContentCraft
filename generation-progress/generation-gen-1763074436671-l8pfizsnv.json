@@ -1,0 +1,23 @@
+{
+  "sessionId": "gen-1763074436671-l8pfizsnv",
+  "createdAt": "2025-11-13T22:53:56.671Z",
+  "lastUpdatedAt": "2025-11-13T22:53:56.671Z",
+  "config": {
+    "type": "monster",
+    "prompt": "Frost Giant",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [],
+  "stageResults": {},
+  "currentStageIndex": 0
+}

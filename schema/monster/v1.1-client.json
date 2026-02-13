@@ -1,0 +1,377 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/monster/v1.1-client.json",
+  "title": "Monster Schema v1.1 (Client)",
+  "description": "Comprehensive schema for D&D 5E monster stat blocks with abilities, actions, legendary features, and ecology",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1",
+      "description": "Schema version number (must be '1.1')"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "description": "Monster name"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Physical appearance and general behavior"
+    },
+    "size": {
+      "type": "string",
+      "enum": ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"],
+      "description": "Creature size"
+    },
+    "creature_type": {
+      "type": "string",
+      "enum": ["Aberration", "Beast", "Celestial", "Construct", "Dragon", "Elemental", "Fey", "Fiend", "Giant", "Humanoid", "Monstrosity", "Ooze", "Plant", "Undead"],
+      "description": "Primary creature type"
+    },
+    "subtype": {
+      "type": "string",
+      "description": "Creature subtype (e.g., 'goblinoid', 'shapechanger', 'devil')"
+    },
+    "alignment": {
+      "type": "string",
+      "description": "Typical alignment"
+    },
+    "challenge_rating": {
+      "type": "string",
+      "description": "Challenge Rating (e.g., '1/4', '1/2', '1', '5', '20')"
+    },
+    "experience_points": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "XP value based on CR"
+    },
+    "proficiency_bonus": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 9,
+      "description": "Proficiency bonus based on CR"
+    },
+    "ability_scores": {
+      "type": "object",
+      "properties": {
+        "str": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "dex": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "con": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "int": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "wis": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "cha": { "type": "integer", "minimum": 1, "maximum": 30 }
+      },
+      "required": ["str", "dex", "con", "int", "wis", "cha"],
+      "description": "Ability scores"
+    },
+    "armor_class": {
+      "oneOf": [
+        { "type": "integer" },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "value": { "type": "integer" },
+              "type": { "type": "string" },
+              "notes": { "type": "string" }
+            },
+            "required": ["value"]
+          }
+        }
+      ],
+      "description": "Armor class (integer or array of AC objects)"
+    },
+    "hit_points": {
+      "oneOf": [
+        { "type": "integer" },
+        {
+          "type": "object",
+          "properties": {
+            "average": { "type": "integer" },
+            "formula": { "type": "string" }
+          }
+        }
+      ],
+      "description": "Hit points (integer or object with average + formula)"
+    },
+    "hit_dice": {
+      "type": "string",
+      "description": "Hit dice formula (e.g., '8d10+24')"
+    },
+    "speed": {
+      "type": "object",
+      "properties": {
+        "walk": { "type": "string" },
+        "fly": { "type": "string" },
+        "swim": { "type": "string" },
+        "climb": { "type": "string" },
+        "burrow": { "type": "string" },
+        "hover": { "type": "boolean" }
+      },
+      "description": "Movement speeds"
+    },
+    "saving_throws": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "string" },
+          "notes": { "type": "string" }
+        },
+        "required": ["name", "value"]
+      },
+      "description": "Saving throw proficiencies"
+    },
+    "skill_proficiencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "string" },
+          "notes": { "type": "string" }
+        },
+        "required": ["name", "value"]
+      },
+      "description": "Skill proficiencies"
+    },
+    "damage_vulnerabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Damage vulnerabilities"
+    },
+    "damage_resistances": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Damage resistances"
+    },
+    "damage_immunities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Damage immunities"
+    },
+    "condition_immunities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Condition immunities"
+    },
+    "senses": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Special senses (e.g., 'darkvision 60 ft.', 'blindsight 30 ft.')"
+    },
+    "passive_perception": {
+      "type": "integer",
+      "description": "Passive Perception score"
+    },
+    "languages": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Languages understood/spoken"
+    },
+    "abilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Special traits and passive abilities (e.g., Magic Resistance, Pack Tactics)"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "attack_bonus": { "type": "string" },
+          "damage": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Actions the monster can take"
+    },
+    "bonus_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Bonus actions"
+    },
+    "reactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Reactions"
+    },
+    "multiattack": {
+      "type": "string",
+      "description": "Multiattack description"
+    },
+    "spellcasting": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "description": "Spellcasting or Innate Spellcasting" },
+        "ability": { "type": "string", "description": "Spellcasting ability" },
+        "save_dc": { "type": "integer" },
+        "attack_bonus": { "type": "string" },
+        "level": { "type": "integer", "description": "Caster level" },
+        "slots": { "type": "object", "description": "Spell slots by level" },
+        "spells_known": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "level": { "type": "integer" },
+              "notes": { "type": "string" }
+            }
+          }
+        },
+        "at_will": { "type": "array", "items": { "type": "string" } },
+        "per_day": { "type": "object", "description": "Spells per day (key: frequency, value: spell list)" }
+      },
+      "description": "Spellcasting abilities"
+    },
+    "legendary_actions": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string", "description": "How many legendary actions per round" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "cost": { "type": "integer", "description": "Number of legendary actions to use" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      },
+      "description": "Legendary actions"
+    },
+    "mythic_actions": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "cost": { "type": "integer" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      },
+      "description": "Mythic actions (for mythic encounters)"
+    },
+    "lair_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Lair actions"
+    },
+    "regional_effects": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Regional effects around the creature's lair"
+    },
+    "location": {
+      "type": "string",
+      "description": "Typical habitat or environment"
+    },
+    "ecology": {
+      "type": "string",
+      "description": "Ecology, diet, social structure, and behavior"
+    },
+    "lore": {
+      "type": "string",
+      "description": "Background lore, origin story, and interesting facts"
+    },
+    "tactics": {
+      "type": "string",
+      "description": "Combat tactics and behavior patterns"
+    },
+    "rule_base": {
+      "type": "string",
+      "description": "Rule system used"
+    },
+    "sources_used": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Canon sources referenced"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" } },
+          "rule_impact": { "type": "string" },
+          "recommendation": { "type": "string" }
+        }
+      }
+    },
+    "canon_update": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "GM notes and adventure hooks"
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Source book references"
+    }
+  },
+  "additionalProperties": true
+}

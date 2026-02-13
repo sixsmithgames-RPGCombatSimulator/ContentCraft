@@ -1,0 +1,41 @@
+/**
+ * Development Dockerfile for ContentCraft
+ *
+ * © 2025 Sixsmith Games. All rights reserved.
+ * This software and associated documentation files are proprietary and confidential.
+ */
+
+# Development Server
+FROM node:20-alpine AS server-dev
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev)
+RUN npm install
+
+# Copy tsconfig
+COPY tsconfig.server.json ./
+
+# Source files will be mounted as volumes
+EXPOSE 3000
+
+CMD ["npm", "run", "dev:server"]
+
+# Development Client
+FROM node:20-alpine AS client-dev
+
+WORKDIR /app/client
+
+# Copy package files
+COPY client/package*.json ./
+
+# Install all dependencies (including dev)
+RUN npm install
+
+# Source files will be mounted as volumes
+EXPOSE 5173
+
+CMD ["npm", "run", "dev"]

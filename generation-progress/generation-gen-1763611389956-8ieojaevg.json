@@ -1,0 +1,339 @@
+{
+  "sessionId": "gen-1763611389956-8ieojaevg",
+  "createdAt": "2025-11-20T04:03:09.956Z",
+  "lastUpdatedAt": "2025-11-20T04:07:39.978Z",
+  "config": {
+    "type": "location",
+    "prompt": "We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Foundation",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 2/4: Foundation.\n\nYou are building upon the Purpose stage which determined the scale and type.\n\nYour task is to establish the structural foundation appropriate to the location's scale.\n\nFOR SIMPLE/MODERATE LOCATIONS (taverns, shops, small dungeons):\nFocus on these fields:\n- layout: Object describing overall arrangement\n  {\n    description: \"Overall layout description\",\n    dimensions: { length: \"60 ft\", width: \"40 ft\", height: \"15 ft\" } (if applicable),\n    levels: Array of level descriptions (e.g., [\"main floor\", \"cellar\", \"upstairs rooms\"])\n  }\n- spatial_organization: How spaces relate to each other (e.g., \"main room with kitchen in back, stairs to rooms above\")\n- access_points: Entrances/exits\n\nFOR COMPLEX/MASSIVE LOCATIONS (castles, cities, mega-dungeons):\nAdd advanced structural fields:\n- wings: Array of major sections (if applicable)\n- floors: Detailed floor structure with elevations\n- locking_points: Fixed structural anchors for geometry validation\n- load_bearing_walls: Critical structural elements\n- vertical_connections: Stairs, ramps, lifts\n- constraints: Binding rules for space generation\n\nMETADATA LINKING SYSTEM (ALL SCALES):\n- chunk_mesh_metadata: Object for seamless chunk integration (REQUIRED)\n  {\n    connection_protocol: \"How chunks connect\" (e.g., \"doors\", \"hallways\", \"adjacency\"),\n    boundary_markers: Array of connection points for other chunks,\n    spatial_hierarchy: \"How chunks nest\" (e.g., \"floor > wing > room\" or \"area > sub-area > feature\"),\n    coordinate_system: \"Coordinate reference\" (e.g., \"relative\", \"absolute grid\", \"narrative only\")\n  }\n\nThis metadata ensures chunks mesh perfectly when generated iteratively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\",\n  \"deliverable\": \"location\",\n  \"stage\": \"foundation\",\n  \"purpose\": {},\n  \"instructions\": \"Generate the structural foundation for this location (scale: moderate).\\n\\nKeep it simple - just layout, dimensions, and spatial organization. No complex topology needed.\\n\\nCRITICAL: Include chunk_mesh_metadata to enable seamless integration when spaces are generated iteratively.\"\n}",
+      "response": "{\n  \"layout\": {\n    \"description\": \"A massive rectangular fortification aligned East-West, divided into three primary lateral bands (North, Central, South). The layout centers on a massive Keep surrounded by open courtyards, with specialized wards tucked against the curtain walls.\",\n    \"dimensions\": {\n      \"length\": \"1040 ft (East-West)\",\n      \"width\": \"840 ft (North-South)\",\n      \"area\": \"874,000 sq ft\"\n    },\n    \"levels\": [\n      \"Ground Level (Current Focus)\",\n      \"Keep 1st Floor\",\n      \"Keep 2nd Floor\",\n      \"Keep 3rd Floor/Spires\",\n      \"Underground Levels (Storage, Forge, Mines)\"\n    ]\n  },\n  \"wings\": [\n    {\n      \"name\": \"Central Keep Base\",\n      \"dimensions\": \"360 ft x 300 ft\",\n      \"position\": \"Center-offset\",\n      \"function\": \"Main fortification and residence\"\n    },\n    {\n      \"name\": \"North Ward\",\n      \"dimensions\": \"1040 ft x ~250 ft\",\n      \"position\": \"North band\",\n      \"function\": \"Administration and barracks\"\n    },\n    {\n      \"name\": \"South Industrial Zone\",\n      \"dimensions\": \"Irregular (Southwest/South Central)\",\n      \"position\": \"South band\",\n      \"function\": \"Forge logistics, chimneys, hoists\"\n    },\n    {\n      \"name\": \"Southeast Outer Ward\",\n      \"dimensions\": \"300 ft x 240 ft\",\n      \"position\": \"Southeast corner\",\n      \"function\": \"Stables, wagons, mustering\"\n    }\n  ],\n  \"floors\": {\n    \"ground_level\": {\n      \"elevation\": \"0 ft\",\n      \"zones\": [\"Outer Courtyards\", \"Keep Great Hall\", \"Service Wings\", \"Stables\", \"Industrial Hoist Houses\"]\n    }\n  },\n  \"locking_points\": [\n    {\n      \"id\": \"LP_MAIN_GATE\",\n      \"location\": \"Southeast Wall\",\n      \"notes\": \"Primary entry point for wagons/troops\"\n    },\n    {\n      \"id\": \"LP_KEEP_ENTRANCE\",\n      \"location\": \"Central Keep South Face\",\n      \"notes\": \"Main entry to the Keep structure\"\n    },\n    {\n      \"id\": \"LP_SPIRE_BASE\",\n      \"location\": \"Keep West Face\",\n      \"notes\": \"Foundation for the 120ft spire\"\n    },\n    {\n      \"id\": \"LP_FORGE_SHAFT\",\n      \"location\": \"South Industrial Zone\",\n      \"notes\": \"Vertical alignment with underground Bloodforge\"\n    }\n  ],\n  \"load_bearing_walls\": [\n    \"Exterior Curtain Wall (East: 70ft, South: 60ft, West/North: 45ft)\",\n    \"Central Keep Perimeter Walls\",\n    \"Industrial Chimney Columns\"\n  ],\n  \"vertical_connections\": [\n    \"Grand Staircase (Keep Interior)\",\n    \"Service Lifts (Keep Kitchens)\",\n    \"Industrial Winch Hoists (South Zone to Underground)\",\n    \"Wall Ramparts Access Stairs\"\n  ],\n  \"constraints\": [\n    \"Southeast Ward must not overlap Central Keep footprint\",\n    \"Industrial Zone must align vertically with underground map\",\n    \"Courtyards must provide clear logistical flow between wards\"\n  ],\n  \"chunk_mesh_metadata\": {\n    \"connection_protocol\": \"Cartesian Grid Alignment (10ft squares)\",\n    \"boundary_markers\": [\n      \"North_Ward_Transition_Line\",\n      \"Keep_Perimeter_Threshold\",\n      \"South_Industrial_Demarcation\"\n    ],\n    \"spatial_hierarchy\": \"Floor > Ward > Building/Structure > Room\",\n    \"coordinate_system\": \"Absolute Grid (Origin: Northwest Corner of Outer Wall)\"\n  }\n}",
+      "timestamp": "2025-11-20T04:05:05.426Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 3/4: Spaces (Iterative Generation).\n\nYou are generating individual spaces (rooms, areas, chambers) one at a time.\n\nMETADATA LINKING FOR PERFECT MESHING:\nEach space you generate MUST include linking metadata to mesh perfectly with other chunks:\n- chunk_id: Unique identifier for this space chunk\n- mesh_anchors: Object describing connection points\n  {\n    connects_to: Array of space IDs this connects to (or \"pending\" for future chunks),\n    connection_types: Array of connection methods (e.g., \"door\", \"hallway\", \"stairs\", \"open\"),\n    boundary_interface: Precise description of where this chunk meets others,\n    spatial_relationship: How this chunk fits in the hierarchy (e.g., \"ground_floor.main_hall.alcove\")\n  }\n\nADAPTIVE COMPLEXITY BASED ON SCALE:\n\nFOR SIMPLE/MODERATE (taverns, small buildings):\n- id, name, purpose, description\n- dimensions: {length, width, height} (can be approximate)\n- connections: Array of {to: space_id, type: \"door\"|\"archway\"|\"stairs\"}\n- features: Array of notable features\n- lighting, inhabitants\n\nFOR COMPLEX/MASSIVE (castles, mega-dungeons):\nAdd geometry validation:\n- geometry: Object with precise dimensional data\n  {\n    dimensions: exact measurements,\n    position: coordinates or relative positioning,\n    locking_points: which structural anchors this attaches to,\n    walls: wall descriptions with load-bearing status\n  }\n- validation_notes: Array of geometry checks performed\n\nCONFLICT DETECTION:\nIf you detect issues (overlaps, impossible connections, dimension conflicts), add a proposal:\n{\n  question: \"Describe the specific conflict\",\n  options: [\"Solution 1\", \"Solution 2\", \"Solution 3\", \"Custom\"],\n  rule_impact: \"What constraint is violated\",\n  field_path: \"geometry.dimensions\",\n  severity: \"blocking\" | \"warning\"\n}\n\nReturn ONLY a JSON object with the space fields PLUS mesh_anchors and (if conflicts) proposals[].\nNo markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\",\n  \"deliverable\": \"location\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"castle_state\": {\n    \"existing_spaces\": [],\n    \"mesh_metadata\": {}\n  },\n  \"instructions\": \"Generate the next space with proper mesh_anchors for integration.\"\n}",
+      "response": "{\n  \"id\": \"L1_KEEP_MAIN_HALL\",\n  \"name\": \"The Iron Vestibule (Central Keep Main Entry)\",\n  \"location_type\": \"interior_hall\",\n  \"purpose\": \"Main entrance, defense checkpoint, and transit zone to upper Great Hall\",\n  \"description\": \"The grand entry hall of the Central Keep at ground level. Massive reinforced stone pillars support the Great Hall directly above. The floor is polished dark slate, and the walls are lined with weapon racks and torch sconces. A grand split-staircase dominates the north wall, leading up to the First Floor Feast Chambers.\",\n  \"scale\": \"massive\",\n  \"geometry\": {\n    \"dimensions\": {\n      \"width\": \"100 ft\",\n      \"depth\": \"60 ft\",\n      \"height\": \"20 ft\"\n    },\n    \"position\": {\n      \"relative_to_keep\": \"Centered on South Face\",\n      \"coordinates\": \"Centered horizontally in the 360ft wide Keep footprint\"\n    },\n    \"walls\": {\n      \"south_wall\": \"5ft thick Exterior Keep Wall (Stone)\",\n      \"north_wall\": \"Interior Load-bearing (supports upper Great Hall hearths)\",\n      \"east_west_walls\": \"Partition walls separating service wings\"\n    },\n    \"locking_points\": [\n      \"KEEP_SOUTH_GATE\",\n      \"STAIRCASE_TO_L2\"\n    ]\n  },\n  \"mesh_anchors\": {\n    \"chunk_id\": \"L1_KEEP_MAIN_HALL\",\n    \"connects_to\": [\n      \"L1_KEEP_SOUTH_COURTYARD\",\n      \"L1_KEEP_EAST_SERVICE_WING\",\n      \"L1_KEEP_WEST_GUARD_WING\",\n      \"L2_KEEP_GREAT_HALL\"\n    ],\n    \"connection_types\": [\n      \"Double Reinforced Doors (South)\",\n      \"Stone Archway (East/West)\",\n      \"Grand Staircase (Up/North)\"\n    ],\n    \"boundary_interface\": \"South face aligns with Keep perimeter; North face abuts internal storage/dungeon access corridors.\",\n    \"spatial_relationship\": \"ground_level.central_keep.entry_zone\"\n  },\n  \"features\": [\n    \"Murder holes in ceiling (controlled from L2)\",\n    \"Two large guard stations flanking the south entrance\",\n    \"Grand split-staircase rising to the north\",\n    \"Dampening acoustics to silence armor clanking\"\n  ],\n  \"lighting\": \"Dim, flickering torchlight in iron sconces\",\n  \"inhabitants\": \"Keep guards, servants transit\",\n  \"validation_notes\": [\n    \"Width (100ft) fits comfortably within Keep South Face (360ft)\",\n    \"Ceiling height (20ft) accounts for heavy load of Great Hall above\",\n    \"South entrance aligns with description of 'wide courtyards' to the south\"\n  ]\n}",
+      "timestamp": "2025-11-20T04:05:54.309Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Details",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 4/4: Details.\n\nThe structure is now complete. Add rich narrative details that bring the location to life.\n\nFocus on these fields:\n- materials: Construction materials used\n- lighting_scheme: Overall lighting approach\n- atmosphere: Mood and feeling (2-3 sentences)\n- inhabitants: Who lives/works/visits here\n  {\n    permanent_residents: Array of {type, count},\n    notable_npcs: Array of {name, role, location},\n    visitors: Array of typical visitor types,\n    creatures: Array of any monsters/animals\n  }\n- encounter_areas: Spaces suitable for encounters\n  Each area: {\n    space_id: string,\n    encounter_type: \"combat\"|\"social\"|\"puzzle\"|\"trap\"|\"exploration\",\n    description: string,\n    tactical_notes: string (if combat)\n  }\n- secrets: Secret features (passages, rooms, compartments, doors)\n  Each secret: {type, location, description, how_to_find}\n- treasure_locations: Hidden or secured treasure spots\n- history: Narrative history (2-3 paragraphs)\n- current_events: What's happening now (plot hooks)\n- adventure_hooks: Array of adventure seeds\n- special_features: Unique or magical features\n- cinematic_walkthrough: Narrative walkthrough of exploring the location (3-4 paragraphs)\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\",\n  \"deliverable\": \"location\",\n  \"stage\": \"details\",\n  \"complete_structure\": {\n    \"purpose\": {},\n    \"foundation\": {},\n    \"spaces\": {}\n  },\n  \"instructions\": \"Add rich narrative details to this location.\\n\\nInclude:\\n- Materials, lighting, atmosphere\\n- Inhabitants and notable NPCs\\n- Encounter areas with tactical notes\\n- Secrets and treasure locations\\n- History and current events\\n- Adventure hooks\\n- A cinematic walkthrough that brings it to life\\n\\nMake it vivid and usable at the table.\"\n}",
+      "response": "{\n  \"materials\": \"The castle is constructed primarily of quarried black basalt and iron-reinforced granite, giving it a dark, imposing silhouette against the mountain sky. The Central Keep features 'Blood-veined Marble'—a rare stone that appears to weep crimson in humid weather. The South Industrial Zone is dominated by rusted heavy iron plating, riveted steel beams, and blackened brick chimneys. The floors are mostly cobblestone in the yards and polished slate within the Keep.\",\n  \"lighting_scheme\": \"The exterior walls are lit by massive oil braziers that burn with a thick, acrid smoke, creating a permanent smog layer. The South Industrial Zone glows with the dull, rhythmic orange pulse of the vents connected to the forge below. Inside the Keep's ground level, lighting is austere—magical cold-fire sconces provide dim, bluish illumination that keeps shadows long, while the North Ward relies on utilitarian torchlight.\",\n  \"atmosphere\": \"The air at ground level tastes of ozone, sulfur, and cold iron. The atmosphere is one of oppressive, industrialized militarism. The ground vibrates rhythmically—a subtle, constant thrumming from the subterranean Bloodforge machinery. In the Southeast Ward, the chaotic noise of shouting drill sergeants and shoeing horses dominates, while the Central Keep emits a heavy, threatening silence broken only by the clang of armored patrols.\",\n  \"inhabitants\": {\n    \"permanent_residents\": [\n      { \"type\": \"Bloodforge Guards (Heavily Armored)\", \"count\": 200 },\n      { \"type\": \"Indentured Smiths & Engineers\", \"count\": 80 },\n      { \"type\": \"Stable Hands & Servants\", \"count\": 50 },\n      { \"type\": \"Warhorses\", \"count\": 60 },\n      { \"type\": \"Nightmares (Vampire Mounts)\", \"count\": 12 }\n    ],\n    \"notable_npcs\": [\n      { \"name\": \"Castellan Varic Thorne\", \"role\": \"Overseer of Ground Defenses\", \"location\": \"North Ward Admin Block\" },\n      { \"name\": \"Chief Artificer Hestia Molt\", \"role\": \"Head of Industrial Hoists\", \"location\": \"South Industrial Winch House\" },\n      { \"name\": \"Stablemaster Groll\", \"role\": \"Keeper of the Nightmares\", \"location\": \"Southeast Outer Ward Stables\" }\n    ],\n    \"visitors\": [\n      \"Merchant caravans delivering raw ore\",\n      \"Visiting vampire nobility (rarely on foot)\",\n      \"Mercenary captains seeking contracts\"\n    ],\n    \"creatures\": [\n      \"Gargoyles (Perched on the Keep walls)\",\n      \"Guard Drakes (Patrolling the Winch Houses)\"\n    ]\n  },\n  \"encounter_areas\": [\n    {\n      \"space_id\": \"L1_SOUTH_WINCH_HOUSE\",\n      \"encounter_type\": \"combat\",\n      \"description\": \"A massive, sweltering chamber containing the primary chain hoists for the mines below. The floor is a metal grate over a drop into darkness.\",\n      \"tactical_notes\": \"Hazardous terrain. Characters can be pushed into moving gears (4d6 bludgeoning) or shoved through grates (fall damage). The noise imposes disadvantage on Perception checks relying on hearing.\"\n    },\n    {\n      \"space_id\": \"L1_SOUTHEAST_MUSTERING_YARD\",\n      \"encounter_type\": \"social\",\n      \"description\": \"A muddy, trodden yard where guards run drills. A quartermaster argues with a wagon driver near the gate.\",\n      \"tactical_notes\": \"Social infiltration opportunity. Characters can blend in as mercenaries or servants. Failing a deception check results in immediate confrontation with 2d6 guards.\"\n    },\n    {\n      \"space_id\": \"L1_KEEP_IRON_VESTIBULE\",\n      \"encounter_type\": \"trap\",\n      \"description\": \"The grand entry hall to the Keep. The floor is beautifully polished, but murder holes line the ceiling.\",\n      \"tactical_notes\": \"If the alarm is raised, heavy portcullises drop, and burning oil is poured from the 'Feast Chambers' above (Dex save DC 15). Guards fire crossbows from protected balconies.\"\n    }\n  ],\n  \"secrets\": [\n    {\n      \"type\": \"Passage\",\n      \"location\": \"Southeast Stables (Stall 13)\",\n      \"description\": \"A loose stone under a trough reveals a narrow smuggling tunnel leading outside the East Wall.\",\n      \"how_to_find\": \"DC 18 Investigation check or observing Stablemaster Groll late at night.\"\n    },\n    {\n      \"type\": \"Compartment\",\n      \"location\": \"North Ward Barracks\",\n      \"description\": \"A false back in a weapon rack hides confiscated contraband and a map of the ventilation shafts.\",\n      \"how_to_find\": \"DC 15 Perception check to notice scuff marks on the floor.\"\n    },\n    {\n      \"type\": \"Mechanism\",\n      \"location\": \"Central Keep Vestibule\",\n      \"description\": \"One of the decorative shields is a lever that locks the main staircase, turning it into a slide/ramp.\",\n      \"how_to_find\": \"DC 20 Investigation or knowing the passphrase 'Blood Ascends'.\"\n    }\n  ],\n  \"treasure_locations\": [\n    {\n      \"location\": \"Winch House Overseer's Office\",\n      \"description\": \"An iron safe containing payroll for the engineers (500gp) and blueprints for the Bloodforge elevator mechanism.\"\n    },\n    {\n      \"location\": \"Stablemaster's Private Tack Room\",\n      \"description\": \"A saddle of 'Riding the Wind' (magical) meant for a Nightmare, hanging unobtrusively among mundane tack.\"\n    }\n  ],\n  \"history\": \"Castle Blood Forge was established three centuries ago by the vampire warlord Malakor, not just as a fortress, but as a capacitor for the geothermal and necromantic energies welling up from the fault line beneath the mountains. The ground level was built first, a fortress of utility designed to facilitate the excavation of the subterranean levels. Over decades, the Keep rose in the center, a monument to dominance, while the industrial zones expanded like a cancer to feed the hungry forges below. The castle has never been taken by siege, primarily because the defenders can simply collapse the causeways or flood the courtyards with magma pumped from the depths.\",\n  \"current_events\": \"Production in the Bloodforge is behind schedule, causing tension between the Chief Artificer and the vampiric nobility upstairs. The guards are on high alert due to rumors of a saboteur, resulting in double patrols in the North Ward. Meanwhile, a shipment of rare 'Star-Metal' has just arrived in the Southeast Ward and is being prepped for transport down the winch shafts.\",\n  \"adventure_hooks\": [\n     ],\n  \"special_features\": {\n    \"The Blood-Vents\": \"Chimneys in the South Zone that occasionally belch crimson steam, obscuring vision and dealing 1d4 acid damage to anyone flying above them.\",\n    \"The Echo-Stone Flooring\": \"The flooring in the Central Keep is magically attuned to amplify the sound of footsteps for the guards, making Stealth checks have Disadvantage unless wearing enchanted boots.\"\n  },\n  \"cinematic_walkthrough\": \"Approaching Castle Blood Forge, the sheer scale of the 70-foot East Wall blocks out the rising sun, casting a long, cold shadow over the approach. Passing through the main Southeast Gate, you are immediately assaulted by the noise of the Outer Ward: the strike of hammers on iron, the screaming of horses, and the shouting of wagon drivers maneuvering in the mud. To your left, the South Industrial Zone is a forest of black iron chimneys and massive chains moving vertically into the earth, shaking the ground with every rotation of the winches.\\n\\nMoving inward, the chaos fades into a disciplined silence as you approach the Central Keep. It sits like a tombstone in the center of the complex, separated from the filth of the wards by wide, empty courtyards that offer no cover. The 'Iron Vestibule' entrance looms ahead, its doors reinforced with bands of dark metal. To the North, the barracks and admin buildings are terrifyingly orderly, with patrols marching in perfect, lifeless unison.\\n\\nLooking up, the architecture shifts from the brutal industrialism of the ground floor to the gothic elegance of the upper spires, where the true masters of the castle reside. But here, on the ground, it is a world of sweat, steel, and the grinding gears of a war machine that never sleeps.\"\n}",
+      "timestamp": "2025-11-20T04:07:39.958Z",
+      "status": "completed"
+    }
+  ],
+  "stageResults": {
+    "purpose": {
+      "name": "Castle Blood Forge - Ground Level",
+      "location_type": "castle",
+      "description": "The sprawling ground level of a colossal fortress covering over 20 acres, enclosed by varied-height curtain walls and divided into distinct functional wards. This level serves as the logistical and defensive foundation, housing the massive central keep, extensive stables, military barracks, and the industrial entry points to the Bloodforge below.",
+      "purpose": "Primary defense, logistics, and industrial access",
+      "scale": "massive",
+      "estimated_spaces": 45,
+      "architectural_style": "Gothic Industrial",
+      "setting": "Coastal mountain region",
+      "key_features": [
+        "Central Keep (360x300 ft) containing Great Hall and service wings",
+        "South Industrial Zone with massive chimneys and mine hoists",
+        "Southeast Outer Ward with stables (60-80 horses) and wagon sheds",
+        "North Ward housing administration and barracks",
+        "Asymmetrical curtain walls (45-70 ft high) tailored to terrain and sun"
+      ]
+    },
+    "foundation": {
+      "layout": {
+        "description": "A massive rectangular fortification aligned East-West, divided into three primary lateral bands (North, Central, South). The layout centers on a massive Keep surrounded by open courtyards, with specialized wards tucked against the curtain walls.",
+        "dimensions": {
+          "length": "1040 ft (East-West)",
+          "width": "840 ft (North-South)",
+          "area": "874,000 sq ft"
+        },
+        "levels": [
+          "Ground Level (Current Focus)",
+          "Keep 1st Floor",
+          "Keep 2nd Floor",
+          "Keep 3rd Floor/Spires",
+          "Underground Levels (Storage, Forge, Mines)"
+        ]
+      },
+      "wings": [
+        {
+          "name": "Central Keep Base",
+          "dimensions": "360 ft x 300 ft",
+          "position": "Center-offset",
+          "function": "Main fortification and residence"
+        },
+        {
+          "name": "North Ward",
+          "dimensions": "1040 ft x ~250 ft",
+          "position": "North band",
+          "function": "Administration and barracks"
+        },
+        {
+          "name": "South Industrial Zone",
+          "dimensions": "Irregular (Southwest/South Central)",
+          "position": "South band",
+          "function": "Forge logistics, chimneys, hoists"
+        },
+        {
+          "name": "Southeast Outer Ward",
+          "dimensions": "300 ft x 240 ft",
+          "position": "Southeast corner",
+          "function": "Stables, wagons, mustering"
+        }
+      ],
+      "floors": {
+        "ground_level": {
+          "elevation": "0 ft",
+          "zones": [
+            "Outer Courtyards",
+            "Keep Great Hall",
+            "Service Wings",
+            "Stables",
+            "Industrial Hoist Houses"
+          ]
+        }
+      },
+      "locking_points": [
+        {
+          "id": "LP_MAIN_GATE",
+          "location": "Southeast Wall",
+          "notes": "Primary entry point for wagons/troops"
+        },
+        {
+          "id": "LP_KEEP_ENTRANCE",
+          "location": "Central Keep South Face",
+          "notes": "Main entry to the Keep structure"
+        },
+        {
+          "id": "LP_SPIRE_BASE",
+          "location": "Keep West Face",
+          "notes": "Foundation for the 120ft spire"
+        },
+        {
+          "id": "LP_FORGE_SHAFT",
+          "location": "South Industrial Zone",
+          "notes": "Vertical alignment with underground Bloodforge"
+        }
+      ],
+      "load_bearing_walls": [
+        "Exterior Curtain Wall (East: 70ft, South: 60ft, West/North: 45ft)",
+        "Central Keep Perimeter Walls",
+        "Industrial Chimney Columns"
+      ],
+      "vertical_connections": [
+        "Grand Staircase (Keep Interior)",
+        "Service Lifts (Keep Kitchens)",
+        "Industrial Winch Hoists (South Zone to Underground)",
+        "Wall Ramparts Access Stairs"
+      ],
+      "constraints": [
+        "Southeast Ward must not overlap Central Keep footprint",
+        "Industrial Zone must align vertically with underground map",
+        "Courtyards must provide clear logistical flow between wards"
+      ],
+      "chunk_mesh_metadata": {
+        "connection_protocol": "Cartesian Grid Alignment (10ft squares)",
+        "boundary_markers": [
+          "North_Ward_Transition_Line",
+          "Keep_Perimeter_Threshold",
+          "South_Industrial_Demarcation"
+        ],
+        "spatial_hierarchy": "Floor > Ward > Building/Structure > Room",
+        "coordinate_system": "Absolute Grid (Origin: Northwest Corner of Outer Wall)"
+      }
+    },
+    "spaces": {
+      "id": "L1_KEEP_MAIN_HALL",
+      "name": "The Iron Vestibule (Central Keep Main Entry)",
+      "location_type": "interior_hall",
+      "purpose": "Main entrance, defense checkpoint, and transit zone to upper Great Hall",
+      "description": "The grand entry hall of the Central Keep at ground level. Massive reinforced stone pillars support the Great Hall directly above. The floor is polished dark slate, and the walls are lined with weapon racks and torch sconces. A grand split-staircase dominates the north wall, leading up to the First Floor Feast Chambers.",
+      "scale": "massive",
+      "geometry": {
+        "dimensions": {
+          "width": "100 ft",
+          "depth": "60 ft",
+          "height": "20 ft"
+        },
+        "position": {
+          "relative_to_keep": "Centered on South Face",
+          "coordinates": "Centered horizontally in the 360ft wide Keep footprint"
+        },
+        "walls": {
+          "south_wall": "5ft thick Exterior Keep Wall (Stone)",
+          "north_wall": "Interior Load-bearing (supports upper Great Hall hearths)",
+          "east_west_walls": "Partition walls separating service wings"
+        },
+        "locking_points": [
+          "KEEP_SOUTH_GATE",
+          "STAIRCASE_TO_L2"
+        ]
+      },
+      "mesh_anchors": {
+        "chunk_id": "L1_KEEP_MAIN_HALL",
+        "connects_to": [
+          "L1_KEEP_SOUTH_COURTYARD",
+          "L1_KEEP_EAST_SERVICE_WING",
+          "L1_KEEP_WEST_GUARD_WING",
+          "L2_KEEP_GREAT_HALL"
+        ],
+        "connection_types": [
+          "Double Reinforced Doors (South)",
+          "Stone Archway (East/West)",
+          "Grand Staircase (Up/North)"
+        ],
+        "boundary_interface": "South face aligns with Keep perimeter; North face abuts internal storage/dungeon access corridors.",
+        "spatial_relationship": "ground_level.central_keep.entry_zone"
+      },
+      "features": [
+        "Murder holes in ceiling (controlled from L2)",
+        "Two large guard stations flanking the south entrance",
+        "Grand split-staircase rising to the north",
+        "Dampening acoustics to silence armor clanking"
+      ],
+      "lighting": "Dim, flickering torchlight in iron sconces",
+      "inhabitants": "Keep guards, servants transit",
+      "validation_notes": [
+        "Width (100ft) fits comfortably within Keep South Face (360ft)",
+        "Ceiling height (20ft) accounts for heavy load of Great Hall above",
+        "South entrance aligns with description of 'wide courtyards' to the south"
+      ]
+    },
+    "details": {
+      "materials": "The castle is constructed primarily of quarried black basalt and iron-reinforced granite, giving it a dark, imposing silhouette against the mountain sky. The Central Keep features 'Blood-veined Marble'—a rare stone that appears to weep crimson in humid weather. The South Industrial Zone is dominated by rusted heavy iron plating, riveted steel beams, and blackened brick chimneys. The floors are mostly cobblestone in the yards and polished slate within the Keep.",
+      "lighting_scheme": "The exterior walls are lit by massive oil braziers that burn with a thick, acrid smoke, creating a permanent smog layer. The South Industrial Zone glows with the dull, rhythmic orange pulse of the vents connected to the forge below. Inside the Keep's ground level, lighting is austere—magical cold-fire sconces provide dim, bluish illumination that keeps shadows long, while the North Ward relies on utilitarian torchlight.",
+      "atmosphere": "The air at ground level tastes of ozone, sulfur, and cold iron. The atmosphere is one of oppressive, industrialized militarism. The ground vibrates rhythmically—a subtle, constant thrumming from the subterranean Bloodforge machinery. In the Southeast Ward, the chaotic noise of shouting drill sergeants and shoeing horses dominates, while the Central Keep emits a heavy, threatening silence broken only by the clang of armored patrols.",
+      "inhabitants": {
+        "permanent_residents": [
+          {
+            "type": "Bloodforge Guards (Heavily Armored)",
+            "count": 200
+          },
+          {
+            "type": "Indentured Smiths & Engineers",
+            "count": 80
+          },
+          {
+            "type": "Stable Hands & Servants",
+            "count": 50
+          },
+          {
+            "type": "Warhorses",
+            "count": 60
+          },
+          {
+            "type": "Nightmares (Vampire Mounts)",
+            "count": 12
+          }
+        ],
+        "notable_npcs": [
+          {
+            "name": "Castellan Varic Thorne",
+            "role": "Overseer of Ground Defenses",
+            "location": "North Ward Admin Block"
+          },
+          {
+            "name": "Chief Artificer Hestia Molt",
+            "role": "Head of Industrial Hoists",
+            "location": "South Industrial Winch House"
+          },
+          {
+            "name": "Stablemaster Groll",
+            "role": "Keeper of the Nightmares",
+            "location": "Southeast Outer Ward Stables"
+          }
+        ],
+        "visitors": [
+          "Merchant caravans delivering raw ore",
+          "Visiting vampire nobility (rarely on foot)",
+          "Mercenary captains seeking contracts"
+        ],
+        "creatures": [
+          "Gargoyles (Perched on the Keep walls)",
+          "Guard Drakes (Patrolling the Winch Houses)"
+        ]
+      },
+      "encounter_areas": [
+        {
+          "space_id": "L1_SOUTH_WINCH_HOUSE",
+          "encounter_type": "combat",
+          "description": "A massive, sweltering chamber containing the primary chain hoists for the mines below. The floor is a metal grate over a drop into darkness.",
+          "tactical_notes": "Hazardous terrain. Characters can be pushed into moving gears (4d6 bludgeoning) or shoved through grates (fall damage). The noise imposes disadvantage on Perception checks relying on hearing."
+        },
+        {
+          "space_id": "L1_SOUTHEAST_MUSTERING_YARD",
+          "encounter_type": "social",
+          "description": "A muddy, trodden yard where guards run drills. A quartermaster argues with a wagon driver near the gate.",
+          "tactical_notes": "Social infiltration opportunity. Characters can blend in as mercenaries or servants. Failing a deception check results in immediate confrontation with 2d6 guards."
+        },
+        {
+          "space_id": "L1_KEEP_IRON_VESTIBULE",
+          "encounter_type": "trap",
+          "description": "The grand entry hall to the Keep. The floor is beautifully polished, but murder holes line the ceiling.",
+          "tactical_notes": "If the alarm is raised, heavy portcullises drop, and burning oil is poured from the 'Feast Chambers' above (Dex save DC 15). Guards fire crossbows from protected balconies."
+        }
+      ],
+      "secrets": [
+        {
+          "type": "Passage",
+          "location": "Southeast Stables (Stall 13)",
+          "description": "A loose stone under a trough reveals a narrow smuggling tunnel leading outside the East Wall.",
+          "how_to_find": "DC 18 Investigation check or observing Stablemaster Groll late at night."
+        },
+        {
+          "type": "Compartment",
+          "location": "North Ward Barracks",
+          "description": "A false back in a weapon rack hides confiscated contraband and a map of the ventilation shafts.",
+          "how_to_find": "DC 15 Perception check to notice scuff marks on the floor."
+        },
+        {
+          "type": "Mechanism",
+          "location": "Central Keep Vestibule",
+          "description": "One of the decorative shields is a lever that locks the main staircase, turning it into a slide/ramp.",
+          "how_to_find": "DC 20 Investigation or knowing the passphrase 'Blood Ascends'."
+        }
+      ],
+      "treasure_locations": [
+        {
+          "location": "Winch House Overseer's Office",
+          "description": "An iron safe containing payroll for the engineers (500gp) and blueprints for the Bloodforge elevator mechanism."
+        },
+        {
+          "location": "Stablemaster's Private Tack Room",
+          "description": "A saddle of 'Riding the Wind' (magical) meant for a Nightmare, hanging unobtrusively among mundane tack."
+        }
+      ],
+      "history": "Castle Blood Forge was established three centuries ago by the vampire warlord Malakor, not just as a fortress, but as a capacitor for the geothermal and necromantic energies welling up from the fault line beneath the mountains. The ground level was built first, a fortress of utility designed to facilitate the excavation of the subterranean levels. Over decades, the Keep rose in the center, a monument to dominance, while the industrial zones expanded like a cancer to feed the hungry forges below. The castle has never been taken by siege, primarily because the defenders can simply collapse the causeways or flood the courtyards with magma pumped from the depths.",
+      "current_events": "Production in the Bloodforge is behind schedule, causing tension between the Chief Artificer and the vampiric nobility upstairs. The guards are on high alert due to rumors of a saboteur, resulting in double patrols in the North Ward. Meanwhile, a shipment of rare 'Star-Metal' has just arrived in the Southeast Ward and is being prepped for transport down the winch shafts.",
+      "adventure_hooks": [],
+      "special_features": {
+        "The Blood-Vents": "Chimneys in the South Zone that occasionally belch crimson steam, obscuring vision and dealing 1d4 acid damage to anyone flying above them.",
+        "The Echo-Stone Flooring": "The flooring in the Central Keep is magically attuned to amplify the sound of footsteps for the guards, making Stealth checks have Disadvantage unless wearing enchanted boots."
+      },
+      "cinematic_walkthrough": "Approaching Castle Blood Forge, the sheer scale of the 70-foot East Wall blocks out the rising sun, casting a long, cold shadow over the approach. Passing through the main Southeast Gate, you are immediately assaulted by the noise of the Outer Ward: the strike of hammers on iron, the screaming of horses, and the shouting of wagon drivers maneuvering in the mud. To your left, the South Industrial Zone is a forest of black iron chimneys and massive chains moving vertically into the earth, shaking the ground with every rotation of the winches.\n\nMoving inward, the chaos fades into a disciplined silence as you approach the Central Keep. It sits like a tombstone in the center of the complex, separated from the filth of the wards by wide, empty courtyards that offer no cover. The 'Iron Vestibule' entrance looms ahead, its doors reinforced with bands of dark metal. To the North, the barracks and admin buildings are terrifyingly orderly, with patrols marching in perfect, lifeless unison.\n\nLooking up, the architecture shifts from the brutal industrialism of the ground floor to the gothic elegance of the upper spires, where the true masters of the castle reside. But here, on the ground, it is a world of sweat, steel, and the grinding gears of a war machine that never sleeps."
+    }
+  },
+  "currentStageIndex": 3
+}

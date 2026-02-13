@@ -1,0 +1,147 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "adventure.schema.json",
+  "type": "object",
+  "allOf": [{ "$ref": "base.schema.json#/definitions/baseOutput" }],
+  "required": [
+    "title",
+    "synopsis",
+    "level_range",
+    "acts",
+    "key_npcs",
+    "key_locations"
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 5
+    },
+    "synopsis": {
+      "type": "string",
+      "minLength": 200,
+      "description": "Overview of the adventure story"
+    },
+    "level_range": {
+      "type": "object",
+      "required": ["min", "max"],
+      "properties": {
+        "min": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "max": { "type": "integer", "minimum": 1, "maximum": 20 }
+      }
+    },
+    "estimated_sessions": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "themes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Major themes and topics"
+    },
+    "hooks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 3,
+      "description": "Ways to get players involved"
+    },
+    "acts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["act_number", "title", "description", "scenes"],
+        "properties": {
+          "act_number": { "type": "integer", "minimum": 1 },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "objectives": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["title", "type", "description"],
+              "properties": {
+                "title": { "type": "string" },
+                "type": {
+                  "type": "string",
+                  "enum": ["combat", "social", "exploration", "puzzle", "investigation"]
+                },
+                "description": { "type": "string" },
+                "location": { "type": "string" },
+                "key_npcs": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            },
+            "minItems": 1
+          },
+          "climax": { "type": "string" }
+        }
+      },
+      "minItems": 1
+    },
+    "key_npcs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "role", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": "string" },
+          "description": { "type": "string" },
+          "motivations": { "type": "string" },
+          "stat_block_ref": { "type": "string" }
+        }
+      },
+      "minItems": 1
+    },
+    "key_locations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "region": { "type": "string" },
+          "map_needed": { "type": "boolean" },
+          "features": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "factions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "goals"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "goals": { "type": "array", "items": { "type": "string" } },
+          "leader": { "type": "string" }
+        }
+      }
+    },
+    "major_rewards": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Significant treasure, items, or story rewards"
+    },
+    "complications": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Optional twists or challenges to add"
+    },
+    "gm_guidance": {
+      "type": "string",
+      "description": "Tips for running the adventure"
+    }
+  }
+}

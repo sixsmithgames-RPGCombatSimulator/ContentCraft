@@ -1,0 +1,23 @@
+{
+  "sessionId": "gen-1762562860422-7eu9nl1hc",
+  "createdAt": "2025-11-08T00:47:40.422Z",
+  "lastUpdatedAt": "2025-11-08T00:47:40.422Z",
+  "config": {
+    "type": "npc",
+    "prompt": "Lady Erliza of Snowdown\nA gorgeous and accomplished human woman artificer turned vampire lord. She is supported by her arcane creations, vampiric powers, and extensive magical knowledge. Her strategic blend of mechanical mastery and vampiric might makes her a unique and powerful vampire. A combination of Arcane complexity, vampiric power, and dark elegance.\nLady Erliza, The Bloodsmith of Snowdown (Formerly Known as Elspeth Varadin of Amn)\nName: Lady Erliza (formerly Elspeth Varadin)\nRace: True Vampire (Blueblood lineage, Human)\nAge: Immortal, looks about 24\nClasses: Artificer (Battle Smith) 16 / Vampire 9\nAlignment: Lawful Evil\nHit Dice: 25 (16d8 Artificer + 9d10 Vampire + 100)\nHit Points: 255\nAbility Scores: Strength: 18 (+4), Dexterity: 18 (+4), Constitution: 18 (+4), Intelligence: 20 (+5), Wisdom: 14 (+2), Charisma: 20 (+5)\nSpeed: 40 ft. Proficiency Bonus: +7\nBackground: Sage\nSaving Throws: Constitution (+11), Intelligence (+12), Wisdom (+9), Charisma (+12)\nSkills: Arcana (+12), History (+12), Insight (+9), Perception (+9), Persuasion (+12; expertise from Blueblood lineage), Deception (+12; advantage from Physique)\nResistances: necrotic \nImmunities: Charm, Compulsions, Phantasms, Patterns, Morale effects, poison, sleep, stun. Ability drain, energy drain, nonlethal damage, penalties to your physical ability scores (Strength, Dexterity, and Constitution), not at risk of death from massive damage.\nCombat Stats\nArmor Class: 21 (Breastplate of Balance [AC 14 + 2 Dex] + 2 Physique + 2 Bracers + 1 Ring of Protection)\nVampiric Traits\nRegeneration: 10 HP per turn unless damaged by radiant energy or running water.\nUndead Resilience: No need to breathe, eat, or sleep; functions indefinitely with 8 pints of blood per 9 days.\nForbiddance: Cannot enter a residence uninvited.\nSunlight Weakness: Takes 10 radiant damage per turn in sunlight.\nSpider Climb: Can climb on surfaces effortlessly.\nUnnatural Sight: Darkvision 120 ft.\nPhysique: +2 Natural AC; advantage on Deception and Persuasion checks.\nStake the Heart: Paralyzed if staked through the heart.\nHarmed by Holy Water: Takes 10 acid damage from holy water.\nBlueblood Lineage Traits. Persuasion skill expertise.\nVampiric Powers (Level 1, 2, 4, 6, 8)\nCharm: Disadvantage on saves against her Charm. Charmed people are charmed for 14 (5+9) days and subject to Command. Charmed creatures remain so for 9 days (equal to Vampire Hit Dice) and subject to Command. You can charm any creature with your charm power, not just humanoids as per the Charm Monster spell. For creatures (not people), you may charm creatures with a maximum CR equal to your vampire Hit Dice. You may charm a number of creatures equal to your vampire Hit Dice. Charm attempts (creatures) after reaching your maximum just fail. And these creatures remain charmed for a number of days equal to your vampire Hit Dice. Your spell save DC is 8 + your charisma modifier + proficiency.\nLegendary Actions: (3 per round; options: Attack, Magic, Bonus action, Move)\nLegendary Resistance: (3/day) Can succeed on a failed saving throw.\nChildren of the Night: Summon swarms of bats/rats or wolves (double quantities and duration due to Vampire level 9).\nShapechanger: Can shift into mist form or back as a bonus action.\nVampiric Weaknesses\nFear of Divine Wrath: Disadvantage against Turn Undead; psychic damage on failure.\nRacial Blood Type: Humans\nGender Blood Taste: Men\nInsatiable Thirst: Must feed every night.\nBloodlust\n",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [],
+  "stageResults": {},
+  "currentStageIndex": 0
+}

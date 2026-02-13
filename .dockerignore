@@ -1,0 +1,87 @@
+# Docker ignore file
+# © 2025 Sixsmith Games. All rights reserved.
+
+# Node modules
+node_modules/
+client/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+client/dist/
+build/
+*.tsbuildinfo
+
+# Development files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+coverage/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Logs
+logs/
+*.log
+
+# Database files (will use volumes)
+data/
+mongodb-data/
+*.db
+*.sqlite
+
+# Backup/restore files
+_restore_clientzip/
+*.zip
+*.tar.gz
+
+# Scripts not needed in production
+scripts/
+add-copyright-headers.cjs
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Session files
+sessions/

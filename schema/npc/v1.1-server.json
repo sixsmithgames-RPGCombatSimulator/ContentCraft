@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/npc/v1.1-server.json",
+  "title": "NPC Schema v1.1 (Server Validation)",
+  "description": "Permissive validation schema for NPC data integrity",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1",
+      "description": "Schema version number (must be '1.1')"
+    },
+    "genre": { "type": "string" },
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "description": "The NPC's canonical name"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Physical appearance, demeanor, and narrative summary"
+    },
+    "title": { "type": "string" },
+    "aliases": { "type": "array", "items": { "type": "string" } },
+    "role": { "type": "string" },
+    "appearance": { "type": "string" },
+    "background": { "type": "string" },
+    "race": { "type": "string" },
+    "size": { "type": "string" },
+    "creature_type": { "type": "string" },
+    "subtype": { "type": "string" },
+    "alignment": { "type": "string" },
+    "affiliation": { "type": "string" },
+    "location": { "type": "string" },
+    "era": { "type": "string" },
+    "challenge_rating": { "type": "string" },
+    "experience_points": { "type": "integer", "minimum": 0 },
+    "hooks": { "type": "array", "items": { "type": "string" } },
+    "tactics": { "type": "string" },
+    "class_levels": {
+      "oneOf": [
+        { "type": "array", "items": { "type": "object" } },
+        { "type": "string" }
+      ]
+    },
+    "multiclass_features": { "type": "array", "items": { "type": "object" } },
+    "class_features": { "type": "array", "items": { "type": "object" }, "description": "Base class features gained from class levels" },
+    "subclass_features": { "type": "array", "items": { "type": "object" }, "description": "Subclass/archetype features" },
+    "racial_features": { "type": "array", "items": { "type": "object" }, "description": "Racial traits and features" },
+    "feats": { "type": "array", "items": { "type": "object" }, "description": "Feats taken from ASI, background, or racial bonus" },
+    "asi_choices": { "type": "array", "items": { "type": "object" }, "description": "ASI choices at each ASI level" },
+    "background_feature": { "type": "object", "description": "Background details including feature and origin feat" },
+    "ability_scores": { "type": "object" },
+    "armor_class": {
+      "oneOf": [
+        { "type": "integer" },
+        { "type": "array", "items": { "type": "object" } }
+      ]
+    },
+    "hit_points": {
+      "oneOf": [
+        { "type": "integer" },
+        { "type": "object" }
+      ]
+    },
+    "hit_dice": { "type": "string" },
+    "proficiency_bonus": {
+      "oneOf": [
+        { "type": "integer" },
+        { "type": "string" }
+      ]
+    },
+    "speed": { "type": "object" },
+    "saving_throws": { "type": "array", "items": { "type": "object" } },
+    "skill_proficiencies": { "type": "array", "items": { "type": "object" } },
+    "senses": { "type": "array", "items": { "type": "string" } },
+    "passive_perception": { "type": "integer" },
+    "languages": { "type": "array", "items": { "type": "string" } },
+    "damage_resistances": { "type": "array", "items": { "type": "string" } },
+    "damage_immunities": { "type": "array", "items": { "type": "string" } },
+    "damage_vulnerabilities": { "type": "array", "items": { "type": "string" } },
+    "condition_immunities": { "type": "array", "items": { "type": "string" } },
+    "abilities": { "type": "array", "items": { "type": "object" } },
+    "traits": { "type": "array", "items": { "type": "object" }, "description": "Alias for 'abilities' - will be normalized" },
+    "additional_traits": { "type": "array", "items": { "type": "object" } },
+    "vampire_traits": { "type": "object" },
+    "equipment": { "type": "array", "items": { "type": "string" } },
+    "attuned_items": { "type": "array", "items": { "type": "object" } },
+    "magic_items": { "type": "array", "items": { "type": "object" } },
+    "relationships": { "type": "array", "items": { "type": "object" } },
+    "allies_friends": { "type": "array", "items": { "type": "object" } },
+    "factions": { "type": "array", "items": { "type": "object" } },
+    "minions": { "type": "array", "items": { "type": "object" } },
+    "personality": { "type": "object" },
+    "motivations": { "type": "array", "items": { "type": "string" } },
+    "spellcasting": { "type": "object" },
+    "actions": { "type": "array", "items": { "type": "object" } },
+    "bonus_actions": { "type": "array", "items": { "type": "object" } },
+    "reactions": { "type": "array", "items": { "type": "object" } },
+    "legendary_actions": { "type": "object" },
+    "mythic_actions": { "type": "object" },
+    "lair_description": { "type": "string" },
+    "lair_actions": {
+      "oneOf": [
+        { "type": "array", "items": { "type": "string" } },
+        { "type": "array", "items": { "type": "object" } }
+      ]
+    },
+    "regional_effects": {
+      "oneOf": [
+        { "type": "array", "items": { "type": "string" } },
+        { "type": "array", "items": { "type": "object" } }
+      ]
+    },
+    "treasure": { "type": "object" },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "sources": { "type": "array", "items": { "type": "string" } },
+    "stat_block": { "type": "object", "additionalProperties": true },
+    "rule_base": { "type": "string" },
+    "sources_used": { "type": "array", "items": { "type": "string" } },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "object" }
+        ]
+      }
+    },
+    "canon_update": { "type": "string" },
+    "generation_metadata": { "type": "object" },
+    "custom_fields": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": true
+}

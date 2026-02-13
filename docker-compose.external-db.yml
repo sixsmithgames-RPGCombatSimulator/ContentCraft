@@ -1,0 +1,58 @@
+# Docker Compose with External MongoDB
+#
+# © 2025 Sixsmith Games. All rights reserved.
+#
+# Use this instead of the default docker-compose.yml when using
+# an external hosted MongoDB (Railway, Atlas, etc.)
+#
+# Usage: docker-compose -f docker-compose.external-db.yml up -d
+
+version: '3.8'
+
+services:
+  # ContentCraft Application (Client + Server)
+  # Note: MongoDB service is NOT included - using external database
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    container_name: contentcraft-app
+    restart: unless-stopped
+    environment:
+      # Server configuration
+      NODE_ENV: production
+      PORT: 3000
+
+      # External MongoDB connection
+      # Set this in your .env file with your hosted MongoDB URL
+      MONGO_URI: ${MONGO_URI}
+
+      # OpenAI API
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4-turbo-preview}
+
+      # Application settings
+      MAX_CONTENT_LENGTH: ${MAX_CONTENT_LENGTH:-100000}
+      SESSION_SECRET: ${SESSION_SECRET:-change-this-secret-in-production}
+
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      # Mount sessions directory for persistence
+      - app-sessions:/app/sessions
+      # Mount uploads directory
+      - app-uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  app-sessions:
+    driver: local
+  app-uploads:
+    driver: local

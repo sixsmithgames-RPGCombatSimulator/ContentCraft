@@ -1,0 +1,228 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/item/v1.1-client.json",
+  "title": "Magic Item Schema v1.1 (Client)",
+  "description": "Comprehensive schema for D&D 5E magic items with properties, mechanics, lore, and curse/sentience support",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1",
+      "description": "Schema version number (must be '1.1')"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "description": "Item name"
+    },
+    "item_type": {
+      "type": "string",
+      "enum": ["weapon", "armor", "shield", "wondrous", "potion", "scroll", "ring", "rod", "staff", "wand", "ammunition", "other"],
+      "description": "Base item type category"
+    },
+    "item_subtype": {
+      "type": "string",
+      "description": "Specific base item (e.g., 'longsword', 'plate armor', 'cloak', 'amulet')"
+    },
+    "rarity": {
+      "type": "string",
+      "enum": ["common", "uncommon", "rare", "very rare", "legendary", "artifact"],
+      "description": "Item rarity"
+    },
+    "attunement": {
+      "type": "object",
+      "properties": {
+        "required": { "type": "boolean", "description": "Whether attunement is required" },
+        "restrictions": { "type": "string", "description": "Who can attune (e.g., 'by a spellcaster', 'by a cleric or paladin')" }
+      },
+      "description": "Attunement requirements"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Full item description including appearance and general properties"
+    },
+    "appearance": {
+      "type": "string",
+      "description": "Physical appearance and distinctive visual features"
+    },
+    "weight": {
+      "type": "string",
+      "description": "Item weight (e.g., '3 lb.')"
+    },
+    "value": {
+      "type": "string",
+      "description": "Approximate market value (e.g., '5,000 gp')"
+    },
+    "properties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string", "description": "Property name" },
+          "description": { "type": "string", "description": "Full mechanical description" },
+          "activation": { "type": "string", "description": "How to activate (action, bonus action, reaction, passive)" },
+          "uses": { "type": "string", "description": "Usage limits (e.g., '3 charges', 'once per long rest', 'at will')" },
+          "recharge": { "type": "string", "description": "How uses are regained (e.g., 'dawn', '1d3 charges at dawn')" },
+          "save_dc": { "type": "integer", "description": "Save DC if applicable" },
+          "save_type": { "type": "string", "description": "Which save (e.g., 'Wisdom', 'Constitution')" },
+          "damage": { "type": "string", "description": "Damage dealt (e.g., '2d6 fire')" },
+          "bonus": { "type": "string", "description": "Numerical bonus (e.g., '+1 to attack and damage', '+2 AC')" },
+          "duration": { "type": "string", "description": "Effect duration" },
+          "range": { "type": "string", "description": "Effect range" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Magical properties and effects"
+    },
+    "charges": {
+      "type": "object",
+      "properties": {
+        "maximum": { "type": "integer", "minimum": 0, "description": "Maximum charges" },
+        "recharge": { "type": "string", "description": "How charges are regained" },
+        "on_last_charge": { "type": "string", "description": "What happens when the last charge is used (e.g., 'roll d20; on 1, item is destroyed')" }
+      },
+      "description": "Charge system if applicable"
+    },
+    "spells": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "level": { "type": "integer" },
+          "charges_cost": { "type": "integer", "description": "Number of charges to cast" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Spells that can be cast from the item"
+    },
+    "weapon_properties": {
+      "type": "object",
+      "properties": {
+        "damage": { "type": "string", "description": "Base damage (e.g., '1d8 slashing')" },
+        "damage_type": { "type": "string" },
+        "properties": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Weapon properties (finesse, versatile, thrown, etc.)"
+        },
+        "range": { "type": "string", "description": "Range if applicable" },
+        "bonus": { "type": "string", "description": "Enhancement bonus (e.g., '+1', '+2', '+3')" }
+      },
+      "description": "Weapon-specific stats (only for weapon-type items)"
+    },
+    "armor_properties": {
+      "type": "object",
+      "properties": {
+        "base_ac": { "type": "integer" },
+        "ac_bonus": { "type": "integer" },
+        "armor_type": { "type": "string", "description": "Light, medium, heavy, or shield" },
+        "stealth_disadvantage": { "type": "boolean" },
+        "strength_requirement": { "type": "integer" }
+      },
+      "description": "Armor-specific stats (only for armor/shield-type items)"
+    },
+    "history": {
+      "type": "string",
+      "description": "Creation story, historical significance, and lore"
+    },
+    "creator": {
+      "type": "string",
+      "description": "Who created the item and how"
+    },
+    "previous_owners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "era": { "type": "string" },
+          "notable_deed": { "type": "string" }
+        }
+      },
+      "description": "Notable previous owners"
+    },
+    "quirks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Minor personality traits or cosmetic effects (e.g., 'hums softly near undead', 'blade glows blue in moonlight')"
+    },
+    "curse": {
+      "type": "object",
+      "properties": {
+        "is_cursed": { "type": "boolean" },
+        "description": { "type": "string", "description": "What the curse does" },
+        "trigger": { "type": "string", "description": "How the curse activates" },
+        "removal": { "type": "string", "description": "How to remove the curse" },
+        "hidden": { "type": "boolean", "description": "Whether the curse is hidden until triggered" }
+      },
+      "description": "Curse details if the item is cursed"
+    },
+    "sentience": {
+      "type": "object",
+      "properties": {
+        "is_sentient": { "type": "boolean" },
+        "alignment": { "type": "string" },
+        "intelligence": { "type": "integer" },
+        "wisdom": { "type": "integer" },
+        "charisma": { "type": "integer" },
+        "communication": { "type": "string", "description": "How it communicates (telepathy, speech, empathy)" },
+        "senses": { "type": "string", "description": "What senses the item has" },
+        "purpose": { "type": "string", "description": "The item's special purpose or goal" },
+        "personality": { "type": "string", "description": "The item's personality and demeanor" },
+        "conflict": { "type": "string", "description": "What causes conflict with the wielder" }
+      },
+      "description": "Sentience details if the item is sentient"
+    },
+    "campaign_hooks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Adventure hooks related to the item"
+    },
+    "rule_base": {
+      "type": "string",
+      "description": "Rule system used (e.g., '2024RAW', '2014RAW')"
+    },
+    "sources_used": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Canon sources referenced"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Assumptions made during generation"
+    },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" } },
+          "rule_impact": { "type": "string" },
+          "recommendation": { "type": "string" }
+        }
+      },
+      "description": "Questions/choices for the user"
+    },
+    "canon_update": {
+      "type": "string",
+      "description": "Summary of canon changes from this item"
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "GM notes and additional guidance"
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,367 @@
+{
+  "sessionId": "gen-1763068988275-l81nt8bd8",
+  "createdAt": "2025-11-13T21:23:08.275Z",
+  "lastUpdatedAt": "2025-11-13T22:55:40.874Z",
+  "config": {
+    "type": "monster",
+    "prompt": "Frost Giant",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Stats & Defenses",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 2/5: Stats and Defenses.\n\nYou are building upon the basic info from stage 1.\n\nFocus ONLY on these fields:\n- ability_scores: Object with str, dex, con, int, wis, cha (all integers 1-30, required)\n- armor_class: Integer or array of AC objects with value/type/notes (required)\n- hit_points: Integer or object with average and formula (required)\n- hit_dice: String like \"8d10\" or \"15d8+45\"\n- proficiency_bonus: Integer +2 to +9 based on CR (required)\n- speed: Object with walk, fly, swim, climb, burrow speeds (strings like \"30 ft.\")\n- saving_throws: Array of {name, value, notes} for proficient saves\n- skill_proficiencies: Array of {name, value, notes} for proficient skills\n- damage_vulnerabilities: Array of damage types\n- damage_resistances: Array of damage types\n- damage_immunities: Array of damage types\n- condition_immunities: Array of conditions\n- senses: Array of special senses (e.g., \"darkvision 60 ft.\", \"blindsight 30 ft.\")\n- languages: Array of languages understood/spoken\n\nCalculate stats appropriate for the monster's CR and type. Use D&D 5e guidelines for CR-appropriate values.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"stats\",\n  \"basic_info\": {},\n  \"instructions\": \"Generate stats and defenses for this monster. Ensure values are appropriate for CR unknown.\"\n}",
+      "response": "{\n\"ability_scores\": {\n\"str\": 23,\n\"dex\": 9,\n\"con\": 21,\n\"int\": 9,\n\"wis\": 12,\n\"cha\": 12\n},\n\"armor_class\": 15,\n\"hit_points\": {\n\"average\": 138,\n\"formula\": \"12d12 + 60\"\n},\n\"hit_dice\": \"12d12\",\n\"proficiency_bonus\": 3,\n\"speed\": {\n\"walk\": \"40 ft.\"\n},\n\"saving_throws\": [\n{\n\"name\": \"Con\",\n\"value\": \"+8\",\n\"notes\": \"($+5$ CON modifier $+ 3$ PB)\"\n},\n{\n\"name\": \"Wis\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB). Proficient to resist mental effects.\"\n}\n],\n\"skill_proficiencies\": [\n{\n\"name\": \"Perception\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB)\"\n}\n],\n\"damage_vulnerabilities\": [\n\"Fire\"\n],\n\"damage_resistances\": [],\n\"damage_immunities\": [\n\"Cold\"\n],\n\"condition_immunities\": [\n\"exhaustion (from cold)\"\n],\n\"senses\": [\n\"passive Perception 14\"\n],\n\"languages\": [\n\"Giant\"\n]\n}",
+      "timestamp": "2025-11-13T21:24:07.170Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Combat & Abilities",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 3/5: Combat and Abilities.\n\nYou are building upon previous stages.\n\nFocus ONLY on these fields:\n- abilities: Array of special traits/abilities (passive features like Magic Resistance, Pack Tactics, etc.)\n  Each ability: {name, description, uses?, recharge?, notes?}\n- actions: Array of actions the monster can take (attacks, special actions)\n  Each action: {name, description, uses?, recharge?, notes?}\n  Include attack bonus, damage, and DC values in descriptions\n- bonus_actions: Array of bonus actions if applicable\n- reactions: Array of reactions if applicable\n- tactics: String describing combat tactics and behavior patterns\n\nCreate abilities and actions appropriate for the monster's CR and type. Include:\n- At least 1-2 attack actions\n- Special abilities that make the monster interesting/unique\n- Appropriate attack bonuses and save DCs for the CR\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"combat\",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"instructions\": \"Generate combat abilities and actions for this monster. Make it interesting and mechanically appropriate for CR unknown.\"\n}",
+      "response": "{\n\"abilities\": [\n{\n\"name\": \"Jotunkin Resilience\",\n\"description\": \"The giant has advantage on saving throws against being charmed and frightened.\"\n},\n{\n\"name\": \"Cold Absorption\",\n\"description\": \"Whenever the giant is subjected to cold damage, it takes no damage and instead regains a number of hit points equal to half the cold damage dealt.\"\n}\n],\n\"actions\": [\n{\n\"name\": \"Multiattack\",\n\"description\": \"The giant makes two Great Axe attacks or one Great Axe attack and one Rock attack.\"\n},\n{\n\"name\": \"Great Axe\",\n\"description\": \"Melee Weapon Attack: +10 to hit, reach 10 ft., one target. Hit: 25 (3d12 + 6) slashing damage plus 5 (1d10) cold damage.\"\n},\n{\n\"name\": \"Rock\",\n\"description\": \"Ranged Weapon Attack: +10 to hit, range 60/240 ft., one target. Hit: 28 (4d8 + 6) bludgeoning damage.\"\n},\n{\n\"name\": \"Glacial Stomp (Recharge 5–6)\",\n\"description\": \"The giant stomps the ground, sending a shockwave of freezing earth. Each creature within 15 feet of the giant must make a DC 16 Constitution saving throw, taking 21 (6d6) cold damage on a failed save, or half as much damage on a successful one. If the saving throw fails by 5 or more, the creature is also knocked prone.\"\n}\n],\n\"bonus_actions\": [],\n\"reactions\": [],\n\"tactics\": \"The Frost Giant begins combat by throwing rocks to engage distant targets or to soften up foes. Once in melee, it uses Multiattack, favoring the Great Axe for its combined cold and slashing damage. It saves Glacial Stomp to clear space around itself or to punish grouped enemies, especially after closing distance. It focuses on the largest or most heavily armored targets first, viewing them as the primary threat.\"\n}\n```",
+      "timestamp": "2025-11-13T21:25:38.615Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Legendary & Lair",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 4/5: Legendary and Lair Features.\n\nYou are building upon previous stages. This stage is OPTIONAL - only include these if the monster is powerful/important enough (typically CR 5+).\n\nFocus ONLY on these fields (only if appropriate):\n- legendary_actions: Object with {summary, options}\n  summary: String explaining how many legendary actions the creature gets\n  options: Array of legendary actions, each with {name, description, uses?, recharge?, notes?}\n- mythic_actions: Object with {summary, options} - only for extremely powerful creatures\n- lair_actions: Array of strings describing lair actions (if the creature has a lair)\n- regional_effects: Array of strings describing regional effects (if applicable)\n\nMost monsters will NOT need these fields. Only include if:\n- CR is 5+ for legendary actions\n- CR is 15+ for mythic actions\n- The monster is significant enough to have a lair\n\nIf not applicable, return an empty object {} or omit these fields.\n\nReturn ONLY a JSON object. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"legendary\",\n  \"basic_info\": {},\n  \"instructions\": \"If appropriate for CR unknown, generate legendary actions and/or lair features. Otherwise return an empty object.\"\n}",
+      "response": "{\n}\n```",
+      "timestamp": "2025-11-13T21:33:54.422Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Ecology & Lore",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 5/5: Ecology and Lore.\n\nYou are building upon all previous stages to add final context and flavor.\n\nFocus ONLY on these fields:\n- ecology: String (2-3 sentences) describing habitat, diet, social structure, and behavior in its natural environment\n- lore: String (2-3 sentences) providing background lore, origin, or interesting facts about the creature\n- notes: Array of strings with any additional GM notes or adventure hooks\n- sources: Array of strings citing any source books or references\n\nThis is the final polish stage - provide interesting context that helps a GM use this monster effectively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"lore\",\n  \"basic_info\": {},\n  \"stats_summary\": {\n    \"has_legendary\": false\n  },\n  \"instructions\": \"Generate ecology and lore information for this monster. Provide context that helps GMs use it effectively.\"\n}",
+      "response": "{\n\"ecology\": \"Frost giants inhabit the coldest reaches of the world, favoring ice caves, remote mountain peaks, and tundra. They are carnivorous, hunting large arctic megafauna like mammoth and occasionally resorting to raiding civilized settlements for livestock and spoils. Their society is rigid and hierarchical, centered around tribal loyalty and obedience to a powerful Jarl.\",\n\"lore\": \"These brutal giants are descendants of Ymir's chilling breath, believing themselves rightful heirs to the cold northern world. They view the smaller 'warm-blooded' races as weak resources to be exploited, and they often carry out long-standing feuds against fire giants and powerful humanoids who trespass on their ancestral lands.\",\n\"notes\": [\n\"This giant is an excellent brute or shock trooper but is vulnerable to organized tactics and fire magic.\",\n\"A suitable combat challenge for a party of four 7th-level adventurers, or two 9th-level adventurers.\"\n],\n\"sources\": [\n\"Monster Manual (D&D 5e)\",\n\"Giant Lore\"\n]\n}\n```",
+      "timestamp": "2025-11-13T21:34:59.339Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Basic Info",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 1/5: Basic Information.\n\nYour task is to establish the fundamental identity and classification of the monster.\n\nFocus ONLY on these fields:\n- name: The monster's name (required)\n- description: Physical appearance and general behavior (2-3 sentences, required)\n- size: Tiny, Small, Medium, Large, Huge, or Gargantuan (required)\n- creature_type: Aberration, Beast, Celestial, Construct, Dragon, Elemental, Fey, Fiend, Giant, Humanoid, Monstrosity, Ooze, Plant, or Undead (required)\n- subtype: Specific subtype if applicable (e.g., \"goblinoid\", \"shapechanger\")\n- alignment: Typical alignment for this creature (required)\n- challenge_rating: CR as a string like \"1/4\", \"1/2\", \"1\", \"5\", etc. (required)\n- experience_points: XP value based on CR\n- location: Typical habitat or environment where this creature is found\n\nDo NOT include stats, abilities, or actions yet - those come in later stages.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"basic_info\",\n  \"instructions\": \"Generate the basic information for this monster. Include name, description, size, creature type, alignment, and challenge rating.\"\n}",
+      "response": null,
+      "timestamp": "2025-11-13T22:40:23.903Z",
+      "status": "pending"
+    },
+    {
+      "stage": "Basic Info",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 1/5: Basic Information.\n\nYour task is to establish the fundamental identity and classification of the monster.\n\nFocus ONLY on these fields:\n- name: The monster's name (required)\n- description: Physical appearance and general behavior (2-3 sentences, required)\n- size: Tiny, Small, Medium, Large, Huge, or Gargantuan (required)\n- creature_type: Aberration, Beast, Celestial, Construct, Dragon, Elemental, Fey, Fiend, Giant, Humanoid, Monstrosity, Ooze, Plant, or Undead (required)\n- subtype: Specific subtype if applicable (e.g., \"goblinoid\", \"shapechanger\")\n- alignment: Typical alignment for this creature (required)\n- challenge_rating: CR as a string like \"1/4\", \"1/2\", \"1\", \"5\", etc. (required)\n- experience_points: XP value based on CR\n- location: Typical habitat or environment where this creature is found\n\nDo NOT include stats, abilities, or actions yet - those come in later stages.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"basic_info\",\n  \"instructions\": \"Generate the basic information for this monster. Include name, description, size, creature type, alignment, and challenge rating.\"\n}",
+      "response": "{\n\"name\": \"Frost Giant\",\n\"description\": \"A hulking, powerful humanoid with pale blue skin and eyes as cold as a glacier, the frost giant thrives in the most frigid environments. Clad in thick furs and iron weaponry, it embodies the brutal survival and raiding culture of its kind.\",\n\"size\": \"Huge\",\n\"creature_type\": \"Giant\",\n\"subtype\": null,\n\"alignment\": \"Chaotic Evil\",\n\"challenge_rating\": \"8\",\n\"experience_points\": 3900,\n\"location\": \"Arctic, tundra, ice caves, or remote mountain peaks\"\n}\n```",
+      "timestamp": "2025-11-13T22:41:44.144Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Stats & Defenses",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 2/5: Stats and Defenses.\n\nYou are building upon the basic info from stage 1.\n\nFocus ONLY on these fields:\n- ability_scores: Object with str, dex, con, int, wis, cha (all integers 1-30, required)\n- armor_class: Integer or array of AC objects with value/type/notes (required)\n- hit_points: Integer or object with average and formula (required)\n- hit_dice: String like \"8d10\" or \"15d8+45\"\n- proficiency_bonus: Integer +2 to +9 based on CR (required)\n- speed: Object with walk, fly, swim, climb, burrow speeds (strings like \"30 ft.\")\n- saving_throws: Array of {name, value, notes} for proficient saves\n- skill_proficiencies: Array of {name, value, notes} for proficient skills\n- damage_vulnerabilities: Array of damage types\n- damage_resistances: Array of damage types\n- damage_immunities: Array of damage types\n- condition_immunities: Array of conditions\n- senses: Array of special senses (e.g., \"darkvision 60 ft.\", \"blindsight 30 ft.\")\n- languages: Array of languages understood/spoken\n\nCalculate stats appropriate for the monster's CR and type. Use D&D 5e guidelines for CR-appropriate values.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"stats\",\n  \"basic_info\": {},\n  \"instructions\": \"Generate stats and defenses for this monster. Ensure values are appropriate for CR unknown.\"\n}",
+      "response": "{\n\"ability_scores\": {\n\"str\": 23,\n\"dex\": 9,\n\"con\": 21,\n\"int\": 9,\n\"wis\": 12,\n\"cha\": 12\n},\n\"armor_class\": 15,\n\"hit_points\": {\n\"average\": 138,\n\"formula\": \"12d12 + 60\"\n},\n\"hit_dice\": \"12d12\",\n\"proficiency_bonus\": 3,\n\"speed\": {\n\"walk\": \"40 ft.\"\n},\n\"saving_throws\": [\n{\n\"name\": \"Con\",\n\"value\": \"+8\",\n\"notes\": \"($+5$ CON modifier $+ 3$ PB)\"\n},\n{\n\"name\": \"Wis\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB). Proficient to resist mental effects.\"\n}\n],\n\"skill_proficiencies\": [\n{\n\"name\": \"Perception\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB)\"\n}\n],\n\"damage_vulnerabilities\": [\n\"Fire\"\n],\n\"damage_resistances\": [],\n\"damage_immunities\": [\n\"Cold\"\n],\n\"condition_immunities\": [\n\"exhaustion (from cold)\"\n],\n\"senses\": [\n\"passive Perception 14\"\n],\n\"languages\": [\n\"Giant\"\n]\n}\n```",
+      "timestamp": "2025-11-13T22:42:41.265Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Combat & Abilities",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 3/5: Combat and Abilities.\n\nYou are building upon previous stages.\n\nFocus ONLY on these fields:\n- abilities: Array of special traits/abilities (passive features like Magic Resistance, Pack Tactics, etc.)\n  Each ability: {name, description, uses?, recharge?, notes?}\n- actions: Array of actions the monster can take (attacks, special actions)\n  Each action: {name, description, uses?, recharge?, notes?}\n  Include attack bonus, damage, and DC values in descriptions\n- bonus_actions: Array of bonus actions if applicable\n- reactions: Array of reactions if applicable\n- tactics: String describing combat tactics and behavior patterns\n\nCreate abilities and actions appropriate for the monster's CR and type. Include:\n- At least 1-2 attack actions\n- Special abilities that make the monster interesting/unique\n- Appropriate attack bonuses and save DCs for the CR\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"combat\",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"instructions\": \"Generate combat abilities and actions for this monster. Make it interesting and mechanically appropriate for CR unknown.\"\n}",
+      "response": "{\n\"abilities\": [\n{\n\"name\": \"Jotunkin Resilience\",\n\"description\": \"The giant has advantage on saving throws against being charmed and frightened.\"\n},\n{\n\"name\": \"Cold Absorption\",\n\"description\": \"Whenever the giant is subjected to cold damage, it takes no damage and instead regains a number of hit points equal to half the cold damage dealt.\"\n}\n],\n\"actions\": [\n{\n\"name\": \"Multiattack\",\n\"description\": \"The giant makes two Great Axe attacks or one Great Axe attack and one Rock attack.\"\n},\n{\n\"name\": \"Great Axe\",\n\"description\": \"Melee Weapon Attack: +10 to hit, reach 10 ft., one target. Hit: 25 (3d12 + 6) slashing damage plus 5 (1d10) cold damage.\"\n},\n{\n\"name\": \"Rock\",\n\"description\": \"Ranged Weapon Attack: +10 to hit, range 60/240 ft., one target. Hit: 28 (4d8 + 6) bludgeoning damage.\"\n},\n{\n\"name\": \"Glacial Stomp (Recharge 5–6)\",\n\"description\": \"The giant stomps the ground, sending a shockwave of freezing earth. Each creature within 15 feet of the giant must make a DC 16 Constitution saving throw, taking 21 (6d6) cold damage on a failed save, or half as much damage on a successful one. If the saving throw fails by 5 or more, the creature is also knocked prone.\"\n}\n],\n\"bonus_actions\": [],\n\"reactions\": [],\n\"tactics\": \"The Frost Giant begins combat by throwing rocks to engage distant targets or to soften up foes. Once in melee, it uses Multiattack, favoring the Great Axe for its combined cold and slashing damage. It saves Glacial Stomp to clear space around itself or to punish grouped enemies, especially after closing distance. It focuses on the largest or most heavily armored targets first, viewing them as the primary threat.\"\n}\n```",
+      "timestamp": "2025-11-13T22:43:27.949Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Legendary & Lair",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 4/5: Legendary and Lair Features.\n\nYou are building upon previous stages. This stage is OPTIONAL - only include these if the monster is powerful/important enough (typically CR 5+).\n\nFocus ONLY on these fields (only if appropriate):\n- legendary_actions: Object with {summary, options}\n  summary: String explaining how many legendary actions the creature gets\n  options: Array of legendary actions, each with {name, description, uses?, recharge?, notes?}\n- mythic_actions: Object with {summary, options} - only for extremely powerful creatures\n- lair_actions: Array of strings describing lair actions (if the creature has a lair)\n- regional_effects: Array of strings describing regional effects (if applicable)\n\nMost monsters will NOT need these fields. Only include if:\n- CR is 5+ for legendary actions\n- CR is 15+ for mythic actions\n- The monster is significant enough to have a lair\n\nIf not applicable, return an empty object {} or omit these fields.\n\nReturn ONLY a JSON object. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"legendary\",\n  \"basic_info\": {},\n  \"instructions\": \"If appropriate for CR unknown, generate legendary actions and/or lair features. Otherwise return an empty object.\"\n}",
+      "response": "{\n\"name\": \"Frost Giant\",\n\"type\": \"npc\",\n\"schema_version\": \"1.1\",\n\"size\": \"Huge\",\n\"creature_type\": \"Giant\",\n\"subtype\": null,\n\"alignment\": \"Chaotic Evil\",\n\"challenge_rating\": \"8\",\n\"experience_points\": 3900,\n\"location\": \"Arctic, tundra, ice caves, or remote mountain peaks\",\n\"description\": \"A hulking, powerful humanoid with pale blue skin and eyes as cold as a glacier, the frost giant thrives in the most frigid environments. Clad in thick furs and iron weaponry, it embodies the brutal survival and raiding culture of its kind.\",\n\"ability_scores\": {\n\"str\": 23,\n\"dex\": 9,\n\"con\": 21,\n\"int\": 9,\n\"wis\": 12,\n\"cha\": 12\n},\n\"armor_class\": 15,\n\"hit_points\": {\n\"average\": 138,\n\"formula\": \"12d12 + 60\"\n},\n\"hit_dice\": \"12d12\",\n\"proficiency_bonus\": 3,\n\"speed\": {\n\"walk\": \"40 ft.\"\n},\n\"saving_throws\": [\n{\n\"name\": \"Con\",\n\"value\": \"+8\",\n\"notes\": \"($+5$ CON modifier $+ 3$ PB)\"\n},\n{\n\"name\": \"Wis\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB). Proficient to resist mental effects.\"\n}\n],\n\"skill_proficiencies\": [\n{\n\"name\": \"Perception\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB)\"\n}\n],\n\"damage_vulnerabilities\": [\n\"Fire\"\n],\n\"damage_resistances\": [],\n\"damage_immunities\": [\n\"Cold\"\n],\n\"condition_immunities\": [\n\"exhaustion (from cold)\"\n],\n\"senses\": [\n\"passive Perception 14\"\n],\n\"languages\": [\n\"Giant\"\n],\n\"abilities\": [\n{\n\"name\": \"Jotunkin Resilience\",\n\"description\": \"The giant has advantage on saving throws against being charmed and frightened.\"\n},\n{\n\"name\": \"Cold Absorption\",\n\"description\": \"Whenever the giant is subjected to cold damage, it takes no damage and instead regains a number of hit points equal to half the cold damage dealt.\"\n}\n],\n\"actions\": [\n{\n\"name\": \"Multiattack\",\n\"description\": \"The giant makes two Great Axe attacks or one Great Axe attack and one Rock attack.\"\n},\n{\n\"name\": \"Great Axe\",\n\"description\": \"Melee Weapon Attack: +10 to hit, reach 10 ft., one target. Hit: 25 (3d12 + 6) slashing damage plus 5 (1d10) cold damage.\"\n},\n{\n\"name\": \"Rock\",\n\"description\": \"Ranged Weapon Attack: +10 to hit, range 60/240 ft., one target. Hit: 28 (4d8 + 6) bludgeoning damage.\"\n},\n{\n\"name\": \"Glacial Stomp (Recharge 5–6)\",\n\"description\": \"The giant stomps the ground, sending a shockwave of freezing earth. Each creature within 15 feet of the giant must make a DC 16 Constitution saving throw, taking 21 (6d6) cold damage on a failed save, or half as much damage on a successful one. If the saving throw fails by 5 or more, the creature is also knocked prone.\"\n}\n],\n\"bonus_actions\": [],\n\"reactions\": [],\n\"tactics\": \"The Frost Giant begins combat by throwing rocks to engage distant targets or to soften up foes. Once in melee, it uses Multiattack, favoring the Great Axe for its combined cold and slashing damage. It saves Glacial Stomp to clear space around itself or to punish grouped enemies, especially after closing distance. It focuses on the largest or most heavily armored targets first, viewing them as the primary threat.\",\n\"legendary_actions\": {},\n\"mythic_actions\": {},\n\"lair_actions\": [],\n\"regional_effects\": [],\n\"ecology\": \"Frost giants inhabit the coldest reaches of the world, favoring ice caves, remote mountain peaks, and tundra. They are carnivorous, hunting large arctic megafauna like mammoth and occasionally resorting to raiding civilized settlements for livestock and spoils. Their society is rigid and hierarchical, centered around tribal loyalty and obedience to a powerful Jarl.\",\n\"lore\": \"These brutal giants are descendants of Ymir's chilling breath, believing themselves rightful heirs to the cold northern world. They view the smaller 'warm-blooded' races as weak resources to be exploited, and they often carry out long-standing feuds against fire giants and powerful humanoids who trespass on their ancestral lands.\",\n\"notes\": [\n\"This giant is an excellent brute or shock trooper but is vulnerable to organized tactics and fire magic.\",\n\"A suitable combat challenge for a party of four 7th-level adventurers, or two 9th-level adventurers.\"\n],\n\"sources\": [\n\"Monster Manual (D&D 5e)\",\n\"Giant Lore\"\n]\n}\n```",
+      "timestamp": "2025-11-13T22:45:14.812Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Ecology & Lore",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 5/5: Ecology and Lore.\n\nYou are building upon all previous stages to add final context and flavor.\n\nFocus ONLY on these fields:\n- ecology: String (2-3 sentences) describing habitat, diet, social structure, and behavior in its natural environment\n- lore: String (2-3 sentences) providing background lore, origin, or interesting facts about the creature\n- notes: Array of strings with any additional GM notes or adventure hooks\n- sources: Array of strings citing any source books or references\n\nThis is the final polish stage - provide interesting context that helps a GM use this monster effectively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"lore\",\n  \"basic_info\": {},\n  \"stats_summary\": {\n    \"has_legendary\": false\n  },\n  \"instructions\": \"Generate ecology and lore information for this monster. Provide context that helps GMs use it effectively.\"\n}",
+      "response": "{\n\"ecology\": \"Frost giants inhabit the coldest reaches of the world, favoring ice caves, remote mountain peaks, and tundra. They are carnivorous, hunting large arctic megafauna like mammoth and occasionally resorting to raiding civilized settlements for livestock and spoils. Their society is rigid and hierarchical, centered around tribal loyalty and obedience to a powerful Jarl.\",\n\"lore\": \"These brutal giants are descendants of Ymir's chilling breath, believing themselves rightful heirs to the cold northern world. They view the smaller 'warm-blooded' races as weak resources to be exploited, and they often carry out long-standing feuds against fire giants and powerful humanoids who trespass on their ancestral lands.\",\n\"notes\": [\n\"This giant is an excellent brute or shock trooper but is vulnerable to organized tactics and fire magic.\",\n\"A suitable combat challenge for a party of four 7th-level adventurers, or two 9th-level adventurers.\"\n],\n\"sources\": [\n\"Monster Manual (D&D 5e)\",\n\"Giant Lore\"\n]\n}\n```",
+      "timestamp": "2025-11-13T22:46:32.292Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Basic Info",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 1/5: Basic Information.\n\nYour task is to establish the fundamental identity and classification of the monster.\n\nFocus ONLY on these fields:\n- name: The monster's name (required)\n- description: Physical appearance and general behavior (2-3 sentences, required)\n- size: Tiny, Small, Medium, Large, Huge, or Gargantuan (required)\n- creature_type: Aberration, Beast, Celestial, Construct, Dragon, Elemental, Fey, Fiend, Giant, Humanoid, Monstrosity, Ooze, Plant, or Undead (required)\n- subtype: Specific subtype if applicable (e.g., \"goblinoid\", \"shapechanger\")\n- alignment: Typical alignment for this creature (required)\n- challenge_rating: CR as a string like \"1/4\", \"1/2\", \"1\", \"5\", etc. (required)\n- experience_points: XP value based on CR\n- location: Typical habitat or environment where this creature is found\n\nDo NOT include stats, abilities, or actions yet - those come in later stages.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"basic_info\",\n  \"instructions\": \"Generate the basic information for this monster. Include name, description, size, creature type, alignment, and challenge rating.\"\n}",
+      "response": "{\n\"name\": \"Frost Giant\",\n\"description\": \"A hulking, powerful humanoid with pale blue skin and eyes as cold as a glacier, the frost giant thrives in the most frigid environments. Clad in thick furs and iron weaponry, it embodies the brutal survival and raiding culture of its kind.\",\n\"size\": \"Huge\",\n\"creature_type\": \"Giant\",\n\"subtype\": null,\n\"alignment\": \"Chaotic Evil\",\n\"challenge_rating\": \"8\",\n\"experience_points\": 3900,\n\"location\": \"Arctic, tundra, ice caves, or remote mountain peaks\"\n}\n```",
+      "timestamp": "2025-11-13T22:54:17.920Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Stats & Defenses",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 2/5: Stats and Defenses.\n\nYou are building upon the basic info from stage 1.\n\nFocus ONLY on these fields:\n- ability_scores: Object with str, dex, con, int, wis, cha (all integers 1-30, required)\n- armor_class: Integer or array of AC objects with value/type/notes (required)\n- hit_points: Integer or object with average and formula (required)\n- hit_dice: String like \"8d10\" or \"15d8+45\"\n- proficiency_bonus: Integer +2 to +9 based on CR (required)\n- speed: Object with walk, fly, swim, climb, burrow speeds (strings like \"30 ft.\")\n- saving_throws: Array of {name, value, notes} for proficient saves\n- skill_proficiencies: Array of {name, value, notes} for proficient skills\n- damage_vulnerabilities: Array of damage types\n- damage_resistances: Array of damage types\n- damage_immunities: Array of damage types\n- condition_immunities: Array of conditions\n- senses: Array of special senses (e.g., \"darkvision 60 ft.\", \"blindsight 30 ft.\")\n- languages: Array of languages understood/spoken\n\nCalculate stats appropriate for the monster's CR and type. Use D&D 5e guidelines for CR-appropriate values.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"stats\",\n  \"basic_info\": {},\n  \"instructions\": \"Generate stats and defenses for this monster. Ensure values are appropriate for CR unknown.\"\n}",
+      "response": "{\n\"ability_scores\": {\n\"str\": 23,\n\"dex\": 9,\n\"con\": 21,\n\"int\": 9,\n\"wis\": 12,\n\"cha\": 12\n},\n\"armor_class\": 15,\n\"hit_points\": {\n\"average\": 138,\n\"formula\": \"12d12 + 60\"\n},\n\"hit_dice\": \"12d12\",\n\"proficiency_bonus\": 3,\n\"speed\": {\n\"walk\": \"40 ft.\"\n},\n\"saving_throws\": [\n{\n\"name\": \"Con\",\n\"value\": \"+8\",\n\"notes\": \"($+5$ CON modifier $+ 3$ PB)\"\n},\n{\n\"name\": \"Wis\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB). Proficient to resist mental effects.\"\n}\n],\n\"skill_proficiencies\": [\n{\n\"name\": \"Perception\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB)\"\n}\n],\n\"damage_vulnerabilities\": [\n\"Fire\"\n],\n\"damage_resistances\": [],\n\"damage_immunities\": [\n\"Cold\"\n],\n\"condition_immunities\": [\n\"exhaustion (from cold)\"\n],\n\"senses\": [\n\"passive Perception 14\"\n],\n\"languages\": [\n\"Giant\"\n]\n}\n```",
+      "timestamp": "2025-11-13T22:54:26.776Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Combat & Abilities",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 3/5: Combat and Abilities.\n\nYou are building upon previous stages.\n\nFocus ONLY on these fields:\n- abilities: Array of special traits/abilities (passive features like Magic Resistance, Pack Tactics, etc.)\n  Each ability: {name, description, uses?, recharge?, notes?}\n- actions: Array of actions the monster can take (attacks, special actions)\n  Each action: {name, description, uses?, recharge?, notes?}\n  Include attack bonus, damage, and DC values in descriptions\n- bonus_actions: Array of bonus actions if applicable\n- reactions: Array of reactions if applicable\n- tactics: String describing combat tactics and behavior patterns\n\nCreate abilities and actions appropriate for the monster's CR and type. Include:\n- At least 1-2 attack actions\n- Special abilities that make the monster interesting/unique\n- Appropriate attack bonuses and save DCs for the CR\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"combat\",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"instructions\": \"Generate combat abilities and actions for this monster. Make it interesting and mechanically appropriate for CR unknown.\"\n}",
+      "response": "{\n\"abilities\": [\n{\n\"name\": \"Jotunkin Resilience\",\n\"description\": \"The giant has advantage on saving throws against being charmed and frightened.\"\n},\n{\n\"name\": \"Cold Absorption\",\n\"description\": \"Whenever the giant is subjected to cold damage, it takes no damage and instead regains a number of hit points equal to half the cold damage dealt.\"\n}\n],\n\"actions\": [\n{\n\"name\": \"Multiattack\",\n\"description\": \"The giant makes two Great Axe attacks or one Great Axe attack and one Rock attack.\"\n},\n{\n\"name\": \"Great Axe\",\n\"description\": \"Melee Weapon Attack: +10 to hit, reach 10 ft., one target. Hit: 25 (3d12 + 6) slashing damage plus 5 (1d10) cold damage.\"\n},\n{\n\"name\": \"Rock\",\n\"description\": \"Ranged Weapon Attack: +10 to hit, range 60/240 ft., one target. Hit: 28 (4d8 + 6) bludgeoning damage.\"\n},\n{\n\"name\": \"Glacial Stomp (Recharge 5–6)\",\n\"description\": \"The giant stomps the ground, sending a shockwave of freezing earth. Each creature within 15 feet of the giant must make a DC 16 Constitution saving throw, taking 21 (6d6) cold damage on a failed save, or half as much damage on a successful one. If the saving throw fails by 5 or more, the creature is also knocked prone.\"\n}\n],\n\"bonus_actions\": [],\n\"reactions\": [],\n\"tactics\": \"The Frost Giant begins combat by throwing rocks to engage distant targets or to soften up foes. Once in melee, it uses Multiattack, favoring the Great Axe for its combined cold and slashing damage. It saves Glacial Stomp to clear space around itself or to punish grouped enemies, especially after closing distance. It focuses on the largest or most heavily armored targets first, viewing them as the primary threat.\"\n}\n```",
+      "timestamp": "2025-11-13T22:54:37.077Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Legendary & Lair",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 4/5: Legendary and Lair Features.\n\nYou are building upon previous stages. This stage is OPTIONAL - only include these if the monster is powerful/important enough (typically CR 5+).\n\nFocus ONLY on these fields (only if appropriate):\n- legendary_actions: Object with {summary, options}\n  summary: String explaining how many legendary actions the creature gets\n  options: Array of legendary actions, each with {name, description, uses?, recharge?, notes?}\n- mythic_actions: Object with {summary, options} - only for extremely powerful creatures\n- lair_actions: Array of strings describing lair actions (if the creature has a lair)\n- regional_effects: Array of strings describing regional effects (if applicable)\n\nMost monsters will NOT need these fields. Only include if:\n- CR is 5+ for legendary actions\n- CR is 15+ for mythic actions\n- The monster is significant enough to have a lair\n\nIf not applicable, return an empty object {} or omit these fields.\n\nReturn ONLY a JSON object. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"legendary\",\n  \"basic_info\": {},\n  \"instructions\": \"If appropriate for CR unknown, generate legendary actions and/or lair features. Otherwise return an empty object.\"\n}",
+      "response": "{\n\"name\": \"Frost Giant\",\n\"type\": \"npc\",\n\"schema_version\": \"1.1\",\n\"size\": \"Huge\",\n\"creature_type\": \"Giant\",\n\"subtype\": null,\n\"alignment\": \"Chaotic Evil\",\n\"challenge_rating\": \"8\",\n\"experience_points\": 3900,\n\"location\": \"Arctic, tundra, ice caves, or remote mountain peaks\",\n\"description\": \"A hulking, powerful humanoid with pale blue skin and eyes as cold as a glacier, the frost giant thrives in the most frigid environments. Clad in thick furs and iron weaponry, it embodies the brutal survival and raiding culture of its kind.\",\n\"ability_scores\": {\n\"str\": 23,\n\"dex\": 9,\n\"con\": 21,\n\"int\": 9,\n\"wis\": 12,\n\"cha\": 12\n},\n\"armor_class\": 15,\n\"hit_points\": {\n\"average\": 138,\n\"formula\": \"12d12 + 60\"\n},\n\"hit_dice\": \"12d12\",\n\"proficiency_bonus\": 3,\n\"speed\": {\n\"walk\": \"40 ft.\"\n},\n\"saving_throws\": [\n{\n\"name\": \"Con\",\n\"value\": \"+8\",\n\"notes\": \"($+5$ CON modifier $+ 3$ PB)\"\n},\n{\n\"name\": \"Wis\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB). Proficient to resist mental effects.\"\n}\n],\n\"skill_proficiencies\": [\n{\n\"name\": \"Perception\",\n\"value\": \"+4\",\n\"notes\": \"($+1$ WIS modifier $+ 3$ PB)\"\n}\n],\n\"damage_vulnerabilities\": [\n\"Fire\"\n],\n\"damage_resistances\": [],\n\"damage_immunities\": [\n\"Cold\"\n],\n\"condition_immunities\": [\n\"exhaustion (from cold)\"\n],\n\"senses\": [\n\"passive Perception 14\"\n],\n\"languages\": [\n\"Giant\"\n],\n\"abilities\": [\n{\n\"name\": \"Jotunkin Resilience\",\n\"description\": \"The giant has advantage on saving throws against being charmed and frightened.\"\n},\n{\n\"name\": \"Cold Absorption\",\n\"description\": \"Whenever the giant is subjected to cold damage, it takes no damage and instead regains a number of hit points equal to half the cold damage dealt.\"\n}\n],\n\"actions\": [\n{\n\"name\": \"Multiattack\",\n\"description\": \"The giant makes two Great Axe attacks or one Great Axe attack and one Rock attack.\"\n},\n{\n\"name\": \"Great Axe\",\n\"description\": \"Melee Weapon Attack: +10 to hit, reach 10 ft., one target. Hit: 25 (3d12 + 6) slashing damage plus 5 (1d10) cold damage.\"\n},\n{\n\"name\": \"Rock\",\n\"description\": \"Ranged Weapon Attack: +10 to hit, range 60/240 ft., one target. Hit: 28 (4d8 + 6) bludgeoning damage.\"\n},\n{\n\"name\": \"Glacial Stomp (Recharge 5–6)\",\n\"description\": \"The giant stomps the ground, sending a shockwave of freezing earth. Each creature within 15 feet of the giant must make a DC 16 Constitution saving throw, taking 21 (6d6) cold damage on a failed save, or half as much damage on a successful one. If the saving throw fails by 5 or more, the creature is also knocked prone.\"\n}\n],\n\"bonus_actions\": [],\n\"reactions\": [],\n\"tactics\": \"The Frost Giant begins combat by throwing rocks to engage distant targets or to soften up foes. Once in melee, it uses Multiattack, favoring the Great Axe for its combined cold and slashing damage. It saves Glacial Stomp to clear space around itself or to punish grouped enemies, especially after closing distance. It focuses on the largest or most heavily armored targets first, viewing them as the primary threat.\",\n\"legendary_actions\": {},\n\"mythic_actions\": {},\n\"lair_actions\": [],\n\"regional_effects\": [],\n\"ecology\": \"Frost giants inhabit the coldest reaches of the world, favoring ice caves, remote mountain peaks, and tundra. They are carnivorous, hunting large arctic megafauna like mammoth and occasionally resorting to raiding civilized settlements for livestock and spoils. Their society is rigid and hierarchical, centered around tribal loyalty and obedience to a powerful Jarl.\",\n\"lore\": \"These brutal giants are descendants of Ymir's chilling breath, believing themselves rightful heirs to the cold northern world. They view the smaller 'warm-blooded' races as weak resources to be exploited, and they often carry out long-standing feuds against fire giants and powerful humanoids who trespass on their ancestral lands.\",\n\"notes\": [\n\"This giant is an excellent brute or shock trooper but is vulnerable to organized tactics and fire magic.\",\n\"A suitable combat challenge for a party of four 7th-level adventurers, or two 9th-level adventurers.\"\n],\n\"sources\": [\n\"Monster Manual (D&D 5e)\",\n\"Giant Lore\"\n]\n}\n```",
+      "timestamp": "2025-11-13T22:55:25.554Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Ecology & Lore",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 5/5: Ecology and Lore.\n\nYou are building upon all previous stages to add final context and flavor.\n\nFocus ONLY on these fields:\n- ecology: String (2-3 sentences) describing habitat, diet, social structure, and behavior in its natural environment\n- lore: String (2-3 sentences) providing background lore, origin, or interesting facts about the creature\n- notes: Array of strings with any additional GM notes or adventure hooks\n- sources: Array of strings citing any source books or references\n\nThis is the final polish stage - provide interesting context that helps a GM use this monster effectively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Frost Giant\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"lore\",\n  \"basic_info\": {},\n  \"stats_summary\": {\n    \"has_legendary\": false\n  },\n  \"instructions\": \"Generate ecology and lore information for this monster. Provide context that helps GMs use it effectively.\"\n}",
+      "response": "{\n\"ecology\": \"Frost giants inhabit the coldest reaches of the world, favoring ice caves, remote mountain peaks, and tundra. They are carnivorous, hunting large arctic megafauna like mammoth and occasionally resorting to raiding civilized settlements for livestock and spoils. Their society is rigid and hierarchical, centered around tribal loyalty and obedience to a powerful Jarl.\",\n\"lore\": \"These brutal giants are descendants of Ymir's chilling breath, believing themselves rightful heirs to the cold northern world. They view the smaller 'warm-blooded' races as weak resources to be exploited, and they often carry out long-standing feuds against fire giants and powerful humanoids who trespass on their ancestral lands.\",\n\"notes\": [\n\"This giant is an excellent brute or shock trooper but is vulnerable to organized tactics and fire magic.\",\n\"A suitable combat challenge for a party of four 7th-level adventurers, or two 9th-level adventurers.\"\n],\n\"sources\": [\n\"Monster Manual (D&D 5e)\",\n\"Giant Lore\"\n]\n}\n```",
+      "timestamp": "2025-11-13T22:55:40.840Z",
+      "status": "completed"
+    }
+  ],
+  "stageResults": {
+    "basic_info": {
+      "name": "Frost Giant",
+      "description": "A hulking, powerful humanoid with pale blue skin and eyes as cold as a glacier, the frost giant thrives in the most frigid environments. Clad in thick furs and iron weaponry, it embodies the brutal survival and raiding culture of its kind.",
+      "size": "Huge",
+      "creature_type": "Giant",
+      "subtype": null,
+      "alignment": "Chaotic Evil",
+      "challenge_rating": "8",
+      "experience_points": 3900,
+      "location": "Arctic, tundra, ice caves, or remote mountain peaks"
+    },
+    "stats_&_defenses": {
+      "ability_scores": {
+        "str": 23,
+        "dex": 9,
+        "con": 21,
+        "int": 9,
+        "wis": 12,
+        "cha": 12
+      },
+      "armor_class": 15,
+      "hit_points": {
+        "average": 138,
+        "formula": "12d12 + 60"
+      },
+      "hit_dice": "12d12",
+      "proficiency_bonus": 3,
+      "speed": {
+        "walk": "40 ft."
+      },
+      "saving_throws": [
+        {
+          "name": "Con",
+          "value": "+8",
+          "notes": "($+5$ CON modifier $+ 3$ PB)"
+        },
+        {
+          "name": "Wis",
+          "value": "+4",
+          "notes": "($+1$ WIS modifier $+ 3$ PB). Proficient to resist mental effects."
+        }
+      ],
+      "skill_proficiencies": [
+        {
+          "name": "Perception",
+          "value": "+4",
+          "notes": "($+1$ WIS modifier $+ 3$ PB)"
+        }
+      ],
+      "damage_vulnerabilities": [
+        "Fire"
+      ],
+      "damage_resistances": [],
+      "damage_immunities": [
+        "Cold"
+      ],
+      "condition_immunities": [
+        "exhaustion (from cold)"
+      ],
+      "senses": [
+        "passive Perception 14"
+      ],
+      "languages": [
+        "Giant"
+      ]
+    },
+    "combat_&_abilities": {
+      "abilities": [
+        {
+          "name": "Jotunkin Resilience",
+          "description": "The giant has advantage on saving throws against being charmed and frightened."
+        },
+        {
+          "name": "Cold Absorption",
+          "description": "Whenever the giant is subjected to cold damage, it takes no damage and instead regains a number of hit points equal to half the cold damage dealt."
+        }
+      ],
+      "actions": [
+        {
+          "name": "Multiattack",
+          "description": "The giant makes two Great Axe attacks or one Great Axe attack and one Rock attack."
+        },
+        {
+          "name": "Great Axe",
+          "description": "Melee Weapon Attack: +10 to hit, reach 10 ft., one target. Hit: 25 (3d12 + 6) slashing damage plus 5 (1d10) cold damage."
+        },
+        {
+          "name": "Rock",
+          "description": "Ranged Weapon Attack: +10 to hit, range 60/240 ft., one target. Hit: 28 (4d8 + 6) bludgeoning damage."
+        },
+        {
+          "name": "Glacial Stomp (Recharge 5–6)",
+          "description": "The giant stomps the ground, sending a shockwave of freezing earth. Each creature within 15 feet of the giant must make a DC 16 Constitution saving throw, taking 21 (6d6) cold damage on a failed save, or half as much damage on a successful one. If the saving throw fails by 5 or more, the creature is also knocked prone."
+        }
+      ],
+      "bonus_actions": [],
+      "reactions": [],
+      "tactics": "The Frost Giant begins combat by throwing rocks to engage distant targets or to soften up foes. Once in melee, it uses Multiattack, favoring the Great Axe for its combined cold and slashing damage. It saves Glacial Stomp to clear space around itself or to punish grouped enemies, especially after closing distance. It focuses on the largest or most heavily armored targets first, viewing them as the primary threat."
+    },
+    "legendary_&_lair": {
+      "name": "Frost Giant",
+      "type": "npc",
+      "schema_version": "1.1",
+      "size": "Huge",
+      "creature_type": "Giant",
+      "subtype": null,
+      "alignment": "Chaotic Evil",
+      "challenge_rating": "8",
+      "experience_points": 3900,
+      "location": "Arctic, tundra, ice caves, or remote mountain peaks",
+      "description": "A hulking, powerful humanoid with pale blue skin and eyes as cold as a glacier, the frost giant thrives in the most frigid environments. Clad in thick furs and iron weaponry, it embodies the brutal survival and raiding culture of its kind.",
+      "ability_scores": {
+        "str": 23,
+        "dex": 9,
+        "con": 21,
+        "int": 9,
+        "wis": 12,
+        "cha": 12
+      },
+      "armor_class": 15,
+      "hit_points": {
+        "average": 138,
+        "formula": "12d12 + 60"
+      },
+      "hit_dice": "12d12",
+      "proficiency_bonus": 3,
+      "speed": {
+        "walk": "40 ft."
+      },
+      "saving_throws": [
+        {
+          "name": "Con",
+          "value": "+8",
+          "notes": "($+5$ CON modifier $+ 3$ PB)"
+        },
+        {
+          "name": "Wis",
+          "value": "+4",
+          "notes": "($+1$ WIS modifier $+ 3$ PB). Proficient to resist mental effects."
+        }
+      ],
+      "skill_proficiencies": [
+        {
+          "name": "Perception",
+          "value": "+4",
+          "notes": "($+1$ WIS modifier $+ 3$ PB)"
+        }
+      ],
+      "damage_vulnerabilities": [
+        "Fire"
+      ],
+      "damage_resistances": [],
+      "damage_immunities": [
+        "Cold"
+      ],
+      "condition_immunities": [
+        "exhaustion (from cold)"
+      ],
+      "senses": [
+        "passive Perception 14"
+      ],
+      "languages": [
+        "Giant"
+      ],
+      "abilities": [
+        {
+          "name": "Jotunkin Resilience",
+          "description": "The giant has advantage on saving throws against being charmed and frightened."
+        },
+        {
+          "name": "Cold Absorption",
+          "description": "Whenever the giant is subjected to cold damage, it takes no damage and instead regains a number of hit points equal to half the cold damage dealt."
+        }
+      ],
+      "actions": [
+        {
+          "name": "Multiattack",
+          "description": "The giant makes two Great Axe attacks or one Great Axe attack and one Rock attack."
+        },
+        {
+          "name": "Great Axe",
+          "description": "Melee Weapon Attack: +10 to hit, reach 10 ft., one target. Hit: 25 (3d12 + 6) slashing damage plus 5 (1d10) cold damage."
+        },
+        {
+          "name": "Rock",
+          "description": "Ranged Weapon Attack: +10 to hit, range 60/240 ft., one target. Hit: 28 (4d8 + 6) bludgeoning damage."
+        },
+        {
+          "name": "Glacial Stomp (Recharge 5–6)",
+          "description": "The giant stomps the ground, sending a shockwave of freezing earth. Each creature within 15 feet of the giant must make a DC 16 Constitution saving throw, taking 21 (6d6) cold damage on a failed save, or half as much damage on a successful one. If the saving throw fails by 5 or more, the creature is also knocked prone."
+        }
+      ],
+      "bonus_actions": [],
+      "reactions": [],
+      "tactics": "The Frost Giant begins combat by throwing rocks to engage distant targets or to soften up foes. Once in melee, it uses Multiattack, favoring the Great Axe for its combined cold and slashing damage. It saves Glacial Stomp to clear space around itself or to punish grouped enemies, especially after closing distance. It focuses on the largest or most heavily armored targets first, viewing them as the primary threat.",
+      "legendary_actions": {},
+      "mythic_actions": {},
+      "lair_actions": [],
+      "regional_effects": [],
+      "ecology": "Frost giants inhabit the coldest reaches of the world, favoring ice caves, remote mountain peaks, and tundra. They are carnivorous, hunting large arctic megafauna like mammoth and occasionally resorting to raiding civilized settlements for livestock and spoils. Their society is rigid and hierarchical, centered around tribal loyalty and obedience to a powerful Jarl.",
+      "lore": "These brutal giants are descendants of Ymir's chilling breath, believing themselves rightful heirs to the cold northern world. They view the smaller 'warm-blooded' races as weak resources to be exploited, and they often carry out long-standing feuds against fire giants and powerful humanoids who trespass on their ancestral lands.",
+      "notes": [
+        "This giant is an excellent brute or shock trooper but is vulnerable to organized tactics and fire magic.",
+        "A suitable combat challenge for a party of four 7th-level adventurers, or two 9th-level adventurers."
+      ],
+      "sources": [
+        "Monster Manual (D&D 5e)",
+        "Giant Lore"
+      ]
+    },
+    "ecology_&_lore": {
+      "ecology": "Frost giants inhabit the coldest reaches of the world, favoring ice caves, remote mountain peaks, and tundra. They are carnivorous, hunting large arctic megafauna like mammoth and occasionally resorting to raiding civilized settlements for livestock and spoils. Their society is rigid and hierarchical, centered around tribal loyalty and obedience to a powerful Jarl.",
+      "lore": "These brutal giants are descendants of Ymir's chilling breath, believing themselves rightful heirs to the cold northern world. They view the smaller 'warm-blooded' races as weak resources to be exploited, and they often carry out long-standing feuds against fire giants and powerful humanoids who trespass on their ancestral lands.",
+      "notes": [
+        "This giant is an excellent brute or shock trooper but is vulnerable to organized tactics and fire magic.",
+        "A suitable combat challenge for a party of four 7th-level adventurers, or two 9th-level adventurers."
+      ],
+      "sources": [
+        "Monster Manual (D&D 5e)",
+        "Giant Lore"
+      ]
+    }
+  },
+  "currentStageIndex": 4
+}

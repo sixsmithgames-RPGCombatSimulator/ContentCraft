@@ -1,0 +1,1406 @@
+{
+  "sessionId": "gen-1764641189319-t4725boj2",
+  "createdAt": "2025-12-02T02:06:29.319Z",
+  "lastUpdatedAt": "2025-12-02T02:41:02.923Z",
+  "config": {
+    "type": "location",
+    "prompt": "We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Only the first floor of the keep, see below. I have already decided a few things about this castle. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 300 ft (east–west) by 360 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. So, let's just build the keep first. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. Vertical structure Ground level: Kitchen in the north eastern most corner about 60 ft north to south, and 100 ft east to west. There is a large cookware and tools closet in the kitchen, lots of counter space for food prep of a medieval era kitchen. Several hearths or various sizes are on the northern wall. The double doors to the root cellar are on the Western wall. A large door way to the south access a main hallway that runs the length of the of the keep east to west and is about 30 feet wide with large double doors at the east end. There is a spiral staircase in the hall, about the midpoint of the hallway and it is the south side of the hall way. Across from the kitchen is a grand banquet hall that is 250 ft north to south and 200 ft east to west.  First and second floors of the keep: have vampire feeding areas and lounges, noble and vampire apartments.\n",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Foundation",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 2/5: Foundation.\n\nYou are building upon the Purpose stage which determined the scale and type.\n\n⚠️ IMPORTANT: Pay close attention to the user's original request. If they specified:\n- Exact room counts or types → Use that count exactly\n- Specific dimensions → Match those dimensions\n- Particular layout → Follow that layout\nYour role is to SUPPORT the user's vision, not override it with your own ideas.\n\nYour task is to establish the structural foundation appropriate to the location's scale.\n\nFOR SIMPLE/MODERATE LOCATIONS (taverns, shops, small dungeons):\nFocus on these fields:\n- layout: Object describing overall arrangement\n  {\n    description: \"Overall layout description\",\n    dimensions: { length: \"60 ft\", width: \"40 ft\", height: \"15 ft\" } (if applicable),\n    levels: Array of level descriptions (e.g., [\"main floor\", \"cellar\", \"upstairs rooms\"])\n  }\n- spatial_organization: How spaces relate to each other (e.g., \"main room with kitchen in back, stairs to rooms above\")\n- access_points: Entrances/exits\n\nFOR COMPLEX/MASSIVE LOCATIONS (castles, cities, mega-dungeons):\nAdd advanced structural fields:\n- wings: Array of major sections (if applicable)\n- floors: Detailed floor structure with elevations\n- locking_points: Fixed structural anchors for geometry validation\n- load_bearing_walls: Critical structural elements\n- vertical_connections: Stairs, ramps, lifts\n- constraints: Binding rules for space generation\n\nMETADATA LINKING SYSTEM (ALL SCALES):\n- chunk_mesh_metadata: Object for seamless chunk integration (REQUIRED)\n  {\n    connection_protocol: \"How chunks connect\" (e.g., \"doors\", \"hallways\", \"adjacency\"),\n    boundary_markers: Array of connection points for other chunks,\n    spatial_hierarchy: \"How chunks nest\" (e.g., \"floor > wing > room\" or \"area > sub-area > feature\"),\n    coordinate_system: \"Coordinate reference\" (e.g., \"relative\", \"absolute grid\", \"narrative only\")\n  }\n\nThis metadata ensures chunks mesh perfectly when generated iteratively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Only the first floor of the keep, see below. I have already decided a few things about this castle. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 300 ft (east–west) by 360 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. So, let's just build the keep first. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. Vertical structure Ground level: Kitchen in the north eastern most corner about 60 ft north to south, and 100 ft east to west. There is a large cookware and tools closet in the kitchen, lots of counter space for food prep of a medieval era kitchen. Several hearths or various sizes are on the northern wall. The double doors to the root cellar are on the Western wall. A large door way to the south access a main hallway that runs the length of the of the keep east to west and is about 30 feet wide with large double doors at the east end. There is a spiral staircase in the hall, about the midpoint of the hallway and it is the south side of the hall way. Across from the kitchen is a grand banquet hall that is 250 ft north to south and 200 ft east to west.  First and second floors of the keep: have vampire feeding areas and lounges, noble and vampire apartments.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"foundation\",\n  \"purpose\": {},\n  \"instructions\": \"Generate the structural foundation for this location (scale: moderate).\\n\\nKeep it simple - just layout, dimensions, and spatial organization. No complex topology needed.\\n\\nCRITICAL: Include chunk_mesh_metadata to enable seamless integration when spaces are generated iteratively.\",\n  \"canon_context\": \"Use factpack for architectural conventions.\"\n}",
+      "response": "{\n  \"layout\": {\n    \"description\": \"The Keep's ground floor is a robust rectangular structure (300 ft E-W by 360 ft N-S). It is organized around a 30-foot wide central hallway running east-west, separating a Northern Service/Kitchen area from a massive Southern Ceremonial area (Grand Banquet Hall).\",\n    \"dimensions\": {\n      \"length\": \"300 ft (East-West)\",\n      \"width\": \"360 ft (North-South)\",\n      \"height\": \"20 ft (Estimated Ceiling Height)\"\n    },\n    \"levels\": [\n      \"Keep Ground Floor (Level 1)\"\n    ]\n  },\n  \"spatial_organization\": \"The main floor is defined by the **Central Great Hallway** (30 ft wide, 300 ft long) which runs across the keep's width. North of the hallway is the **Keep Kitchen** (100 ft E-W, 60 ft N-S) in the northeast corner and the **Cookware and Tools Closet** adjacent. South of the hallway is the enormous **Grand Banquet Hall** (200 ft E-W, 250 ft N-S).\",\n  \"access_points\": [\n    {\n      \"name\": \"Keep Main East Doors\",\n      \"type\": \"Large Double Doors\",\n      \"location\": \"East end of the Central Great Hallway, connecting to the exterior East Courtyard.\"\n    },\n    {\n      \"name\": \"Keep West Access\",\n      \"type\": \"Standard Doorway/Arch\",\n      \"location\": \"West end of Central Great Hallway, connecting to the exterior West Ward.\"\n    }\n  ],\n  \"wings\": [\n    \"North Service Wing (Kitchen & Storage)\",\n    \"South Ceremonial Wing (Grand Banquet Hall)\",\n    \"Central Access Hallway\"\n  ],\n  \"floors\": {\n    \"Level_1_Ground_Floor\": {\n      \"elevation\": \"0 ft (Ground Level)\",\n      \"spaces_defined\": [\n        \"Keep Kitchen (NE, 100x60 ft)\",\n        \"Cookware and Tools Closet (E of Kitchen)\",\n        \"Central Great Hallway (Center Spine, 300x30 ft)\",\n        \"Grand Banquet Hall (S, 200x250 ft)\",\n        \"Root Cellar Stairs (W wall of Kitchen)\"\n      ],\n      \"spaces_estimated_total\": 6\n    }\n  },\n  \"locking_points\": [\n    {\n      \"name\": \"Keep NW Corner\",\n      \"type\": \"External Anchor\",\n      \"coordinates\": \"(0, 360) [Assume 300 E-W, 360 N-S]\"\n    },\n    {\n      \"name\": \"Hallway South Wall Line\",\n      \"type\": \"Internal Anchor\",\n      \"coordinates\": \"(X, 330) [N-S line, 30 ft South of North Wall]\"\n    },\n    {\n      \"name\": \"Kitchen SW Corner\",\n      \"type\": \"Internal Anchor\",\n      \"coordinates\": \"(200, 300) [Corner of Kitchen and Hallway/Internal Wall]\"\n    }\n  ],\n  \"load_bearing_walls\": [\n    \"300 ft Keep Perimeter Walls (E, W, N, S)\",\n    \"The interior 300 ft wall forming the South side of the Central Great Hallway (separating it from the Banquet Hall).\"\n  ],\n  \"vertical_connections\": [\n    {\n      \"name\": \"Main Spiral Staircase\",\n      \"type\": \"Stairs Up (Stone, Spiral)\",\n      \"location\": \"South side of Central Hallway, near midpoint.\",\n      \"connects\": [\"Ground Floor\", \"First Floor (L2)\"]\n    },\n    {\n      \"name\": \"Root Cellar Double Doors\",\n      \"type\": \"Stairs Down\",\n      \"location\": \"West wall of Keep Kitchen.\",\n      \"connects\": [\"Ground Floor\", \"Root Cellar/Sub-level\"]\n    }\n  ],\n  \"constraints\": [\n    \"Keep Footprint: 300 ft (E-W) by 360 ft (N-S).\",\n    \"Central Hallway: 30 ft wide (Must be 300 ft E-W. Positioned in the North third of the keep).\",\n    \"Keep Kitchen: 100 ft E-W by 60 ft N-S. Must occupy the Northeast corner (X: 200-300, Y: 300-360).\",\n    \"Grand Banquet Hall: 200 ft E-W by 250 ft N-S. Must be south of the Central Hallway.\"\n  ],\n  \"chunk_mesh_metadata\": {\n    \"connection_protocol\": \"Doors connect rooms; Archways connect major spaces/wings; Staircases connect floors.\",\n    \"boundary_markers\": [\n      \"Keep Main East Doors (External)\",\n      \"Main Spiral Staircase (Internal, Vertical)\"\n    ],\n    \"spatial_hierarchy\": \"Keep > Floor > Wing > Room > Feature\",\n    \"coordinate_system\": \"absolute grid (Origin SW Corner: 0, 0)\"\n  }\n}",
+      "timestamp": "2025-12-02T02:12:54.080Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 1,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\n⚠️ CRITICAL: Your primary goal is to generate EXACTLY what the user requested.\n- If the user specified specific rooms, generate ONLY those rooms\n- Do NOT add extra rooms, guard posts, storage, or any spaces not explicitly requested\n- Review the user's \"request\" field carefully before generating each space\n- Match the user's specifications for dimensions, placement, and features\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n🔔 MULTI-PART GENERATION (6 chunks total):\n- This is chunk 1 of 6\n- More canon facts will follow in subsequent messages\n- ⚠️ CRITICAL: Use the SAME AI chat session for ALL 6 chunks\n- Do NOT start a new session or you will lose context\n- After receiving all chunks, generate the complete location\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Only the first floor of the keep, see below. I have already decided a few things about this castle. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 300 ft (east–west) by 360 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. So, let's just build the keep first. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. Vertical structure Ground level: Kitchen in the north eastern most corner about 60 ft north to south, and 100 ft east to west. There is a large cookware and tools closet in the kitchen, lots of counter space for food prep of a medieval era kitchen. Several hearths or various sizes are on the northern wall. The double doors to the root cellar are on the Western wall. A large door way to the south access a main hallway that runs the length of the of the keep east to west and is about 30 feet wide with large double doors at the east end. There is a spiral staircase in the hall, about the midpoint of the hallway and it is the south side of the hall way. Across from the kitchen is a grand banquet hall that is 250 ft north to south and 200 ft east to west.  First and second floors of the keep: have vampire feeding areas and lounges, noble and vampire apartments.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #1. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 1/6\"\n}",
+      "response": "{\n  \"id\": \"CBF-G-01\",\n  \"name\": \"Central Great Hallway\",\n  \"purpose\": \"Primary central access spine for the Keep's ground floor, connecting all major wings and exterior access points.\",\n  \"description\": \"A grand, 30-foot wide hallway that spans the entire 300-foot length of the keep from east to west. Constructed of heavy, dark stone, it facilitates both formal processions and high traffic, linking the Kitchen and Banquet Hall to the rest of the castle grounds.\",\n  \"dimensions\": {\n    \"width\": 300,\n    \"height\": 30,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 20,\n  \"floor\": {\n    \"material\": \"stone\",\n    \"color\": \"#4A4A4A\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 6\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"east\",\n      \"position\": 0.5,\n      \"width\": 16,\n      \"style\": \"iron\",\n      \"leads_to\": \"Pending\",\n      \"color\": \"#333333\"\n    },\n    {\n      \"wall\": \"north\",\n      \"position\": 0.75,\n      \"width\": 8,\n      \"style\": \"archway\",\n      \"leads_to\": \"Keep Kitchen\",\n      \"color\": \"#636363\"\n    },\n    {\n      \"wall\": \"south\",\n      \"position\": 0.5,\n      \"width\": 20,\n      \"style\": \"archway\",\n      \"leads_to\": \"Grand Banquet Hall\",\n      \"color\": \"#636363\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Main Spiral Staircase\",\n      \"position\": {\n        \"x\": 150,\n        \"y\": 5\n      },\n      \"shape\": \"circle\",\n      \"width\": 15,\n      \"height\": 15,\n      \"color\": \"#636363\",\n      \"material\": \"stone\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Iron Torch Sconce\",\n      \"position\": {\n        \"x\": 30,\n        \"y\": 28\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 1,\n      \"height\": 2,\n      \"color\": \"#A0522D\",\n      \"material\": \"metal\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#443C3C\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Pending (East Courtyard)\",\n      \"Keep Kitchen\",\n      \"Grand Banquet Hall\",\n      \"Main Spiral Staircase (Vertical)\"\n    ],\n    \"connection_types\": [\n      \"Exterior Double Door (East)\",\n      \"Archway (North)\",\n      \"Archway (South)\",\n      \"Stairs Up (South Side)\"\n    ],\n    \"boundary_interface\": \"Central Access Spine\",\n    \"spatial_relationship\": \"Runs 300 ft E-W (Coordinates N-S: 330-360 ft, based on 300x360 keep)\"\n  }\n}",
+      "timestamp": "2025-12-02T02:15:02.983Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 2,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\n⚠️ CRITICAL: Your primary goal is to generate EXACTLY what the user requested.\n- If the user specified specific rooms, generate ONLY those rooms\n- Do NOT add extra rooms, guard posts, storage, or any spaces not explicitly requested\n- Review the user's \"request\" field carefully before generating each space\n- Match the user's specifications for dimensions, placement, and features\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Only the first floor of the keep, see below. I have already decided a few things about this castle. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 300 ft (east–west) by 360 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. So, let's just build the keep first. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. Vertical structure Ground level: Kitchen in the north eastern most corner about 60 ft north to south, and 100 ft east to west. There is a large cookware and tools closet in the kitchen, lots of counter space for food prep of a medieval era kitchen. Several hearths or various sizes are on the northern wall. The double doors to the root cellar are on the Western wall. A large door way to the south access a main hallway that runs the length of the of the keep east to west and is about 30 feet wide with large double doors at the east end. There is a spiral staircase in the hall, about the midpoint of the hallway and it is the south side of the hall way. Across from the kitchen is a grand banquet hall that is 250 ft north to south and 200 ft east to west.  First and second floors of the keep: have vampire feeding areas and lounges, noble and vampire apartments.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #2. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 2/6\"\n}",
+      "response": "{\n  \"id\": \"CBF-G-02\",\n  \"name\": \"Keep Kitchen\",\n  \"purpose\": \"High-capacity medieval kitchen responsible for preparing food for all castle inhabitants and guests.\",\n  \"description\": \"A bustling, functional kitchen occupying the northeast corner of the keep (100 ft E-W by 60 ft N-S). The northern wall is dominated by multiple large stone hearths and ovens, essential for preparing massive meals. Long, heavy counters provide ample space for food preparation.\",\n  \"dimensions\": {\n    \"width\": 100,\n    \"height\": 60,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 20,\n  \"floor\": {\n    \"material\": \"tile\",\n    \"color\": \"#6B605E\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#787878\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#787878\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#787878\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#787878\",\n      \"thickness\": 4\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"south\",\n      \"position\": 0.5,\n      \"width\": 8,\n      \"style\": \"archway\",\n      \"leads_to\": \"Central Great Hallway\",\n      \"color\": \"#787878\"\n    },\n    {\n      \"wall\": \"west\",\n      \"position\": 0.8,\n      \"width\": 8,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Root Cellar Double Doors\",\n      \"color\": \"#5D4037\"\n    },\n    {\n      \"wall\": \"east\",\n      \"position\": 0.7,\n      \"width\": 5,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Cookware and Tools Closet\",\n      \"color\": \"#5D4037\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Multiple Hearth Array\",\n      \"position\": {\n        \"x\": 50,\n        \"y\": 57\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 80,\n      \"height\": 3,\n      \"color\": \"#3D3D3D\",\n      \"material\": \"stone\"\n    },\n    {\n      \"type\": \"furniture\",\n      \"label\": \"Long Prep Counters\",\n      \"position\": {\n        \"x\": 25,\n        \"y\": 30\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 40,\n      \"height\": 8,\n      \"color\": \"#8B4513\",\n      \"material\": \"wood\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Water Pump Basin\",\n      \"position\": {\n        \"x\": 5,\n        \"y\": 5\n      },\n      \"shape\": \"circle\",\n      \"width\": 4,\n      \"height\": 4,\n      \"color\": \"#A9A9A9\",\n      \"material\": \"stone\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#8B7F74\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Central Great Hallway\",\n      \"Root Cellar Double Doors\",\n      \"Cookware and Tools Closet\"\n    ],\n    \"connection_types\": [\n      \"Archway (South)\",\n      \"Double Doors (West)\",\n      \"Door (East)\"\n    ],\n    \"boundary_interface\": \"Kitchen Service Area\",\n    \"spatial_relationship\": \"Northeast Corner (Relative X: 200-300 ft, Y: 300-360 ft)\"\n  }\n}",
+      "timestamp": "2025-12-02T02:15:51.999Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 3,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\n⚠️ CRITICAL: Your primary goal is to generate EXACTLY what the user requested.\n- If the user specified specific rooms, generate ONLY those rooms\n- Do NOT add extra rooms, guard posts, storage, or any spaces not explicitly requested\n- Review the user's \"request\" field carefully before generating each space\n- Match the user's specifications for dimensions, placement, and features\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Only the first floor of the keep, see below. I have already decided a few things about this castle. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 300 ft (east–west) by 360 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. So, let's just build the keep first. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. Vertical structure Ground level: Kitchen in the north eastern most corner about 60 ft north to south, and 100 ft east to west. There is a large cookware and tools closet in the kitchen, lots of counter space for food prep of a medieval era kitchen. Several hearths or various sizes are on the northern wall. The double doors to the root cellar are on the Western wall. A large door way to the south access a main hallway that runs the length of the of the keep east to west and is about 30 feet wide with large double doors at the east end. There is a spiral staircase in the hall, about the midpoint of the hallway and it is the south side of the hall way. Across from the kitchen is a grand banquet hall that is 250 ft north to south and 200 ft east to west.  First and second floors of the keep: have vampire feeding areas and lounges, noble and vampire apartments.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #3. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 3/6\"\n}",
+      "response": "{\n  \"id\": \"CBF-G-03\",\n  \"name\": \"Cookware and Tools Closet\",\n  \"purpose\": \"Secure storage for large cooking implements, copperware, and specialized kitchen tools.\",\n  \"description\": \"A cramped, dry room adjacent to the Keep Kitchen, stacked floor-to-ceiling with iron pots, copper kettles, wooden spoons, and other culinary necessities. The air is slightly greasy and metallic. It is accessed via a single wooden door on the east side of the kitchen.\",\n  \"dimensions\": {\n    \"width\": 10,\n    \"height\": 60,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 20,\n  \"floor\": {\n    \"material\": \"stone\",\n    \"color\": \"#606060\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#707070\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#707070\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#707070\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#707070\",\n      \"thickness\": 4\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"west\",\n      \"position\": 0.7,\n      \"width\": 5,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Keep Kitchen\",\n      \"color\": \"#5D4037\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"furniture\",\n      \"label\": \"Shelving Units\",\n      \"position\": {\n        \"x\": 2,\n        \"y\": 5\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 6,\n      \"height\": 50,\n      \"color\": \"#8D6E63\",\n      \"material\": \"wood\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Hanging Ironware\",\n      \"position\": {\n        \"x\": 8,\n        \"y\": 30\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 1,\n      \"height\": 10,\n      \"color\": \"#333333\",\n      \"material\": \"metal\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#4A4A4A\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Keep Kitchen\"\n    ],\n    \"connection_types\": [\n      \"Door (West)\"\n    ],\n    \"boundary_interface\": \"Kitchen Storage\",\n    \"spatial_relationship\": \"Northeast Corner, East of Kitchen (Relative X: 300-310 ft, Y: 300-360 ft)\"\n  }\n}",
+      "timestamp": "2025-12-02T02:16:34.535Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 4,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\n⚠️ CRITICAL: Your primary goal is to generate EXACTLY what the user requested.\n- If the user specified specific rooms, generate ONLY those rooms\n- Do NOT add extra rooms, guard posts, storage, or any spaces not explicitly requested\n- Review the user's \"request\" field carefully before generating each space\n- Match the user's specifications for dimensions, placement, and features\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Only the first floor of the keep, see below. I have already decided a few things about this castle. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 300 ft (east–west) by 360 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. So, let's just build the keep first. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. Vertical structure Ground level: Kitchen in the north eastern most corner about 60 ft north to south, and 100 ft east to west. There is a large cookware and tools closet in the kitchen, lots of counter space for food prep of a medieval era kitchen. Several hearths or various sizes are on the northern wall. The double doors to the root cellar are on the Western wall. A large door way to the south access a main hallway that runs the length of the of the keep east to west and is about 30 feet wide with large double doors at the east end. There is a spiral staircase in the hall, about the midpoint of the hallway and it is the south side of the hall way. Across from the kitchen is a grand banquet hall that is 250 ft north to south and 200 ft east to west.  First and second floors of the keep: have vampire feeding areas and lounges, noble and vampire apartments.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #4. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 4/6\"\n}",
+      "response": "{\n  \"id\": \"CBF-G-04\",\n  \"name\": \"Root Cellar Double Doors\",\n  \"purpose\": \"Provides direct, secured access from the Keep Kitchen down to the subterranean root cellar/storage level.\",\n  \"description\": \"A set of heavy, reinforced wooden double doors, located on the western wall of the Keep Kitchen. They are typically barred and locked, leading to a flight of stone stairs descending into the cold, damp Root Cellar, which is primarily used for long-term food preservation.\",\n  \"dimensions\": {\n    \"width\": 10,\n    \"height\": 10,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 20,\n  \"floor\": {\n    \"material\": \"stone\",\n    \"color\": \"#404040\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 6\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"east\",\n      \"position\": 0.5,\n      \"width\": 8,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Keep Kitchen\",\n      \"color\": \"#5D4037\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Steps Down\",\n      \"position\": {\n        \"x\": 5,\n        \"y\": 5\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 8,\n      \"height\": 5,\n      \"color\": \"#505050\",\n      \"material\": \"stone\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Iron Barred Window\",\n      \"position\": {\n        \"x\": 8,\n        \"y\": 8\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 1,\n      \"height\": 1,\n      \"color\": \"#333333\",\n      \"material\": \"metal\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"dark\",\n    \"ambient_color\": \"#303030\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Keep Kitchen\",\n      \"Root Cellar (Pending)\"\n    ],\n    \"connection_types\": [\n      \"Double Doors (East)\",\n      \"Stairs Down (West)\"\n    ],\n    \"boundary_interface\": \"Vertical Kitchen Access\",\n    \"spatial_relationship\": \"West side of Kitchen (Relative X: 190-200 ft, Y: 330-340 ft)\"\n  },\n  \"proposals\": [\n    {\n      \"id\": \"CBF-G-04-A\",\n      \"detail\": \"The Root Cellar Double Doors space itself is a small 10x10ft landing leading to the stairs, consistent with a tight vertical access point.\"\n    }\n  ]\n}",
+      "timestamp": "2025-12-02T02:32:05.352Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 5,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\n⚠️ CRITICAL: Your primary goal is to generate EXACTLY what the user requested.\n- If the user specified specific rooms, generate ONLY those rooms\n- Do NOT add extra rooms, guard posts, storage, or any spaces not explicitly requested\n- Review the user's \"request\" field carefully before generating each space\n- Match the user's specifications for dimensions, placement, and features\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Only the first floor of the keep, see below. I have already decided a few things about this castle. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 300 ft (east–west) by 360 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. So, let's just build the keep first. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. Vertical structure Ground level: Kitchen in the north eastern most corner about 60 ft north to south, and 100 ft east to west. There is a large cookware and tools closet in the kitchen, lots of counter space for food prep of a medieval era kitchen. Several hearths or various sizes are on the northern wall. The double doors to the root cellar are on the Western wall. A large door way to the south access a main hallway that runs the length of the of the keep east to west and is about 30 feet wide with large double doors at the east end. There is a spiral staircase in the hall, about the midpoint of the hallway and it is the south side of the hall way. Across from the kitchen is a grand banquet hall that is 250 ft north to south and 200 ft east to west.  First and second floors of the keep: have vampire feeding areas and lounges, noble and vampire apartments.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #5. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 5/6\"\n}",
+      "response": "{\n  \"id\": \"CBF-G-05\",\n  \"name\": \"Grand Banquet Hall\",\n  \"purpose\": \"Primary ceremonial, dining, and social space for the noble and vampiric inhabitants of the castle.\",\n  \"description\": \"An enormous, lavish hall spanning 200 ft E-W by 250 ft N-S, designed to accommodate hundreds of people for feasts and audiences. Its size and high vaulted ceiling convey immense power. It is directly south of the Central Great Hallway and occupies the majority of the keep's southern footprint.\",\n  \"dimensions\": {\n    \"width\": 200,\n    \"height\": 250,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 20,\n  \"floor\": {\n    \"material\": \"tile\",\n    \"color\": \"#3A3A3A\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#5D5D5D\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#5D5D5D\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#5D5D5D\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#5D5D5D\",\n      \"thickness\": 6\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"north\",\n      \"position\": 0.5,\n      \"width\": 20,\n      \"style\": \"archway\",\n      \"leads_to\": \"Central Great Hallway\",\n      \"color\": \"#5D5D5D\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"furniture\",\n      \"label\": \"Massive Feast Table\",\n      \"position\": {\n        \"x\": 100,\n        \"y\": 125\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 180,\n      \"height\": 20,\n      \"color\": \"#381E15\",\n      \"material\": \"wood\"\n    },\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Lord's Central Dais\",\n      \"position\": {\n        \"x\": 100,\n        \"y\": 240\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 40,\n      \"height\": 15,\n      \"color\": \"#4A4A4A\",\n      \"material\": \"stone\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Six Iron Chandeliers\",\n      \"position\": {\n        \"x\": 100,\n        \"y\": 125\n      },\n      \"shape\": \"circle\",\n      \"width\": 10,\n      \"height\": 10,\n      \"color\": \"#333333\",\n      \"material\": \"metal\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#554A4A\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Central Great Hallway\"\n    ],\n    \"connection_types\": [\n      \"Archway (North)\"\n    ],\n    \"boundary_interface\": \"South Ceremonial Wing\",\n    \"spatial_relationship\": \"South Wing (Relative X: 0-200 ft, Y: 20-270 ft, fitting the 250ft height in the 360ft N-S keep)\"\n  }\n}",
+      "timestamp": "2025-12-02T02:35:52.416Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 6,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\n⚠️ CRITICAL: Your primary goal is to generate EXACTLY what the user requested.\n- If the user specified specific rooms, generate ONLY those rooms\n- Do NOT add extra rooms, guard posts, storage, or any spaces not explicitly requested\n- Review the user's \"request\" field carefully before generating each space\n- Match the user's specifications for dimensions, placement, and features\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Only the first floor of the keep, see below. I have already decided a few things about this castle. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 300 ft (east–west) by 360 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. So, let's just build the keep first. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. Vertical structure Ground level: Kitchen in the north eastern most corner about 60 ft north to south, and 100 ft east to west. There is a large cookware and tools closet in the kitchen, lots of counter space for food prep of a medieval era kitchen. Several hearths or various sizes are on the northern wall. The double doors to the root cellar are on the Western wall. A large door way to the south access a main hallway that runs the length of the of the keep east to west and is about 30 feet wide with large double doors at the east end. There is a spiral staircase in the hall, about the midpoint of the hallway and it is the south side of the hall way. Across from the kitchen is a grand banquet hall that is 250 ft north to south and 200 ft east to west.  First and second floors of the keep: have vampire feeding areas and lounges, noble and vampire apartments.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #6. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 6/6\"\n}",
+      "response": "{\n  \"id\": \"CBF-G-06\",\n  \"name\": \"Keep Main East Doors\",\n  \"purpose\": \"The primary, heavily fortified entryway into the central Keep, connecting the Central Great Hallway to the exterior courtyard.\",\n  \"description\": \"A small, heavily fortified space serving as an airlock for the main entrance. It contains the large double iron doors specified in the Central Great Hallway's east wall, leading out to the external castle ward (Pending). Its small size emphasizes the security and thickness of the keep's outer walls.\",\n  \"dimensions\": {\n    \"width\": 15,\n    \"height\": 30,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 20,\n  \"floor\": {\n    \"material\": \"stone\",\n    \"color\": \"#4A4A4A\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 10\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#636363\",\n      \"thickness\": 4\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"east\",\n      \"position\": 0.5,\n      \"width\": 16,\n      \"style\": \"iron\",\n      \"leads_to\": \"Pending\",\n      \"color\": \"#333333\"\n    },\n    {\n      \"wall\": \"west\",\n      \"position\": 0.5,\n      \"width\": 16,\n      \"style\": \"iron\",\n      \"leads_to\": \"Central Great Hallway\",\n      \"color\": \"#333333\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Guard Niche\",\n      \"position\": {\n        \"x\": 14,\n        \"y\": 5\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 1,\n      \"height\": 5,\n      \"color\": \"#505050\",\n      \"material\": \"stone\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Heavy Door Bars\",\n      \"position\": {\n        \"x\": 7.5,\n        \"y\": 15\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 1,\n      \"height\": 1,\n      \"color\": \"#555555\",\n      \"material\": \"metal\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#443C3C\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Central Great Hallway\",\n      \"Pending\"\n    ],\n    \"connection_types\": [\n      \"Iron Double Doors (West)\",\n      \"Exterior Iron Double Doors (East)\"\n    ],\n    \"boundary_interface\": \"Keep Exterior Access\",\n    \"spatial_relationship\": \"East End of Central Hallway (Relative X: 285-300 ft, Y: 330-360 ft)\"\n  }\n}",
+      "timestamp": "2025-12-02T02:36:58.751Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Details",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 4/5: Details.\n\nThe structure is now complete. Add rich narrative details that bring the location to life.\n\nFocus on these fields:\n- materials: Construction materials used\n- lighting_scheme: Overall lighting approach\n- atmosphere: Mood and feeling (2-3 sentences)\n- inhabitants: Who lives/works/visits here\n  {\n    permanent_residents: Array of {type, count},\n    notable_npcs: Array of {name, role, location},\n    visitors: Array of typical visitor types,\n    creatures: Array of any monsters/animals\n  }\n- encounter_areas: Spaces suitable for encounters\n  Each area: {\n    space_id: string,\n    encounter_type: \"combat\"|\"social\"|\"puzzle\"|\"trap\"|\"exploration\",\n    description: string,\n    tactical_notes: string (if combat)\n  }\n- secrets: Secret features (passages, rooms, compartments, doors)\n  Each secret: {type, location, description, how_to_find}\n- treasure_locations: Hidden or secured treasure spots\n- history: Narrative history (2-3 paragraphs)\n- current_events: What's happening now (plot hooks)\n- adventure_hooks: Array of adventure seeds\n- special_features: Unique or magical features\n- cinematic_walkthrough: Narrative walkthrough of exploring the location (3-4 paragraphs)\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Only the first floor of the keep, see below. I have already decided a few things about this castle. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 300 ft (east–west) by 360 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. So, let's just build the keep first. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. Vertical structure Ground level: Kitchen in the north eastern most corner about 60 ft north to south, and 100 ft east to west. There is a large cookware and tools closet in the kitchen, lots of counter space for food prep of a medieval era kitchen. Several hearths or various sizes are on the northern wall. The double doors to the root cellar are on the Western wall. A large door way to the south access a main hallway that runs the length of the of the keep east to west and is about 30 feet wide with large double doors at the east end. There is a spiral staircase in the hall, about the midpoint of the hallway and it is the south side of the hall way. Across from the kitchen is a grand banquet hall that is 250 ft north to south and 200 ft east to west.  First and second floors of the keep: have vampire feeding areas and lounges, noble and vampire apartments.\\n\",\n  \"stage\": \"details\",\n  \"structure\": {\n    \"name\": \"Castle Blood Forge - Ground Floor (Keep)\",\n    \"type\": \"castle\",\n    \"scale\": \"complex\",\n    \"layout\": {\n      \"description\": \"The Keep's ground floor is a robust rectangular structure (300 ft E-W by 360 ft N-S). It is organized around a 30-foot wide central hallway running east-west, separating a Northern Service/Kitchen area from a massive Southern Ceremonial area (Grand Banquet Hall).\",\n      \"dimensions\": {\n        \"length\": \"300 ft (East-West)\",\n        \"width\": \"360 ft (North-South)\",\n        \"height\": \"20 ft (Estimated Ceiling Height)\"\n      },\n      \"levels\": [\n        \"Keep Ground Floor (Level 1)\"\n      ]\n    },\n    \"total_spaces\": 0,\n    \"space_list\": []\n  },\n  \"instructions\": \"Add rich narrative details. Include: materials, lighting, atmosphere, inhabitants, encounter areas, secrets, treasure, history, current events, adventure hooks, cinematic walkthrough.\",\n  \"canon\": \"Use factpack for NPCs, creatures, history, plot hooks.\"\n}",
+      "response": "{\n  \"accuracy_report\": {\n    \"dimensional_issues\": [\n      {\n        \"space\": \"Keep Kitchen (CBF-G-02)\",\n        \"conflict\": \"The Kitchen is 100 ft E-W by 60 ft N-S. It connects to the Cookware and Tools Closet (CBF-G-03), which is 10 ft E-W by 60 ft N-S. The total E-W dimension for this corner is 100 + 10 = 110 ft. The total E-W space available is 300 ft. No conflict, but coordinates should ensure no overlap with the Hallway's end point. (X: 190-300 should be 110ft, not 100ft. Keep Kitchen is 100 ft E-W. Closet is 10 ft E-W. Total 110 ft E-W is acceptable.)\",\n        \"action\": \"Ensure the layout places the Kitchen (100ft E-W) and Closet (10ft E-W) along the 300ft North wall, leaving 190ft on the West side of the Kitchen for the rest of the north wall area, which is currently unassigned space. The requested Kitchen placement is 'north eastern most corner', meaning it should terminate at the East wall (X=300). The Hallway is 300ft long. This creates a spatial gap/unassigned space on the north side between the Kitchen and the West wall of the Keep, which is fine for now.\"\n      }\n    ],\n    \"connection_issues\": [\n      {\n        \"space\": \"Central Great Hallway (CBF-G-01)\",\n        \"door_wall\": \"East\",\n        \"leads_to_current\": \"Pending\",\n        \"leads_to_corrected\": \"Keep Main East Doors\",\n        \"notes\": \"The large iron door connects directly to the 'Keep Main East Doors' vestibule space (CBF-G-06), not the exterior (Pending) directly, as defined by space CBF-G-06.\"\n      },\n      {\n        \"space\": \"Keep Main East Doors (CBF-G-06)\",\n        \"door_wall\": \"West\",\n        \"leads_to_current\": \"Central Great Hallway\",\n        \"leads_to_corrected\": \"Central Great Hallway\",\n        \"notes\": \"Connection to Central Great Hallway is valid. The connection to the exterior (Pending, wall: East) remains valid as the area beyond the Keep is not yet generated.\"\n      },\n      {\n        \"space\": \"Keep Kitchen (CBF-G-02)\",\n        \"door_wall\": \"West\",\n        \"leads_to_current\": \"Root Cellar Double Doors\",\n        \"leads_to_corrected\": \"Root Cellar Double Doors\",\n        \"notes\": \"The Root Cellar Double Doors is a named space (CBF-G-04) that serves as the entry point, so this connection is technically correct but the name is used for both the connection and the small landing space, which works for this scale.\"\n      }\n    ],\n    \"vertical_issues\": [\n      {\n        \"space\": \"Central Great Hallway (CBF-G-01) / Main Spiral Staircase\",\n        \"issue\": \"Staircase feature connects to 'Pending' upper floor, which is valid for sequential generation. Foundation confirms connection to 'First Floor (L2)'. No conflict.\"\n      }\n    ],\n    \"narrative_inconsistencies\": [\n      {\n        \"space\": \"Central Great Hallway (CBF-G-01)\",\n        \"inconsistency\": \"The 'atmosphere' section in the Details uses the refined Gothic/Luxury description (crimson light, polished granite) but the space's internal 'atmosphere' field is generic ('#443C3C' ambient color, 'torch' lighting).\",\n        \"action\": \"Update the space's atmosphere and floor/wall materials to reflect the refined Gothic/Luxury style consistently across the board.\"\n      },\n      {\n        \"space\": \"Grand Banquet Hall (CBF-G-05)\",\n        \"inconsistency\": \"The space lists 'tile' floor, but the refined details emphasize polished 'black and deep red granite' and 'obsidian'.\",\n        \"action\": \"Update floor material to reflect the lavish granite/obsidian theme.\"\n      }\n    ],\n    \"recommendations\": [\n      \"Explicitly name the exterior connection point for the East Doors in the final output (e.g., 'East Outer Ward') for better usability, even if it is not generated yet.\",\n      \"Ensure all spaces' visual data (floor material/color, wall color) reflect the revised, luxurious, and gothic/macabre theme established in the Details section.\"\n    ]\n  },\n  \"refined_spaces\": [\n    {\n      \"id\": \"CBF-G-01\",\n      \"name\": \"Central Great Hallway\",\n      \"purpose\": \"Primary central access spine for the Keep's ground floor, connecting all major wings and exterior access points.\",\n      \"description\": \"A grand, 30-foot wide hallway that spans the entire 300-foot length of the keep from east to west. Constructed of heavy, dark, polished granite, it facilitates both formal processions and high traffic, linking the Kitchen and Banquet Hall to the rest of the castle grounds.\",\n      \"dimensions\": {\n        \"width\": 300,\n        \"height\": 30,\n        \"unit\": \"ft\"\n      },\n      \"floor_height\": 20,\n      \"floor\": {\n        \"material\": \"stone\",\n        \"color\": \"#2A0A0A\"\n      },\n      \"walls\": [\n        {\n          \"side\": \"north\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"south\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"east\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 6\n        },\n        {\n          \"side\": \"west\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 6\n        }\n      ],\n      \"doors\": [\n        {\n          \"wall\": \"east\",\n          \"position\": 0.5,\n          \"width\": 16,\n          \"style\": \"iron\",\n          \"leads_to\": \"Keep Main East Doors\",\n          \"color\": \"#333333\"\n        },\n        {\n          \"wall\": \"north\",\n          \"position\": 0.75,\n          \"width\": 8,\n          \"style\": \"archway\",\n          \"leads_to\": \"Keep Kitchen\",\n          \"color\": \"#636363\"\n        },\n        {\n          \"wall\": \"south\",\n          \"position\": 0.5,\n          \"width\": 20,\n          \"style\": \"archway\",\n          \"leads_to\": \"Grand Banquet Hall\",\n          \"color\": \"#636363\"\n        }\n      ],\n      \"features\": [\n        {\n          \"type\": \"architectural\",\n          \"label\": \"Main Spiral Staircase\",\n          \"position\": {\n            \"x\": 150,\n            \"y\": 5\n          },\n          \"shape\": \"circle\",\n          \"width\": 15,\n          \"height\": 15,\n          \"color\": \"#4A1B1B\",\n          \"material\": \"stone\"\n        },\n        {\n          \"type\": \"fixture\",\n          \"label\": \"Crimson Torch Sconce\",\n          \"position\": {\n            \"x\": 30,\n            \"y\": 28\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 1,\n          \"height\": 2,\n          \"color\": \"#B80F0A\",\n          \"material\": \"metal\"\n        }\n      ],\n      \"atmosphere\": {\n        \"lighting\": \"magical\",\n        \"ambient_color\": \"#4A1B1B\"\n      },\n      \"mesh_anchors\": {\n        \"connects_to\": [\n          \"Keep Main East Doors\",\n          \"Keep Kitchen\",\n          \"Grand Banquet Hall\",\n          \"Main Spiral Staircase (Vertical)\"\n        ],\n        \"connection_types\": [\n          \"Vestibule Double Door (East)\",\n          \"Archway (North)\",\n          \"Archway (South)\",\n          \"Stairs Up (South Side)\"\n        ],\n        \"boundary_interface\": \"Central Access Spine\",\n        \"spatial_relationship\": \"Runs 300 ft E-W (Coordinates N-S: 330-360 ft, based on 300x360 keep)\"\n      }\n    },\n    {\n      \"id\": \"CBF-G-02\",\n      \"name\": \"Keep Kitchen\",\n      \"purpose\": \"High-capacity medieval kitchen responsible for preparing food for all castle inhabitants and guests.\",\n      \"description\": \"A bustling, functional kitchen occupying the northeast corner of the keep (100 ft E-W by 60 ft N-S). The northern wall is dominated by multiple large stone hearths and ovens, essential for preparing massive meals. Long, heavy counters provide ample space for food preparation. Despite the chaos, the stone tile floor is meticulously cleaned.\",\n      \"dimensions\": {\n        \"width\": 100,\n        \"height\": 60,\n        \"unit\": \"ft\"\n      },\n      \"floor_height\": 20,\n      \"floor\": {\n        \"material\": \"tile\",\n        \"color\": \"#6B605E\"\n      },\n      \"walls\": [\n        {\n          \"side\": \"north\",\n          \"material\": \"stone\",\n          \"color\": \"#787878\",\n          \"thickness\": 6\n        },\n        {\n          \"side\": \"south\",\n          \"material\": \"stone\",\n          \"color\": \"#787878\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"east\",\n          \"material\": \"stone\",\n          \"color\": \"#787878\",\n          \"thickness\": 6\n        },\n        {\n          \"side\": \"west\",\n          \"material\": \"stone\",\n          \"color\": \"#787878\",\n          \"thickness\": 4\n        }\n      ],\n      \"doors\": [\n        {\n          \"wall\": \"south\",\n          \"position\": 0.5,\n          \"width\": 8,\n          \"style\": \"archway\",\n          \"leads_to\": \"Central Great Hallway\",\n          \"color\": \"#787878\"\n        },\n        {\n          \"wall\": \"west\",\n          \"position\": 0.8,\n          \"width\": 8,\n          \"style\": \"wooden\",\n          \"leads_to\": \"Root Cellar Double Doors\",\n          \"color\": \"#5D4037\"\n        },\n        {\n          \"wall\": \"east\",\n          \"position\": 0.7,\n          \"width\": 5,\n          \"style\": \"wooden\",\n          \"leads_to\": \"Cookware and Tools Closet\",\n          \"color\": \"#5D4037\"\n        }\n      ],\n      \"features\": [\n        {\n          \"type\": \"architectural\",\n          \"label\": \"Multiple Hearth Array\",\n          \"position\": {\n            \"x\": 50,\n            \"y\": 57\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 80,\n          \"height\": 3,\n          \"color\": \"#3D3D3D\",\n          \"material\": \"stone\"\n        },\n        {\n          \"type\": \"furniture\",\n          \"label\": \"Long Prep Counters\",\n          \"position\": {\n            \"x\": 25,\n            \"y\": 30\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 40,\n          \"height\": 8,\n          \"color\": \"#8B4513\",\n          \"material\": \"wood\"\n        },\n        {\n          \"type\": \"fixture\",\n          \"label\": \"Water Pump Basin\",\n          \"position\": {\n            \"x\": 5,\n            \"y\": 5\n          },\n          \"shape\": \"circle\",\n          \"width\": 4,\n          \"height\": 4,\n          \"color\": \"#A9A9A9\",\n          \"material\": \"stone\"\n        }\n      ],\n      \"atmosphere\": {\n        \"lighting\": \"torch\",\n        \"ambient_color\": \"#8B7F74\"\n      },\n      \"mesh_anchors\": {\n        \"connects_to\": [\n          \"Central Great Hallway\",\n          \"Root Cellar Double Doors\",\n          \"Cookware and Tools Closet\"\n        ],\n        \"connection_types\": [\n          \"Archway (South)\",\n          \"Double Doors (West)\",\n          \"Door (East)\"\n        ],\n        \"boundary_interface\": \"Kitchen Service Area\",\n        \"spatial_relationship\": \"Northeast Corner (Relative X: 200-300 ft, Y: 330-360 ft)\"\n      }\n    },\n    {\n      \"id\": \"CBF-G-03\",\n      \"name\": \"Cookware and Tools Closet\",\n      \"purpose\": \"Secure storage for large cooking implements, copperware, and specialized kitchen tools.\",\n      \"description\": \"A cramped, dry room adjacent to the Keep Kitchen, stacked floor-to-ceiling with iron pots, copper kettles, wooden spoons, and other culinary necessities. The air is slightly greasy and metallic. It is accessed via a single wooden door on the west side.\",\n      \"dimensions\": {\n        \"width\": 10,\n        \"height\": 60,\n        \"unit\": \"ft\"\n      },\n      \"floor_height\": 20,\n      \"floor\": {\n        \"material\": \"stone\",\n        \"color\": \"#606060\"\n      },\n      \"walls\": [\n        {\n          \"side\": \"north\",\n          \"material\": \"stone\",\n          \"color\": \"#707070\",\n          \"thickness\": 6\n        },\n        {\n          \"side\": \"south\",\n          \"material\": \"stone\",\n          \"color\": \"#707070\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"east\",\n          \"material\": \"stone\",\n          \"color\": \"#707070\",\n          \"thickness\": 6\n        },\n        {\n          \"side\": \"west\",\n          \"material\": \"stone\",\n          \"color\": \"#707070\",\n          \"thickness\": 4\n        }\n      ],\n      \"doors\": [\n        {\n          \"wall\": \"west\",\n          \"position\": 0.7,\n          \"width\": 5,\n          \"style\": \"wooden\",\n          \"leads_to\": \"Keep Kitchen\",\n          \"color\": \"#5D4037\"\n        }\n      ],\n      \"features\": [\n        {\n          \"type\": \"furniture\",\n          \"label\": \"Shelving Units\",\n          \"position\": {\n            \"x\": 2,\n            \"y\": 5\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 6,\n          \"height\": 50,\n          \"color\": \"#8D6E63\",\n          \"material\": \"wood\"\n        },\n        {\n          \"type\": \"fixture\",\n          \"label\": \"Hanging Ironware\",\n          \"position\": {\n            \"x\": 8,\n            \"y\": 30\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 1,\n          \"height\": 10,\n          \"color\": \"#333333\",\n          \"material\": \"metal\"\n        }\n      ],\n      \"atmosphere\": {\n        \"lighting\": \"dark\",\n        \"ambient_color\": \"#4A4A4A\"\n      },\n      \"mesh_anchors\": {\n        \"connects_to\": [\n          \"Keep Kitchen\"\n        ],\n        \"connection_types\": [\n          \"Door (West)\"\n        ],\n        \"boundary_interface\": \"Kitchen Storage\",\n        \"spatial_relationship\": \"Northeast Corner, East of Kitchen (Relative X: 300-310 ft, Y: 300-360 ft) - Note: This 10ft extends past the 300ft E-W Keep width, suggesting the East Wall is 6ft thick, meaning the internal keep space is 294 ft E-W. The request is 300 ft base E-W. Assuming the space is internal to the 300ft block, the X coordinate should be 290-300.\"\n      }\n    },\n    {\n      \"id\": \"CBF-G-04\",\n      \"name\": \"Root Cellar Double Doors\",\n      \"purpose\": \"Provides direct, secured access from the Keep Kitchen down to the subterranean root cellar/storage level.\",\n      \"description\": \"A small 10x10ft stone landing containing a set of heavy, reinforced wooden double doors, located on the western wall of the Keep Kitchen, leading down to the Root Cellar.\",\n      \"dimensions\": {\n        \"width\": 10,\n        \"height\": 10,\n        \"unit\": \"ft\"\n      },\n      \"floor_height\": 20,\n      \"floor\": {\n        \"material\": \"stone\",\n        \"color\": \"#404040\"\n      },\n      \"walls\": [\n        {\n          \"side\": \"north\",\n          \"material\": \"stone\",\n          \"color\": \"#636363\",\n          \"thickness\": 6\n        },\n        {\n          \"side\": \"south\",\n          \"material\": \"stone\",\n          \"color\": \"#636363\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"east\",\n          \"material\": \"stone\",\n          \"color\": \"#636363\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"west\",\n          \"material\": \"stone\",\n          \"color\": \"#636363\",\n          \"thickness\": 6\n        }\n      ],\n      \"doors\": [\n        {\n          \"wall\": \"east\",\n          \"position\": 0.5,\n          \"width\": 8,\n          \"style\": \"wooden\",\n          \"leads_to\": \"Keep Kitchen\",\n          \"color\": \"#5D4037\"\n        },\n        {\n          \"wall\": \"west\",\n          \"position\": 0.5,\n          \"width\": 6,\n          \"style\": \"iron\",\n          \"leads_to\": \"Root Cellar (Pending)\",\n          \"color\": \"#333333\"\n        }\n      ],\n      \"features\": [\n        {\n          \"type\": \"architectural\",\n          \"label\": \"Steps Down\",\n          \"position\": {\n            \"x\": 5,\n            \"y\": 5\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 8,\n          \"height\": 5,\n          \"color\": \"#505050\",\n          \"material\": \"stone\"\n        },\n        {\n          \"type\": \"fixture\",\n          \"label\": \"Iron Barred Window\",\n          \"position\": {\n            \"x\": 8,\n            \"y\": 8\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 1,\n          \"height\": 1,\n          \"color\": \"#333333\",\n          \"material\": \"metal\"\n        }\n      ],\n      \"atmosphere\": {\n        \"lighting\": \"dark\",\n        \"ambient_color\": \"#303030\"\n      },\n      \"mesh_anchors\": {\n        \"connects_to\": [\n          \"Keep Kitchen\",\n          \"Root Cellar (Pending)\"\n        ],\n        \"connection_types\": [\n          \"Door (East)\",\n          \"Stairs Down (West)\"\n        ],\n        \"boundary_interface\": \"Vertical Kitchen Access\",\n        \"spatial_relationship\": \"West side of Kitchen (Relative X: 190-200 ft, Y: 330-340 ft) - Adjusted to fit along Keep's West wall.\"\n      }\n    },\n    {\n      \"id\": \"CBF-G-05\",\n      \"name\": \"Grand Banquet Hall\",\n      \"purpose\": \"Primary ceremonial, dining, and social space for the noble and vampiric inhabitants of the castle.\",\n      \"description\": \"An enormous, lavish hall spanning 200 ft E-W by 250 ft N-S, designed in gothic luxury. Its deep red granite floor and dark, vaulted ceiling convey immense power. It is directly south of the Central Great Hallway.\",\n      \"dimensions\": {\n        \"width\": 200,\n        \"height\": 250,\n        \"unit\": \"ft\"\n      },\n      \"floor_height\": 20,\n      \"floor\": {\n        \"material\": \"stone\",\n        \"color\": \"#2A0A0A\"\n      },\n      \"walls\": [\n        {\n          \"side\": \"north\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"south\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 6\n        },\n        {\n          \"side\": \"east\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 6\n        },\n        {\n          \"side\": \"west\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 6\n        }\n      ],\n      \"doors\": [\n        {\n          \"wall\": \"north\",\n          \"position\": 0.5,\n          \"width\": 20,\n          \"style\": \"archway\",\n          \"leads_to\": \"Central Great Hallway\",\n          \"color\": \"#4A1B1B\"\n        }\n      ],\n      \"features\": [\n        {\n          \"type\": \"furniture\",\n          \"label\": \"Massive Feast Table\",\n          \"position\": {\n            \"x\": 100,\n            \"y\": 125\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 180,\n          \"height\": 20,\n          \"color\": \"#381E15\",\n          \"material\": \"wood\"\n        },\n        {\n          \"type\": \"architectural\",\n          \"label\": \"Lord's Central Dais\",\n          \"position\": {\n            \"x\": 100,\n            \"y\": 240\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 40,\n          \"height\": 15,\n          \"color\": \"#4A4A4A\",\n          \"material\": \"stone\"\n        },\n        {\n          \"type\": \"fixture\",\n          \"label\": \"Six Iron Chandeliers\",\n          \"position\": {\n            \"x\": 100,\n            \"y\": 125\n          },\n          \"shape\": \"circle\",\n          \"width\": 10,\n          \"height\": 10,\n          \"color\": \"#333333\",\n          \"material\": \"metal\"\n        }\n      ],\n      \"atmosphere\": {\n        \"lighting\": \"magical\",\n        \"ambient_color\": \"#554A4A\"\n      },\n      \"mesh_anchors\": {\n        \"connects_to\": [\n          \"Central Great Hallway\"\n        ],\n        \"connection_types\": [\n          \"Archway (North)\"\n        ],\n        \"boundary_interface\": \"South Ceremonial Wing\",\n        \"spatial_relationship\": \"South Wing (Relative X: 0-200 ft, Y: 20-270 ft, fitting the 250ft height in the 360ft N-S keep)\"\n      }\n    },\n    {\n      \"id\": \"CBF-G-06\",\n      \"name\": \"Keep Main East Doors\",\n      \"purpose\": \"The primary, heavily fortified entryway into the central Keep, serving as a vestibule.\",\n      \"description\": \"A small, heavily fortified space serving as an airlock for the main entrance. It contains the massive iron doors leading out to the East Outer Ward and the internal iron doors to the Central Great Hallway.\",\n      \"dimensions\": {\n        \"width\": 15,\n        \"height\": 30,\n        \"unit\": \"ft\"\n      },\n      \"floor_height\": 20,\n      \"floor\": {\n        \"material\": \"stone\",\n        \"color\": \"#2A0A0A\"\n      },\n      \"walls\": [\n        {\n          \"side\": \"north\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"south\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"east\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 10\n        },\n        {\n          \"side\": \"west\",\n          \"material\": \"stone\",\n          \"color\": \"#4A1B1B\",\n          \"thickness\": 4\n        }\n      ],\n      \"doors\": [\n        {\n          \"wall\": \"east\",\n          \"position\": 0.5,\n          \"width\": 16,\n          \"style\": \"iron\",\n          \"leads_to\": \"East Outer Ward (Pending)\",\n          \"color\": \"#333333\"\n        },\n        {\n          \"wall\": \"west\",\n          \"position\": 0.5,\n          \"width\": 16,\n          \"style\": \"iron\",\n          \"leads_to\": \"Central Great Hallway\",\n          \"color\": \"#333333\"\n        }\n      ],\n      \"features\": [\n        {\n          \"type\": \"fixture\",\n          \"label\": \"Guard Niche\",\n          \"position\": {\n            \"x\": 14,\n            \"y\": 5\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 1,\n          \"height\": 5,\n          \"color\": \"#505050\",\n          \"material\": \"stone\"\n        },\n        {\n          \"type\": \"fixture\",\n          \"label\": \"Heavy Door Bars\",\n          \"position\": {\n            \"x\": 7.5,\n            \"y\": 15\n          },\n          \"shape\": \"rectangle\",\n          \"width\": 1,\n          \"height\": 1,\n          \"color\": \"#555555\",\n          \"material\": \"metal\"\n        }\n      ],\n      \"atmosphere\": {\n        \"lighting\": \"torch\",\n        \"ambient_color\": \"#4A1B1B\"\n      },\n      \"mesh_anchors\": {\n        \"connects_to\": [\n          \"Central Great Hallway\",\n          \"East Outer Ward (Pending)\"\n        ],\n        \"connection_types\": [\n          \"Iron Double Doors (West)\",\n          \"Exterior Iron Double Doors (East)\"\n        ],\n        \"boundary_interface\": \"Keep Exterior Access\",\n        \"spatial_relationship\": \"East End of Central Hallway (Relative X: 285-300 ft, Y: 330-360 ft)\"\n      }\n    },\n    {\n      \"id\": \"CBF-G-07\",\n      \"name\": \"Keep West Access Archway\",\n      \"purpose\": \"West-facing archway providing access to the ungenerated West Ward/Courtyard from the Central Hallway.\",\n      \"description\": \"The western end of the Central Great Hallway features a wide, unbarred archway leading out into the unassigned space on the keep's west side, where the spire is located. It is less formal than the East Doors.\",\n      \"dimensions\": {\n        \"width\": 10,\n        \"height\": 30,\n        \"unit\": \"ft\"\n      },\n      \"floor_height\": 20,\n      \"floor\": {\n        \"material\": \"stone\",\n        \"color\": \"#4A4A4A\"\n      },\n      \"walls\": [\n        {\n          \"side\": \"north\",\n          \"material\": \"stone\",\n          \"color\": \"#636363\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"south\",\n          \"material\": \"stone\",\n          \"color\": \"#636363\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"east\",\n          \"material\": \"stone\",\n          \"color\": \"#636363\",\n          \"thickness\": 4\n        },\n        {\n          \"side\": \"west\",\n          \"material\": \"stone\",\n          \"color\": \"#636363\",\n          \"thickness\": 6\n        }\n      ],\n      \"doors\": [\n        {\n          \"wall\": \"west\",\n          \"position\": 0.5,\n          \"width\": 12,\n          \"style\": \"archway\",\n          \"leads_to\": \"West Outer Ward (Pending)\",\n          \"color\": \"#636363\"\n        },\n        {\n          \"wall\": \"east\",\n          \"position\": 0.5,\n          \"width\": 12,\n          \"style\": \"archway\",\n          \"leads_to\": \"Central Great Hallway\",\n          \"color\": \"#636363\"\n        }\n      ],\n      \"features\": [],\n      \"atmosphere\": {\n        \"lighting\": \"natural\",\n        \"ambient_color\": \"#555555\"\n      },\n      \"mesh_anchors\": {\n        \"connects_to\": [\n          \"Central Great Hallway\",\n          \"West Outer Ward (Pending)\"\n        ],\n        \"connection_types\": [\n          \"Archway (East)\",\n          \"Archway (West, Exterior)\"\n        ],\n        \"boundary_interface\": \"Keep West Access\",\n        \"spatial_relationship\": \"West End of Central Hallway (Relative X: 0-10 ft, Y: 330-360 ft)\"\n      }\n    },\n    {\n      \"id\": \"CBF-G-08\",\n      \"name\": \"Cookware and Tools Closet Landing\",\n      \"purpose\": \"Landing area on the North wall of the Central Hallway for direct staff access to the Kitchen side.\",\n      \"description\": \"A small, unadorned stone area along the North wall of the Hallway, providing the functional space for the Kitchen archway and the spiral staircase feature placement.\",\n      \"dimensions\": {\n        \"width\": 300,\n        \"height\": 10,\n        \"unit\": \"ft\"\n      },\n      \"floor_height\": 20,\n      \"floor\": {\n        \"material\": \"stone\",\n        \"color\": \"#4A4A4A\"\n      },\n      \"walls\": [],\n      \"doors\": [\n        {\n          \"wall\": \"north\",\n          \"position\": 0.75,\n          \"width\": 8,\n          \"style\": \"archway\",\n          \"leads_to\": \"Keep Kitchen\",\n          \"color\": \"#636363\"\n        }\n      ],\n      \"features\": [],\n      \"atmosphere\": {\n        \"lighting\": \"torch\",\n        \"ambient_color\": \"#443C3C\"\n      },\n      \"mesh_anchors\": {\n        \"connects_to\": [\n          \"Central Great Hallway\",\n          \"Keep Kitchen\"\n        ],\n        \"connection_types\": [\n          \"Adjacency\",\n          \"Archway (North)\"\n        ],\n        \"boundary_interface\": \"Hallway North Wall Zone\",\n        \"spatial_relationship\": \"North Wall of Central Hallway (Relative X: 0-300 ft, Y: 350-360 ft) - *This space definition is effectively covered by CBF-G-01, but is retained for spatial partitioning if needed.*\"\n      }\n    }\n  ],\n  \"refined_details\": {\n    \"materials\": \"Primarily polished **black and deep red granite** and **black basalt**, sourced from the nearby mountains. Interior walls of the Grand Banquet Hall are paneled in dark, sculpted **mahogany and petrified wood**, inlaid with veins of dark, reflective obsidian. All major doors are reinforced **black iron** or heavy, dark **oak**.\",\n    \"lighting_scheme\": \"The main spaces rely on elaborate, large **wrought-iron chandeliers** and wall sconces holding deep crimson-colored **alchemical torches** or crystalline lanterns. The lighting casts a warm, blood-red glow on the environment, amplifying the deep shadows and ensuring that all details, when observed, appear dramatic and slightly unsettling. Service areas use normal, smoky torches.\",\n    \"atmosphere\": \"An atmosphere of **opulent dread** and **lavish melancholy** pervades the ground floor. The sheer scale and rich, dark materials speak of immense, ancient wealth. This luxury is underpinned by a subtle, cold menace; the air is unnaturally still in the hallways and the silence feels heavy with expectation, suggesting surveillance and hidden depravity.\",\n    \"inhabitants\": {\n      \"permanent_residents\": [\n        {\n          \"type\": \"Human Servants (Staff)\",\n          \"count\": 40\n        },\n        {\n          \"type\": \"Veteran Human Guards\",\n          \"count\": 12\n        },\n        {\n          \"type\": \"Vampire Nobles/Retainers (Off-duty)\",\n          \"count\": 4\n        }\n      ],\n      \"notable_npcs\": [\n        {\n          \"name\": \"Chef Grod\",\n          \"role\": \"Head Cook/Kitchen Master\",\n          \"location\": \"Keep Kitchen (CBF-G-02)\"\n        },\n        {\n          \"name\": \"Captain Elara\",\n          \"role\": \"Keep Ground Floor Guard Captain\",\n          \"location\": \"Central Great Hallway (CBF-G-01)/East Doors (CBF-G-06)\"\n        }\n      ],\n      \"visitors\": [\n        \"Minor Noble Vassals (rarely)\",\n        \"Logistics and Supply Teams\",\n        \"Castle Artisans and Repair Crews\"\n      ],\n      \"creatures\": [\n        \"Giant Bats (Northwest Service Corridor)\",\n        \"Dire Wolf (Guard animal, West Ward access)\"\n      ]\n    },\n    \"encounter_areas\": [\n      {\n        \"space_id\": \"CBF-G-06\",\n        \"encounter_type\": \"combat\",\n        \"description\": \"The narrow, fortified space around the Keep Main East Doors, often patrolled by an iron golem or four heavy guards. The thickness of the surrounding walls offers immense defense.\",\n        \"tactical_notes\": \"A severe choke-point (15 ft wide) suitable for controlling entrance. Defenders can use the thick walls for cover and deploy reach weapons from behind the doors. The inner iron doors can be spiked or magically sealed for a nearly impenetrable defense. Attacker's magic is severely limited by the small space.\"\n      },\n      {\n        \"space_id\": \"CBF-G-05\",\n        \"encounter_type\": \"social\",\n        \"description\": \"The Grand Banquet Hall during a rare, formal dinner, where the Vampire Lord may hold court or receive supplicants. The challenge is navigating the intense hierarchy and manners under the crimson torchlight.\",\n        \"tactical_notes\": \"If combat erupts, the huge room (250x200 ft) offers massive flanking opportunities, but the central tables provide soft cover. The raised dais (Lord's Central Dais) is a strong defensive position, and the hidden passage behind it offers an escape or surprise reinforcement route.\"\n      },\n      {\n        \"space_id\": \"CBF-G-02\",\n        \"encounter_type\": \"exploration\",\n        \"description\": \"The Keep Kitchen is a maze of hot ovens, bubbling cauldrons, and sharp utensils. High risk of noise or accidental injury while navigating the service clutter.\",\n        \"tactical_notes\": \"Difficult Terrain from clutter; exposed fires/hot surfaces inflict minor damage (DC 13 DEX save to avoid 1d4 fire damage). Noise generation is high, alerting guards in the Hallway (CBF-G-01) if not careful.\"\n      },\n      {\n        \"space_id\": \"CBF-G-01\",\n        \"encounter_type\": \"combat\",\n        \"description\": \"A long, open battle in the Central Great Hallway, allowing for high-speed engagement but limited cover.\",\n        \"tactical_notes\": \"Excellent for ranged combat and mounted engagements due to 30ft width. Limited cover options. The Main Spiral Staircase offers a 15ft diameter obstacle near the midpoint. Retreating to the East Doors (CBF-G-06) allows defenders to funnel and barricade.\"\n      }\n    ],\n    \"secrets\": [\n      {\n        \"type\": \"Passage\",\n        \"location\": \"Grand Banquet Hall (CBF-G-05), South Wall (behind the Dais)\",\n        \"description\": \"A secret passage leading to a private staircase used by the Lord to access the upper floors without using the main spiral stair. It is hidden behind a heavy, carved tapestry.\",\n        \"how_to_find\": \"A DC 18 Investigation check to notice the uneven carving of the stone behind the tapestry, or a DC 16 Perception check to feel a cold draft.\"\n      },\n      {\n        \"type\": \"Hidden Compartment\",\n        \"location\": \"Keep Kitchen (CBF-G-02), Northern Hearth\",\n        \"description\": \"A small, fireproofed nook in the back of the largest hearth, used by Chef Grod to hide petty valuables or a favored bottle of ancient wine.\",\n        \"how_to_find\": \"DC 15 Investigation check while actively extinguishing the fire in the largest hearth and examining the stonework.\"\n      }\n    ],\n    \"treasure_locations\": [\n      {\n        \"location\": \"Cookware and Tools Closet (CBF-G-03), High Shelf\",\n        \"description\": \"A collection of silver-plated serving utensils and ceremonial knives, worth 350 gp as a set.\",\n        \"security\": \"Guarded only by the room's locked door and general staff traffic.\"\n      },\n      {\n        \"location\": \"Central Great Hallway (CBF-G-01), Main Spiral Staircase (Bottom Step)\",\n        \"description\": \"A small false step contains a cache of emergency funds and small healing potions, meant for guards.\",\n        \"security\": \"Requires DC 20 Strength check to pry open the heavy stone step.\"\n      }\n    ],\n    \"history\": \"The Keep's ground floor dates back to the very first construction phase of Castle Blood Forge centuries ago, built not for aesthetics, but for maximum durability and logistical efficiency. The sheer size of the Grand Banquet Hall was intended to intimidate and project the ruling family’s power, hosting treaties, vassal loyalty ceremonies, and massive wartime feasts. While the upper floors have seen many renovations to suit the changing, often macabre, tastes of the resident Vampires, the ground floor has remained largely unchanged, a testament to its original, robust design. The eastern entrance was once the only entry point into the entire fortress, making the Hallway a vital, historic passage.\",\n    \"current_events\": \"Currently, the Keep Kitchen is in a state of controlled panic; Head Cook Grod is frantically preparing for the arrival of a visiting dignitary from a rival noble house, meaning the staff is stressed, resources are stretched thin, and guards are doubling patrols around the service entrance. Meanwhile, Captain Elara is convinced an assassination attempt will happen during the official dinner and is moving extra guards (not currently listed) into the Hallway's adjacent, unmapped storage rooms.\",\n    \"adventure_hooks\": [\n      \"**The Missing Spices:** Chef Grod needs a specific, rare, and possibly cursed ingredient (The Tear of the Mountain Giant) from a nearby ruin, or the Lord's feast will fail, leading to Grod's execution.\",\n      \"**The Coded Message:** A servant carrying a critical encoded message for the Lord must be smuggled out through the Root Cellar, requiring the players to bypass the high-security entrance and the Kitchen staff.\",\n      \"**The Double Door Trap:** A plot to destroy the East Main Doors requires the party to disable a powerful arcane trap set on the exterior, but they must coordinate with an inside agent (Captain Elara) who controls the inner bars.\"\n    ],\n    \"special_features\": [\n      {\n        \"name\": \"Alchemical Torches\",\n        \"effect\": \"Torches burn with a crimson light and emit no smoke, providing superior, stable illumination that is immune to normal wind or water and is non-magical.\"\n      },\n      {\n        \"name\": \"Kitchen Heat Channel\",\n        \"effect\": \"A hidden vent system runs from the Multiple Hearth Array, channeling heat up to dry and warm the vampire lounges on the floors above, ensuring a constant, low-level heat for the residents' comfort. A loud noise in the kitchen can sometimes be heard faintly in the upper floor vents.\"\n      },\n      {\n        \"name\": \"Macabre Artistry\",\n        \"effect\": \"The Hallway and Banquet Hall are adorned with stunning, technically brilliant murals and sculptures. Upon closer inspection (DC 15 Investigation), the scenes depicted are not heroic battles or mythological scenes, but gruesome historical depictions of sieges, torture, and vampiric feeding rituals, often rendered in deep red pigments that resemble dried blood.\"\n      }\n    ],\n    \"cinematic_walkthrough\": \"The entry through the **Keep Main East Doors** is a deafening clang as the massive iron gates swing inward, revealing the dimly lit **Central Great Hallway**. The floor is made of polished black granite that reflects the deep crimson light of the alchemical torches. The air here is cold and still, the 30-foot width making your footsteps echo down the dark, 300-foot expanse. Flanking the hall, carved Gothic reliefs tell tales of brutal conquest, the figures' eyes seeming to follow you. Midway down, the dark mass of the **Main Spiral Staircase** winds upward like a petrified serpent, its stone cold and heavy. \\n\\nTo the left, a wide, unadorned archway leads to the intense heat and chaos of the **Keep Kitchen**. The sound of clanging copper and shouting servants hits you immediately, contrasting sharply with the hall’s stillness. Chef Grod, a massive man sweating profusely, curses loudly while overseeing the smoking, multi-tiered hearths that line the far wall. The faint smell of woodsmoke and roasting meat is powerful here. A dark wooden door on the kitchen's western edge, marked with an old seal, leads down to the chill of the **Root Cellar Double Doors**, a promise of hidden, subterranean spaces.\\n\\nAcross the Hallway, the archway to the **Grand Banquet Hall** is massive and framed in blood-red granite, a portal into opulence and intimidation. The space is vast, its high, vaulted ceiling emphasizing the long, dark tables prepared for a massive assembly. Intricate murals on the mahogany panels depict the noble family's history, but looking closely reveals the scenes are less about triumph and more about the gruesome acquisition of victims. This room is designed to make anyone who is not the Master feel utterly small and vulnerable.\"\n  },\n  \"gm_notes\": [\n    \"The Keep's Ground Floor is highly defensible. Combat should emphasize the **choke-points** (East Doors) and the **open battlefield** of the Central Hallway.\",\n    \"The **Root Cellar Double Doors** (CBF-G-04) are key for discreet access/egress to the dungeon/sub-levels and should be guarded by either a lock (DC 20 Thieves' Tools) or a dedicated guard.\",\n    \"The **Macabre Artistry** in the main areas (CBF-G-01 and CBF-G-05) should be used to foreshadow the nature of the castle's vampiric inhabitants.\",\n    \"The **Main Spiral Staircase** (CBF-G-01) leads directly to the 'First Floor (L2)' which, per the request, contains vampire feeding areas and noble apartments. Any noise from L1 combat will alert L2 occupants.\"\n  ],\n  \"tactical_summary\": {\n    \"choke_points\": [\n      \"Keep Main East Doors (CBF-G-06): 16 ft wide vestibule, ideal for holding a line.\",\n      \"Root Cellar Double Doors (CBF-G-04): 8 ft wide, reinforced door leading to vertical descent.\"\n    ],\n    \"escape_routes\": [\n      \"Secret Passage (behind Lord's Dais in CBF-G-05): Leads to private vertical connection to upper floors.\",\n      \"Keep West Access Archway (CBF-G-07): Leads outside the Keep to the West Outer Ward (Pending).\"\n    ],\n    \"defensible_positions\": [\n      \"Lord's Central Dais (CBF-G-05): Raised platform providing height advantage and cover.\",\n      \"North Wall of Central Hallway (CBF-G-01): Offers cover near the Kitchen Archway (CBF-G-02).\"\n    ],\n    \"hazards\": [\n      \"Multiple Hearth Array (CBF-G-02): Open fires and hot surfaces causing minor fire damage.\",\n      \"Kitchen Clutter (CBF-G-02): Difficult Terrain penalties.\",\n      \"Darkness/Shadows (CBF-G-01, CBF-G-05): Despite the torches, the high ceilings and dark materials create deep shadows, offering ample concealment (Stealth checks).\"\n    ]\n  }\n}",
+      "timestamp": "2025-12-02T02:41:02.903Z",
+      "status": "completed"
+    }
+  ],
+  "stageResults": {
+    "purpose": {
+      "name": "Castle Blood Forge - Ground Floor (Keep)",
+      "location_type": "castle",
+      "description": "The foundational ground level of the central keep, characterized by immense structural integrity and large service and ceremonial areas. It is the logistical core, housing the primary kitchen, a massive banquet hall, and the main access hallway.",
+      "purpose": "Primary ceremonial, dining, and logistical hub for the Keep's ground floor operations.",
+      "scale": "complex",
+      "estimated_spaces": 6,
+      "architectural_style": "Gothic Military Fortress",
+      "setting": "The central keep of a vast, formidable castle complex.",
+      "key_features": [
+        "Grand Banquet Hall (250 ft x 200 ft)",
+        "Keep Kitchen (60 ft x 100 ft)",
+        "30-foot Wide Central Hallway",
+        "Main Spiral Staircase",
+        "Root Cellar Access"
+      ]
+    },
+    "foundation": {
+      "layout": {
+        "description": "The Keep's ground floor is a robust rectangular structure (300 ft E-W by 360 ft N-S). It is organized around a 30-foot wide central hallway running east-west, separating a Northern Service/Kitchen area from a massive Southern Ceremonial area (Grand Banquet Hall).",
+        "dimensions": {
+          "length": "300 ft (East-West)",
+          "width": "360 ft (North-South)",
+          "height": "20 ft (Estimated Ceiling Height)"
+        },
+        "levels": [
+          "Keep Ground Floor (Level 1)"
+        ]
+      },
+      "spatial_organization": "The main floor is defined by the **Central Great Hallway** (30 ft wide, 300 ft long) which runs across the keep's width. North of the hallway is the **Keep Kitchen** (100 ft E-W, 60 ft N-S) in the northeast corner and the **Cookware and Tools Closet** adjacent. South of the hallway is the enormous **Grand Banquet Hall** (200 ft E-W, 250 ft N-S).",
+      "access_points": [
+        {
+          "name": "Keep Main East Doors",
+          "type": "Large Double Doors",
+          "location": "East end of the Central Great Hallway, connecting to the exterior East Courtyard."
+        },
+        {
+          "name": "Keep West Access",
+          "type": "Standard Doorway/Arch",
+          "location": "West end of Central Great Hallway, connecting to the exterior West Ward."
+        }
+      ],
+      "wings": [
+        "North Service Wing (Kitchen & Storage)",
+        "South Ceremonial Wing (Grand Banquet Hall)",
+        "Central Access Hallway"
+      ],
+      "floors": {
+        "Level_1_Ground_Floor": {
+          "elevation": "0 ft (Ground Level)",
+          "spaces_defined": [
+            "Keep Kitchen (NE, 100x60 ft)",
+            "Cookware and Tools Closet (E of Kitchen)",
+            "Central Great Hallway (Center Spine, 300x30 ft)",
+            "Grand Banquet Hall (S, 200x250 ft)",
+            "Root Cellar Stairs (W wall of Kitchen)"
+          ],
+          "spaces_estimated_total": 6
+        }
+      },
+      "locking_points": [
+        {
+          "name": "Keep NW Corner",
+          "type": "External Anchor",
+          "coordinates": "(0, 360) [Assume 300 E-W, 360 N-S]"
+        },
+        {
+          "name": "Hallway South Wall Line",
+          "type": "Internal Anchor",
+          "coordinates": "(X, 330) [N-S line, 30 ft South of North Wall]"
+        },
+        {
+          "name": "Kitchen SW Corner",
+          "type": "Internal Anchor",
+          "coordinates": "(200, 300) [Corner of Kitchen and Hallway/Internal Wall]"
+        }
+      ],
+      "load_bearing_walls": [
+        "300 ft Keep Perimeter Walls (E, W, N, S)",
+        "The interior 300 ft wall forming the South side of the Central Great Hallway (separating it from the Banquet Hall)."
+      ],
+      "vertical_connections": [
+        {
+          "name": "Main Spiral Staircase",
+          "type": "Stairs Up (Stone, Spiral)",
+          "location": "South side of Central Hallway, near midpoint.",
+          "connects": [
+            "Ground Floor",
+            "First Floor (L2)"
+          ]
+        },
+        {
+          "name": "Root Cellar Double Doors",
+          "type": "Stairs Down",
+          "location": "West wall of Keep Kitchen.",
+          "connects": [
+            "Ground Floor",
+            "Root Cellar/Sub-level"
+          ]
+        }
+      ],
+      "constraints": [
+        "Keep Footprint: 300 ft (E-W) by 360 ft (N-S).",
+        "Central Hallway: 30 ft wide (Must be 300 ft E-W. Positioned in the North third of the keep).",
+        "Keep Kitchen: 100 ft E-W by 60 ft N-S. Must occupy the Northeast corner (X: 200-300, Y: 300-360).",
+        "Grand Banquet Hall: 200 ft E-W by 250 ft N-S. Must be south of the Central Hallway."
+      ],
+      "chunk_mesh_metadata": {
+        "connection_protocol": "Doors connect rooms; Archways connect major spaces/wings; Staircases connect floors.",
+        "boundary_markers": [
+          "Keep Main East Doors (External)",
+          "Main Spiral Staircase (Internal, Vertical)"
+        ],
+        "spatial_hierarchy": "Keep > Floor > Wing > Room > Feature",
+        "coordinate_system": "absolute grid (Origin SW Corner: 0, 0)"
+      }
+    },
+    "spaces": {
+      "id": "CBF-G-01",
+      "name": "Central Great Hallway",
+      "purpose": "Primary central access spine for the Keep's ground floor, connecting all major wings and exterior access points.",
+      "description": "A grand, 30-foot wide hallway that spans the entire 300-foot length of the keep from east to west. Constructed of heavy, dark stone, it facilitates both formal processions and high traffic, linking the Kitchen and Banquet Hall to the rest of the castle grounds.",
+      "dimensions": {
+        "width": 300,
+        "height": 30,
+        "unit": "ft"
+      },
+      "floor_height": 20,
+      "floor": {
+        "material": "stone",
+        "color": "#4A4A4A"
+      },
+      "walls": [
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#636363",
+          "thickness": 4
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#636363",
+          "thickness": 4
+        },
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#636363",
+          "thickness": 6
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#636363",
+          "thickness": 6
+        }
+      ],
+      "doors": [
+        {
+          "wall": "east",
+          "position": 0.5,
+          "width": 16,
+          "style": "iron",
+          "leads_to": "Pending",
+          "color": "#333333"
+        },
+        {
+          "wall": "north",
+          "position": 0.75,
+          "width": 8,
+          "style": "archway",
+          "leads_to": "Keep Kitchen",
+          "color": "#636363"
+        },
+        {
+          "wall": "south",
+          "position": 0.5,
+          "width": 20,
+          "style": "archway",
+          "leads_to": "Grand Banquet Hall",
+          "color": "#636363"
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Main Spiral Staircase",
+          "position": {
+            "x": 150,
+            "y": 5
+          },
+          "shape": "circle",
+          "width": 15,
+          "height": 15,
+          "color": "#636363",
+          "material": "stone"
+        },
+        {
+          "type": "fixture",
+          "label": "Iron Torch Sconce",
+          "position": {
+            "x": 30,
+            "y": 28
+          },
+          "shape": "rectangle",
+          "width": 1,
+          "height": 2,
+          "color": "#A0522D",
+          "material": "metal"
+        }
+      ],
+      "atmosphere": {
+        "lighting": "torch",
+        "ambient_color": "#443C3C"
+      },
+      "mesh_anchors": {
+        "connects_to": [
+          "Pending (East Courtyard)",
+          "Keep Kitchen",
+          "Grand Banquet Hall",
+          "Main Spiral Staircase (Vertical)"
+        ],
+        "connection_types": [
+          "Exterior Double Door (East)",
+          "Archway (North)",
+          "Archway (South)",
+          "Stairs Up (South Side)"
+        ],
+        "boundary_interface": "Central Access Spine",
+        "spatial_relationship": "Runs 300 ft E-W (Coordinates N-S: 330-360 ft, based on 300x360 keep)"
+      },
+      "spaces": [],
+      "total_spaces": 0
+    },
+    "details": {
+      "materials": "Primarily polished **black and deep red granite** and **black basalt**, sourced from the nearby mountains. Interior walls of the Grand Banquet Hall are paneled in dark, sculpted **mahogany and petrified wood**, inlaid with veins of dark, reflective obsidian. All major doors are reinforced **black iron** or heavy, dark **oak**.",
+      "lighting_scheme": "The main spaces rely on elaborate, large **wrought-iron chandeliers** and wall sconces holding deep crimson-colored **alchemical torches** or crystalline lanterns. The lighting casts a warm, blood-red glow on the environment, amplifying the deep shadows and ensuring that all details, when observed, appear dramatic and slightly unsettling.",
+      "atmosphere": "An atmosphere of **opulent dread** and **lavish melancholy** pervades the ground floor. The sheer scale and rich, dark materials speak of immense, ancient wealth. This luxury is underpinned by a subtle, cold menace; the air is unnaturally still in the hallways and the silence feels heavy with expectation, suggesting surveillance and hidden depravity.",
+      "inhabitants": {
+        "permanent_residents": [
+          {
+            "type": "Human Servants (Staff)",
+            "count": 40
+          },
+          {
+            "type": "Veteran Human Guards",
+            "count": 12
+          },
+          {
+            "type": "Vampire Nobles/Retainers (Off-duty)",
+            "count": 4
+          }
+        ],
+        "notable_npcs": [
+          {
+            "name": "Chef Grod",
+            "role": "Head Cook/Kitchen Master",
+            "location": "Keep Kitchen"
+          },
+          {
+            "name": "Captain Elara",
+            "role": "Keep Ground Floor Guard Captain",
+            "location": "Central Great Hallway/East Doors"
+          }
+        ],
+        "visitors": [
+          "Minor Noble Vassals (rarely)",
+          "Logistics and Supply Teams",
+          "Castle Artisans and Repair Crews"
+        ],
+        "creatures": [
+          "Giant Bats (Northwest Service Corridor)",
+          "Dire Wolf (Guard animal, West Ward access)"
+        ]
+      },
+      "encounter_areas": [
+        {
+          "space_id": "CBF-G-06",
+          "encounter_type": "combat",
+          "description": "The narrow, fortified space around the Keep Main East Doors, often patrolled by an iron golem or four heavy guards.",
+          "tactical_notes": "A narrow choke-point (15 ft wide) suitable for controlling entrance. Defenders can use the thick walls for cover and deploy reach weapons from behind the doors. Attacker's magic is severely limited by the small space."
+        },
+        {
+          "space_id": "CBF-G-05",
+          "encounter_type": "social",
+          "description": "The Grand Banquet Hall during a rare, formal dinner, where the Vampire Lord may hold court or receive supplicants. The challenge is navigating the intense hierarchy and manners.",
+          "tactical_notes": "If combat erupts, the huge room (250x200 ft) offers massive flanking opportunities, but the central tables provide soft cover. The raised dais (Lord's Central Dais) is a strong defensive position."
+        },
+        {
+          "space_id": "CBF-G-02",
+          "encounter_type": "exploration",
+          "description": "The Keep Kitchen is a maze of hot ovens, bubbling cauldrons, and sharp utensils. High risk of noise or accidental injury.",
+          "tactical_notes": "Difficult Terrain from clutter; exposed fires/hot surfaces inflict minor damage (DC 13 DEX save to avoid 1d4 fire damage)."
+        }
+      ],
+      "secrets": [
+        {
+          "type": "Passage",
+          "location": "Grand Banquet Hall, South Wall (behind the Dais)",
+          "description": "A secret passage leading to a private staircase used by the Lord to access the upper floors without using the main spiral stair. It is hidden behind a heavy, carved tapestry.",
+          "how_to_find": "A DC 18 Investigation check to notice the uneven carving of the stone behind the tapestry, or a DC 16 Perception check to feel a cold draft."
+        },
+        {
+          "type": "Hidden Compartment",
+          "location": "Keep Kitchen, Northern Hearth",
+          "description": "A small, fireproofed nook in the back of the largest hearth, used by Chef Grod to hide petty valuables or a favored bottle of ancient wine.",
+          "how_to_find": "DC 15 Investigation check while actively extinguishing the fire in the largest hearth and examining the stonework."
+        }
+      ],
+      "treasure_locations": [
+        {
+          "location": "Cookware and Tools Closet (High Shelf)",
+          "description": "A collection of silver-plated serving utensils and ceremonial knives, worth 350 gp as a set.",
+          "security": "Guarded only by the room's locked door and general staff traffic."
+        },
+        {
+          "location": "Main Spiral Staircase (Bottom Step)",
+          "description": "A small false step contains a cache of emergency funds and small healing potions, meant for guards.",
+          "security": "Requires DC 20 Strength check to pry open the heavy stone step."
+        }
+      ],
+      "history": "The Keep's ground floor dates back to the very first construction phase of Castle Blood Forge centuries ago, built not for aesthetics, but for maximum durability and logistical efficiency. The sheer size of the Grand Banquet Hall was intended to intimidate and project the ruling family’s power, hosting treaties, vassal loyalty ceremonies, and massive wartime feasts. While the upper floors have seen many renovations to suit the changing, often macabre, tastes of the resident Vampires, the ground floor has remained largely unchanged, a testament to its original, robust design. The eastern entrance was once the only entry point into the entire fortress, making the Hallway a vital, historic passage.",
+      "current_events": "Currently, the Keep Kitchen is in a state of controlled panic; Head Cook Grod is frantically preparing for the arrival of a visiting dignitary from a rival noble house, meaning the staff is stressed, resources are stretched thin, and guards are doubling patrols around the service entrance. Meanwhile, Captain Elara is convinced an assassination attempt will happen during the official dinner and is moving extra guards (not currently listed) into the Hallway's adjacent, unmapped storage rooms.",
+      "adventure_hooks": [
+        "**The Missing Spices:** Chef Grod needs a specific, rare, and possibly cursed ingredient (The Tear of the Mountain Giant) from a nearby ruin, or the Lord's feast will fail, leading to Grod's execution.",
+        "**The Coded Message:** A servant carrying a critical encoded message for the Lord must be smuggled out through the Root Cellar, requiring the players to bypass the high-security entrance and the Kitchen staff.",
+        "**The Double Door Trap:** A plot to destroy the East Main Doors requires the party to disable a powerful arcane trap set on the exterior, but they must coordinate with an inside agent (Captain Elara) who controls the inner bars."
+      ],
+      "special_features": [
+        {
+          "name": "Alchemical Torches",
+          "effect": "Torches burn with a crimson light and emit no smoke, providing superior, stable illumination that is immune to normal wind or water and is non-magical."
+        },
+        {
+          "name": "Kitchen Heat Channel",
+          "effect": "A hidden vent system runs from the Multiple Hearth Array, channeling heat up to dry and warm the vampire lounges on the floors above, ensuring a constant, low-level heat for the residents' comfort. A loud noise in the kitchen can sometimes be heard faintly in the upper floor vents."
+        },
+        {
+          "name": "Macabre Artistry",
+          "effect": "The Hallway and Banquet Hall are adorned with stunning, technically brilliant murals and sculptures. Upon closer inspection (DC 15 Investigation), the scenes depicted are not heroic battles or mythological scenes, but gruesome historical depictions of sieges, torture, and vampiric feeding rituals, often rendered in deep red pigments that resemble dried blood."
+        }
+      ],
+      "cinematic_walkthrough": "The entry through the **Keep Main East Doors** is a deafening clang as the massive iron gates swing inward, revealing the dimly lit **Central Great Hallway**. The floor is made of polished black granite that reflects the deep crimson light of the alchemical torches. The air here is cold and still, the 30-foot width making your footsteps echo down the dark, 300-foot expanse. Flanking the hall, carved Gothic reliefs tell tales of brutal conquest, the figures' eyes seeming to follow you. Midway down, the dark mass of the **Main Spiral Staircase** winds upward like a petrified serpent, its stone cold and heavy.\n\nTo the left, a wide, unadorned archway leads to the intense heat and chaos of the **Keep Kitchen**. The sound of clanging copper and shouting servants hits you immediately, contrasting sharply with the hall’s stillness. Chef Grod, a massive man sweating profusely, curses loudly while overseeing the smoking, multi-tiered hearths that line the far wall. The faint smell of woodsmoke and roasting meat is powerful here. A dark wooden door on the kitchen's western edge, marked with an old seal, leads down to the chill of the **Root Cellar Double Doors**, a promise of hidden, subterranean spaces.\n\nAcross the Hallway, the archway to the **Grand Banquet Hall** is massive and framed in blood-red granite, a portal into opulence and intimidation. The space is vast, its high, vaulted ceiling emphasizing the long, dark tables prepared for a massive assembly. Intricate murals on the mahogany panels depict the noble family's history, but looking closely reveals the scenes are less about triumph and more about the gruesome acquisition of victims. This room is designed to make anyone who is not the Master feel utterly small and vulnerable."
+    },
+    "accuracy_refinement": {
+      "accuracy_report": {
+        "dimensional_issues": [
+          {
+            "space": "Keep Kitchen (CBF-G-02)",
+            "conflict": "The Kitchen is 100 ft E-W by 60 ft N-S. It connects to the Cookware and Tools Closet (CBF-G-03), which is 10 ft E-W by 60 ft N-S. The total E-W dimension for this corner is 100 + 10 = 110 ft. The total E-W space available is 300 ft. No conflict, but coordinates should ensure no overlap with the Hallway's end point. (X: 190-300 should be 110ft, not 100ft. Keep Kitchen is 100 ft E-W. Closet is 10 ft E-W. Total 110 ft E-W is acceptable.)",
+            "action": "Ensure the layout places the Kitchen (100ft E-W) and Closet (10ft E-W) along the 300ft North wall, leaving 190ft on the West side of the Kitchen for the rest of the north wall area, which is currently unassigned space. The requested Kitchen placement is 'north eastern most corner', meaning it should terminate at the East wall (X=300). The Hallway is 300ft long. This creates a spatial gap/unassigned space on the north side between the Kitchen and the West wall of the Keep, which is fine for now."
+          }
+        ],
+        "connection_issues": [
+          {
+            "space": "Central Great Hallway (CBF-G-01)",
+            "door_wall": "East",
+            "leads_to_current": "Pending",
+            "leads_to_corrected": "Keep Main East Doors",
+            "notes": "The large iron door connects directly to the 'Keep Main East Doors' vestibule space (CBF-G-06), not the exterior (Pending) directly, as defined by space CBF-G-06."
+          },
+          {
+            "space": "Keep Main East Doors (CBF-G-06)",
+            "door_wall": "West",
+            "leads_to_current": "Central Great Hallway",
+            "leads_to_corrected": "Central Great Hallway",
+            "notes": "Connection to Central Great Hallway is valid. The connection to the exterior (Pending, wall: East) remains valid as the area beyond the Keep is not yet generated."
+          },
+          {
+            "space": "Keep Kitchen (CBF-G-02)",
+            "door_wall": "West",
+            "leads_to_current": "Root Cellar Double Doors",
+            "leads_to_corrected": "Root Cellar Double Doors",
+            "notes": "The Root Cellar Double Doors is a named space (CBF-G-04) that serves as the entry point, so this connection is technically correct but the name is used for both the connection and the small landing space, which works for this scale."
+          }
+        ],
+        "vertical_issues": [
+          {
+            "space": "Central Great Hallway (CBF-G-01) / Main Spiral Staircase",
+            "issue": "Staircase feature connects to 'Pending' upper floor, which is valid for sequential generation. Foundation confirms connection to 'First Floor (L2)'. No conflict."
+          }
+        ],
+        "narrative_inconsistencies": [
+          {
+            "space": "Central Great Hallway (CBF-G-01)",
+            "inconsistency": "The 'atmosphere' section in the Details uses the refined Gothic/Luxury description (crimson light, polished granite) but the space's internal 'atmosphere' field is generic ('#443C3C' ambient color, 'torch' lighting).",
+            "action": "Update the space's atmosphere and floor/wall materials to reflect the refined Gothic/Luxury style consistently across the board."
+          },
+          {
+            "space": "Grand Banquet Hall (CBF-G-05)",
+            "inconsistency": "The space lists 'tile' floor, but the refined details emphasize polished 'black and deep red granite' and 'obsidian'.",
+            "action": "Update floor material to reflect the lavish granite/obsidian theme."
+          }
+        ],
+        "recommendations": [
+          "Explicitly name the exterior connection point for the East Doors in the final output (e.g., 'East Outer Ward') for better usability, even if it is not generated yet.",
+          "Ensure all spaces' visual data (floor material/color, wall color) reflect the revised, luxurious, and gothic/macabre theme established in the Details section."
+        ]
+      },
+      "refined_spaces": [
+        {
+          "id": "CBF-G-01",
+          "name": "Central Great Hallway",
+          "purpose": "Primary central access spine for the Keep's ground floor, connecting all major wings and exterior access points.",
+          "description": "A grand, 30-foot wide hallway that spans the entire 300-foot length of the keep from east to west. Constructed of heavy, dark, polished granite, it facilitates both formal processions and high traffic, linking the Kitchen and Banquet Hall to the rest of the castle grounds.",
+          "dimensions": {
+            "width": 300,
+            "height": 30,
+            "unit": "ft"
+          },
+          "floor_height": 20,
+          "floor": {
+            "material": "stone",
+            "color": "#2A0A0A"
+          },
+          "walls": [
+            {
+              "side": "north",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 4
+            },
+            {
+              "side": "south",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 4
+            },
+            {
+              "side": "east",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 6
+            },
+            {
+              "side": "west",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 6
+            }
+          ],
+          "doors": [
+            {
+              "wall": "east",
+              "position": 0.5,
+              "width": 16,
+              "style": "iron",
+              "leads_to": "Keep Main East Doors",
+              "color": "#333333"
+            },
+            {
+              "wall": "north",
+              "position": 0.75,
+              "width": 8,
+              "style": "archway",
+              "leads_to": "Keep Kitchen",
+              "color": "#636363"
+            },
+            {
+              "wall": "south",
+              "position": 0.5,
+              "width": 20,
+              "style": "archway",
+              "leads_to": "Grand Banquet Hall",
+              "color": "#636363"
+            }
+          ],
+          "features": [
+            {
+              "type": "architectural",
+              "label": "Main Spiral Staircase",
+              "position": {
+                "x": 150,
+                "y": 5
+              },
+              "shape": "circle",
+              "width": 15,
+              "height": 15,
+              "color": "#4A1B1B",
+              "material": "stone"
+            },
+            {
+              "type": "fixture",
+              "label": "Crimson Torch Sconce",
+              "position": {
+                "x": 30,
+                "y": 28
+              },
+              "shape": "rectangle",
+              "width": 1,
+              "height": 2,
+              "color": "#B80F0A",
+              "material": "metal"
+            }
+          ],
+          "atmosphere": {
+            "lighting": "magical",
+            "ambient_color": "#4A1B1B"
+          },
+          "mesh_anchors": {
+            "connects_to": [
+              "Keep Main East Doors",
+              "Keep Kitchen",
+              "Grand Banquet Hall",
+              "Main Spiral Staircase (Vertical)"
+            ],
+            "connection_types": [
+              "Vestibule Double Door (East)",
+              "Archway (North)",
+              "Archway (South)",
+              "Stairs Up (South Side)"
+            ],
+            "boundary_interface": "Central Access Spine",
+            "spatial_relationship": "Runs 300 ft E-W (Coordinates N-S: 330-360 ft, based on 300x360 keep)"
+          }
+        },
+        {
+          "id": "CBF-G-02",
+          "name": "Keep Kitchen",
+          "purpose": "High-capacity medieval kitchen responsible for preparing food for all castle inhabitants and guests.",
+          "description": "A bustling, functional kitchen occupying the northeast corner of the keep (100 ft E-W by 60 ft N-S). The northern wall is dominated by multiple large stone hearths and ovens, essential for preparing massive meals. Long, heavy counters provide ample space for food preparation. Despite the chaos, the stone tile floor is meticulously cleaned.",
+          "dimensions": {
+            "width": 100,
+            "height": 60,
+            "unit": "ft"
+          },
+          "floor_height": 20,
+          "floor": {
+            "material": "tile",
+            "color": "#6B605E"
+          },
+          "walls": [
+            {
+              "side": "north",
+              "material": "stone",
+              "color": "#787878",
+              "thickness": 6
+            },
+            {
+              "side": "south",
+              "material": "stone",
+              "color": "#787878",
+              "thickness": 4
+            },
+            {
+              "side": "east",
+              "material": "stone",
+              "color": "#787878",
+              "thickness": 6
+            },
+            {
+              "side": "west",
+              "material": "stone",
+              "color": "#787878",
+              "thickness": 4
+            }
+          ],
+          "doors": [
+            {
+              "wall": "south",
+              "position": 0.5,
+              "width": 8,
+              "style": "archway",
+              "leads_to": "Central Great Hallway",
+              "color": "#787878"
+            },
+            {
+              "wall": "west",
+              "position": 0.8,
+              "width": 8,
+              "style": "wooden",
+              "leads_to": "Root Cellar Double Doors",
+              "color": "#5D4037"
+            },
+            {
+              "wall": "east",
+              "position": 0.7,
+              "width": 5,
+              "style": "wooden",
+              "leads_to": "Cookware and Tools Closet",
+              "color": "#5D4037"
+            }
+          ],
+          "features": [
+            {
+              "type": "architectural",
+              "label": "Multiple Hearth Array",
+              "position": {
+                "x": 50,
+                "y": 57
+              },
+              "shape": "rectangle",
+              "width": 80,
+              "height": 3,
+              "color": "#3D3D3D",
+              "material": "stone"
+            },
+            {
+              "type": "furniture",
+              "label": "Long Prep Counters",
+              "position": {
+                "x": 25,
+                "y": 30
+              },
+              "shape": "rectangle",
+              "width": 40,
+              "height": 8,
+              "color": "#8B4513",
+              "material": "wood"
+            },
+            {
+              "type": "fixture",
+              "label": "Water Pump Basin",
+              "position": {
+                "x": 5,
+                "y": 5
+              },
+              "shape": "circle",
+              "width": 4,
+              "height": 4,
+              "color": "#A9A9A9",
+              "material": "stone"
+            }
+          ],
+          "atmosphere": {
+            "lighting": "torch",
+            "ambient_color": "#8B7F74"
+          },
+          "mesh_anchors": {
+            "connects_to": [
+              "Central Great Hallway",
+              "Root Cellar Double Doors",
+              "Cookware and Tools Closet"
+            ],
+            "connection_types": [
+              "Archway (South)",
+              "Double Doors (West)",
+              "Door (East)"
+            ],
+            "boundary_interface": "Kitchen Service Area",
+            "spatial_relationship": "Northeast Corner (Relative X: 200-300 ft, Y: 330-360 ft)"
+          }
+        },
+        {
+          "id": "CBF-G-03",
+          "name": "Cookware and Tools Closet",
+          "purpose": "Secure storage for large cooking implements, copperware, and specialized kitchen tools.",
+          "description": "A cramped, dry room adjacent to the Keep Kitchen, stacked floor-to-ceiling with iron pots, copper kettles, wooden spoons, and other culinary necessities. The air is slightly greasy and metallic. It is accessed via a single wooden door on the west side.",
+          "dimensions": {
+            "width": 10,
+            "height": 60,
+            "unit": "ft"
+          },
+          "floor_height": 20,
+          "floor": {
+            "material": "stone",
+            "color": "#606060"
+          },
+          "walls": [
+            {
+              "side": "north",
+              "material": "stone",
+              "color": "#707070",
+              "thickness": 6
+            },
+            {
+              "side": "south",
+              "material": "stone",
+              "color": "#707070",
+              "thickness": 4
+            },
+            {
+              "side": "east",
+              "material": "stone",
+              "color": "#707070",
+              "thickness": 6
+            },
+            {
+              "side": "west",
+              "material": "stone",
+              "color": "#707070",
+              "thickness": 4
+            }
+          ],
+          "doors": [
+            {
+              "wall": "west",
+              "position": 0.7,
+              "width": 5,
+              "style": "wooden",
+              "leads_to": "Keep Kitchen",
+              "color": "#5D4037"
+            }
+          ],
+          "features": [
+            {
+              "type": "furniture",
+              "label": "Shelving Units",
+              "position": {
+                "x": 2,
+                "y": 5
+              },
+              "shape": "rectangle",
+              "width": 6,
+              "height": 50,
+              "color": "#8D6E63",
+              "material": "wood"
+            },
+            {
+              "type": "fixture",
+              "label": "Hanging Ironware",
+              "position": {
+                "x": 8,
+                "y": 30
+              },
+              "shape": "rectangle",
+              "width": 1,
+              "height": 10,
+              "color": "#333333",
+              "material": "metal"
+            }
+          ],
+          "atmosphere": {
+            "lighting": "dark",
+            "ambient_color": "#4A4A4A"
+          },
+          "mesh_anchors": {
+            "connects_to": [
+              "Keep Kitchen"
+            ],
+            "connection_types": [
+              "Door (West)"
+            ],
+            "boundary_interface": "Kitchen Storage",
+            "spatial_relationship": "Northeast Corner, East of Kitchen (Relative X: 300-310 ft, Y: 300-360 ft) - Note: This 10ft extends past the 300ft E-W Keep width, suggesting the East Wall is 6ft thick, meaning the internal keep space is 294 ft E-W. The request is 300 ft base E-W. Assuming the space is internal to the 300ft block, the X coordinate should be 290-300."
+          }
+        },
+        {
+          "id": "CBF-G-04",
+          "name": "Root Cellar Double Doors",
+          "purpose": "Provides direct, secured access from the Keep Kitchen down to the subterranean root cellar/storage level.",
+          "description": "A small 10x10ft stone landing containing a set of heavy, reinforced wooden double doors, located on the western wall of the Keep Kitchen, leading down to the Root Cellar.",
+          "dimensions": {
+            "width": 10,
+            "height": 10,
+            "unit": "ft"
+          },
+          "floor_height": 20,
+          "floor": {
+            "material": "stone",
+            "color": "#404040"
+          },
+          "walls": [
+            {
+              "side": "north",
+              "material": "stone",
+              "color": "#636363",
+              "thickness": 6
+            },
+            {
+              "side": "south",
+              "material": "stone",
+              "color": "#636363",
+              "thickness": 4
+            },
+            {
+              "side": "east",
+              "material": "stone",
+              "color": "#636363",
+              "thickness": 4
+            },
+            {
+              "side": "west",
+              "material": "stone",
+              "color": "#636363",
+              "thickness": 6
+            }
+          ],
+          "doors": [
+            {
+              "wall": "east",
+              "position": 0.5,
+              "width": 8,
+              "style": "wooden",
+              "leads_to": "Keep Kitchen",
+              "color": "#5D4037"
+            },
+            {
+              "wall": "west",
+              "position": 0.5,
+              "width": 6,
+              "style": "iron",
+              "leads_to": "Root Cellar (Pending)",
+              "color": "#333333"
+            }
+          ],
+          "features": [
+            {
+              "type": "architectural",
+              "label": "Steps Down",
+              "position": {
+                "x": 5,
+                "y": 5
+              },
+              "shape": "rectangle",
+              "width": 8,
+              "height": 5,
+              "color": "#505050",
+              "material": "stone"
+            },
+            {
+              "type": "fixture",
+              "label": "Iron Barred Window",
+              "position": {
+                "x": 8,
+                "y": 8
+              },
+              "shape": "rectangle",
+              "width": 1,
+              "height": 1,
+              "color": "#333333",
+              "material": "metal"
+            }
+          ],
+          "atmosphere": {
+            "lighting": "dark",
+            "ambient_color": "#303030"
+          },
+          "mesh_anchors": {
+            "connects_to": [
+              "Keep Kitchen",
+              "Root Cellar (Pending)"
+            ],
+            "connection_types": [
+              "Door (East)",
+              "Stairs Down (West)"
+            ],
+            "boundary_interface": "Vertical Kitchen Access",
+            "spatial_relationship": "West side of Kitchen (Relative X: 190-200 ft, Y: 330-340 ft) - Adjusted to fit along Keep's West wall."
+          }
+        },
+        {
+          "id": "CBF-G-05",
+          "name": "Grand Banquet Hall",
+          "purpose": "Primary ceremonial, dining, and social space for the noble and vampiric inhabitants of the castle.",
+          "description": "An enormous, lavish hall spanning 200 ft E-W by 250 ft N-S, designed in gothic luxury. Its deep red granite floor and dark, vaulted ceiling convey immense power. It is directly south of the Central Great Hallway.",
+          "dimensions": {
+            "width": 200,
+            "height": 250,
+            "unit": "ft"
+          },
+          "floor_height": 20,
+          "floor": {
+            "material": "stone",
+            "color": "#2A0A0A"
+          },
+          "walls": [
+            {
+              "side": "north",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 4
+            },
+            {
+              "side": "south",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 6
+            },
+            {
+              "side": "east",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 6
+            },
+            {
+              "side": "west",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 6
+            }
+          ],
+          "doors": [
+            {
+              "wall": "north",
+              "position": 0.5,
+              "width": 20,
+              "style": "archway",
+              "leads_to": "Central Great Hallway",
+              "color": "#4A1B1B"
+            }
+          ],
+          "features": [
+            {
+              "type": "furniture",
+              "label": "Massive Feast Table",
+              "position": {
+                "x": 100,
+                "y": 125
+              },
+              "shape": "rectangle",
+              "width": 180,
+              "height": 20,
+              "color": "#381E15",
+              "material": "wood"
+            },
+            {
+              "type": "architectural",
+              "label": "Lord's Central Dais",
+              "position": {
+                "x": 100,
+                "y": 240
+              },
+              "shape": "rectangle",
+              "width": 40,
+              "height": 15,
+              "color": "#4A4A4A",
+              "material": "stone"
+            },
+            {
+              "type": "fixture",
+              "label": "Six Iron Chandeliers",
+              "position": {
+                "x": 100,
+                "y": 125
+              },
+              "shape": "circle",
+              "width": 10,
+              "height": 10,
+              "color": "#333333",
+              "material": "metal"
+            }
+          ],
+          "atmosphere": {
+            "lighting": "magical",
+            "ambient_color": "#554A4A"
+          },
+          "mesh_anchors": {
+            "connects_to": [
+              "Central Great Hallway"
+            ],
+            "connection_types": [
+              "Archway (North)"
+            ],
+            "boundary_interface": "South Ceremonial Wing",
+            "spatial_relationship": "South Wing (Relative X: 0-200 ft, Y: 20-270 ft, fitting the 250ft height in the 360ft N-S keep)"
+          }
+        },
+        {
+          "id": "CBF-G-06",
+          "name": "Keep Main East Doors",
+          "purpose": "The primary, heavily fortified entryway into the central Keep, serving as a vestibule.",
+          "description": "A small, heavily fortified space serving as an airlock for the main entrance. It contains the massive iron doors leading out to the East Outer Ward and the internal iron doors to the Central Great Hallway.",
+          "dimensions": {
+            "width": 15,
+            "height": 30,
+            "unit": "ft"
+          },
+          "floor_height": 20,
+          "floor": {
+            "material": "stone",
+            "color": "#2A0A0A"
+          },
+          "walls": [
+            {
+              "side": "north",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 4
+            },
+            {
+              "side": "south",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 4
+            },
+            {
+              "side": "east",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 10
+            },
+            {
+              "side": "west",
+              "material": "stone",
+              "color": "#4A1B1B",
+              "thickness": 4
+            }
+          ],
+          "doors": [
+            {
+              "wall": "east",
+              "position": 0.5,
+              "width": 16,
+              "style": "iron",
+              "leads_to": "East Outer Ward (Pending)",
+              "color": "#333333"
+            },
+            {
+              "wall": "west",
+              "position": 0.5,
+              "width": 16,
+              "style": "iron",
+              "leads_to": "Central Great Hallway",
+              "color": "#333333"
+            }
+          ],
+          "features": [
+            {
+              "type": "fixture",
+              "label": "Guard Niche",
+              "position": {
+                "x": 14,
+                "y": 5
+              },
+              "shape": "rectangle",
+              "width": 1,
+              "height": 5,
+              "color": "#505050",
+              "material": "stone"
+            },
+            {
+              "type": "fixture",
+              "label": "Heavy Door Bars",
+              "position": {
+                "x": 7.5,
+                "y": 15
+              },
+              "shape": "rectangle",
+              "width": 1,
+              "height": 1,
+              "color": "#555555",
+              "material": "metal"
+            }
+          ],
+          "atmosphere": {
+            "lighting": "torch",
+            "ambient_color": "#4A1B1B"
+          },
+          "mesh_anchors": {
+            "connects_to": [
+              "Central Great Hallway",
+              "East Outer Ward (Pending)"
+            ],
+            "connection_types": [
+              "Iron Double Doors (West)",
+              "Exterior Iron Double Doors (East)"
+            ],
+            "boundary_interface": "Keep Exterior Access",
+            "spatial_relationship": "East End of Central Hallway (Relative X: 285-300 ft, Y: 330-360 ft)"
+          }
+        },
+        {
+          "id": "CBF-G-07",
+          "name": "Keep West Access Archway",
+          "purpose": "West-facing archway providing access to the ungenerated West Ward/Courtyard from the Central Hallway.",
+          "description": "The western end of the Central Great Hallway features a wide, unbarred archway leading out into the unassigned space on the keep's west side, where the spire is located. It is less formal than the East Doors.",
+          "dimensions": {
+            "width": 10,
+            "height": 30,
+            "unit": "ft"
+          },
+          "floor_height": 20,
+          "floor": {
+            "material": "stone",
+            "color": "#4A4A4A"
+          },
+          "walls": [
+            {
+              "side": "north",
+              "material": "stone",
+              "color": "#636363",
+              "thickness": 4
+            },
+            {
+              "side": "south",
+              "material": "stone",
+              "color": "#636363",
+              "thickness": 4
+            },
+            {
+              "side": "east",
+              "material": "stone",
+              "color": "#636363",
+              "thickness": 4
+            },
+            {
+              "side": "west",
+              "material": "stone",
+              "color": "#636363",
+              "thickness": 6
+            }
+          ],
+          "doors": [
+            {
+              "wall": "west",
+              "position": 0.5,
+              "width": 12,
+              "style": "archway",
+              "leads_to": "West Outer Ward (Pending)",
+              "color": "#636363"
+            },
+            {
+              "wall": "east",
+              "position": 0.5,
+              "width": 12,
+              "style": "archway",
+              "leads_to": "Central Great Hallway",
+              "color": "#636363"
+            }
+          ],
+          "features": [],
+          "atmosphere": {
+            "lighting": "natural",
+            "ambient_color": "#555555"
+          },
+          "mesh_anchors": {
+            "connects_to": [
+              "Central Great Hallway",
+              "West Outer Ward (Pending)"
+            ],
+            "connection_types": [
+              "Archway (East)",
+              "Archway (West, Exterior)"
+            ],
+            "boundary_interface": "Keep West Access",
+            "spatial_relationship": "West End of Central Hallway (Relative X: 0-10 ft, Y: 330-360 ft)"
+          }
+        },
+        {
+          "id": "CBF-G-08",
+          "name": "Cookware and Tools Closet Landing",
+          "purpose": "Landing area on the North wall of the Central Hallway for direct staff access to the Kitchen side.",
+          "description": "A small, unadorned stone area along the North wall of the Hallway, providing the functional space for the Kitchen archway and the spiral staircase feature placement.",
+          "dimensions": {
+            "width": 300,
+            "height": 10,
+            "unit": "ft"
+          },
+          "floor_height": 20,
+          "floor": {
+            "material": "stone",
+            "color": "#4A4A4A"
+          },
+          "walls": [],
+          "doors": [
+            {
+              "wall": "north",
+              "position": 0.75,
+              "width": 8,
+              "style": "archway",
+              "leads_to": "Keep Kitchen",
+              "color": "#636363"
+            }
+          ],
+          "features": [],
+          "atmosphere": {
+            "lighting": "torch",
+            "ambient_color": "#443C3C"
+          },
+          "mesh_anchors": {
+            "connects_to": [
+              "Central Great Hallway",
+              "Keep Kitchen"
+            ],
+            "connection_types": [
+              "Adjacency",
+              "Archway (North)"
+            ],
+            "boundary_interface": "Hallway North Wall Zone",
+            "spatial_relationship": "North Wall of Central Hallway (Relative X: 0-300 ft, Y: 350-360 ft) - *This space definition is effectively covered by CBF-G-01, but is retained for spatial partitioning if needed.*"
+          }
+        }
+      ],
+      "refined_details": {
+        "materials": "Primarily polished **black and deep red granite** and **black basalt**, sourced from the nearby mountains. Interior walls of the Grand Banquet Hall are paneled in dark, sculpted **mahogany and petrified wood**, inlaid with veins of dark, reflective obsidian. All major doors are reinforced **black iron** or heavy, dark **oak**.",
+        "lighting_scheme": "The main spaces rely on elaborate, large **wrought-iron chandeliers** and wall sconces holding deep crimson-colored **alchemical torches** or crystalline lanterns. The lighting casts a warm, blood-red glow on the environment, amplifying the deep shadows and ensuring that all details, when observed, appear dramatic and slightly unsettling. Service areas use normal, smoky torches.",
+        "atmosphere": "An atmosphere of **opulent dread** and **lavish melancholy** pervades the ground floor. The sheer scale and rich, dark materials speak of immense, ancient wealth. This luxury is underpinned by a subtle, cold menace; the air is unnaturally still in the hallways and the silence feels heavy with expectation, suggesting surveillance and hidden depravity.",
+        "inhabitants": {
+          "permanent_residents": [
+            {
+              "type": "Human Servants (Staff)",
+              "count": 40
+            },
+            {
+              "type": "Veteran Human Guards",
+              "count": 12
+            },
+            {
+              "type": "Vampire Nobles/Retainers (Off-duty)",
+              "count": 4
+            }
+          ],
+          "notable_npcs": [
+            {
+              "name": "Chef Grod",
+              "role": "Head Cook/Kitchen Master",
+              "location": "Keep Kitchen (CBF-G-02)"
+            },
+            {
+              "name": "Captain Elara",
+              "role": "Keep Ground Floor Guard Captain",
+              "location": "Central Great Hallway (CBF-G-01)/East Doors (CBF-G-06)"
+            }
+          ],
+          "visitors": [
+            "Minor Noble Vassals (rarely)",
+            "Logistics and Supply Teams",
+            "Castle Artisans and Repair Crews"
+          ],
+          "creatures": [
+            "Giant Bats (Northwest Service Corridor)",
+            "Dire Wolf (Guard animal, West Ward access)"
+          ]
+        },
+        "encounter_areas": [
+          {
+            "space_id": "CBF-G-06",
+            "encounter_type": "combat",
+            "description": "The narrow, fortified space around the Keep Main East Doors, often patrolled by an iron golem or four heavy guards. The thickness of the surrounding walls offers immense defense.",
+            "tactical_notes": "A severe choke-point (15 ft wide) suitable for controlling entrance. Defenders can use the thick walls for cover and deploy reach weapons from behind the doors. The inner iron doors can be spiked or magically sealed for a nearly impenetrable defense. Attacker's magic is severely limited by the small space."
+          },
+          {
+            "space_id": "CBF-G-05",
+            "encounter_type": "social",
+            "description": "The Grand Banquet Hall during a rare, formal dinner, where the Vampire Lord may hold court or receive supplicants. The challenge is navigating the intense hierarchy and manners under the crimson torchlight.",
+            "tactical_notes": "If combat erupts, the huge room (250x200 ft) offers massive flanking opportunities, but the central tables provide soft cover. The raised dais (Lord's Central Dais) is a strong defensive position, and the hidden passage behind it offers an escape or surprise reinforcement route."
+          },
+          {
+            "space_id": "CBF-G-02",
+            "encounter_type": "exploration",
+            "description": "The Keep Kitchen is a maze of hot ovens, bubbling cauldrons, and sharp utensils. High risk of noise or accidental injury while navigating the service clutter.",
+            "tactical_notes": "Difficult Terrain from clutter; exposed fires/hot surfaces inflict minor damage (DC 13 DEX save to avoid 1d4 fire damage). Noise generation is high, alerting guards in the Hallway (CBF-G-01) if not careful."
+          },
+          {
+            "space_id": "CBF-G-01",
+            "encounter_type": "combat",
+            "description": "A long, open battle in the Central Great Hallway, allowing for high-speed engagement but limited cover.",
+            "tactical_notes": "Excellent for ranged combat and mounted engagements due to 30ft width. Limited cover options. The Main Spiral Staircase offers a 15ft diameter obstacle near the midpoint. Retreating to the East Doors (CBF-G-06) allows defenders to funnel and barricade."
+          }
+        ],
+        "secrets": [
+          {
+            "type": "Passage",
+            "location": "Grand Banquet Hall (CBF-G-05), South Wall (behind the Dais)",
+            "description": "A secret passage leading to a private staircase used by the Lord to access the upper floors without using the main spiral stair. It is hidden behind a heavy, carved tapestry.",
+            "how_to_find": "A DC 18 Investigation check to notice the uneven carving of the stone behind the tapestry, or a DC 16 Perception check to feel a cold draft."
+          },
+          {
+            "type": "Hidden Compartment",
+            "location": "Keep Kitchen (CBF-G-02), Northern Hearth",
+            "description": "A small, fireproofed nook in the back of the largest hearth, used by Chef Grod to hide petty valuables or a favored bottle of ancient wine.",
+            "how_to_find": "DC 15 Investigation check while actively extinguishing the fire in the largest hearth and examining the stonework."
+          }
+        ],
+        "treasure_locations": [
+          {
+            "location": "Cookware and Tools Closet (CBF-G-03), High Shelf",
+            "description": "A collection of silver-plated serving utensils and ceremonial knives, worth 350 gp as a set.",
+            "security": "Guarded only by the room's locked door and general staff traffic."
+          },
+          {
+            "location": "Central Great Hallway (CBF-G-01), Main Spiral Staircase (Bottom Step)",
+            "description": "A small false step contains a cache of emergency funds and small healing potions, meant for guards.",
+            "security": "Requires DC 20 Strength check to pry open the heavy stone step."
+          }
+        ],
+        "history": "The Keep's ground floor dates back to the very first construction phase of Castle Blood Forge centuries ago, built not for aesthetics, but for maximum durability and logistical efficiency. The sheer size of the Grand Banquet Hall was intended to intimidate and project the ruling family’s power, hosting treaties, vassal loyalty ceremonies, and massive wartime feasts. While the upper floors have seen many renovations to suit the changing, often macabre, tastes of the resident Vampires, the ground floor has remained largely unchanged, a testament to its original, robust design. The eastern entrance was once the only entry point into the entire fortress, making the Hallway a vital, historic passage.",
+        "current_events": "Currently, the Keep Kitchen is in a state of controlled panic; Head Cook Grod is frantically preparing for the arrival of a visiting dignitary from a rival noble house, meaning the staff is stressed, resources are stretched thin, and guards are doubling patrols around the service entrance. Meanwhile, Captain Elara is convinced an assassination attempt will happen during the official dinner and is moving extra guards (not currently listed) into the Hallway's adjacent, unmapped storage rooms.",
+        "adventure_hooks": [
+          "**The Missing Spices:** Chef Grod needs a specific, rare, and possibly cursed ingredient (The Tear of the Mountain Giant) from a nearby ruin, or the Lord's feast will fail, leading to Grod's execution.",
+          "**The Coded Message:** A servant carrying a critical encoded message for the Lord must be smuggled out through the Root Cellar, requiring the players to bypass the high-security entrance and the Kitchen staff.",
+          "**The Double Door Trap:** A plot to destroy the East Main Doors requires the party to disable a powerful arcane trap set on the exterior, but they must coordinate with an inside agent (Captain Elara) who controls the inner bars."
+        ],
+        "special_features": [
+          {
+            "name": "Alchemical Torches",
+            "effect": "Torches burn with a crimson light and emit no smoke, providing superior, stable illumination that is immune to normal wind or water and is non-magical."
+          },
+          {
+            "name": "Kitchen Heat Channel",
+            "effect": "A hidden vent system runs from the Multiple Hearth Array, channeling heat up to dry and warm the vampire lounges on the floors above, ensuring a constant, low-level heat for the residents' comfort. A loud noise in the kitchen can sometimes be heard faintly in the upper floor vents."
+          },
+          {
+            "name": "Macabre Artistry",
+            "effect": "The Hallway and Banquet Hall are adorned with stunning, technically brilliant murals and sculptures. Upon closer inspection (DC 15 Investigation), the scenes depicted are not heroic battles or mythological scenes, but gruesome historical depictions of sieges, torture, and vampiric feeding rituals, often rendered in deep red pigments that resemble dried blood."
+          }
+        ],
+        "cinematic_walkthrough": "The entry through the **Keep Main East Doors** is a deafening clang as the massive iron gates swing inward, revealing the dimly lit **Central Great Hallway**. The floor is made of polished black granite that reflects the deep crimson light of the alchemical torches. The air here is cold and still, the 30-foot width making your footsteps echo down the dark, 300-foot expanse. Flanking the hall, carved Gothic reliefs tell tales of brutal conquest, the figures' eyes seeming to follow you. Midway down, the dark mass of the **Main Spiral Staircase** winds upward like a petrified serpent, its stone cold and heavy. \n\nTo the left, a wide, unadorned archway leads to the intense heat and chaos of the **Keep Kitchen**. The sound of clanging copper and shouting servants hits you immediately, contrasting sharply with the hall’s stillness. Chef Grod, a massive man sweating profusely, curses loudly while overseeing the smoking, multi-tiered hearths that line the far wall. The faint smell of woodsmoke and roasting meat is powerful here. A dark wooden door on the kitchen's western edge, marked with an old seal, leads down to the chill of the **Root Cellar Double Doors**, a promise of hidden, subterranean spaces.\n\nAcross the Hallway, the archway to the **Grand Banquet Hall** is massive and framed in blood-red granite, a portal into opulence and intimidation. The space is vast, its high, vaulted ceiling emphasizing the long, dark tables prepared for a massive assembly. Intricate murals on the mahogany panels depict the noble family's history, but looking closely reveals the scenes are less about triumph and more about the gruesome acquisition of victims. This room is designed to make anyone who is not the Master feel utterly small and vulnerable."
+      },
+      "gm_notes": [
+        "The Keep's Ground Floor is highly defensible. Combat should emphasize the **choke-points** (East Doors) and the **open battlefield** of the Central Hallway.",
+        "The **Root Cellar Double Doors** (CBF-G-04) are key for discreet access/egress to the dungeon/sub-levels and should be guarded by either a lock (DC 20 Thieves' Tools) or a dedicated guard.",
+        "The **Macabre Artistry** in the main areas (CBF-G-01 and CBF-G-05) should be used to foreshadow the nature of the castle's vampiric inhabitants.",
+        "The **Main Spiral Staircase** (CBF-G-01) leads directly to the 'First Floor (L2)' which, per the request, contains vampire feeding areas and noble apartments. Any noise from L1 combat will alert L2 occupants."
+      ],
+      "tactical_summary": {
+        "choke_points": [
+          "Keep Main East Doors (CBF-G-06): 16 ft wide vestibule, ideal for holding a line.",
+          "Root Cellar Double Doors (CBF-G-04): 8 ft wide, reinforced door leading to vertical descent."
+        ],
+        "escape_routes": [
+          "Secret Passage (behind Lord's Dais in CBF-G-05): Leads to private vertical connection to upper floors.",
+          "Keep West Access Archway (CBF-G-07): Leads outside the Keep to the West Outer Ward (Pending)."
+        ],
+        "defensible_positions": [
+          "Lord's Central Dais (CBF-G-05): Raised platform providing height advantage and cover.",
+          "North Wall of Central Hallway (CBF-G-01): Offers cover near the Kitchen Archway (CBF-G-02)."
+        ],
+        "hazards": [
+          "Multiple Hearth Array (CBF-G-02): Open fires and hot surfaces causing minor fire damage.",
+          "Kitchen Clutter (CBF-G-02): Difficult Terrain penalties.",
+          "Darkness/Shadows (CBF-G-01, CBF-G-05): Despite the torches, the high ceilings and dark materials create deep shadows, offering ample concealment (Stealth checks)."
+        ]
+      }
+    }
+  },
+  "currentStageIndex": 4
+}

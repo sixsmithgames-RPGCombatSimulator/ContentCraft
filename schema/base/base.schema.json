@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/base/base.schema.json",
+  "definitions": {
+    "proposal": {
+      "type": "object",
+      "required": ["question", "options", "rule_impact"],
+      "properties": {
+        "question": {
+          "type": "string",
+          "minLength": 10
+        },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2,
+          "maxItems": 5
+        },
+        "rule_impact": {
+          "type": "string",
+          "minLength": 10
+        },
+        "recommendation": {
+          "type": "string" }
+      }
+    },
+    "baseOutput": {
+      "type": "object",
+      "required": ["rule_base", "sources_used", "assumptions", "proposals", "canon_update"],
+      "properties": {
+        "rule_base": {
+          "type": "string",
+          "enum": ["2024RAW", "2014RAW"],
+          "pattern": "^(2024RAW|2014RAW|HouseRules:.+)$"
+        },
+        "sources_used": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "proposals": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/proposal" }
+        },
+        "canon_update": {
+          "type": "string",
+          "minLength": 20
+        }
+      }
+    }
+  }
+}

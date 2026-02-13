@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "scene.schema.json",
+  "type": "object",
+  "allOf": [{ "$ref": "base.schema.json#/definitions/baseOutput" }],
+  "required": [
+    "title",
+    "description",
+    "location",
+    "participants",
+    "objectives",
+    "scene_type"
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 3
+    },
+    "description": {
+      "type": "string",
+      "minLength": 100,
+      "description": "Narrative description of the scene"
+    },
+    "scene_type": {
+      "type": "string",
+      "enum": ["social", "exploration", "investigation", "travel", "downtime", "cutscene"]
+    },
+    "location": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "region": { "type": "string" },
+        "ambiance": { "type": "string" },
+        "sensory_details": {
+          "type": "object",
+          "properties": {
+            "sights": { "type": "array", "items": { "type": "string" } },
+            "sounds": { "type": "array", "items": { "type": "string" } },
+            "smells": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "participants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "role"],
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": "string" },
+          "goals": { "type": "array", "items": { "type": "string" } },
+          "disposition": {
+            "type": "string",
+            "enum": ["hostile", "unfriendly", "neutral", "friendly", "helpful"]
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "objectives": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "What the players or NPCs are trying to accomplish"
+    },
+    "hooks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Story threads introduced or advanced"
+    },
+    "skill_challenges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "suggested_skills", "dc"],
+        "properties": {
+          "description": { "type": "string" },
+          "suggested_skills": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "dc": { "type": "integer", "minimum": 5, "maximum": 30 },
+          "consequences": {
+            "type": "object",
+            "properties": {
+              "success": { "type": "string" },
+              "failure": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "dialogue": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["speaker", "line"],
+        "properties": {
+          "speaker": { "type": "string" },
+          "line": { "type": "string" },
+          "context": { "type": "string" }
+        }
+      }
+    },
+    "discoveries": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Information or items players can find"
+    },
+    "transitions": {
+      "type": "object",
+      "properties": {
+        "entry": { "type": "string", "description": "How scene begins" },
+        "exit": { "type": "string", "description": "How scene ends or transitions" }
+      }
+    },
+    "gm_notes": {
+      "type": "string",
+      "description": "Private notes for the GM"
+    }
+  }
+}

@@ -1,0 +1,207 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "monster.schema.json",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "creature_type",
+    "size",
+    "alignment",
+    "challenge_rating",
+    "ability_scores",
+    "proficiency_bonus"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 2
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Physical appearance and behavior summary"
+    },
+    "size": {
+      "type": "string",
+      "enum": ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"]
+    },
+    "creature_type": {
+      "type": "string",
+      "description": "Aberration, Beast, Celestial, Construct, Dragon, Elemental, Fey, Fiend, Giant, Humanoid, Monstrosity, Ooze, Plant, Undead"
+    },
+    "subtype": { "type": "string" },
+    "alignment": { "type": "string" },
+    "challenge_rating": {
+      "type": "string",
+      "description": "CR as string (e.g. '1/4', '1/2', '1', '5', '20')"
+    },
+    "experience_points": { "type": "integer", "minimum": 0 },
+    "location": {
+      "type": "string",
+      "description": "Typical habitat or environment"
+    },
+    "ability_scores": {
+      "type": "object",
+      "required": ["str", "dex", "con", "int", "wis", "cha"],
+      "properties": {
+        "str": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "dex": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "con": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "int": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "wis": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "cha": { "type": "integer", "minimum": 1, "maximum": 30 }
+      }
+    },
+    "armor_class": {
+      "oneOf": [
+        { "type": "integer", "minimum": 5, "maximum": 30 },
+        { "$ref": "#/definitions/armorClassList" }
+      ]
+    },
+    "hit_points": {
+      "oneOf": [
+        { "type": "integer", "minimum": 1 },
+        { "$ref": "#/definitions/hitPoints" }
+      ]
+    },
+    "hit_dice": { "type": "string" },
+    "proficiency_bonus": {
+      "oneOf": [
+        { "type": "integer", "minimum": 2, "maximum": 10 },
+        { "type": "string" }
+      ]
+    },
+    "speed": { "$ref": "#/definitions/speed" },
+    "saving_throws": { "$ref": "#/definitions/scoredList" },
+    "skill_proficiencies": { "$ref": "#/definitions/scoredList" },
+    "damage_vulnerabilities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "damage_resistances": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "damage_immunities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "condition_immunities": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "senses": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "languages": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "abilities": { "$ref": "#/definitions/featureList" },
+    "actions": { "$ref": "#/definitions/featureList" },
+    "bonus_actions": { "$ref": "#/definitions/featureList" },
+    "reactions": { "$ref": "#/definitions/featureList" },
+    "legendary_actions": { "$ref": "#/definitions/legendaryActions" },
+    "mythic_actions": { "$ref": "#/definitions/legendaryActions" },
+    "lair_actions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "regional_effects": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tactics": {
+      "type": "string",
+      "description": "Combat tactics and behavior patterns"
+    },
+    "ecology": {
+      "type": "string",
+      "description": "Habitat, diet, and behavior in its natural environment"
+    },
+    "lore": {
+      "type": "string",
+      "description": "Background lore and information about the creature"
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "definitions": {
+    "armorClassList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": { "type": "integer" },
+          "type": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "hitPoints": {
+      "type": "object",
+      "required": ["average", "formula"],
+      "properties": {
+        "average": { "type": "integer" },
+        "formula": { "type": "string" }
+      }
+    },
+    "speed": {
+      "type": "object",
+      "properties": {
+        "walk": { "type": "string" },
+        "fly": { "type": "string" },
+        "swim": { "type": "string" },
+        "climb": { "type": "string" },
+        "burrow": { "type": "string" },
+        "hover": { "type": "boolean" }
+      }
+    },
+    "scoredList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value"],
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "featureList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "legendaryActions": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string" },
+        "options": { "$ref": "#/definitions/featureList" }
+      }
+    }
+  }
+}

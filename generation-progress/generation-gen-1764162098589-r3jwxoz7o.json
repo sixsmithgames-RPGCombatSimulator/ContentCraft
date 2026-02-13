@@ -1,0 +1,1903 @@
+{
+  "sessionId": "gen-1764162098589-r3jwxoz7o",
+  "createdAt": "2025-11-26T13:01:38.589Z",
+  "lastUpdatedAt": "2025-11-28T01:10:52.804Z",
+  "config": {
+    "type": "location",
+    "prompt": "We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\n",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Foundation",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 2/5: Foundation.\n\nYou are building upon the Purpose stage which determined the scale and type.\n\nYour task is to establish the structural foundation appropriate to the location's scale.\n\nFOR SIMPLE/MODERATE LOCATIONS (taverns, shops, small dungeons):\nFocus on these fields:\n- layout: Object describing overall arrangement\n  {\n    description: \"Overall layout description\",\n    dimensions: { length: \"60 ft\", width: \"40 ft\", height: \"15 ft\" } (if applicable),\n    levels: Array of level descriptions (e.g., [\"main floor\", \"cellar\", \"upstairs rooms\"])\n  }\n- spatial_organization: How spaces relate to each other (e.g., \"main room with kitchen in back, stairs to rooms above\")\n- access_points: Entrances/exits\n\nFOR COMPLEX/MASSIVE LOCATIONS (castles, cities, mega-dungeons):\nAdd advanced structural fields:\n- wings: Array of major sections (if applicable)\n- floors: Detailed floor structure with elevations\n- locking_points: Fixed structural anchors for geometry validation\n- load_bearing_walls: Critical structural elements\n- vertical_connections: Stairs, ramps, lifts\n- constraints: Binding rules for space generation\n\nMETADATA LINKING SYSTEM (ALL SCALES):\n- chunk_mesh_metadata: Object for seamless chunk integration (REQUIRED)\n  {\n    connection_protocol: \"How chunks connect\" (e.g., \"doors\", \"hallways\", \"adjacency\"),\n    boundary_markers: Array of connection points for other chunks,\n    spatial_hierarchy: \"How chunks nest\" (e.g., \"floor > wing > room\" or \"area > sub-area > feature\"),\n    coordinate_system: \"Coordinate reference\" (e.g., \"relative\", \"absolute grid\", \"narrative only\")\n  }\n\nThis metadata ensures chunks mesh perfectly when generated iteratively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"foundation\",\n  \"purpose\": {},\n  \"instructions\": \"Generate the structural foundation for this location (scale: moderate).\\n\\nKeep it simple - just layout, dimensions, and spatial organization. No complex topology needed.\\n\\nCRITICAL: Include chunk_mesh_metadata to enable seamless integration when spaces are generated iteratively.\",\n  \"canon_context\": \"Use factpack for architectural conventions.\"\n}",
+      "response": "{\n  \"wings\": [\n    {\n      \"name\": \"Central Keep\",\n      \"footprint\": \"360 ft (E-W) x 300 ft (N-S)\",\n      \"purpose\": \"Primary command, residence, and administrative center.\"\n    },\n    {\n      \"name\": \"North Ward\",\n      \"footprint\": \"1040 ft (E-W) x 200-250 ft (N-S)\",\n      \"purpose\": \"Barracks, administration, and quieter functional areas.\"\n    },\n    {\n      \"name\": \"South Industrial / Forge Zone\",\n      \"footprint\": \"Variable, aligned directly over the subterranean Bloodforge\",\n      \"purpose\": \"Industrial production, hoists, chimneys, and resource transport.\"\n    },\n    {\n      \"name\": \"Southeast Outer Ward\",\n      \"footprint\": \"300 ft (E-W) x 240 ft (N-S) in SE corner\",\n      \"purpose\": \"Main gate defense, stables, mundane smithy, and mustering.\"\n    },\n    {\n      \"name\": \"Courtyards and Yards\",\n      \"footprint\": \"Vast open spaces surrounding the Keep and dividing the Wards\",\n      \"purpose\": \"Maneuver space, staging, and resource storage.\"\n    }\n  ],\n  \"floors\": [\n    {\n      \"level\": \"Below Level 3\",\n      \"name\": \"Mining Line\",\n      \"elevation_reference\": \"Deepest subterranean level\",\n      \"purpose\": \"Raw material extraction.\"\n    },\n    {\n      \"level\": \"Below Level 2\",\n      \"name\": \"The Bloodforge\",\n      \"elevation_reference\": \"Subterranean Bloodforge core\",\n      \"purpose\": \"Magical/industrial production and processing.\"\n    },\n    {\n      \"level\": \"Below Level 1\",\n      \"name\": \"Castle Storage Level\",\n      \"elevation_reference\": \"Directly beneath ground level (castle-wide basement)\",\n      \"purpose\": \"General storage, dungeons, and service tunnels.\"\n    },\n    {\n      \"level\": \"Level 1\",\n      \"name\": \"Ground Level\",\n      \"elevation_reference\": \"Courtyards / Keep Main Floor\",\n      \"purpose\": \"Main access, barracks, stables, service halls, main halls of the keep.\"\n    },\n    {\n      \"level\": \"Level 2 (Keep Only)\",\n      \"name\": \"First Floor Keep\",\n      \"elevation_reference\": \"Above Ground Level\",\n      \"purpose\": \"Great Hall, feast chambers, council rooms.\"\n    },\n    {\n      \"level\": \"Level 3 (Keep Only)\",\n      \"name\": \"Second Floor Keep\",\n      \"elevation_reference\": \"Above First Floor Keep\",\n      \"purpose\": \"Noble/Vampire apartments, private quarters.\"\n    },\n    {\n      \"level\": \"Level 4 (Spire/Tower)\",\n      \"name\": \"Third Floor / Spire Base\",\n      \"elevation_reference\": \"Above Second Floor Keep\",\n      \"purpose\": \"Private sanctums, laboratories, and secure chambers.\"\n    }\n  ],\n  \"locking_points\": [\n    {\n      \"name\": \"Central Keep East Wall\",\n      \"coordinates_wrt_keep_center\": \"360ft E-W / 300ft N-S\",\n      \"feature\": \"Structural anchor for the Keep building mass.\"\n    },\n    {\n      \"name\": \"Outer Wall Corners (SW, SE, NE, NW)\",\n      \"coordinates_wrt_castle_center\": \"1040ft E-W / 840ft N-S\",\n      \"feature\": \"Defines absolute perimeter and scale.\"\n    },\n    {\n      \"name\": \"Bloodforge Chimneys\",\n      \"coordinates_wrt_industrial_zone\": \"Vertical shafts piercing multiple levels.\",\n      \"feature\": \"Anchors industrial wing and vertical continuity.\"\n    }\n  ],\n  \"load_bearing_walls\": [\n    \"Curtain Walls (Defining the 1040x840 ft perimeter)\",\n    \"Central Keep Outer Shell Walls\",\n    \"Inner Walls defining the North Ward boundary (approx. 200-250 ft North of Keep)\"\n  ],\n  \"vertical_connections\": [\n    \"Keep Grand Staircase (L1 to L4)\",\n    \"Service Stairwells (Connecting L1 to Below L1 in North/South Wards)\",\n    \"Industrial Hoists (L1 to Below L2/Bloodforge level in the South Industrial Zone)\"\n  ],\n  \"constraints\": [\n    \"The Central Keep must be located roughly centrally, ensuring large courtyards (North, South, East, West) around it.\",\n    \"The South Industrial Zone structure must vertically align with the subterranean Bloodforge levels.\",\n    \"Curtain Wall heights (E: 70ft, S: 60ft, N/W: 45ft) must be respected in corresponding exterior spaces.\",\n    \"The Southeast Outer Ward must occupy the 300x240 ft space adjacent to the SE corner.\"\n  ],\n  \"chunk_mesh_metadata\": {\n    \"connection_protocol\": \"Large areas connect via Archways/Gates; Buildings connect via Hallways/Doors.\",\n    \"boundary_markers\": [\n      \"Ward Dividing Lines (North/Central/South Bands)\",\n      \"Keep Building Entrances\",\n      \"Vertical Access Points (Hoists/Stairs)\"\n    ],\n    \"spatial_hierarchy\": \"Floor > Wing > Area/Courtyard > Room/Passage\",\n    \"coordinate_system\": \"absolute grid (Origin at SW corner of the Outer Walls, utilizing a large scale (e.g., 5-10 ft) grid)\"\n  }\n}",
+      "timestamp": "2025-11-26T13:02:22.056Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 1,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n🔔 MULTI-PART GENERATION (120 chunks total):\n- This is chunk 1 of 120\n- More canon facts will follow in subsequent messages\n- ⚠️ CRITICAL: Use the SAME AI chat session for ALL 120 chunks\n- Do NOT start a new session or you will lose context\n- After receiving all chunks, generate the complete location\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #1. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 1/120\"\n}",
+      "response": "{\n  \"id\": 1,\n  \"name\": \"Southeast Outer Ward\",\n  \"purpose\": \"Primary access, security, stables, and supply receiving/storage.\",\n  \"description\": \"This is the main receiving area and first line of defense inside the castle's massive outer walls. It is a large, open yard containing stables, sheds, and mustering space, protected by the curtain walls on the East and South.\",\n  \"dimensions\": {\n    \"width\": 300,\n    \"height\": 240,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 70,\n  \"floor\": {\n    \"material\": \"dirt\",\n    \"color\": \"#4A392F\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#4C4B4F\",\n      \"thickness\": 10\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#5D5C61\",\n      \"thickness\": 8\n    },\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 4\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"east\",\n      \"position\": 0.5,\n      \"width\": 25,\n      \"style\": \"portcullis\",\n      \"leads_to\": \"Outside Castle Gates\",\n      \"color\": \"#333333\"\n    },\n    {\n      \"wall\": \"north\",\n      \"position\": 0.85,\n      \"width\": 15,\n      \"style\": \"archway\",\n      \"leads_to\": \"East Courtyard\",\n      \"color\": \"#7B7C7D\"\n    },\n    {\n      \"wall\": \"west\",\n      \"position\": 0.35,\n      \"width\": 10,\n      \"style\": \"archway\",\n      \"leads_to\": \"South Courtyard\",\n      \"color\": \"#7B7C7D\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Stables (60+ capacity)\",\n      \"position\": {\n        \"x\": 30,\n        \"y\": 120\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 50,\n      \"height\": 200,\n      \"color\": \"#7D7D7D\",\n      \"material\": \"wood\"\n    },\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Wagon Shed\",\n      \"position\": {\n        \"x\": 100,\n        \"y\": 50\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 80,\n      \"height\": 80,\n      \"color\": \"#7D7D7D\",\n      \"material\": \"wood\"\n    },\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Mundane Smithy\",\n      \"position\": {\n        \"x\": 200,\n        \"y\": 50\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 50,\n      \"height\": 80,\n      \"color\": \"#B87333\",\n      \"material\": \"brick\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Mustering Yard\",\n      \"position\": {\n        \"x\": 200,\n        \"y\": 170\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 80,\n      \"height\": 60,\n      \"color\": \"#4A392F\",\n      \"material\": \"dirt\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"natural\",\n    \"ambient_color\": \"#808080\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"East Courtyard\",\n      \"South Courtyard\",\n      \"Outside Castle Gates\"\n    ],\n    \"connection_types\": [\n      \"Archway\",\n      \"Portcullis\"\n    ],\n    \"boundary_interface\": \"Inner castle ward/Outer gate access\",\n    \"spatial_relationship\": \"SE corner, nestled between East and South outer walls.\"\n  }\n}",
+      "timestamp": "2025-11-26T13:02:35.458Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 2,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #2. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 2/120\"\n}",
+      "response": "{\n  \"id\": 2,\n  \"name\": \"East Courtyard\",\n  \"purpose\": \"Primary staging area and open access route to the Central Keep and North Ward, serving as a large open buffer zone.\",\n  \"description\": \"A vast, open cobblestone yard located along the eastern curtain wall. It is the main thoroughfare from the Southeast Outer Ward to the rest of the castle, used for drills, temporary staging, and ceremonial assembly.\",\n  \"dimensions\": {\n    \"width\": 740,\n    \"height\": 240,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 70,\n  \"floor\": {\n    \"material\": \"stone\",\n    \"color\": \"#6B6A68\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#4C4B4F\",\n      \"thickness\": 10\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#5A5B5F\",\n      \"thickness\": 8\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"south\",\n      \"position\": 0.15,\n      \"width\": 15,\n      \"style\": \"archway\",\n      \"leads_to\": \"Southeast Outer Ward\",\n      \"color\": \"#7B7C7D\"\n    },\n    {\n      \"wall\": \"west\",\n      \"position\": 0.5,\n      \"width\": 30,\n      \"style\": \"archway\",\n      \"leads_to\": \"Central Keep Entrance Hall\",\n      \"color\": \"#949494\"\n    },\n    {\n      \"wall\": \"north\",\n      \"position\": 0.75,\n      \"width\": 15,\n      \"style\": \"archway\",\n      \"leads_to\": \"North Courtyard\",\n      \"color\": \"#7B7C7D\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Assembly Fountain\",\n      \"position\": {\n        \"x\": 370,\n        \"y\": 120\n      },\n      \"shape\": \"circle\",\n      \"width\": 40,\n      \"height\": 40,\n      \"color\": \"#4B4A48\",\n      \"material\": \"stone\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Siege Engine Storage\",\n      \"position\": {\n        \"x\": 650,\n        \"y\": 50\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 100,\n      \"height\": 80,\n      \"color\": \"#5D5D5D\",\n      \"material\": \"stone\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"natural\",\n    \"ambient_color\": \"#808080\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Southeast Outer Ward\",\n      \"Central Keep Entrance Hall\",\n      \"North Courtyard\"\n    ],\n    \"connection_types\": [\n      \"Archway\",\n      \"Gate\"\n    ],\n    \"boundary_interface\": \"Central Courtyard Area\",\n    \"spatial_relationship\": \"Ground level, East of the Central Keep, North of the Southeast Outer Ward.\"\n  }\n}\n```",
+      "timestamp": "2025-11-26T13:02:51.287Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 3,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #3. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 3/120\"\n}",
+      "response": "{\n  \"id\": 3,\n  \"name\": \"Central Keep Entrance Hall\",\n  \"purpose\": \"Grand entrance and defensive checkpoint for the Central Keep, controlling access to the upper floors and main chambers.\",\n  \"description\": \"A massive, vaulted stone hall forming the main ground-level entry point into the Central Keep from the East Courtyard. It features heavy iron gates and stairwells leading to the upper residential and administrative levels.\",\n  \"dimensions\": {\n    \"width\": 100,\n    \"height\": 80,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 30,\n  \"floor\": {\n    \"material\": \"tile\",\n    \"color\": \"#333333\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#5A5B5F\",\n      \"thickness\": 8\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#5A5B5F\",\n      \"thickness\": 8\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"east\",\n      \"position\": 0.5,\n      \"width\": 30,\n      \"style\": \"iron\",\n      \"leads_to\": \"East Courtyard\",\n      \"color\": \"#1C1C1C\"\n    },\n    {\n      \"wall\": \"west\",\n      \"position\": 0.5,\n      \"width\": 20,\n      \"style\": \"archway\",\n      \"leads_to\": \"Central Keep Main Hall\",\n      \"color\": \"#7B7C7D\"\n    },\n    {\n      \"wall\": \"south\",\n      \"position\": 0.1,\n      \"width\": 8,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Keep Service Passage South\",\n      \"color\": \"#6B4938\"\n    },\n    {\n      \"wall\": \"north\",\n      \"position\": 0.9,\n      \"width\": 8,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Keep Service Passage North\",\n      \"color\": \"#6B4938\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Grand Staircase Up\",\n      \"position\": {\n        \"x\": 85,\n        \"y\": 15\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 10,\n      \"height\": 40,\n      \"color\": \"#7D7D7D\",\n      \"material\": \"stone\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Guard Post\",\n      \"position\": {\n        \"x\": 20,\n        \"y\": 60\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 20,\n      \"height\": 10,\n      \"color\": \"#444444\",\n      \"material\": \"metal\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#5A5A5A\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"East Courtyard\",\n      \"Central Keep Main Hall\",\n      \"Keep Service Passage South\",\n      \"Keep Service Passage North\"\n    ],\n    \"connection_types\": [\n      \"Gate\",\n      \"Archway\",\n      \"Door\"\n    ],\n    \"boundary_interface\": \"Keep Entry\",\n    \"spatial_relationship\": \"Ground level, Eastern face of the Central Keep.\"\n  }\n}\n```",
+      "timestamp": "2025-11-26T13:04:54.679Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 4,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #4. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 4/120\"\n}",
+      "response": "{\n  \"id\": 4,\n  \"name\": \"Central Keep Main Hall\",\n  \"purpose\": \"A large, general-purpose reception, assembly, and dining area for lower-ranking personnel and permanent castle guards.\",\n  \"description\": \"A spacious, dark hall extending westward from the Entrance Hall. This space features long wooden tables for communal dining and gathering, punctuated by stone pillars supporting the floors above.\",\n  \"dimensions\": {\n    \"width\": 180,\n    \"height\": 80,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 20,\n  \"floor\": {\n    \"material\": \"stone\",\n    \"color\": \"#4A4A4A\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#5A5B5F\",\n      \"thickness\": 8\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"east\",\n      \"position\": 0.5,\n      \"width\": 20,\n      \"style\": \"archway\",\n      \"leads_to\": \"Central Keep Entrance Hall\",\n      \"color\": \"#7B7C7D\"\n    },\n    {\n      \"wall\": \"west\",\n      \"position\": 0.5,\n      \"width\": 15,\n      \"style\": \"iron\",\n      \"leads_to\": \"West Courtyard\",\n      \"color\": \"#1C1C1C\"\n    },\n    {\n      \"wall\": \"south\",\n      \"position\": 0.8,\n      \"width\": 10,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Keep Kitchens\",\n      \"color\": \"#6B4938\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"furniture\",\n      \"label\": \"Long Dining Tables\",\n      \"position\": {\n        \"x\": 90,\n        \"y\": 20\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 160,\n      \"height\": 10,\n      \"color\": \"#5A3B2B\",\n      \"material\": \"wood\"\n    },\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Stone Pillars\",\n      \"position\": {\n        \"x\": 60,\n        \"y\": 40\n      },\n      \"shape\": \"circle\",\n      \"width\": 5,\n      \"height\": 5,\n      \"color\": \"#7D7D7D\",\n      \"material\": \"stone\"\n    },\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Stone Pillars\",\n      \"position\": {\n        \"x\": 120,\n        \"y\": 40\n      },\n      \"shape\": \"circle\",\n      \"width\": 5,\n      \"height\": 5,\n      \"color\": \"#7D7D7D\",\n      \"material\": \"stone\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Fireplace Hearth\",\n      \"position\": {\n        \"x\": 10,\n        \"y\": 40\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 10,\n      \"height\": 20,\n      \"color\": \"#303030\",\n      \"material\": \"stone\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#404040\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Central Keep Entrance Hall\",\n      \"West Courtyard\",\n      \"Keep Kitchens\"\n    ],\n    \"connection_types\": [\n      \"Archway\",\n      \"Iron Gate\",\n      \"Door\"\n    ],\n    \"boundary_interface\": \"Keep Central Axis\",\n    \"spatial_relationship\": \"Ground level, directly West of the Entrance Hall.\"\n  }\n}\n```",
+      "timestamp": "2025-11-26T13:05:26.363Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 5,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #5. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 5/120\"\n}",
+      "response": null,
+      "timestamp": "2025-11-26T13:05:26.558Z",
+      "status": "pending"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": null,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #5. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 5/120\"\n}",
+      "response": "{\n  \"id\": 5,\n  \"name\": \"Keep Kitchens\",\n  \"purpose\": \"Preparation and storage of food for the Central Keep, servicing the Main Hall and upper-level feast chambers.\",\n  \"description\": \"A bustling, hot space characterized by heavy cooking ranges, brick ovens, and butchering blocks. It connects directly to the Central Keep Main Hall for service and has discreet access for deliveries.\",\n  \"dimensions\": {\n    \"width\": 80,\n    \"height\": 50,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 18,\n  \"floor\": {\n    \"material\": \"tile\",\n    \"color\": \"#6D6D6A\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"brick\",\n      \"color\": \"#8B3E2F\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 4\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"north\",\n      \"position\": 0.8,\n      \"width\": 10,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Central Keep Main Hall\",\n      \"color\": \"#6B4938\"\n    },\n    {\n      \"wall\": \"south\",\n      \"position\": 0.5,\n      \"width\": 6,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Keep Service Passage South\",\n      \"color\": \"#6B4938\"\n    },\n    {\n      \"wall\": \"west\",\n      \"position\": 0.2,\n      \"width\": 6,\n      \"style\": \"iron\",\n      \"leads_to\": \"Keep Larder & Cellar Access\",\n      \"color\": \"#1C1C1C\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Oven Range\",\n      \"position\": {\n        \"x\": 75,\n        \"y\": 25\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 5,\n      \"height\": 40,\n      \"color\": \"#303030\",\n      \"material\": \"brick\"\n    },\n    {\n      \"type\": \"furniture\",\n      \"label\": \"Butchering Block\",\n      \"position\": {\n        \"x\": 30,\n        \"y\": 25\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 15,\n      \"height\": 20,\n      \"color\": \"#5A3B2B\",\n      \"material\": \"wood\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Water Pump\",\n      \"position\": {\n        \"x\": 5,\n        \"y\": 5\n      },\n      \"shape\": \"circle\",\n      \"width\": 3,\n      \"height\": 3,\n      \"color\": \"#7D7D7D\",\n      \"material\": \"metal\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#807060\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Central Keep Main Hall\",\n      \"Keep Service Passage South\",\n      \"Keep Larder & Cellar Access\"\n    ],\n    \"connection_types\": [\n      \"Door\",\n      \"Iron Door\"\n    ],\n    \"boundary_interface\": \"Keep Service Zone\",\n    \"spatial_relationship\": \"Ground level, South edge of the Central Keep structure, adjacent to the Main Hall.\"\n  }\n}\n```",
+      "timestamp": "2025-11-26T13:21:28.936Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 6,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #6. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 6/120\"\n}",
+      "response": "{\n  \"id\": 6,\n  \"name\": \"Keep Larder & Cellar Access\",\n  \"purpose\": \"Cold storage for perishable goods and the primary stairwell accessing the subterranean storage levels below the Central Keep.\",\n  \"description\": \"A cold, damp chamber lined with shelves and hanging meat hooks, smelling of preservation spices and blood. A heavy, iron-bound trapdoor or stairwell is located in one corner leading down to the deep storage levels.\",\n  \"dimensions\": {\n    \"width\": 50,\n    \"height\": 40,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 10,\n  \"floor\": {\n    \"material\": \"stone\",\n    \"color\": \"#4A4A4A\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 4\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#5A5B5F\",\n      \"thickness\": 8\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"east\",\n      \"position\": 0.2,\n      \"width\": 6,\n      \"style\": \"iron\",\n      \"leads_to\": \"Keep Kitchens\",\n      \"color\": \"#1C1C1C\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"architectural\",\n      \"label\": \"Cellar Stairwell Down\",\n      \"position\": {\n        \"x\": 40,\n        \"y\": 30\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 10,\n      \"height\": 8,\n      \"color\": \"#333333\",\n      \"material\": \"iron\"\n    },\n    {\n      \"type\": \"furniture\",\n      \"label\": \"Meat Hanging Hooks\",\n      \"position\": {\n        \"x\": 25,\n        \"y\": 5\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 45,\n      \"height\": 5,\n      \"color\": \"#7D7D7D\",\n      \"material\": \"metal\"\n    },\n    {\n      \"type\": \"furniture\",\n      \"label\": \"Shelving Units\",\n      \"position\": {\n        \"x\": 5,\n        \"y\": 20\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 5,\n      \"height\": 30,\n      \"color\": \"#5A3B2B\",\n      \"material\": \"wood\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#454A50\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Keep Kitchens\",\n      \"Castle Storage Level (Pending)\"\n    ],\n    \"connection_types\": [\n      \"Iron Door\",\n      \"Stairwell Down\"\n    ],\n    \"boundary_interface\": \"Keep Service Zone/Subterranean Access\",\n    \"spatial_relationship\": \"Ground level, West of the Keep Kitchens, providing vertical access to levels Below L1.\"\n  }\n}\n```",
+      "timestamp": "2025-11-26T13:22:41.364Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 7,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #7. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 7/120\"\n}",
+      "response": "{\n  \"id\": 7,\n  \"name\": \"Keep Service Passage South\",\n  \"purpose\": \"A discreet corridor for staff, supplies, and waste removal, bypassing the formal Central Keep areas and linking the industrial zone.\",\n  \"description\": \"A narrow, low-ceilinged stone hallway running along the southern face of the Central Keep. It is dark, functional, and features minor supply closets and access points for the kitchen and southern storage.\",\n  \"dimensions\": {\n    \"width\": 150,\n    \"height\": 15,\n    \"unit\": \"ft\"\n  },\n  \"floor_height\": 12,\n  \"floor\": {\n    \"material\": \"stone\",\n    \"color\": \"#4A4A4A\"\n  },\n  \"walls\": [\n    {\n      \"side\": \"east\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"south\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 8\n    },\n    {\n      \"side\": \"north\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 6\n    },\n    {\n      \"side\": \"west\",\n      \"material\": \"stone\",\n      \"color\": \"#6A6A6C\",\n      \"thickness\": 6\n    }\n  ],\n  \"doors\": [\n    {\n      \"wall\": \"east\",\n      \"position\": 0.5,\n      \"width\": 8,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Central Keep Entrance Hall\",\n      \"color\": \"#6B4938\"\n    },\n    {\n      \"wall\": \"west\",\n      \"position\": 0.5,\n      \"width\": 8,\n      \"style\": \"wooden\",\n      \"leads_to\": \"South Courtyard\",\n      \"color\": \"#6B4938\"\n    },\n    {\n      \"wall\": \"north\",\n      \"position\": 0.9,\n      \"width\": 6,\n      \"style\": \"wooden\",\n      \"leads_to\": \"Keep Kitchens\",\n      \"color\": \"#6B4938\"\n    }\n  ],\n  \"features\": [\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Utility Closet\",\n      \"position\": {\n        \"x\": 20,\n        \"y\": 14\n      },\n      \"shape\": \"rectangle\",\n      \"width\": 6,\n      \"height\": 4,\n      \"color\": \"#7D7D7D\",\n      \"material\": \"wood\"\n    },\n    {\n      \"type\": \"fixture\",\n      \"label\": \"Waste Shaft Opening\",\n      \"position\": {\n        \"x\": 100,\n        \"y\": 14\n      },\n      \"shape\": \"circle\",\n      \"width\": 4,\n      \"height\": 4,\n      \"color\": \"#333333\",\n      \"material\": \"iron\"\n    }\n  ],\n  \"atmosphere\": {\n    \"lighting\": \"torch\",\n    \"ambient_color\": \"#404040\"\n  },\n  \"mesh_anchors\": {\n    \"connects_to\": [\n      \"Central Keep Entrance Hall\",\n      \"South Courtyard\",\n      \"Keep Kitchens\"\n    ],\n    \"connection_types\": [\n      \"Door\",\n      \"Passage\"\n    ],\n    \"boundary_interface\": \"Keep Service Perimeter\",\n    \"spatial_relationship\": \"Ground level, spanning the southern base of the Central Keep structure.\"\n  }\n}\n```",
+      "timestamp": "2025-11-26T13:30:57.287Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": 8,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate space #8. Review recent_spaces for context. Use mesh_anchors to link.\\n\\nCRITICAL: All door \\\"leads_to\\\" values MUST use exact space names from the \\\"name\\\" field (e.g., \\\"Southeast Outer Ward\\\"), NOT codes or abbreviations. This is required for spatial layout to work.\\n\\n\",\n  \"chunk_info\": \"Space 8/120\"\n}",
+      "response": null,
+      "timestamp": "2025-11-26T13:30:57.469Z",
+      "status": "pending"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": null,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate next space with mesh_anchors.\"\n}",
+      "response": null,
+      "timestamp": "2025-11-28T00:59:26.040Z",
+      "status": "pending"
+    },
+    {
+      "stage": "Foundation",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 2/5: Foundation.\n\nYou are building upon the Purpose stage which determined the scale and type.\n\nYour task is to establish the structural foundation appropriate to the location's scale.\n\nFOR SIMPLE/MODERATE LOCATIONS (taverns, shops, small dungeons):\nFocus on these fields:\n- layout: Object describing overall arrangement\n  {\n    description: \"Overall layout description\",\n    dimensions: { length: \"60 ft\", width: \"40 ft\", height: \"15 ft\" } (if applicable),\n    levels: Array of level descriptions (e.g., [\"main floor\", \"cellar\", \"upstairs rooms\"])\n  }\n- spatial_organization: How spaces relate to each other (e.g., \"main room with kitchen in back, stairs to rooms above\")\n- access_points: Entrances/exits\n\nFOR COMPLEX/MASSIVE LOCATIONS (castles, cities, mega-dungeons):\nAdd advanced structural fields:\n- wings: Array of major sections (if applicable)\n- floors: Detailed floor structure with elevations\n- locking_points: Fixed structural anchors for geometry validation\n- load_bearing_walls: Critical structural elements\n- vertical_connections: Stairs, ramps, lifts\n- constraints: Binding rules for space generation\n\nMETADATA LINKING SYSTEM (ALL SCALES):\n- chunk_mesh_metadata: Object for seamless chunk integration (REQUIRED)\n  {\n    connection_protocol: \"How chunks connect\" (e.g., \"doors\", \"hallways\", \"adjacency\"),\n    boundary_markers: Array of connection points for other chunks,\n    spatial_hierarchy: \"How chunks nest\" (e.g., \"floor > wing > room\" or \"area > sub-area > feature\"),\n    coordinate_system: \"Coordinate reference\" (e.g., \"relative\", \"absolute grid\", \"narrative only\")\n  }\n\nThis metadata ensures chunks mesh perfectly when generated iteratively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"foundation\",\n  \"purpose\": {},\n  \"instructions\": \"Generate the structural foundation for this location (scale: moderate).\\n\\nKeep it simple - just layout, dimensions, and spatial organization. No complex topology needed.\\n\\nCRITICAL: Include chunk_mesh_metadata to enable seamless integration when spaces are generated iteratively.\"\n}",
+      "response": null,
+      "timestamp": "2025-11-28T01:10:10.249Z",
+      "status": "pending"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": null,
+      "prompt": "D&D Location Generator - Stage 3/5: Spaces (Iterative)\n\nGenerate ONE space at a time with these REQUIRED fields:\n\nBASIC: id, name, purpose, description\nDIMENSIONS: dimensions: {width: number, height: number, unit: \"ft\"}, floor_height: number\nVISUAL DATA:\n- floor: {material: \"stone\"|\"wood\"|\"dirt\"|\"tile\", color: \"#hexcode\"}\n- walls: [{side: \"north\"|\"south\"|\"east\"|\"west\", material: \"stone\"|\"wood\"|\"brick\", color: \"#hexcode\", thickness: number}]\n- doors: [{wall: \"north\"|\"south\"|\"east\"|\"west\", position: 0.0-1.0, width: number, style: \"wooden\"|\"iron\"|\"archway\"|\"portcullis\", leads_to: \"Name or Pending\", color: \"#hexcode\"}]\n- features: [{type: \"furniture\"|\"architectural\"|\"fixture\", label: \"Name\", position: {x: number, y: number}, shape: \"rectangle\"|\"circle\", width: number, height: number, color: \"#hexcode\", material: \"wood\"|\"stone\"|\"metal\"|\"cloth\"}]\nATMOSPHERE: lighting: \"torch\"|\"natural\"|\"magical\"|\"dark\", ambient_color: \"#hexcode\"\nMESHING: mesh_anchors: {connects_to: [], connection_types: [], boundary_interface: \"\", spatial_relationship: \"\"}\n\nLABEL RULES:\n- Feature labels: Max 3 words (e.g., \"Stone Forge\", \"Guard Bunk\")\n- Door leads_to: MUST use the EXACT space name as it appears in the \"name\" field, NOT a code or abbreviation\n  * Example: leads_to: \"Southeast Outer Ward\" (correct)\n  * Example: leads_to: \"CBF-G-SEOW\" (WRONG - will break spatial layout)\n  * For ungenerated spaces, use: leads_to: \"Pending\"\n\nCONFLICTS: Add proposals[] if geometry conflicts detected.\n\nReturn JSON only. No markdown.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"recent_spaces\": [],\n  \"instructions\": \"Generate next space with mesh_anchors.\"\n}",
+      "response": null,
+      "timestamp": "2025-11-28T01:10:52.804Z",
+      "status": "pending"
+    }
+  ],
+  "stageResults": {},
+  "currentStageIndex": 2,
+  "liveMapSpaces": [
+    {
+      "name": "Southeast Outer Ward",
+      "dimensions": {
+        "width": 150,
+        "height": 120,
+        "unit": "ft"
+      },
+      "purpose": "Primary access, security, stables, and supply receiving/storage.",
+      "description": "This is the main receiving area and first line of defense inside the castle's massive outer walls. It is a large, open yard containing stables, sheds, and mustering space, protected by the curtain walls on the East and South.",
+      "floor": {
+        "material": "dirt",
+        "color": "#4A392F"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#4C4B4F",
+          "thickness": 10
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#5D5C61",
+          "thickness": 8
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        }
+      ],
+      "doors": [
+        {
+          "wall": "east",
+          "style": "portcullis",
+          "leads_to": "Outside Castle Gates",
+          "color": "#333333",
+          "width_ft": 25,
+          "position_on_wall_ft": 60
+        },
+        {
+          "wall": "north",
+          "style": "archway",
+          "leads_to": "East Courtyard",
+          "color": "#7B7C7D",
+          "width_ft": 15,
+          "position_on_wall_ft": 127.5
+        },
+        {
+          "wall": "west",
+          "style": "archway",
+          "leads_to": "South Courtyard",
+          "color": "#7B7C7D",
+          "width_ft": 10,
+          "position_on_wall_ft": 42
+        },
+        {
+          "wall": "north",
+          "position_on_wall_ft": 22.5,
+          "width_ft": 15,
+          "leads_to": "East Courtyard",
+          "style": "archway",
+          "color": "#7B7C7D",
+          "is_reciprocal": true
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Stables (60+ capacity)",
+          "position": {
+            "x": 30,
+            "y": 120
+          },
+          "shape": "rectangle",
+          "width": 50,
+          "height": 200,
+          "color": "#7D7D7D",
+          "material": "wood"
+        },
+        {
+          "type": "architectural",
+          "label": "Wagon Shed",
+          "position": {
+            "x": 100,
+            "y": 50
+          },
+          "shape": "rectangle",
+          "width": 80,
+          "height": 80,
+          "color": "#7D7D7D",
+          "material": "wood"
+        },
+        {
+          "type": "architectural",
+          "label": "Mundane Smithy",
+          "position": {
+            "x": 200,
+            "y": 50
+          },
+          "shape": "rectangle",
+          "width": 50,
+          "height": 80,
+          "color": "#B87333",
+          "material": "brick"
+        },
+        {
+          "type": "fixture",
+          "label": "Mustering Yard",
+          "position": {
+            "x": 200,
+            "y": 170
+          },
+          "shape": "rectangle",
+          "width": 80,
+          "height": 60,
+          "color": "#4A392F",
+          "material": "dirt"
+        }
+      ],
+      "index": 0,
+      "size_ft": {
+        "width": 150,
+        "height": 120
+      },
+      "placed": true,
+      "position": {
+        "x": 310,
+        "y": 60
+      }
+    },
+    {
+      "name": "East Courtyard",
+      "dimensions": {
+        "width": 150,
+        "height": 49,
+        "unit": "ft"
+      },
+      "purpose": "Primary staging area and open access route to the Central Keep and North Ward, serving as a large open buffer zone.",
+      "description": "A vast, open cobblestone yard located along the eastern curtain wall. It is the main thoroughfare from the Southeast Outer Ward to the rest of the castle, used for drills, temporary staging, and ceremonial assembly.",
+      "floor": {
+        "material": "stone",
+        "color": "#6B6A68"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#4C4B4F",
+          "thickness": 10
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        }
+      ],
+      "doors": [
+        {
+          "wall": "south",
+          "style": "archway",
+          "leads_to": "Southeast Outer Ward",
+          "color": "#7B7C7D",
+          "width_ft": 15,
+          "position_on_wall_ft": 22.5
+        },
+        {
+          "wall": "west",
+          "style": "archway",
+          "leads_to": "Central Keep Entrance Hall",
+          "color": "#949494",
+          "width_ft": 30,
+          "position_on_wall_ft": 24.5
+        },
+        {
+          "wall": "north",
+          "style": "archway",
+          "leads_to": "North Courtyard",
+          "color": "#7B7C7D",
+          "width_ft": 15,
+          "position_on_wall_ft": 112.5
+        },
+        {
+          "wall": "south",
+          "position_on_wall_ft": 127.5,
+          "width_ft": 15,
+          "leads_to": "Southeast Outer Ward",
+          "style": "archway",
+          "color": "#7B7C7D",
+          "is_reciprocal": true
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Assembly Fountain",
+          "position": {
+            "x": 370,
+            "y": 120
+          },
+          "shape": "circle",
+          "width": 40,
+          "height": 40,
+          "color": "#4B4A48",
+          "material": "stone"
+        },
+        {
+          "type": "fixture",
+          "label": "Siege Engine Storage",
+          "position": {
+            "x": 650,
+            "y": 50
+          },
+          "shape": "rectangle",
+          "width": 100,
+          "height": 80,
+          "color": "#5D5D5D",
+          "material": "stone"
+        }
+      ],
+      "index": 1,
+      "size_ft": {
+        "width": 150,
+        "height": 49
+      },
+      "placed": true,
+      "position": {
+        "x": 310,
+        "y": 10
+      }
+    },
+    {
+      "name": "Central Keep Entrance Hall",
+      "dimensions": {
+        "width": 100,
+        "height": 80,
+        "unit": "ft"
+      },
+      "purpose": "Grand entrance and defensive checkpoint for the Central Keep, controlling access to the upper floors and main chambers.",
+      "description": "A massive, vaulted stone hall forming the main ground-level entry point into the Central Keep from the East Courtyard. It features heavy iron gates and stairwells leading to the upper residential and administrative levels.",
+      "floor": {
+        "material": "tile",
+        "color": "#333333"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        }
+      ],
+      "doors": [
+        {
+          "wall": "west",
+          "style": "archway",
+          "leads_to": "Central Keep Main Hall",
+          "color": "#7B7C7D",
+          "width_ft": 20,
+          "position_on_wall_ft": 40
+        },
+        {
+          "wall": "south",
+          "style": "wooden",
+          "leads_to": "Keep Service Passage South",
+          "color": "#6B4938",
+          "width_ft": 8,
+          "position_on_wall_ft": 10
+        },
+        {
+          "wall": "north",
+          "style": "wooden",
+          "leads_to": "Keep Service Passage North",
+          "color": "#6B4938",
+          "width_ft": 8,
+          "position_on_wall_ft": 90
+        },
+        {
+          "wall": "east",
+          "position_on_wall_ft": 40,
+          "width_ft": 30,
+          "leads_to": "East Courtyard",
+          "style": "archway",
+          "color": "#949494",
+          "is_reciprocal": true
+        },
+        {
+          "wall": "west",
+          "position_on_wall_ft": 40,
+          "width_ft": 8,
+          "leads_to": "TEST ROOM",
+          "style": "wooden",
+          "color": "#6B4938",
+          "is_reciprocal": true
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Grand Staircase Up",
+          "position": {
+            "x": 85,
+            "y": 15
+          },
+          "shape": "rectangle",
+          "width": 10,
+          "height": 40,
+          "color": "#7D7D7D",
+          "material": "stone"
+        },
+        {
+          "type": "fixture",
+          "label": "Guard Post",
+          "position": {
+            "x": 20,
+            "y": 60
+          },
+          "shape": "rectangle",
+          "width": 20,
+          "height": 10,
+          "color": "#444444",
+          "material": "metal"
+        }
+      ],
+      "index": 2,
+      "size_ft": {
+        "width": 100,
+        "height": 80
+      },
+      "placed": true,
+      "position": {
+        "x": 210,
+        "y": 10
+      }
+    },
+    {
+      "name": "Central Keep Main Hall",
+      "dimensions": {
+        "width": 150,
+        "height": 67,
+        "unit": "ft"
+      },
+      "purpose": "A large, general-purpose reception, assembly, and dining area for lower-ranking personnel and permanent castle guards.",
+      "description": "A spacious, dark hall extending westward from the Entrance Hall. This space features long wooden tables for communal dining and gathering, punctuated by stone pillars supporting the floors above.",
+      "floor": {
+        "material": "stone",
+        "color": "#4A4A4A"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        }
+      ],
+      "doors": [
+        {
+          "wall": "west",
+          "style": "iron",
+          "leads_to": "West Courtyard",
+          "color": "#1C1C1C",
+          "width_ft": 15,
+          "position_on_wall_ft": 33.5
+        },
+        {
+          "wall": "south",
+          "style": "wooden",
+          "leads_to": "Keep Kitchens",
+          "color": "#6B4938",
+          "width_ft": 10,
+          "position_on_wall_ft": 120
+        },
+        {
+          "wall": "east",
+          "position_on_wall_ft": 33.5,
+          "width_ft": 20,
+          "leads_to": "Central Keep Entrance Hall",
+          "style": "archway",
+          "color": "#7B7C7D",
+          "is_reciprocal": true
+        }
+      ],
+      "features": [
+        {
+          "type": "furniture",
+          "label": "Long Dining Tables",
+          "position": {
+            "x": 90,
+            "y": 20
+          },
+          "shape": "rectangle",
+          "width": 160,
+          "height": 10,
+          "color": "#5A3B2B",
+          "material": "wood"
+        },
+        {
+          "type": "architectural",
+          "label": "Stone Pillars",
+          "position": {
+            "x": 60,
+            "y": 40
+          },
+          "shape": "circle",
+          "width": 5,
+          "height": 5,
+          "color": "#7D7D7D",
+          "material": "stone"
+        },
+        {
+          "type": "architectural",
+          "label": "Stone Pillars",
+          "position": {
+            "x": 120,
+            "y": 40
+          },
+          "shape": "circle",
+          "width": 5,
+          "height": 5,
+          "color": "#7D7D7D",
+          "material": "stone"
+        },
+        {
+          "type": "fixture",
+          "label": "Fireplace Hearth",
+          "position": {
+            "x": 10,
+            "y": 40
+          },
+          "shape": "rectangle",
+          "width": 10,
+          "height": 20,
+          "color": "#303030",
+          "material": "stone"
+        }
+      ],
+      "index": 3,
+      "size_ft": {
+        "width": 150,
+        "height": 67
+      },
+      "placed": true,
+      "position": {
+        "x": 60,
+        "y": 125
+      }
+    },
+    {
+      "name": "Keep Kitchens",
+      "dimensions": {
+        "width": 80,
+        "height": 50,
+        "unit": "ft"
+      },
+      "purpose": "Preparation and storage of food for the Central Keep, servicing the Main Hall and upper-level feast chambers.",
+      "description": "A bustling, hot space characterized by heavy cooking ranges, brick ovens, and butchering blocks. It connects directly to the Central Keep Main Hall for service and has discreet access for deliveries.",
+      "floor": {
+        "material": "tile",
+        "color": "#6D6D6A"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "south",
+          "material": "brick",
+          "color": "#8B3E2F",
+          "thickness": 4
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        }
+      ],
+      "doors": [
+        {
+          "wall": "south",
+          "style": "wooden",
+          "leads_to": "Keep Service Passage South",
+          "color": "#6B4938",
+          "width_ft": 6,
+          "position_on_wall_ft": 40
+        },
+        {
+          "wall": "west",
+          "style": "iron",
+          "leads_to": "Keep Larder & Cellar Access",
+          "color": "#1C1C1C",
+          "width_ft": 6,
+          "position_on_wall_ft": 10
+        },
+        {
+          "wall": "north",
+          "position_on_wall_ft": 64,
+          "width_ft": 10,
+          "leads_to": "Central Keep Main Hall",
+          "style": "wooden",
+          "color": "#6B4938",
+          "is_reciprocal": true
+        },
+        {
+          "wall": "south",
+          "position_on_wall_ft": 72,
+          "width_ft": 6,
+          "leads_to": "TEST ROOM",
+          "style": "wooden",
+          "color": "#6B4938",
+          "is_reciprocal": true
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Oven Range",
+          "position": {
+            "x": 75,
+            "y": 25
+          },
+          "shape": "rectangle",
+          "width": 5,
+          "height": 40,
+          "color": "#303030",
+          "material": "brick"
+        },
+        {
+          "type": "furniture",
+          "label": "Butchering Block",
+          "position": {
+            "x": 30,
+            "y": 25
+          },
+          "shape": "rectangle",
+          "width": 15,
+          "height": 20,
+          "color": "#5A3B2B",
+          "material": "wood"
+        },
+        {
+          "type": "fixture",
+          "label": "Water Pump",
+          "position": {
+            "x": 5,
+            "y": 5
+          },
+          "shape": "circle",
+          "width": 3,
+          "height": 3,
+          "color": "#7D7D7D",
+          "material": "metal"
+        }
+      ],
+      "index": 4,
+      "size_ft": {
+        "width": 80,
+        "height": 50
+      },
+      "placed": true,
+      "position": {
+        "x": 60,
+        "y": 75
+      }
+    },
+    {
+      "name": "Keep Larder & Cellar Access",
+      "dimensions": {
+        "width": 50,
+        "height": 40,
+        "unit": "ft"
+      },
+      "purpose": "Cold storage for perishable goods and the primary stairwell accessing the subterranean storage levels below the Central Keep.",
+      "description": "A cold, damp chamber lined with shelves and hanging meat hooks, smelling of preservation spices and blood. A heavy, iron-bound trapdoor or stairwell is located in one corner leading down to the deep storage levels.",
+      "floor": {
+        "material": "stone",
+        "color": "#4A4A4A"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        }
+      ],
+      "doors": [
+        {
+          "wall": "east",
+          "position_on_wall_ft": 8,
+          "width_ft": 6,
+          "leads_to": "Keep Kitchens",
+          "style": "iron",
+          "color": "#1C1C1C",
+          "is_reciprocal": true
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Cellar Stairwell Down",
+          "position": {
+            "x": 40,
+            "y": 30
+          },
+          "shape": "rectangle",
+          "width": 10,
+          "height": 8,
+          "color": "#333333",
+          "material": "iron"
+        },
+        {
+          "type": "furniture",
+          "label": "Meat Hanging Hooks",
+          "position": {
+            "x": 25,
+            "y": 5
+          },
+          "shape": "rectangle",
+          "width": 45,
+          "height": 5,
+          "color": "#7D7D7D",
+          "material": "metal"
+        },
+        {
+          "type": "furniture",
+          "label": "Shelving Units",
+          "position": {
+            "x": 5,
+            "y": 20
+          },
+          "shape": "rectangle",
+          "width": 5,
+          "height": 30,
+          "color": "#5A3B2B",
+          "material": "wood"
+        }
+      ],
+      "index": 5,
+      "size_ft": {
+        "width": 50,
+        "height": 40
+      },
+      "placed": true,
+      "position": {
+        "x": 10,
+        "y": 75
+      }
+    },
+    {
+      "name": "TEST ROOM",
+      "dimensions": {
+        "width": 150,
+        "height": 30,
+        "unit": "ft"
+      },
+      "purpose": "A discreet corridor for staff, supplies, and waste removal, bypassing the formal Central Keep areas and linking the industrial zone.",
+      "description": "A narrow, low-ceilinged stone hallway running along the southern face of the Central Keep. It is dark, functional, and features minor supply closets and access points for the kitchen and southern storage.",
+      "floor": {
+        "material": "stone",
+        "color": "#4A4A4A"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 8
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        }
+      ],
+      "doors": [
+        {
+          "wall": "east",
+          "style": "wooden",
+          "leads_to": "Central Keep Entrance Hall",
+          "color": "#6B4938",
+          "width_ft": 8,
+          "position_on_wall_ft": 15
+        },
+        {
+          "wall": "west",
+          "style": "wooden",
+          "leads_to": "South Courtyard",
+          "color": "#6B4938",
+          "width_ft": 8,
+          "position_on_wall_ft": 15
+        },
+        {
+          "wall": "north",
+          "style": "wooden",
+          "leads_to": "Keep Kitchens",
+          "color": "#6B4938",
+          "width_ft": 6,
+          "position_on_wall_ft": 135
+        }
+      ],
+      "features": [
+        {
+          "type": "fixture",
+          "label": "Utility Closet",
+          "position": {
+            "x": 20,
+            "y": 14
+          },
+          "shape": "rectangle",
+          "width": 6,
+          "height": 4,
+          "color": "#7D7D7D",
+          "material": "wood"
+        },
+        {
+          "type": "fixture",
+          "label": "Waste Shaft Opening",
+          "position": {
+            "x": 100,
+            "y": 14
+          },
+          "shape": "circle",
+          "width": 4,
+          "height": 4,
+          "color": "#333333",
+          "material": "iron"
+        }
+      ],
+      "index": 6,
+      "size_ft": {
+        "width": 150,
+        "height": 30
+      },
+      "placed": true,
+      "position": {
+        "x": 210,
+        "y": 190
+      }
+    }
+  ],
+  "accumulatedChunkResults": [
+    {
+      "id": 1,
+      "name": "Southeast Outer Ward",
+      "purpose": "Primary access, security, stables, and supply receiving/storage.",
+      "description": "This is the main receiving area and first line of defense inside the castle's massive outer walls. It is a large, open yard containing stables, sheds, and mustering space, protected by the curtain walls on the East and South.",
+      "dimensions": {
+        "width": 150,
+        "height": 120,
+        "unit": "ft"
+      },
+      "floor_height": 70,
+      "floor": {
+        "material": "dirt",
+        "color": "#4A392F"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#4C4B4F",
+          "thickness": 10
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#5D5C61",
+          "thickness": 8
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        }
+      ],
+      "doors": [
+        {
+          "wall": "east",
+          "position": 0.5,
+          "width": 25,
+          "style": "portcullis",
+          "leads_to": "Outside Castle Gates",
+          "color": "#333333"
+        },
+        {
+          "wall": "north",
+          "position": 0.85,
+          "width": 15,
+          "style": "archway",
+          "leads_to": "East Courtyard",
+          "color": "#7B7C7D"
+        },
+        {
+          "wall": "west",
+          "position": 0.35,
+          "width": 10,
+          "style": "archway",
+          "leads_to": "South Courtyard",
+          "color": "#7B7C7D"
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Stables (60+ capacity)",
+          "position": {
+            "x": 30,
+            "y": 120
+          },
+          "shape": "rectangle",
+          "width": 50,
+          "height": 200,
+          "color": "#7D7D7D",
+          "material": "wood"
+        },
+        {
+          "type": "architectural",
+          "label": "Wagon Shed",
+          "position": {
+            "x": 100,
+            "y": 50
+          },
+          "shape": "rectangle",
+          "width": 80,
+          "height": 80,
+          "color": "#7D7D7D",
+          "material": "wood"
+        },
+        {
+          "type": "architectural",
+          "label": "Mundane Smithy",
+          "position": {
+            "x": 200,
+            "y": 50
+          },
+          "shape": "rectangle",
+          "width": 50,
+          "height": 80,
+          "color": "#B87333",
+          "material": "brick"
+        },
+        {
+          "type": "fixture",
+          "label": "Mustering Yard",
+          "position": {
+            "x": 200,
+            "y": 170
+          },
+          "shape": "rectangle",
+          "width": 80,
+          "height": 60,
+          "color": "#4A392F",
+          "material": "dirt"
+        }
+      ],
+      "atmosphere": {
+        "lighting": "natural",
+        "ambient_color": "#808080"
+      },
+      "mesh_anchors": {
+        "connects_to": [
+          "East Courtyard",
+          "South Courtyard",
+          "Outside Castle Gates"
+        ],
+        "connection_types": [
+          "Archway",
+          "Portcullis"
+        ],
+        "boundary_interface": "Inner castle ward/Outer gate access",
+        "spatial_relationship": "SE corner, nestled between East and South outer walls."
+      },
+      "index": 0,
+      "size_ft": {
+        "width": 150,
+        "height": 120
+      },
+      "placed": true,
+      "position": {
+        "x": 310,
+        "y": 60
+      }
+    },
+    {
+      "id": 2,
+      "name": "East Courtyard",
+      "purpose": "Primary staging area and open access route to the Central Keep and North Ward, serving as a large open buffer zone.",
+      "description": "A vast, open cobblestone yard located along the eastern curtain wall. It is the main thoroughfare from the Southeast Outer Ward to the rest of the castle, used for drills, temporary staging, and ceremonial assembly.",
+      "dimensions": {
+        "width": 150,
+        "height": 49,
+        "unit": "ft"
+      },
+      "floor_height": 70,
+      "floor": {
+        "material": "stone",
+        "color": "#6B6A68"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#4C4B4F",
+          "thickness": 10
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        }
+      ],
+      "doors": [
+        {
+          "wall": "south",
+          "position": 0.15,
+          "width": 15,
+          "style": "archway",
+          "leads_to": "Southeast Outer Ward",
+          "color": "#7B7C7D"
+        },
+        {
+          "wall": "west",
+          "position": 0.5,
+          "width": 30,
+          "style": "archway",
+          "leads_to": "Central Keep Entrance Hall",
+          "color": "#949494"
+        },
+        {
+          "wall": "north",
+          "position": 0.75,
+          "width": 15,
+          "style": "archway",
+          "leads_to": "North Courtyard",
+          "color": "#7B7C7D"
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Assembly Fountain",
+          "position": {
+            "x": 370,
+            "y": 120
+          },
+          "shape": "circle",
+          "width": 40,
+          "height": 40,
+          "color": "#4B4A48",
+          "material": "stone"
+        },
+        {
+          "type": "fixture",
+          "label": "Siege Engine Storage",
+          "position": {
+            "x": 650,
+            "y": 50
+          },
+          "shape": "rectangle",
+          "width": 100,
+          "height": 80,
+          "color": "#5D5D5D",
+          "material": "stone"
+        }
+      ],
+      "atmosphere": {
+        "lighting": "natural",
+        "ambient_color": "#808080"
+      },
+      "mesh_anchors": {
+        "connects_to": [
+          "Southeast Outer Ward",
+          "Central Keep Entrance Hall",
+          "North Courtyard"
+        ],
+        "connection_types": [
+          "Archway",
+          "Gate"
+        ],
+        "boundary_interface": "Central Courtyard Area",
+        "spatial_relationship": "Ground level, East of the Central Keep, North of the Southeast Outer Ward."
+      },
+      "index": 1,
+      "size_ft": {
+        "width": 150,
+        "height": 49
+      },
+      "placed": true,
+      "position": {
+        "x": 310,
+        "y": 10
+      }
+    },
+    {
+      "id": 3,
+      "name": "Central Keep Entrance Hall",
+      "purpose": "Grand entrance and defensive checkpoint for the Central Keep, controlling access to the upper floors and main chambers.",
+      "description": "A massive, vaulted stone hall forming the main ground-level entry point into the Central Keep from the East Courtyard. It features heavy iron gates and stairwells leading to the upper residential and administrative levels.",
+      "dimensions": {
+        "width": 100,
+        "height": 80,
+        "unit": "ft"
+      },
+      "floor_height": 30,
+      "floor": {
+        "material": "tile",
+        "color": "#333333"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        }
+      ],
+      "doors": [
+        {
+          "wall": "east",
+          "position": 0.5,
+          "width": 30,
+          "style": "iron",
+          "leads_to": "East Courtyard",
+          "color": "#1C1C1C"
+        },
+        {
+          "wall": "west",
+          "position": 0.5,
+          "width": 20,
+          "style": "archway",
+          "leads_to": "Central Keep Main Hall",
+          "color": "#7B7C7D"
+        },
+        {
+          "wall": "south",
+          "position": 0.1,
+          "width": 8,
+          "style": "wooden",
+          "leads_to": "Keep Service Passage South",
+          "color": "#6B4938"
+        },
+        {
+          "wall": "north",
+          "position": 0.9,
+          "width": 8,
+          "style": "wooden",
+          "leads_to": "Keep Service Passage North",
+          "color": "#6B4938"
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Grand Staircase Up",
+          "position": {
+            "x": 85,
+            "y": 15
+          },
+          "shape": "rectangle",
+          "width": 10,
+          "height": 40,
+          "color": "#7D7D7D",
+          "material": "stone"
+        },
+        {
+          "type": "fixture",
+          "label": "Guard Post",
+          "position": {
+            "x": 20,
+            "y": 60
+          },
+          "shape": "rectangle",
+          "width": 20,
+          "height": 10,
+          "color": "#444444",
+          "material": "metal"
+        }
+      ],
+      "atmosphere": {
+        "lighting": "torch",
+        "ambient_color": "#5A5A5A"
+      },
+      "mesh_anchors": {
+        "connects_to": [
+          "East Courtyard",
+          "Central Keep Main Hall",
+          "Keep Service Passage South",
+          "Keep Service Passage North"
+        ],
+        "connection_types": [
+          "Gate",
+          "Archway",
+          "Door"
+        ],
+        "boundary_interface": "Keep Entry",
+        "spatial_relationship": "Ground level, Eastern face of the Central Keep."
+      },
+      "index": 2,
+      "size_ft": {
+        "width": 100,
+        "height": 80
+      },
+      "placed": true,
+      "position": {
+        "x": 210,
+        "y": 10
+      }
+    },
+    {
+      "id": 4,
+      "name": "Central Keep Main Hall",
+      "purpose": "A large, general-purpose reception, assembly, and dining area for lower-ranking personnel and permanent castle guards.",
+      "description": "A spacious, dark hall extending westward from the Entrance Hall. This space features long wooden tables for communal dining and gathering, punctuated by stone pillars supporting the floors above.",
+      "dimensions": {
+        "width": 150,
+        "height": 67,
+        "unit": "ft"
+      },
+      "floor_height": 20,
+      "floor": {
+        "material": "stone",
+        "color": "#4A4A4A"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        }
+      ],
+      "doors": [
+        {
+          "wall": "east",
+          "position": 0.5,
+          "width": 20,
+          "style": "archway",
+          "leads_to": "Central Keep Entrance Hall",
+          "color": "#7B7C7D"
+        },
+        {
+          "wall": "west",
+          "position": 0.5,
+          "width": 15,
+          "style": "iron",
+          "leads_to": "West Courtyard",
+          "color": "#1C1C1C"
+        },
+        {
+          "wall": "south",
+          "position": 0.8,
+          "width": 10,
+          "style": "wooden",
+          "leads_to": "Keep Kitchens",
+          "color": "#6B4938"
+        }
+      ],
+      "features": [
+        {
+          "type": "furniture",
+          "label": "Long Dining Tables",
+          "position": {
+            "x": 90,
+            "y": 20
+          },
+          "shape": "rectangle",
+          "width": 160,
+          "height": 10,
+          "color": "#5A3B2B",
+          "material": "wood"
+        },
+        {
+          "type": "architectural",
+          "label": "Stone Pillars",
+          "position": {
+            "x": 60,
+            "y": 40
+          },
+          "shape": "circle",
+          "width": 5,
+          "height": 5,
+          "color": "#7D7D7D",
+          "material": "stone"
+        },
+        {
+          "type": "architectural",
+          "label": "Stone Pillars",
+          "position": {
+            "x": 120,
+            "y": 40
+          },
+          "shape": "circle",
+          "width": 5,
+          "height": 5,
+          "color": "#7D7D7D",
+          "material": "stone"
+        },
+        {
+          "type": "fixture",
+          "label": "Fireplace Hearth",
+          "position": {
+            "x": 10,
+            "y": 40
+          },
+          "shape": "rectangle",
+          "width": 10,
+          "height": 20,
+          "color": "#303030",
+          "material": "stone"
+        }
+      ],
+      "atmosphere": {
+        "lighting": "torch",
+        "ambient_color": "#404040"
+      },
+      "mesh_anchors": {
+        "connects_to": [
+          "Central Keep Entrance Hall",
+          "West Courtyard",
+          "Keep Kitchens"
+        ],
+        "connection_types": [
+          "Archway",
+          "Iron Gate",
+          "Door"
+        ],
+        "boundary_interface": "Keep Central Axis",
+        "spatial_relationship": "Ground level, directly West of the Entrance Hall."
+      },
+      "index": 3,
+      "size_ft": {
+        "width": 150,
+        "height": 67
+      },
+      "placed": true,
+      "position": {
+        "x": 60,
+        "y": 125
+      }
+    },
+    {
+      "id": 5,
+      "name": "Keep Kitchens",
+      "purpose": "Preparation and storage of food for the Central Keep, servicing the Main Hall and upper-level feast chambers.",
+      "description": "A bustling, hot space characterized by heavy cooking ranges, brick ovens, and butchering blocks. It connects directly to the Central Keep Main Hall for service and has discreet access for deliveries.",
+      "dimensions": {
+        "width": 80,
+        "height": 50,
+        "unit": "ft"
+      },
+      "floor_height": 18,
+      "floor": {
+        "material": "tile",
+        "color": "#6D6D6A"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "south",
+          "material": "brick",
+          "color": "#8B3E2F",
+          "thickness": 4
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        }
+      ],
+      "doors": [
+        {
+          "wall": "north",
+          "position": 0.8,
+          "width": 10,
+          "style": "wooden",
+          "leads_to": "Central Keep Main Hall",
+          "color": "#6B4938"
+        },
+        {
+          "wall": "south",
+          "position": 0.5,
+          "width": 6,
+          "style": "wooden",
+          "leads_to": "Keep Service Passage South",
+          "color": "#6B4938"
+        },
+        {
+          "wall": "west",
+          "position": 0.2,
+          "width": 6,
+          "style": "iron",
+          "leads_to": "Keep Larder & Cellar Access",
+          "color": "#1C1C1C"
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Oven Range",
+          "position": {
+            "x": 75,
+            "y": 25
+          },
+          "shape": "rectangle",
+          "width": 5,
+          "height": 40,
+          "color": "#303030",
+          "material": "brick"
+        },
+        {
+          "type": "furniture",
+          "label": "Butchering Block",
+          "position": {
+            "x": 30,
+            "y": 25
+          },
+          "shape": "rectangle",
+          "width": 15,
+          "height": 20,
+          "color": "#5A3B2B",
+          "material": "wood"
+        },
+        {
+          "type": "fixture",
+          "label": "Water Pump",
+          "position": {
+            "x": 5,
+            "y": 5
+          },
+          "shape": "circle",
+          "width": 3,
+          "height": 3,
+          "color": "#7D7D7D",
+          "material": "metal"
+        }
+      ],
+      "atmosphere": {
+        "lighting": "torch",
+        "ambient_color": "#807060"
+      },
+      "mesh_anchors": {
+        "connects_to": [
+          "Central Keep Main Hall",
+          "Keep Service Passage South",
+          "Keep Larder & Cellar Access"
+        ],
+        "connection_types": [
+          "Door",
+          "Iron Door"
+        ],
+        "boundary_interface": "Keep Service Zone",
+        "spatial_relationship": "Ground level, South edge of the Central Keep structure, adjacent to the Main Hall."
+      },
+      "index": 4,
+      "size_ft": {
+        "width": 80,
+        "height": 50
+      },
+      "placed": true,
+      "position": {
+        "x": 60,
+        "y": 75
+      }
+    },
+    {
+      "id": 6,
+      "name": "Keep Larder & Cellar Access",
+      "purpose": "Cold storage for perishable goods and the primary stairwell accessing the subterranean storage levels below the Central Keep.",
+      "description": "A cold, damp chamber lined with shelves and hanging meat hooks, smelling of preservation spices and blood. A heavy, iron-bound trapdoor or stairwell is located in one corner leading down to the deep storage levels.",
+      "dimensions": {
+        "width": 50,
+        "height": 40,
+        "unit": "ft"
+      },
+      "floor_height": 10,
+      "floor": {
+        "material": "stone",
+        "color": "#4A4A4A"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 4
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#5A5B5F",
+          "thickness": 8
+        }
+      ],
+      "doors": [
+        {
+          "wall": "east",
+          "position": 0.2,
+          "width": 6,
+          "style": "iron",
+          "leads_to": "Keep Kitchens",
+          "color": "#1C1C1C"
+        }
+      ],
+      "features": [
+        {
+          "type": "architectural",
+          "label": "Cellar Stairwell Down",
+          "position": {
+            "x": 40,
+            "y": 30
+          },
+          "shape": "rectangle",
+          "width": 10,
+          "height": 8,
+          "color": "#333333",
+          "material": "iron"
+        },
+        {
+          "type": "furniture",
+          "label": "Meat Hanging Hooks",
+          "position": {
+            "x": 25,
+            "y": 5
+          },
+          "shape": "rectangle",
+          "width": 45,
+          "height": 5,
+          "color": "#7D7D7D",
+          "material": "metal"
+        },
+        {
+          "type": "furniture",
+          "label": "Shelving Units",
+          "position": {
+            "x": 5,
+            "y": 20
+          },
+          "shape": "rectangle",
+          "width": 5,
+          "height": 30,
+          "color": "#5A3B2B",
+          "material": "wood"
+        }
+      ],
+      "atmosphere": {
+        "lighting": "torch",
+        "ambient_color": "#454A50"
+      },
+      "mesh_anchors": {
+        "connects_to": [
+          "Keep Kitchens",
+          "Castle Storage Level (Pending)"
+        ],
+        "connection_types": [
+          "Iron Door",
+          "Stairwell Down"
+        ],
+        "boundary_interface": "Keep Service Zone/Subterranean Access",
+        "spatial_relationship": "Ground level, West of the Keep Kitchens, providing vertical access to levels Below L1."
+      },
+      "index": 5,
+      "size_ft": {
+        "width": 50,
+        "height": 40
+      },
+      "placed": true,
+      "position": {
+        "x": 10,
+        "y": 75
+      }
+    },
+    {
+      "id": 7,
+      "name": "TEST ROOM",
+      "purpose": "A discreet corridor for staff, supplies, and waste removal, bypassing the formal Central Keep areas and linking the industrial zone.",
+      "description": "A narrow, low-ceilinged stone hallway running along the southern face of the Central Keep. It is dark, functional, and features minor supply closets and access points for the kitchen and southern storage.",
+      "dimensions": {
+        "width": 150,
+        "height": 30,
+        "unit": "ft"
+      },
+      "floor_height": 12,
+      "floor": {
+        "material": "stone",
+        "color": "#4A4A4A"
+      },
+      "walls": [
+        {
+          "side": "east",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "south",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 8
+        },
+        {
+          "side": "north",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        },
+        {
+          "side": "west",
+          "material": "stone",
+          "color": "#6A6A6C",
+          "thickness": 6
+        }
+      ],
+      "doors": [
+        {
+          "wall": "east",
+          "position": 0.5,
+          "width": 8,
+          "style": "wooden",
+          "leads_to": "Central Keep Entrance Hall",
+          "color": "#6B4938"
+        },
+        {
+          "wall": "west",
+          "position": 0.5,
+          "width": 8,
+          "style": "wooden",
+          "leads_to": "South Courtyard",
+          "color": "#6B4938"
+        },
+        {
+          "wall": "north",
+          "position": 0.9,
+          "width": 6,
+          "style": "wooden",
+          "leads_to": "Keep Kitchens",
+          "color": "#6B4938"
+        }
+      ],
+      "features": [
+        {
+          "type": "fixture",
+          "label": "Utility Closet",
+          "position": {
+            "x": 20,
+            "y": 14
+          },
+          "shape": "rectangle",
+          "width": 6,
+          "height": 4,
+          "color": "#7D7D7D",
+          "material": "wood"
+        },
+        {
+          "type": "fixture",
+          "label": "Waste Shaft Opening",
+          "position": {
+            "x": 100,
+            "y": 14
+          },
+          "shape": "circle",
+          "width": 4,
+          "height": 4,
+          "color": "#333333",
+          "material": "iron"
+        }
+      ],
+      "atmosphere": {
+        "lighting": "torch",
+        "ambient_color": "#404040"
+      },
+      "mesh_anchors": {
+        "connects_to": [
+          "Central Keep Entrance Hall",
+          "South Courtyard",
+          "Keep Kitchens"
+        ],
+        "connection_types": [
+          "Door",
+          "Passage"
+        ],
+        "boundary_interface": "Keep Service Perimeter",
+        "spatial_relationship": "Ground level, spanning the southern base of the Central Keep structure."
+      },
+      "index": 6,
+      "size_ft": {
+        "width": 150,
+        "height": 30
+      },
+      "placed": true,
+      "position": {
+        "x": 210,
+        "y": 190
+      }
+    }
+  ]
+}

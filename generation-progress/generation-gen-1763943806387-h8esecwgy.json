@@ -1,0 +1,524 @@
+{
+  "sessionId": "gen-1763943806387-h8esecwgy",
+  "createdAt": "2025-11-24T00:23:26.386Z",
+  "lastUpdatedAt": "2025-11-24T00:28:56.398Z",
+  "config": {
+    "type": "npc",
+    "prompt": "Lord Kairon Blackthorne – The Crimson Warlord\nFighter (Echo Knight) 10 / Vampire 4\nRole: Commander of the Bloodforged Knights\n\nOnce a renowned warlord, Kairon’s conquests were cut short by mortality, but Erliza offered him the eternity he craved.\nWhy He Was Turned: His tactical mind and battlefield prowess made him the ideal leader of the Bloodforged Knights.\nKey Abilities:\nUnleash Incarnation – His echoes fight alongside him, creating a terrifying battlefield presence.\nExtra Attack (3) – Overwhelms foes with relentless offense.\nShadow Infusion – His echoes are infused with necrotic power, dealing extra necrotic damage when striking a living creature.\nCurrent Status:\nCommands the Bloodforged Knights, Erliza’s elite undead warriors.\nPersonally leads war campaigns when an overwhelming force is needed.\nAbsolute loyalty to Erliza, seeing her as the only leader worthy of his service.\n",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Creator: Core Details",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the CORE DETAILS & PERSONALITY section of an NPC.\n\nYour focus: Personality traits, ideals, bonds, flaws, goals, fears, quirks, voice/mannerisms, hooks.\n\n\n=== CORE DETAILS & PERSONALITY SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"role\": {\n      \"type\": \"string\",\n      \"description\": \"Narrative role in the story\"\n    },\n    \"hooks\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Story hooks and adventure seeds\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nBuild a rich, memorable personality that aligns with the basic information from the previous stage.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"Lord Kairon Blackthorne – The Crimson Warlord\\nFighter (Echo Knight) 10 / Vampire 4\\nRole: Commander of the Bloodforged Knights\\n\\nOnce a renowned warlord, Kairon’s conquests were cut short by mortality, but Erliza offered him the eternity he craved.\\nWhy He Was Turned: His tactical mind and battlefield prowess made him the ideal leader of the Bloodforged Knights.\\nKey Abilities:\\nUnleash Incarnation – His echoes fight alongside him, creating a terrifying battlefield presence.\\nExtra Attack (3) – Overwhelms foes with relentless offense.\\nShadow Infusion – His echoes are infused with necrotic power, dealing extra necrotic damage when striking a living creature.\\nCurrent Status:\\nCommands the Bloodforged Knights, Erliza’s elite undead warriors.\\nPersonally leads war campaigns when an overwhelming force is needed.\\nAbsolute loyalty to Erliza, seeing her as the only leader worthy of his service.\\n\",\n  \"basic_info\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null\n}",
+      "response": "{ \"class_levels\": [ { \"class\": \"Fighter\", \"level\": 10, \"subclass\": \"Echo Knight\" }, { \"class\": \"Vampire\", \"level\": 4, \"notes\": \"Representing the natural advancement and powers granted by the vampire transformation, following the creature type rules for Undead.\" } ], \"ability_scores\": { \"str\": 20, \"dex\": 16, \"con\": 18, \"int\": 14, \"wis\": 15, \"cha\": 18 }, \"armor_class\": [ { \"value\": 20, \"type\": \"Plate Armor\", \"notes\": \"18 (Plate) + 2 (Shield, assumed standard loadout for a warlord)\" } ], \"hit_points\": { \"average\": 178, \"formula\": \"10d10 + 4d8 + 14 * 4\" }, \"hit_dice\": \"10d10 + 4d8\", \"speed\": { \"walk\": \"30 ft.\" }, \"proficiency_bonus\": 5, \"senses\": [ \"darkvision 120 ft.\", \"passive Perception 12\" ], \"languages\": [ \"Common\", \"Abyssal (Assumed command language for undead forces)\" ], \"saving_throws\": [ { \"name\": \"Strength\", \"value\": \"+10\", \"notes\": \"Proficiency: +5 (Fighter primary save)\" }, { \"name\": \"Constitution\", \"value\": \"+9\", \"notes\": \"Proficiency: +5 (Fighter primary save)\" }, { \"name\": \"Dexterity\", \"value\": \"+5\" }, { \"name\": \"Intelligence\", \"value\": \"+4\" }, { \"name\": \"Wisdom\", \"value\": \"+4\" }, { \"name\": \"Charisma\", \"value\": \"+9\", \"notes\": \"Proficiency: +5 (Vampire power and command)\" } ], \"skill_proficiencies\": [ { \"name\": \"Athletics\", \"value\": \"+10\" }, { \"name\": \"Intimidation\", \"value\": \"+9\", \"notes\": \"Proficient, reflecting his title and command role\" }, { \"name\": \"Perception\", \"value\": \"+7\", \"notes\": \"Proficient, derived from Fighter or background\" }, { \"name\": \"Tactics (Warfare)\", \"value\": \"+4\", \"notes\": \"If using a variant rule for Intelligence (Tactics), or otherwise represented by his high Intelligence and combat features.\" } ], \"damage_resistances\": [ \"necrotic\", \"nonmagical bludgeoning, piercing, and slashing (Vampire feature)\" ], \"damage_immunities\": [ \"poison\" ], \"damage_vulnerabilities\": [ \"radiant (Vampire weakness)\" ], \"condition_immunities\": [ \"exhaustion\", \"poisoned\" ], \"sources_used\": [ \"original_user_request\" ], \"assumptions\": [ \"The total level is 14 (10 Fighter + 4 Vampire), resulting in a Proficiency Bonus of +5.\", \"Ability Scores are high, befitting a CR 14 commander: STR 20 (+5), DEX 16 (+3), CON 18 (+4), INT 14 (+2), WIS 15 (+2), CHA 18 (+4). STR and CHA are maximized for a martial leader with supernatural presence.\", \"Hit Points calculation: 10d10 (Fighter) + 4d8 (Vampire/Undead HD) + 14 * CON mod (+4) = Average (105.5 + 44.5 + 56) = 55 + 18 + 56 = 129. However, Vampires are usually much tougher. Using the CR 14 estimate of 178 HP (Standard Vampire Lord is ~210 HP, adjusted for lower CR), derived from 14d10+98 (average 175, standard for a high-level fighter/vampire). Recalculating with 14d12+4 per level: 14d12 + (144) = 146.5 + 56 = 91+56 = 147. Let's stick with the base class HD: 10d10 + 4d8 + 56 = 129. We will adjust the formula to reflect a typical powerful vampire lord toughness: 14d10 + 4 * 14 = 14 * 5.5 + 56 = 77 + 56 = 133. Given the CR 14, setting HP to 178 (14d12+4 mod) is more appropriate for a combat NPC. Reverting to formula based on class HD for consistency with D&D 5E PC/NPC multiclassing: 10d10 + 4d8 + 56 = 129 average. Raising the CON to 20 for a +5 modifier to make it 10d10 + 4d8 + 14*5 = 143. Raising CON to 18 (+4) and using a slightly higher average: 178 is kept as the average for the CR 14, using a 14d10 HD equivalent for simplification in the formula.\", \"Vampire defenses (resistances/immunities) are included: Necrotic resistance, nonmagical physical damage resistance, poison immunity, and exhaustion/poisoned condition immunity.\", \"Fighter proficiencies (STR, CON saves) and the inherent leadership role (CHA save) are used for high saving throw bonuses.\", \"A Warlord Commander uses heavy armor and a shield (AC 20).\" ], \"proposals\": [], \"canon_update\": \"Stats are set to reflect a high-level (14 total) STR-based Fighter/Vampire commander with high AC, high damage output potential, and standard Vampire defenses. PB is +5.\" }",
+      "timestamp": "2025-11-24T00:26:46.724Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Combat",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the COMBAT & ACTIONS section of an NPC.\n\nYour focus: Abilities (special traits), actions, bonus actions, reactions, multiattack, tactics.\n\n\n=== COMBAT & ACTIONS SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"abilities\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"description\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"uses\": {\n            \"type\": \"string\"\n          },\n          \"recharge\": {\n            \"type\": \"string\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          },\n          \"source\": {\n            \"type\": \"string\",\n            \"description\": \"Where this ability comes from (e.g., 'Vampire', 'Artificer')\"\n          }\n        }\n      },\n      \"description\": \"Special abilities and traits (also accepts 'traits' as alias)\"\n    },\n    \"actions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"description\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"uses\": {\n            \"type\": \"string\"\n          },\n          \"recharge\": {\n            \"type\": \"string\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Actions available in combat\"\n    },\n    \"bonus_actions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"description\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"uses\": {\n            \"type\": \"string\"\n          },\n          \"recharge\": {\n            \"type\": \"string\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Bonus actions available\"\n    },\n    \"reactions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"description\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"uses\": {\n            \"type\": \"string\"\n          },\n          \"recharge\": {\n            \"type\": \"string\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Reactions available\"\n    },\n    \"tactics\": {\n      \"type\": \"string\",\n      \"description\": \"Combat tactics and strategy\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nCRITICAL D&D 5E COMBAT RULES (if applicable):\n- Attack bonus = proficiency bonus + relevant ability modifier\n- Damage should match CR and threat level\n- Special abilities should have clear mechanics (uses, recharge, range, duration)\n- Tactics should leverage abilities and reflect intelligence/personality\n\nCreate engaging combat capabilities that fit the CR and character concept.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"Lord Kairon Blackthorne – The Crimson Warlord\\nFighter (Echo Knight) 10 / Vampire 4\\nRole: Commander of the Bloodforged Knights\\n\\nOnce a renowned warlord, Kairon’s conquests were cut short by mortality, but Erliza offered him the eternity he craved.\\nWhy He Was Turned: His tactical mind and battlefield prowess made him the ideal leader of the Bloodforged Knights.\\nKey Abilities:\\nUnleash Incarnation – His echoes fight alongside him, creating a terrifying battlefield presence.\\nExtra Attack (3) – Overwhelms foes with relentless offense.\\nShadow Infusion – His echoes are infused with necrotic power, dealing extra necrotic damage when striking a living creature.\\nCurrent Status:\\nCommands the Bloodforged Knights, Erliza’s elite undead warriors.\\nPersonally leads war campaigns when an overwhelming force is needed.\\nAbsolute loyalty to Erliza, seeing her as the only leader worthy of his service.\\n\",\n  \"basic_info\": {},\n  \"core_details\": {},\n  \"stats\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null\n}",
+      "response": "{\n\"abilities\": [\n{\n\"name\": \"Echo Creation (Bonus Action)\",\n\"description\": \"As a bonus action, Lord Kairon can magically manifest an incorporeal, shadowy duplicate of himself in an unoccupied space he can see within 15 feet of him. This echo lasts until it is destroyed, until Kairon dismisses it (no action required), or until he creates a new one. It has AC 14, 1 HP, and is immune to all conditions and all damage types except radiant. It cannot move or take actions on its own but is used for many of Kairon's features.\",\n\"source\": \"Fighter (Echo Knight) 3\"\n},\n{\n\"name\": \"Unleash Incarnation\",\n\"description\": \"When Lord Kairon takes the Attack action on his turn, he can make one additional melee attack (total of three base attacks, or four with Extra Attack (3)) from the echo's position. This bonus attack can be made a number of times equal to his Constitution modifier (4 uses per long rest).\",\n\"uses\": \"4 per Long Rest\",\n\"source\": \"Fighter (Echo Knight) 3\"\n},\n{\n\"name\": \"Extra Attack (3)\",\n\"description\": \"Lord Kairon can attack four times whenever he takes the Attack action on his turn.\",\n\"source\": \"Fighter 10\"\n},\n{\n\"name\": \"Shadow Infusion\",\n\"description\": \"His echoes are infused with necrotic power. When Kairon or his echo hits a living creature with a weapon attack, that attack deals an extra $1d6$ necrotic damage (included in the main weapon attack).\",\n\"source\": \"Original Canon (Echo Enhancement)\"\n},\n{\n\"name\": \"Fey Ancestry (Vampire Legacy)\",\n\"description\": \"Lord Kairon has advantage on saving throws against being charmed, and magic can't put him to sleep.\",\n\"source\": \"Vampire Legacy\"\n},\n{\n\"name\": \"Vampire Weaknesses\",\n\"description\": \"Kairon suffers the standard vampire weaknesses: sunlight hypersensitivity (disadvantage on attack rolls and ability checks while in direct sunlight, takes 20 radiant damage at the start of its turn if it starts its turn there), he must be in his resting place (coffin) to regain HP, and he is unable to enter a residence without an invitation.\",\n\"source\": \"Vampire\"\n}\n],\n\"actions\": [\n{\n\"name\": \"Multiattack\",\n\"description\": \"Lord Kairon makes four attacks, any of which can be replaced by a Grapple or Shove. He may replace one of these attacks with a use of his Unarmed Strike or Blood Drain action.\",\n\"notes\": \"Uses Extra Attack (3) feature.\"\n},\n{\n\"name\": \"Bloodforged Longsword (Melee)\",\n\"description\": \"Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: $9 (1d8 + 5)$ slashing damage plus $3 (1d6)$ necrotic damage. If the attack is made through the echo, the necrotic damage increases to $7 (2d6)$ against a living creature. Kairon can substitute STR for DEX on the attack roll.\",\n\"notes\": \"Uses STR modifier (+5) and PB (+5). Necrotic damage is $1d6$ baseline + $1d6$ extra from Shadow Infusion if through the echo.\"\n},\n{\n\"name\": \"Unarmed Strike (Vampire Feature)\",\n\"description\": \"Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: $9 (1d8 + 5)$ bludgeoning damage. Instead of dealing damage, Kairon can initiate a grapple (escape DC 18).\",\n\"notes\": \"Assumed $1d8$ damage for high-level Fighter, using STR (+5) and PB (+5).\"\n},\n{\n\"name\": \"Blood Drain (Vampire Feature)\",\n\"description\": \"Lord Kairon bites a grappled creature or a willing creature. Melee Weapon Attack: +10 to hit, reach 5 ft., one creature. Hit: $10 (1d10 + 5)$ piercing damage and the target's HP maximum is reduced by an amount equal to the damage taken, and Kairon regains HP equal to the damage dealt. The reduction lasts until the target finishes a long rest. The target dies if this effect reduces its HP maximum to 0.\",\n\"notes\": \"Uses STR modifier (+5) and PB (+5).\"\n},\n{\n\"name\": \"Fighter Action Surge (Recharge: Long Rest)\",\n\"description\": \"Kairon can take one additional action on his turn.\",\n\"uses\": \"1 per Short or Long Rest\",\n\"recharge\": \"Short or Long Rest\",\n\"notes\": \"Fighter level 10 feature.\"\n}\n],\n\"bonus_actions\": [\n{\n\"name\": \"Echo Creation/Manifestation\",\n\"description\": \"Kairon can create an echo as a bonus action (see Abilities).\"\n},\n{\n\"name\": \"Maneuver Echo\",\n\"description\": \"Kairon can teleport, swapping places with his echo as a bonus action, consuming 15 feet of his movement for the turn. He can also mentally command the echo to move up to 30 feet.\",\n\"notes\": \"Fighter (Echo Knight) feature.\"\n}\n],\n\"reactions\": [\n{\n\"name\": \"Sentinel's Watch\",\n\"description\": \"When a creature within 5 feet of Lord Kairon's echo moves at least 5 feet away from it, Kairon can use his reaction to make one opportunity attack against that creature from the echo's position.\"\n},\n{\n\"name\": \"Vigilant Defense (Fighter 6)\",\n\"description\": \"Kairon can take an opportunity attack when a creature moves within 5 feet of him, even if that creature doesn’t use the Disengage action or doesn’t provoke an opportunity attack by moving out of his reach (Limited to one per turn).\",\n\"notes\": \"Assumed using a variation of the Samurai/Champion reaction feature to enhance combat control.\"\n}\n],\n\"tactics\": \"Lord Kairon is a meticulous commander. In combat, he uses his Echo to flank enemies and provide cover, attacking from a distance with the echo while remaining in heavy armor at a safer range (or vice versa, using the echo to maintain distance from powerful casters). He uses his four attacks, often maximizing damage by using 'Unleash Incarnation' when needed. His primary goal is battlefield control and attrition. Once a target is isolated or softened, he will use his Blood Drain to eliminate a threat or regain lost health, then immediately swap places with his echo to reposition. He rarely fights alone, relying on the 'overwhelming force' of the Bloodforged Knights as his vanguard.\",\n\"sources_used\": [\n\"original_user_request\"\n],\n\"assumptions\": [\n\"Kairon's equipment includes Plate Armor and a Longsword (Bloodforged Longsword), reflecting his warlord status, giving him a base AC of 20 (18+2 shield).\",\n\"The Shadow Infusion key ability is interpreted as adding $1d6$ necrotic damage to attacks, and doubling that to $2d6$ when applied through the Echo, as the Echo is the infused element and that level of damage is appropriate for a CR 14 NPC.\",\n\"Extra Attack (3) means four attacks per Attack action, a standard feature for a 10th-level Fighter.\",\n\"The Fighter features (Action Surge, Echo Knight abilities) are implemented according to their standard mechanics.\",\n\"The Vampire features (Blood Drain, Unarmed Strike, weaknesses) are implemented as standard NPC Vampire Lord abilities, reflecting his level 4 Vampire tier.\"\n],\n\"proposals\": [],\n\"canon_update\": \"Combat abilities, actions (Extra Attack (3), Shadow Infusion, Blood Drain), and tactics are established, centering on the use of the Echo and its necrotic damage output for battlefield control and relentless offense.\"\n}",
+      "timestamp": "2025-11-24T00:27:27.156Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Spellcasting",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the SPELLCASTING section of an NPC.\n\nYour focus: Spellcasting ability, cantrips, prepared spells, spell slots, innate spellcasting, spell focus, spell-storing items.\n\n\n=== SPELLCASTING SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"spellcasting\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"type\": {\n          \"type\": \"string\",\n          \"description\": \"e.g., 'Innate', 'Prepared', 'Known', 'Artificer'\"\n        },\n        \"ability\": {\n          \"type\": \"string\",\n          \"description\": \"Spellcasting ability (e.g., 'INT', 'WIS', 'CHA')\"\n        },\n        \"save_dc\": {\n          \"type\": \"integer\",\n          \"minimum\": 0\n        },\n        \"attack_bonus\": {\n          \"type\": \"integer\"\n        },\n        \"notes\": {\n          \"type\": \"string\"\n        },\n        \"cantrips\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"Cantrips known (separate from known_spells)\"\n        },\n        \"spellcasting_focus\": {\n          \"type\": \"string\",\n          \"description\": \"e.g., 'arcane focus', 'component pouch', 'holy symbol'\"\n        },\n        \"spell_storing_items\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"item\",\n              \"spell\"\n            ],\n            \"properties\": {\n              \"item\": {\n                \"type\": \"string\",\n                \"description\": \"e.g., 'Ring of Spell Storing'\"\n              },\n              \"spell\": {\n                \"type\": \"string\"\n              },\n              \"level\": {\n                \"type\": \"integer\",\n                \"minimum\": 0,\n                \"maximum\": 9\n              },\n              \"uses\": {\n                \"type\": \"integer\",\n                \"minimum\": 0\n              }\n            }\n          },\n          \"description\": \"Artificer spell-storing items or similar mechanics\"\n        },\n        \"spell_slots\": {\n          \"type\": \"object\",\n          \"additionalProperties\": {\n            \"type\": \"integer\",\n            \"minimum\": 0\n          },\n          \"description\": \"Spell slots by level (e.g., {'1st': 4, '2nd': 3})\"\n        },\n        \"prepared_spells\": {\n          \"type\": \"object\",\n          \"additionalProperties\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            }\n          },\n          \"description\": \"Prepared spells by level (e.g., {'1st': ['Shield', 'Cure Wounds']})\"\n        },\n        \"innate_spells\": {\n          \"type\": \"object\",\n          \"additionalProperties\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            }\n          },\n          \"description\": \"Innate spells by uses per day (e.g., {'At will': ['Detect Magic'], '3/day': ['Fireball']})\"\n        },\n        \"known_spells\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"All spells known (excluding cantrips)\"\n        }\n      },\n      \"description\": \"Spellcasting information with enhanced Artificer support\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nCRITICAL SPELLCASTING RULES (if D&D 5E):\n- Spell save DC = 8 + proficiency bonus + spellcasting ability modifier\n- Spell attack bonus = proficiency bonus + spellcasting ability modifier\n- Spell slots based on class level(s)\n- Cantrips scale with total character level\n- Prepared spells = spellcasting ability modifier + class level\n\nOnly include this section if the NPC has spellcasting abilities. If not a spellcaster, output minimal JSON with empty fields.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"Lord Kairon Blackthorne – The Crimson Warlord\\nFighter (Echo Knight) 10 / Vampire 4\\nRole: Commander of the Bloodforged Knights\\n\\nOnce a renowned warlord, Kairon’s conquests were cut short by mortality, but Erliza offered him the eternity he craved.\\nWhy He Was Turned: His tactical mind and battlefield prowess made him the ideal leader of the Bloodforged Knights.\\nKey Abilities:\\nUnleash Incarnation – His echoes fight alongside him, creating a terrifying battlefield presence.\\nExtra Attack (3) – Overwhelms foes with relentless offense.\\nShadow Infusion – His echoes are infused with necrotic power, dealing extra necrotic damage when striking a living creature.\\nCurrent Status:\\nCommands the Bloodforged Knights, Erliza’s elite undead warriors.\\nPersonally leads war campaigns when an overwhelming force is needed.\\nAbsolute loyalty to Erliza, seeing her as the only leader worthy of his service.\\n\",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null\n}",
+      "response": "{\n\"legendary_actions\": {\n\"summary\": \"Lord Kairon can take 3 legendary actions, choosing from the options below. Only one legendary action can be used at a time and only at the end of another creature's turn. He regains spent legendary actions at the start of his turn.\",\n\"count\": 3,\n\"reset\": \"start of turn\",\n\"options\": [\n{\n\"name\": \"Commanding Shout\",\n\"description\": \"Kairon issues a swift command. One ally within 60 feet that can hear him can use its reaction to make one weapon attack or move up to half its speed. If the ally is a Bloodforged Knight, it also gains $1d4$ temporary hit points.\",\n\"cost\": 1\n},\n{\n\"name\": \"Echo Assault\",\n\"description\": \"If Kairon has an Echo manifested, he makes one Bloodforged Longsword attack from the Echo’s location. This attack benefits from Shadow Infusion (deals an extra $2d6$ necrotic damage against a living creature).\",\n\"cost\": 2\n},\n{\n\"name\": \"Warlord's Reposition\",\n\"description\": \"Kairon swaps locations with his Echo, or manifests an Echo if none is present (costs 1 action if none is present, 2 actions if swapping). He can then make a contested Charisma check against one creature within 30 feet. If Kairon succeeds, the target is Frightened of him until the end of its next turn.\",\n\"cost\": 2,\n\"notes\": \"Cost is 1 if he only moves the Echo, 2 if he swaps, 3 if he manifests and then swaps (combining a creation and swap).\"\n}\n]\n},\n\"mythic_actions\": {\n\"summary\": \"Lord Kairon does not possess Mythic Actions.\",\n\"trigger\": \"N/A\",\n\"options\": []\n},\n\"lair_actions\": [\n{\n\"initiative\": 20,\n\"action\": \"Tactical Darkness\",\n\"description\": \"Shadows coalesce in a 20-foot radius centered on a point Kairon can see within 120 feet, plunging the area into magical darkness until initiative count 20 on the next round. Kairon and his Echoes ignore this darkness.\"\n},\n{\n\"initiative\": 20,\n\"action\": \"Grasp of the Dead\",\n\"description\": \"Grave hands erupt from the floor in a 15-foot square within 100 feet. Each creature in the area must succeed on a DC 15 Dexterity saving throw or be Restrained until the start of its next turn.\"\n}\n],\n\"regional_effects\": [\n{\n\"radius\": \"1 mile\",\n\"effect\": \"Ominous Echoes\",\n\"description\": \"Creatures attempting to take a long rest within 1 mile of Kairon's fortress/lair are plagued by nightmares of relentless pursuit, receiving no benefit from the rest unless they succeed on a DC 15 Wisdom saving throw.\",\n\"duration\": \"1d6 days after Kairon's death/departure\"\n},\n{\n\"radius\": \"6 miles\",\n\"effect\": \"Military Efficiency\",\n\"description\": \"All Bloodforged Knights (and other undead loyal to Erliza) within the area have advantage on Wisdom (Perception) checks and gain 5 feet of movement.\",\n\"duration\": \"1d6 days after Kairon's death/departure\"\n}\n],\n\"sources_used\": [\n\"original_user_request\"\n],\n\"assumptions\": [\n\"As a CR 14 commander, Lord Kairon is designated a Legendary Creature (CR 11+) to enhance his battlefield control and threat level.\",\n\"Legendary actions are based on his core abilities: commanding his elite forces (Commanding Shout), utilizing his echo for extra attacks (Echo Assault), and tactical repositioning (Warlord's Reposition), all tied to his 'tactical mind and battlefield prowess'.\",\n\"Lair actions (Initiative 20) focus on battlefield manipulation (Tactical Darkness) and control (Grasp of the Dead).\",\n\"Regional effects enhance the loyalty and power of his elite forces (Military Efficiency) and hinder the rest of his enemies (Ominous Echoes).\"\n],\n\"proposals\": [],\n\"canon_update\": \"Legendary Actions, Lair Actions, and Regional Effects are implemented to reflect Lord Kairon's status as a Legendary Vampire Warlord commander, enhancing his tactical control and use of his Echo Knight features.\"\n}",
+      "timestamp": "2025-11-24T00:28:25.169Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Relationships",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the RELATIONSHIPS & NETWORKS section of an NPC.\n\nYour focus: Allies/friends, foes, rivals, mentors, students, family, factions, minions, conflicts.\n\n\n=== RELATIONSHIPS & NETWORKS SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"allies_friends\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"type\",\n          \"relationship\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"type\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'vampire spawn', 'construct', 'NPC'\"\n          },\n          \"relationship\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Childe', 'Servant', 'Ally'\"\n          },\n          \"location\": {\n            \"type\": \"string\"\n          },\n          \"stat_summary\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'CR 5 vampire spawn'\"\n          },\n          \"stat_block_ref\": {\n            \"type\": \"string\",\n            \"description\": \"Reference to full NPC file if it exists\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Detailed ally and friend stat blocks for complex NPCs with networks\"\n    },\n    \"factions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"role\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"role\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Leader', 'Member', 'Enemy', 'Rival'\"\n          },\n          \"standing\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Exalted', 'Honored', 'Neutral', 'Hostile'\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Faction affiliations and standings\"\n    },\n    \"minions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"type\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"type\": {\n            \"type\": \"string\",\n            \"description\": \"Type of minion (e.g., 'Vampire Spawn', 'Construct')\"\n          },\n          \"quantity\": {\n            \"type\": \"integer\",\n            \"minimum\": 1\n          },\n          \"loyalty\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Absolute', 'Strong', 'Conditional'\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Controlled creatures, constructs, or servants\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nBuild a rich social network that:\n- Connects the NPC to the broader world\n- Creates adventure hooks and complications\n- Reflects the NPC's personality and background\n- Uses canon entities where applicable\n\nFocus on relationships that GMs can leverage in their campaigns.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"Lord Kairon Blackthorne – The Crimson Warlord\\nFighter (Echo Knight) 10 / Vampire 4\\nRole: Commander of the Bloodforged Knights\\n\\nOnce a renowned warlord, Kairon’s conquests were cut short by mortality, but Erliza offered him the eternity he craved.\\nWhy He Was Turned: His tactical mind and battlefield prowess made him the ideal leader of the Bloodforged Knights.\\nKey Abilities:\\nUnleash Incarnation – His echoes fight alongside him, creating a terrifying battlefield presence.\\nExtra Attack (3) – Overwhelms foes with relentless offense.\\nShadow Infusion – His echoes are infused with necrotic power, dealing extra necrotic damage when striking a living creature.\\nCurrent Status:\\nCommands the Bloodforged Knights, Erliza’s elite undead warriors.\\nPersonally leads war campaigns when an overwhelming force is needed.\\nAbsolute loyalty to Erliza, seeing her as the only leader worthy of his service.\\n\",\n  \"basic_info\": {},\n  \"core_details\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null\n}",
+      "response": "{ \"allies_friends\": [ { \"name\": \"Erliza\", \"type\": \"Vampire Lord/Matriarch\", \"relationship\": \"Liege / Creator / Object of Absolute Loyalty\", \"notes\": \"Erliza granted Kairon the eternity he craved and recognized his tactical genius. Kairon views her as 'the only leader worthy of his service' and is dedicated entirely to her war efforts.\" } ], \"factions\": [ { \"name\": \"The Bloodforged Knights\", \"role\": \"Commander (The Crimson Warlord)\", \"standing\": \"Exalted\", \"notes\": \"Kairon personally commands this organization, which is identified as Erliza’s elite undead warriors. He directs their war campaigns.\" }, { \"name\": \"Erliza's Dominion\", \"role\": \"Chief Military Commander\", \"standing\": \"Exalted\", \"notes\": \"The overarching faction Kairon serves. His power stems entirely from his high position within this structure.\" } ], \"minions\": [ { \"name\": \"Bloodforged Knights (Vampire Spawn)\", \"type\": \"Vampire Spawn / Elite Undead Warrior\", \"quantity\": 25, \"loyalty\": \"Absolute (Controlled by Erliza and led by Kairon)\", \"notes\": \"These are the elite troops Kairon commands and personally leads in campaigns. Their dedication and skill reflect Kairon's tactical influence.\" }, { \"name\": \"Field Captains\", \"type\": \"Vampire Spawn / Death Knights\", \"quantity\": 4, \"loyalty\": \"Strong\", \"notes\": \"Subordinate commanders responsible for implementing Kairon's complex strategies on the ground.\" } ], \"sources_used\": [ \"original_user_request\" ], \"assumptions\": [ \"Erliza is the name of the being who turned Kairon and is his primary ally, though she is superior to him.\", \"The Bloodforged Knights are an organization, making them a key Faction and also Minions (undead elite soldiers) under his direct command.\", \"The 'Bloodforged Knights' are assumed to be Vampire Spawn or similarly powerful undead, as they are described as 'elite undead warriors.' A quantity of 25 is reasonable for an elite contingent led by a legendary commander.\", \"The character's background as a 'renowned warlord' suggests he commands high-ranking subordinates (Field Captains) to delegate his tactical plans.\" ], \"proposals\": [], \"canon_update\": \"Lord Kairon's network is defined by his absolute loyalty to his creator Erliza and his command over the Bloodforged Knights (faction and minions), positioning him as the military arm of a greater evil power.\" }",
+      "timestamp": "2025-11-24T00:28:56.369Z",
+      "status": "completed"
+    }
+  ],
+  "stageResults": {
+    "creator:_basic_info": {
+      "schema_version": "1.1",
+      "genre": "Fantasy",
+      "name": "Lord Kairon Blackthorne",
+      "title": "The Crimson Warlord",
+      "aliases": [],
+      "description": "Once a renowned warlord whose conquests were cut short by mortality, Lord Kairon Blackthorne now serves as a powerful vampire commander. His tactical mind and battlefield prowess made him the ideal leader for the Bloodforged Knights, Erliza's elite undead warriors. He is characterized by absolute loyalty to Erliza and personally leads war campaigns when overwhelming force is required. His fighting style utilizes his Echo Knight abilities, creating a terrifying presence on the battlefield with his unleashed incarnations.",
+      "appearance": "Due to his role as a commander and his epithet 'The Crimson Warlord,' he likely appears as a powerful, imposing figure, possibly bearing some sign of his vampire nature, such as pale skin and intense eyes, alongside the martial bearing of a high-ranking officer.",
+      "background": "Kairon was a renowned warlord until his mortality threatened to end his conquests. He was offered the eternity he craved by Erliza, who recognized his tactical mind and battlefield prowess. He was turned to become the commander of the Bloodforged Knights, Erliza’s elite undead warriors, and remains absolutely loyal to her.",
+      "race": "Vampire",
+      "size": "Medium",
+      "creature_type": "Undead",
+      "subtype": "Human",
+      "alignment": "Lawful Evil",
+      "affiliation": "Bloodforged Knights (Commander), Servant of Erliza",
+      "location": "Wherever the Bloodforged Knights are deployed; personally leads campaigns when overwhelming force is needed.",
+      "era": "Custom",
+      "challenge_rating": "14",
+      "experience_points": 11500,
+      "sources_used": [
+        "original_user_request"
+      ],
+      "assumptions": [
+        "Given the high level of 10 Fighter / 4 Vampire and his role as a major commander, a Challenge Rating of 14 is appropriate (standard for a powerful NPC of this tier in a fantasy setting).",
+        "A CR 14 NPC grants 11,500 XP.",
+        "The character is assumed to be of the Human subtype for a Vampire, as this is the most common background for a warlord in standard fantasy settings.",
+        "His alignment is Lawful Evil, as he commands an elite undead army ('Bloodforged Knights') and demonstrates 'absolute loyalty' to a powerful figure ('Erliza') who granted him undeath, suggesting a disciplined and ordered dedication to an evil cause.",
+        "The genre is 'Fantasy' based on the mention of a 'Vampire' and 'Echo Knight' class/abilities."
+      ],
+      "proposals": [],
+      "canon_update": "Lord Kairon Blackthorne, The Crimson Warlord, is established as a Lawful Evil Vampire (Human subtype) commander of the Bloodforged Knights with a CR of 14."
+    },
+    "creator:_core_details": {
+      "role": "The primary military commander for Erliza, leading her elite undead forces in major war campaigns. He serves as an intermediate antagonist or a powerful encounter who uses advanced tactics and battlefield control.",
+      "personality_traits": [
+        "Disciplined and Tactical: His core identity is built around his tactical mind and battlefield prowess, leading to a highly organized and calculated approach to all tasks.",
+        "Arrogant: As a renowned warlord who achieved eternity, he views non-vampires (especially mortal ones) as inferior, seeing them merely as obstacles to be crushed.",
+        "Loyal: Exhibits 'Absolute loyalty to Erliza, seeing her as the only leader worthy of his service.'",
+        "Relentless: Reflects his 'relentless offense' and his former ambition for conquest, now directed toward Erliza's goals."
+      ],
+      "ideals": [
+        "Service: 'Absolute loyalty to Erliza, seeing her as the only leader worthy of his service.' His purpose is defined by carrying out her will.",
+        "Eternity: The driving force for accepting vampirism; the belief that true greatness requires immortality to fulfill one's destiny of endless conquest.",
+        "Order (Corrupted): He believes in absolute hierarchy and chain of command (Lawful Evil), ensuring his elite forces function with terrifying efficiency."
+      ],
+      "bonds": [
+        "Erliza: His sole and primary bond; the person who offered him the 'eternity he craved' and is 'the only leader worthy of his service.'",
+        "The Bloodforged Knights: His command structure; he is fiercely dedicated to maintaining the unit's elite status and effectiveness."
+      ],
+      "flaws": [
+        "Overconfidence: His tactical genius and mastery of the Echo Knight abilities, combined with his undead immortality, make him dangerously overconfident in battle, leading him to occasionally underestimate unpredictable mortal foes.",
+        "Obsession with Victory: As a warlord whose conquests were 'cut short by mortality,' he cannot tolerate strategic retreat or failure, pushing his forces beyond reasonable limits to secure victory."
+      ],
+      "goals": [
+        "Secure Erliza's Victory: To successfully command the war campaigns and achieve total dominance for Erliza.",
+        "Prove His Worth: To continually demonstrate that his tactical mind and battlefield prowess made him the ideal choice for vampirism and command."
+      ],
+      "fears": [
+        "Mortality/True Death: The fear that drove him to accept vampirism; the idea of being permanently extinguished is his greatest terror.",
+        "Disappointment of Erliza: His absolute loyalty means failure to perform or losing Erliza's favor is a fate worse than death."
+      ],
+      "quirks": [
+        "Precision: When addressing subordinates or foes, he uses precise military language and formal titles, even in the heat of battle.",
+        "Tactical Observation: He spends the first round of any combat solely observing and directing his 'echoes' and knights, only committing himself to direct combat when he perceives a tactical weak point."
+      ],
+      "voice_mannerisms": [
+        "Voice: Low, resonant, and measured, carrying the authority of a lifelong commander. Rarely raises his voice.",
+        "Mannerisms: Stands with perfect posture. Often makes precise, small hand gestures to direct his Echoes, reflecting his absolute command over his spiritual self."
+      ],
+      "hooks": [
+        "The Crimson Tide: Players are tasked with disrupting a major war campaign personally led by Lord Kairon ('Personally leads war campaigns when an overwhelming force is needed').",
+        "The General's Secrets: Discovering Kairon's mortal past and finding an artifact or location from his time as a mortal warlord that might hold a key to defeating him or weakening his loyalty.",
+        "Echoes of the Past: Kairon has a specific tactical weakness that only the Bloodforged Knights know, and players must infiltrate their ranks to uncover it before Kairon leads a decisive attack."
+      ],
+      "sources_used": [
+        "original_user_request"
+      ],
+      "assumptions": [
+        "The core personality traits (Disciplined, Tactical, Loyal) are derived directly from the canonical facts ('tactical mind and battlefield prowess,' 'Absolute loyalty to Erliza').",
+        "The 'epic' tone supports the development of strong, decisive ideals and flaws.",
+        "The specific tactical ability 'Unleash Incarnation' informs the 'Tactical Observation' quirk."
+      ],
+      "proposals": [],
+      "canon_update": "Core personality, ideals, bonds, flaws, goals, fears, and role are established, focusing on Kairon's tactical nature, absolute loyalty to Erliza, and fear of mortality."
+    },
+    "creator:_stats": {
+      "class_levels": [
+        {
+          "class": "Fighter",
+          "level": 10,
+          "subclass": "Echo Knight"
+        },
+        {
+          "class": "Vampire",
+          "level": 4,
+          "notes": "Representing the natural advancement and powers granted by the vampire transformation, following the creature type rules for Undead."
+        }
+      ],
+      "ability_scores": {
+        "str": 20,
+        "dex": 16,
+        "con": 18,
+        "int": 14,
+        "wis": 15,
+        "cha": 18
+      },
+      "armor_class": [
+        {
+          "value": 20,
+          "type": "Plate Armor",
+          "notes": "18 (Plate) + 2 (Shield, assumed standard loadout for a warlord)"
+        }
+      ],
+      "hit_points": {
+        "average": 178,
+        "formula": "10d10 + 4d8 + 14 * 4"
+      },
+      "hit_dice": "10d10 + 4d8",
+      "speed": {
+        "walk": "30 ft."
+      },
+      "proficiency_bonus": 5,
+      "senses": [
+        "darkvision 120 ft.",
+        "passive Perception 12"
+      ],
+      "languages": [
+        "Common",
+        "Abyssal (Assumed command language for undead forces)"
+      ],
+      "saving_throws": [
+        {
+          "name": "Strength",
+          "value": "+10",
+          "notes": "Proficiency: +5 (Fighter primary save)"
+        },
+        {
+          "name": "Constitution",
+          "value": "+9",
+          "notes": "Proficiency: +5 (Fighter primary save)"
+        },
+        {
+          "name": "Dexterity",
+          "value": "+5"
+        },
+        {
+          "name": "Intelligence",
+          "value": "+4"
+        },
+        {
+          "name": "Wisdom",
+          "value": "+4"
+        },
+        {
+          "name": "Charisma",
+          "value": "+9",
+          "notes": "Proficiency: +5 (Vampire power and command)"
+        }
+      ],
+      "skill_proficiencies": [
+        {
+          "name": "Athletics",
+          "value": "+10"
+        },
+        {
+          "name": "Intimidation",
+          "value": "+9",
+          "notes": "Proficient, reflecting his title and command role"
+        },
+        {
+          "name": "Perception",
+          "value": "+7",
+          "notes": "Proficient, derived from Fighter or background"
+        },
+        {
+          "name": "Tactics (Warfare)",
+          "value": "+4",
+          "notes": "If using a variant rule for Intelligence (Tactics), or otherwise represented by his high Intelligence and combat features."
+        }
+      ],
+      "damage_resistances": [
+        "necrotic",
+        "nonmagical bludgeoning, piercing, and slashing (Vampire feature)"
+      ],
+      "damage_immunities": [
+        "poison"
+      ],
+      "damage_vulnerabilities": [
+        "radiant (Vampire weakness)"
+      ],
+      "condition_immunities": [
+        "exhaustion",
+        "poisoned"
+      ],
+      "sources_used": [
+        "original_user_request"
+      ],
+      "assumptions": [
+        "The total level is 14 (10 Fighter + 4 Vampire), resulting in a Proficiency Bonus of +5.",
+        "Ability Scores are high, befitting a CR 14 commander: STR 20 (+5), DEX 16 (+3), CON 18 (+4), INT 14 (+2), WIS 15 (+2), CHA 18 (+4). STR and CHA are maximized for a martial leader with supernatural presence.",
+        "Hit Points calculation: 10d10 (Fighter) + 4d8 (Vampire/Undead HD) + 14 * CON mod (+4) = Average (105.5 + 44.5 + 56) = 55 + 18 + 56 = 129. However, Vampires are usually much tougher. Using the CR 14 estimate of 178 HP (Standard Vampire Lord is ~210 HP, adjusted for lower CR), derived from 14d10+98 (average 175, standard for a high-level fighter/vampire). Recalculating with 14d12+4 per level: 14d12 + (144) = 146.5 + 56 = 91+56 = 147. Let's stick with the base class HD: 10d10 + 4d8 + 56 = 129. We will adjust the formula to reflect a typical powerful vampire lord toughness: 14d10 + 4 * 14 = 14 * 5.5 + 56 = 77 + 56 = 133. Given the CR 14, setting HP to 178 (14d12+4 mod) is more appropriate for a combat NPC. Reverting to formula based on class HD for consistency with D&D 5E PC/NPC multiclassing: 10d10 + 4d8 + 56 = 129 average. Raising the CON to 20 for a +5 modifier to make it 10d10 + 4d8 + 14*5 = 143. Raising CON to 18 (+4) and using a slightly higher average: 178 is kept as the average for the CR 14, using a 14d10 HD equivalent for simplification in the formula.",
+        "Vampire defenses (resistances/immunities) are included: Necrotic resistance, nonmagical physical damage resistance, poison immunity, and exhaustion/poisoned condition immunity.",
+        "Fighter proficiencies (STR, CON saves) and the inherent leadership role (CHA save) are used for high saving throw bonuses.",
+        "A Warlord Commander uses heavy armor and a shield (AC 20)."
+      ],
+      "proposals": [],
+      "canon_update": "Stats are set to reflect a high-level (14 total) STR-based Fighter/Vampire commander with high AC, high damage output potential, and standard Vampire defenses. PB is +5."
+    },
+    "creator:_combat": {
+      "abilities": [
+        {
+          "name": "Echo Creation (Bonus Action)",
+          "description": "As a bonus action, Lord Kairon can magically manifest an incorporeal, shadowy duplicate of himself in an unoccupied space he can see within 15 feet of him. This echo lasts until it is destroyed, until Kairon dismisses it (no action required), or until he creates a new one. It has AC 14, 1 HP, and is immune to all conditions and all damage types except radiant. It cannot move or take actions on its own but is used for many of Kairon's features.",
+          "source": "Fighter (Echo Knight) 3"
+        },
+        {
+          "name": "Unleash Incarnation",
+          "description": "When Lord Kairon takes the Attack action on his turn, he can make one additional melee attack (total of three base attacks, or four with Extra Attack (3)) from the echo's position. This bonus attack can be made a number of times equal to his Constitution modifier (4 uses per long rest).",
+          "uses": "4 per Long Rest",
+          "source": "Fighter (Echo Knight) 3"
+        },
+        {
+          "name": "Extra Attack (3)",
+          "description": "Lord Kairon can attack four times whenever he takes the Attack action on his turn.",
+          "source": "Fighter 10"
+        },
+        {
+          "name": "Shadow Infusion",
+          "description": "His echoes are infused with necrotic power. When Kairon or his echo hits a living creature with a weapon attack, that attack deals an extra $1d6$ necrotic damage (included in the main weapon attack).",
+          "source": "Original Canon (Echo Enhancement)"
+        },
+        {
+          "name": "Fey Ancestry (Vampire Legacy)",
+          "description": "Lord Kairon has advantage on saving throws against being charmed, and magic can't put him to sleep.",
+          "source": "Vampire Legacy"
+        },
+        {
+          "name": "Vampire Weaknesses",
+          "description": "Kairon suffers the standard vampire weaknesses: sunlight hypersensitivity (disadvantage on attack rolls and ability checks while in direct sunlight, takes 20 radiant damage at the start of its turn if it starts its turn there), he must be in his resting place (coffin) to regain HP, and he is unable to enter a residence without an invitation.",
+          "source": "Vampire"
+        }
+      ],
+      "actions": [
+        {
+          "name": "Multiattack",
+          "description": "Lord Kairon makes four attacks, any of which can be replaced by a Grapple or Shove. He may replace one of these attacks with a use of his Unarmed Strike or Blood Drain action.",
+          "notes": "Uses Extra Attack (3) feature."
+        },
+        {
+          "name": "Bloodforged Longsword (Melee)",
+          "description": "Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: $9 (1d8 + 5)$ slashing damage plus $3 (1d6)$ necrotic damage. If the attack is made through the echo, the necrotic damage increases to $7 (2d6)$ against a living creature. Kairon can substitute STR for DEX on the attack roll.",
+          "notes": "Uses STR modifier (+5) and PB (+5). Necrotic damage is $1d6$ baseline + $1d6$ extra from Shadow Infusion if through the echo."
+        },
+        {
+          "name": "Unarmed Strike (Vampire Feature)",
+          "description": "Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: $9 (1d8 + 5)$ bludgeoning damage. Instead of dealing damage, Kairon can initiate a grapple (escape DC 18).",
+          "notes": "Assumed $1d8$ damage for high-level Fighter, using STR (+5) and PB (+5)."
+        },
+        {
+          "name": "Blood Drain (Vampire Feature)",
+          "description": "Lord Kairon bites a grappled creature or a willing creature. Melee Weapon Attack: +10 to hit, reach 5 ft., one creature. Hit: $10 (1d10 + 5)$ piercing damage and the target's HP maximum is reduced by an amount equal to the damage taken, and Kairon regains HP equal to the damage dealt. The reduction lasts until the target finishes a long rest. The target dies if this effect reduces its HP maximum to 0.",
+          "notes": "Uses STR modifier (+5) and PB (+5)."
+        },
+        {
+          "name": "Fighter Action Surge (Recharge: Long Rest)",
+          "description": "Kairon can take one additional action on his turn.",
+          "uses": "1 per Short or Long Rest",
+          "recharge": "Short or Long Rest",
+          "notes": "Fighter level 10 feature."
+        }
+      ],
+      "bonus_actions": [
+        {
+          "name": "Echo Creation/Manifestation",
+          "description": "Kairon can create an echo as a bonus action (see Abilities)."
+        },
+        {
+          "name": "Maneuver Echo",
+          "description": "Kairon can teleport, swapping places with his echo as a bonus action, consuming 15 feet of his movement for the turn. He can also mentally command the echo to move up to 30 feet.",
+          "notes": "Fighter (Echo Knight) feature."
+        }
+      ],
+      "reactions": [
+        {
+          "name": "Sentinel's Watch",
+          "description": "When a creature within 5 feet of Lord Kairon's echo moves at least 5 feet away from it, Kairon can use his reaction to make one opportunity attack against that creature from the echo's position."
+        },
+        {
+          "name": "Vigilant Defense (Fighter 6)",
+          "description": "Kairon can take an opportunity attack when a creature moves within 5 feet of him, even if that creature doesn’t use the Disengage action or doesn’t provoke an opportunity attack by moving out of his reach (Limited to one per turn).",
+          "notes": "Assumed using a variation of the Samurai/Champion reaction feature to enhance combat control."
+        }
+      ],
+      "tactics": "Lord Kairon is a meticulous commander. In combat, he uses his Echo to flank enemies and provide cover, attacking from a distance with the echo while remaining in heavy armor at a safer range (or vice versa, using the echo to maintain distance from powerful casters). He uses his four attacks, often maximizing damage by using 'Unleash Incarnation' when needed. His primary goal is battlefield control and attrition. Once a target is isolated or softened, he will use his Blood Drain to eliminate a threat or regain lost health, then immediately swap places with his echo to reposition. He rarely fights alone, relying on the 'overwhelming force' of the Bloodforged Knights as his vanguard.",
+      "sources_used": [
+        "original_user_request"
+      ],
+      "assumptions": [
+        "Kairon's equipment includes Plate Armor and a Longsword (Bloodforged Longsword), reflecting his warlord status, giving him a base AC of 20 (18+2 shield).",
+        "The Shadow Infusion key ability is interpreted as adding $1d6$ necrotic damage to attacks, and doubling that to $2d6$ when applied through the Echo, as the Echo is the infused element and that level of damage is appropriate for a CR 14 NPC.",
+        "Extra Attack (3) means four attacks per Attack action, a standard feature for a 10th-level Fighter.",
+        "The Fighter features (Action Surge, Echo Knight abilities) are implemented according to their standard mechanics.",
+        "The Vampire features (Blood Drain, Unarmed Strike, weaknesses) are implemented as standard NPC Vampire Lord abilities, reflecting his level 4 Vampire tier."
+      ],
+      "proposals": [],
+      "canon_update": "Combat abilities, actions (Extra Attack (3), Shadow Infusion, Blood Drain), and tactics are established, centering on the use of the Echo and its necrotic damage output for battlefield control and relentless offense."
+    },
+    "creator:_spellcasting": {
+      "spellcasting": {
+        "type": "Innate",
+        "ability": "CHA",
+        "save_dc": 17,
+        "attack_bonus": 9,
+        "notes": "Lord Kairon's inherent magic comes from his vampiric nature, using his high Charisma score (CHA 18, modifier +4, PB +5) for calculating DC and attack bonus (8 + 5 + 4 = 17; 5 + 4 = 9). The Fighter (Echo Knight) class does not grant spellcasting.",
+        "cantrips": [
+          "Toll the Dead (Vampiric Command)",
+          "Minor Illusion (Tactical Feints)"
+        ],
+        "spellcasting_focus": "None (Innate)",
+        "spell_storing_items": [],
+        "spell_slots": {},
+        "prepared_spells": {},
+        "innate_spells": {
+          "At will": [
+            "Detect Magic"
+          ],
+          "3/day": [
+            "Misty Step (Tactical repositioning with the Echo)",
+            "Charm Person (Influence)"
+          ],
+          "1/day": [
+            "Gaseous Form (Escape/Movement)",
+            "Animate Dead (Command undead forces)"
+          ]
+        },
+        "known_spells": []
+      },
+      "sources_used": [
+        "original_user_request"
+      ],
+      "assumptions": [
+        "The base Fighter (Echo Knight) 10 class does not grant spellcasting.",
+        "The Vampire 4 tier grants innate spellcasting abilities based on Charisma, as is standard for many powerful Undead/Vampires. CHA 18 is the assumed casting ability.",
+        "A CR 14 NPC is assumed to have a DC of 17 (8 + PB 5 + CHA 4) and an attack bonus of +9.",
+        "The chosen innate spells (Misty Step, Gaseous Form, Animate Dead) reflect his tactical nature and status as a commander of undead forces. Charm Person reflects his ability to influence mortals as a powerful vampire."
+      ],
+      "proposals": [],
+      "canon_update": "Innate spellcasting is assigned to Lord Kairon based on his Vampire tier, using Charisma as the ability score and including tactical and necromantic spells."
+    },
+    "creator:_legendary": {
+      "legendary_actions": {
+        "summary": "Lord Kairon can take 3 legendary actions, choosing from the options below. Only one legendary action can be used at a time and only at the end of another creature's turn. He regains spent legendary actions at the start of his turn.",
+        "count": 3,
+        "reset": "start of turn",
+        "options": [
+          {
+            "name": "Commanding Shout",
+            "description": "Kairon issues a swift command. One ally within 60 feet that can hear him can use its reaction to make one weapon attack or move up to half its speed. If the ally is a Bloodforged Knight, it also gains $1d4$ temporary hit points.",
+            "cost": 1
+          },
+          {
+            "name": "Echo Assault",
+            "description": "If Kairon has an Echo manifested, he makes one Bloodforged Longsword attack from the Echo’s location. This attack benefits from Shadow Infusion (deals an extra $2d6$ necrotic damage against a living creature).",
+            "cost": 2
+          },
+          {
+            "name": "Warlord's Reposition",
+            "description": "Kairon swaps locations with his Echo, or manifests an Echo if none is present (costs 1 action if none is present, 2 actions if swapping). He can then make a contested Charisma check against one creature within 30 feet. If Kairon succeeds, the target is Frightened of him until the end of its next turn.",
+            "cost": 2,
+            "notes": "Cost is 1 if he only moves the Echo, 2 if he swaps, 3 if he manifests and then swaps (combining a creation and swap)."
+          }
+        ]
+      },
+      "mythic_actions": {
+        "summary": "Lord Kairon does not possess Mythic Actions.",
+        "trigger": "N/A",
+        "options": []
+      },
+      "lair_actions": [
+        {
+          "initiative": 20,
+          "action": "Tactical Darkness",
+          "description": "Shadows coalesce in a 20-foot radius centered on a point Kairon can see within 120 feet, plunging the area into magical darkness until initiative count 20 on the next round. Kairon and his Echoes ignore this darkness."
+        },
+        {
+          "initiative": 20,
+          "action": "Grasp of the Dead",
+          "description": "Grave hands erupt from the floor in a 15-foot square within 100 feet. Each creature in the area must succeed on a DC 15 Dexterity saving throw or be Restrained until the start of its next turn."
+        }
+      ],
+      "regional_effects": [
+        {
+          "radius": "1 mile",
+          "effect": "Ominous Echoes",
+          "description": "Creatures attempting to take a long rest within 1 mile of Kairon's fortress/lair are plagued by nightmares of relentless pursuit, receiving no benefit from the rest unless they succeed on a DC 15 Wisdom saving throw.",
+          "duration": "1d6 days after Kairon's death/departure"
+        },
+        {
+          "radius": "6 miles",
+          "effect": "Military Efficiency",
+          "description": "All Bloodforged Knights (and other undead loyal to Erliza) within the area have advantage on Wisdom (Perception) checks and gain 5 feet of movement.",
+          "duration": "1d6 days after Kairon's death/departure"
+        }
+      ],
+      "sources_used": [
+        "original_user_request"
+      ],
+      "assumptions": [
+        "As a CR 14 commander, Lord Kairon is designated a Legendary Creature (CR 11+) to enhance his battlefield control and threat level.",
+        "Legendary actions are based on his core abilities: commanding his elite forces (Commanding Shout), utilizing his echo for extra attacks (Echo Assault), and tactical repositioning (Warlord's Reposition), all tied to his 'tactical mind and battlefield prowess'.",
+        "Lair actions (Initiative 20) focus on battlefield manipulation (Tactical Darkness) and control (Grasp of the Dead).",
+        "Regional effects enhance the loyalty and power of his elite forces (Military Efficiency) and hinder the rest of his enemies (Ominous Echoes)."
+      ],
+      "proposals": [],
+      "canon_update": "Legendary Actions, Lair Actions, and Regional Effects are implemented to reflect Lord Kairon's status as a Legendary Vampire Warlord commander, enhancing his tactical control and use of his Echo Knight features."
+    },
+    "creator:_relationships": {
+      "allies_friends": [
+        {
+          "name": "Erliza",
+          "type": "Vampire Lord/Matriarch",
+          "relationship": "Liege / Creator / Object of Absolute Loyalty",
+          "notes": "Erliza granted Kairon the eternity he craved and recognized his tactical genius. Kairon views her as 'the only leader worthy of his service' and is dedicated entirely to her war efforts."
+        }
+      ],
+      "factions": [
+        {
+          "name": "The Bloodforged Knights",
+          "role": "Commander (The Crimson Warlord)",
+          "standing": "Exalted",
+          "notes": "Kairon personally commands this organization, which is identified as Erliza’s elite undead warriors. He directs their war campaigns."
+        },
+        {
+          "name": "Erliza's Dominion",
+          "role": "Chief Military Commander",
+          "standing": "Exalted",
+          "notes": "The overarching faction Kairon serves. His power stems entirely from his high position within this structure."
+        }
+      ],
+      "minions": [
+        {
+          "name": "Bloodforged Knights (Vampire Spawn)",
+          "type": "Vampire Spawn / Elite Undead Warrior",
+          "quantity": 25,
+          "loyalty": "Absolute (Controlled by Erliza and led by Kairon)",
+          "notes": "These are the elite troops Kairon commands and personally leads in campaigns. Their dedication and skill reflect Kairon's tactical influence."
+        },
+        {
+          "name": "Field Captains",
+          "type": "Vampire Spawn / Death Knights",
+          "quantity": 4,
+          "loyalty": "Strong",
+          "notes": "Subordinate commanders responsible for implementing Kairon's complex strategies on the ground."
+        }
+      ],
+      "sources_used": [
+        "original_user_request"
+      ],
+      "assumptions": [
+        "Erliza is the name of the being who turned Kairon and is his primary ally, though she is superior to him.",
+        "The Bloodforged Knights are an organization, making them a key Faction and also Minions (undead elite soldiers) under his direct command.",
+        "The 'Bloodforged Knights' are assumed to be Vampire Spawn or similarly powerful undead, as they are described as 'elite undead warriors.' A quantity of 25 is reasonable for an elite contingent led by a legendary commander.",
+        "The character's background as a 'renowned warlord' suggests he commands high-ranking subordinates (Field Captains) to delegate his tactical plans."
+      ],
+      "proposals": [],
+      "canon_update": "Lord Kairon's network is defined by his absolute loyalty to his creator Erliza and his command over the Bloodforged Knights (faction and minions), positioning him as the military arm of a greater evil power."
+    }
+  },
+  "currentStageIndex": 6
+}

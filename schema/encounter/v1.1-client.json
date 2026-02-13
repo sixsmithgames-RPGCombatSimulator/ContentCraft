@@ -1,0 +1,317 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schema/encounter/v1.1-client.json",
+  "title": "Encounter Schema v1.1 (Client)",
+  "description": "Comprehensive schema for D&D 5E combat encounters with terrain, tactics, event clocks, and rewards",
+  "type": "object",
+  "required": [
+    "title",
+    "description",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1",
+      "description": "Schema version number (must be '1.1')"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "description": "Encounter title (e.g., 'Ambush at Thornwall Bridge')"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 50,
+      "description": "Narrative description of the encounter setup and context"
+    },
+    "encounter_type": {
+      "type": "string",
+      "enum": ["combat", "social", "exploration", "puzzle", "chase", "hybrid"],
+      "description": "Primary type of encounter"
+    },
+    "difficulty_tier": {
+      "type": "string",
+      "enum": ["trivial", "easy", "medium", "hard", "deadly", "boss"],
+      "description": "Encounter difficulty for the target party"
+    },
+    "party_level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "Average party level this encounter is designed for"
+    },
+    "party_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Number of party members"
+    },
+    "xp_budget": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total XP budget for the encounter (before multiplier)"
+    },
+    "adjusted_xp": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Adjusted XP after encounter multiplier"
+    },
+    "expected_duration_rounds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 30,
+      "description": "Expected combat duration in rounds"
+    },
+    "location": {
+      "type": "string",
+      "description": "Narrative location where the encounter takes place"
+    },
+    "setting_context": {
+      "type": "string",
+      "description": "Brief narrative context — why this encounter is happening"
+    },
+    "objectives": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Win conditions and goals for the party"
+    },
+    "failure_conditions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "What happens if the party fails"
+    },
+    "monsters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "count", "cr"],
+        "properties": {
+          "name": { "type": "string", "description": "Monster/creature name" },
+          "count": { "type": "integer", "minimum": 1, "description": "Number of this creature" },
+          "cr": { "type": "string", "description": "Challenge Rating (e.g., '1/4', '2', '10')" },
+          "xp": { "type": "integer", "minimum": 0, "description": "XP per creature" },
+          "ac": { "type": "integer", "description": "Armor Class" },
+          "hp": { "type": "integer", "description": "Hit Points" },
+          "speed": { "type": "string", "description": "Movement speeds (e.g., '30 ft., fly 60 ft.')" },
+          "role": { "type": "string", "description": "Tactical role (e.g., 'brute', 'controller', 'skirmisher', 'artillery')" },
+          "positioning": { "type": "string", "description": "Starting position and formation" },
+          "key_abilities": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Key abilities/attacks to highlight"
+          },
+          "source": { "type": "string", "description": "Source book reference (e.g., 'Monster Manual p.123')" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Monsters and creatures in the encounter"
+    },
+    "npcs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": "string", "description": "Ally, enemy, neutral, or bystander" },
+          "affiliation": { "type": "string" },
+          "motivation": { "type": "string" },
+          "stat_reference": { "type": "string", "description": "Reference to stat block or canon NPC" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Named NPCs involved in the encounter"
+    },
+    "terrain": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string", "description": "Overall terrain description" },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "effect"],
+            "properties": {
+              "name": { "type": "string" },
+              "effect": { "type": "string", "description": "Mechanical effect on combat" },
+              "dc": { "type": "integer", "description": "DC for interaction if applicable" },
+              "cover": { "type": "string", "enum": ["none", "half", "three-quarters", "full"] },
+              "movement_cost": { "type": "string", "description": "Movement modifier (e.g., 'difficult terrain', '2x cost')" }
+            }
+          }
+        },
+        "lighting": {
+          "type": "string",
+          "enum": ["bright", "dim", "dark", "magical-darkness"],
+          "description": "Lighting conditions"
+        },
+        "elevation": { "type": "string", "description": "Elevation changes and high ground" },
+        "weather": { "type": "string", "description": "Weather conditions affecting combat" },
+        "map_dimensions": { "type": "string", "description": "Approximate map size (e.g., '60x40 ft.')" }
+      },
+      "description": "Terrain and environmental details"
+    },
+    "hazards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "impact"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "impact": { "type": "string", "description": "Mechanical impact (damage, condition, etc.)" },
+          "dc": { "type": "integer" },
+          "damage": { "type": "string", "description": "Damage dealt (e.g., '2d6 fire')" },
+          "trigger": { "type": "string" },
+          "mitigation": { "type": "string" }
+        }
+      },
+      "description": "Environmental hazards"
+    },
+    "traps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "trigger", "effect", "dc"],
+        "properties": {
+          "name": { "type": "string" },
+          "trigger": { "type": "string" },
+          "effect": { "type": "string" },
+          "dc": { "type": "integer" },
+          "damage": { "type": "string" },
+          "disarm": { "type": "string", "description": "How to disarm (skill, DC, method)" },
+          "detection_dc": { "type": "integer", "description": "DC to detect the trap" }
+        }
+      },
+      "description": "Traps and hidden dangers"
+    },
+    "tactics": {
+      "type": "object",
+      "properties": {
+        "opening_moves": { "type": "string", "description": "How enemies begin the encounter" },
+        "focus_targets": { "type": "string", "description": "Priority targeting strategy" },
+        "resource_usage": { "type": "string", "description": "When enemies use limited abilities/spells" },
+        "fallback_plan": { "type": "string", "description": "What enemies do when losing" },
+        "morale": { "type": "string", "description": "When enemies flee or surrender" },
+        "coordination": { "type": "string", "description": "How different enemy types work together" }
+      },
+      "description": "Enemy tactical behavior"
+    },
+    "event_clock": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string", "description": "Overview of the event timeline" },
+        "phases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "trigger", "outcome"],
+            "properties": {
+              "name": { "type": "string" },
+              "trigger": { "type": "string", "description": "What triggers this phase (round number, HP threshold, action, etc.)" },
+              "outcome": { "type": "string", "description": "What happens when triggered" },
+              "round": { "type": "integer", "description": "Round number if time-based" }
+            }
+          }
+        }
+      },
+      "description": "Event clock / escalation phases"
+    },
+    "treasure": {
+      "type": "object",
+      "properties": {
+        "currency": {
+          "type": "object",
+          "properties": {
+            "cp": { "type": "integer", "minimum": 0 },
+            "sp": { "type": "integer", "minimum": 0 },
+            "ep": { "type": "integer", "minimum": 0 },
+            "gp": { "type": "integer", "minimum": 0 },
+            "pp": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "rarity": { "type": "string" },
+              "description": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        },
+        "boons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Non-material rewards (favors, information, reputation, etc.)"
+        }
+      },
+      "description": "Rewards and loot"
+    },
+    "consequences": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "string", "description": "Narrative outcome on success" },
+        "failure": { "type": "string", "description": "Narrative outcome on failure" },
+        "partial": { "type": "string", "description": "Narrative outcome on partial success" },
+        "story_hooks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Future plot threads this encounter creates"
+        }
+      },
+      "description": "Narrative consequences and story progression"
+    },
+    "scaling": {
+      "type": "object",
+      "properties": {
+        "easier": { "type": "string", "description": "How to make the encounter easier" },
+        "harder": { "type": "string", "description": "How to make the encounter harder" },
+        "party_size_adjust": { "type": "string", "description": "Adjustments for different party sizes" }
+      },
+      "description": "Scaling guidance for different parties"
+    },
+    "rule_base": {
+      "type": "string",
+      "description": "Rule system used (e.g., '2024RAW', '2014RAW')"
+    },
+    "sources_used": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Canon sources referenced"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Assumptions made during generation"
+    },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" } },
+          "rule_impact": { "type": "string" },
+          "recommendation": { "type": "string" }
+        }
+      },
+      "description": "Questions/choices for the user"
+    },
+    "canon_update": {
+      "type": "string",
+      "description": "Summary of canon changes from this encounter"
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "GM notes and additional guidance"
+    }
+  },
+  "additionalProperties": true
+}

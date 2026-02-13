@@ -1,0 +1,37 @@
+{
+  "sessionId": "gen-1763066246031-lgy85ex9j",
+  "createdAt": "2025-11-13T20:37:26.031Z",
+  "lastUpdatedAt": "2025-11-13T20:38:03.667Z",
+  "config": {
+    "type": "monster",
+    "prompt": "Frost Giant",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [],
+  "stageResults": {
+    "basic_info": {
+      "content_type": "npc",
+      "generation_mode": "hybrid",
+      "game_system": "D&D 5e",
+      "detail_level": "standard",
+      "special_requirements": [
+        "use 2024RAW rule base",
+        "allow cosmetic invention only",
+        "tone must be epic",
+        "must be Frost Giant race"
+      ],
+      "interpretation": "The user wants a standard character sheet or stat block for a Frost Giant, using D&D 5e rules (implied by 2024RAW flag). The content should have both mechanical (stat block) and narrative (epic tone) details, but mechanical invention is restricted."
+    }
+  },
+  "currentStageIndex": 0
+}

@@ -1,0 +1,76 @@
+# Docker Compose Configuration for Development
+#
+# © 2025 Sixsmith Games. All rights reserved.
+# This software and associated documentation files are proprietary and confidential.
+#
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+version: '3.8'
+
+services:
+  # MongoDB Database (same as production)
+  mongodb:
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-dev-data:/data/db
+
+  # Development Server (with hot reload)
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: server-dev
+    container_name: contentcraft-server-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-changeme}@mongodb:27017/${MONGO_DATABASE:-dndgen}?authSource=admin
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4-turbo-preview}
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source code for hot reload
+      - ./src:/app/src:cached
+      - ./tsconfig.server.json:/app/tsconfig.server.json:cached
+      - /app/node_modules
+    networks:
+      - contentcraft-network
+    depends_on:
+      - mongodb
+    command: npm run dev:server
+
+  # Development Client (with hot reload)
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: client-dev
+    container_name: contentcraft-client-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
+    volumes:
+      # Mount source code for hot reload
+      - ./client/src:/app/client/src:cached
+      - ./client/public:/app/client/public:cached
+      - ./client/index.html:/app/client/index.html:cached
+      - ./client/vite.config.ts:/app/client/vite.config.ts:cached
+      - ./client/tsconfig.json:/app/client/tsconfig.json:cached
+      - /app/client/node_modules
+    networks:
+      - contentcraft-network
+    command: npm run dev:client
+
+networks:
+  contentcraft-network:
+    driver: bridge
+
+volumes:
+  mongodb-dev-data:
+    driver: local

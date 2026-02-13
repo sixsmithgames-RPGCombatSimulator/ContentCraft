@@ -1,0 +1,23 @@
+{
+  "sessionId": "gen-1762091583590-7ruxqasff",
+  "createdAt": "2025-11-02T13:53:03.590Z",
+  "lastUpdatedAt": "2025-11-02T13:53:03.590Z",
+  "config": {
+    "type": "npc",
+    "prompt": "Once a High Elf architect in Westphal, Goran Varus is now a level 9 vampire (previous level 5 fighter) and oversees the mining line beneath Castle Bloodforge that leads to the mountains in a very long tunnel (dozens of miles). Remade by his vampire sire into a Blueblood vampire, he retains elven intellect and precise martial discipline (fighter level 5, Arcane archer, archery fighting style, binding shot and bursting shot all per 2024RAW), directing the extraction and refinement of ore that feeds the vampire queen’s bloodsteel forges that supply her planned war machine. His measured calm conceals a relentless hunger for flawless order and absolute obedience. He carries a +1 Longbow, bloodforge bracers of flying daggers, three silver daggers, and 5 bloodforged sleep arrows (DC 16 Wis). He is never seen without his Bloodforged Mantle of Spell Resistance and Bloodforged Protection Ring, both faintly pulsing with necrotic life. His vampiric powers of celerity, misty escape, shape changer, children of the night and heightened regeneration serve him well but come a cost of vampiric weaknesses of lingering morality, weakend bonds, fear of divine wrath, energy vulnerability-acid and sunlight hypersensitivty",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [],
+  "stageResults": {},
+  "currentStageIndex": 0
+}

@@ -1,0 +1,460 @@
+{
+  "sessionId": "gen-1763658980979-yck63j3b9",
+  "createdAt": "2025-11-20T17:16:20.979Z",
+  "lastUpdatedAt": "2025-11-20T17:19:00.590Z",
+  "config": {
+    "type": "location",
+    "prompt": "We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\n",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Foundation",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 2/5: Foundation.\n\nYou are building upon the Purpose stage which determined the scale and type.\n\nYour task is to establish the structural foundation appropriate to the location's scale.\n\nFOR SIMPLE/MODERATE LOCATIONS (taverns, shops, small dungeons):\nFocus on these fields:\n- layout: Object describing overall arrangement\n  {\n    description: \"Overall layout description\",\n    dimensions: { length: \"60 ft\", width: \"40 ft\", height: \"15 ft\" } (if applicable),\n    levels: Array of level descriptions (e.g., [\"main floor\", \"cellar\", \"upstairs rooms\"])\n  }\n- spatial_organization: How spaces relate to each other (e.g., \"main room with kitchen in back, stairs to rooms above\")\n- access_points: Entrances/exits\n\nFOR COMPLEX/MASSIVE LOCATIONS (castles, cities, mega-dungeons):\nAdd advanced structural fields:\n- wings: Array of major sections (if applicable)\n- floors: Detailed floor structure with elevations\n- locking_points: Fixed structural anchors for geometry validation\n- load_bearing_walls: Critical structural elements\n- vertical_connections: Stairs, ramps, lifts\n- constraints: Binding rules for space generation\n\nMETADATA LINKING SYSTEM (ALL SCALES):\n- chunk_mesh_metadata: Object for seamless chunk integration (REQUIRED)\n  {\n    connection_protocol: \"How chunks connect\" (e.g., \"doors\", \"hallways\", \"adjacency\"),\n    boundary_markers: Array of connection points for other chunks,\n    spatial_hierarchy: \"How chunks nest\" (e.g., \"floor > wing > room\" or \"area > sub-area > feature\"),\n    coordinate_system: \"Coordinate reference\" (e.g., \"relative\", \"absolute grid\", \"narrative only\")\n  }\n\nThis metadata ensures chunks mesh perfectly when generated iteratively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"foundation\",\n  \"purpose\": {},\n  \"instructions\": \"Generate the structural foundation for this location (scale: moderate).\\n\\nKeep it simple - just layout, dimensions, and spatial organization. No complex topology needed.\\n\\nCRITICAL: Include chunk_mesh_metadata to enable seamless integration when spaces are generated iteratively.\",\n  \"canon_context\": \"Use factpack for architectural conventions.\"\n}",
+      "response": "{\n  \"layout\": {\n    \"description\": \"The First Floor (L2) occupies the full 360 ft x 300 ft footprint of the Central Keep base. It is dominated by the Great Hall, which is a massive, double-height space situated centrally. This hall is flanked by structured wings containing administrative offices and minor apartments.\",\n    \"dimensions\": {\n      \"length\": \"360 ft (East-West)\",\n      \"width\": \"300 ft (North-South)\",\n      \"height\": \"Average 25 ft (45 ft in Great Hall)\"\n    },\n    \"levels\": [\n      \"First Floor Keep (L2)\"\n    ]\n  },\n  \"wings\": [\n    {\n      \"name\": \"The Great Hall & Feast Chamber\",\n      \"position\": \"Central and South-facing\",\n      \"function\": \"Ceremonial space, hosting, and dining.\"\n    },\n    {\n      \"name\": \"East Council Wing\",\n      \"position\": \"Eastern side of the Keep\",\n      \"function\": \"Council rooms, map rooms, and minor administration offices.\"\n    },\n    {\n      \"name\": \"West Residential Wing\",\n      \"position\": \"Western side of the Keep\",\n      \"function\": \"Noble apartments and secure servant quarters.\"\n    },\n    {\n      \"name\": \"North Service Balcony\",\n      \"position\": \"North rear, overlooking the Courtyard\",\n      \"function\": \"Kitchen access, minstrel gallery, and secondary storage access.\"\n    }\n  ],\n  \"floors\": {\n    \"first_floor_keep\": {\n      \"elevation\": \"20 ft (above ground level)\",\n      \"zones\": [\n        \"Great Hall (Double Height)\",\n        \"East Wing Offices\",\n        \"West Wing Apartments\",\n        \"Minstrel Gallery\"\n      ]\n    }\n  },\n  \"locking_points\": [\n    {\n      \"id\": \"LP_GREAT_HALL_HEARTH\",\n      \"location\": \"North end of Great Hall\",\n      \"notes\": \"Large, fixed chimney structure, runs L1 through L3.\"\n    },\n    {\n      \"id\": \"LP_MAIN_STAIRWELL_L2\",\n      \"location\": \"South-center entry point from ground level\",\n      \"notes\": \"Termination of the Grand Staircase from L1.\"\n    },\n    {\n      \"id\": \"LP_SPIRE_BASE_ACCESS\",\n      \"location\": \"West Wall of Great Hall/West Wing\",\n      \"notes\": \"Secure entry point to the Central Spire structure.\"\n    }\n  ],\n  \"load_bearing_walls\": [\n    \"Keep Perimeter Walls (360x300 ft)\",\n    \"Pillar columns supporting the Great Hall roof and L3 floor (Internal)\",\n    \"Structural elements beneath the Great Hall supporting the main Hearth/Chimney\"\n  ],\n  \"vertical_connections\": [\n    \"Grand Staircase (Up from L1)\",\n    \"Private Staircase (Up to L3 sanctums/apartments)\",\n    \"Service Lift/Dumbwaiter (Kitchen access to L1 service hall)\",\n    \"Spire Access Staircase (Secured)\"\n  ],\n  \"constraints\": [\n    \"Great Hall must occupy at least 1/3 of the floor area and be double-height (20ft above L2 ceiling).\",\n    \"East Wing and West Wing must maintain symmetry around the Great Hall axis.\",\n    \"All service connections must be hidden from the Great Hall view.\"\n  ],\n  \"chunk_mesh_metadata\": {\n    \"connection_protocol\": \"Hallways and Secured Doors\",\n    \"boundary_markers\": [\n      \"Great_Hall_Perimeter\",\n      \"East_Wing_Corridor_Junction\",\n      \"West_Wing_Apartment_Access\"\n    ],\n    \"spatial_hierarchy\": \"Floor > Wing > Room\",\n    \"coordinate_system\": \"Absolute Grid (Relative to Keep South Face Center)\"\n  }\n}",
+      "timestamp": "2025-11-20T17:17:00.123Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 3/5: Spaces (Iterative Generation).\n\nYou are generating individual spaces (rooms, areas, chambers) one at a time.\n\nMETADATA LINKING FOR PERFECT MESHING:\nEach space you generate MUST include linking metadata to mesh perfectly with other chunks:\n- chunk_id: Unique identifier for this space chunk\n- mesh_anchors: Object describing connection points\n  {\n    connects_to: Array of space IDs this connects to (or \"pending\" for future chunks),\n    connection_types: Array of connection methods (e.g., \"door\", \"hallway\", \"stairs\", \"open\"),\n    boundary_interface: Precise description of where this chunk meets others,\n    spatial_relationship: How this chunk fits in the hierarchy (e.g., \"ground_floor.main_hall.alcove\")\n  }\n\nADAPTIVE COMPLEXITY BASED ON SCALE:\n\nFOR SIMPLE/MODERATE (taverns, small buildings):\n- id, name, purpose, description\n- dimensions: {length, width, height} (can be approximate)\n- connections: Array of {to: space_id, type: \"door\"|\"archway\"|\"stairs\"}\n- features: Array of notable features\n- lighting, inhabitants\n\nFOR COMPLEX/MASSIVE (castles, mega-dungeons):\nAdd geometry validation:\n- geometry: Object with precise dimensional data\n  {\n    dimensions: exact measurements,\n    position: coordinates or relative positioning,\n    locking_points: which structural anchors this attaches to,\n    walls: wall descriptions with load-bearing status\n  }\n- validation_notes: Array of geometry checks performed\n\nCONFLICT DETECTION:\nIf you detect issues (overlaps, impossible connections, dimension conflicts), add a proposal:\n{\n  question: \"Describe the specific conflict\",\n  options: [\"Solution 1\", \"Solution 2\", \"Solution 3\", \"Custom\"],\n  rule_impact: \"What constraint is violated\",\n  field_path: \"geometry.dimensions\",\n  severity: \"blocking\" | \"warning\"\n}\n\nReturn ONLY a JSON object with the space fields PLUS mesh_anchors and (if conflicts) proposals[].\nNo markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"castle_state\": {\n    \"existing_spaces\": [],\n    \"mesh_metadata\": {}\n  },\n  \"instructions\": \"Generate the next space with proper mesh_anchors for integration.\",\n  \"canon_context\": \"Use factpack for appropriate features, NPCs, and details.\"\n}",
+      "response": "{\n  \"id\": \"L2_KEEP_EAST_CORRIDOR\",\n  \"name\": \"East Wing Corridor of Oaths\",\n  \"location_type\": \"hallway\",\n  \"purpose\": \"Primary access spine for administration and council rooms; security patrol route.\",\n  \"description\": \"A long, shadowed corridor lined with tall, slender columns and heavy velvet drapes that mute all sound. Iron sconces fitted with cold blue Gloom Gems provide minimal light. Several heavy, reinforced oak doors line the eastern wall, leading to important chambers.\",\n  \"scale\": \"moderate\",\n  \"geometry\": {\n    \"dimensions\": {\n      \"length\": \"15 ft (East-West)\",\n      \"width\": \"250 ft (North-South)\",\n      \"height\": \"20 ft\"\n    },\n    \"position\": {\n      \"relative_to_keep\": \"Eastern circulation band, parallel to the Great Hall.\",\n      \"coordinates\": \"Starts approx. 240 ft East of the Keep's West wall, spans 15 ft East, centered North-South.\"\n    },\n    \"walls\": {\n      \"west_wall\": \"Load-bearing partition, shared with L2_KEEP_GREAT_HALL (4 large double doors open onto the corridor)\",\n      \"east_wall\": \"Inner load-bearing wall, separating corridor from East Wing Chambers (many secured doors)\",\n      \"north_south_ends\": \"Connects to North Service area and South Stair Landing area.\"\n    },\n    \"locking_points\": []\n  },\n  \"mesh_anchors\": {\n    \"chunk_id\": \"L2_KEEP_EAST_CORRIDOR\",\n    \"connects_to\": [\n      \"L2_KEEP_GREAT_HALL\",\n      \"L2_KEEP_SOUTH_LANDING\",\n      \"L2_KEEP_COUNCIL_CHAMBER\",\n      \"L3_KEEP_EAST_STAIRS\"\n    ],\n    \"connection_types\": [\n      \"Double Doors (West)\",\n      \"Archway (South)\",\n      \"Secured Door (East)\",\n      \"Stairs (North End)\"\n    ],\n    \"boundary_interface\": \"Runs parallel to the 240ft length of the Great Hall, providing main access to the East Wing.\",\n    \"spatial_relationship\": \"first_floor_keep.east_wing.corridor\"\n  },\n  \"features\": [\n    \"Recessed Guard Alcoves (four total, spaced evenly, currently empty but often used for patrols)\",\n    \"Heavy, sound-dampening velvet tapestries (provide visual cover; Conceal DC 15)\",\n    \"Stone flooring carved with strict heraldic oaths, reinforcing the regime's authority\"\n  ],\n  \"lighting\": \"Dim light (Magical Gloom Gems) everywhere, creating large pools of shadow along the walls.\",\n  \"inhabitants\": \"Elite Vampire Guards (patrol, 40% chance of encountering 1d4 guards), Administrative Thralls (transiting).\",\n  \"validation_notes\": [\n    \"Corridor width (15ft) is sufficient for circulation in the 60ft total East band, leaving 45ft depth for rooms to the East.\",\n    \"Corridor height (20ft) is consistent with the floor level and allows L3 structure above.\"\n  ]\n}",
+      "timestamp": "2025-11-20T17:17:19.289Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Details",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 4/5: Details.\n\nThe structure is now complete. Add rich narrative details that bring the location to life.\n\nFocus on these fields:\n- materials: Construction materials used\n- lighting_scheme: Overall lighting approach\n- atmosphere: Mood and feeling (2-3 sentences)\n- inhabitants: Who lives/works/visits here\n  {\n    permanent_residents: Array of {type, count},\n    notable_npcs: Array of {name, role, location},\n    visitors: Array of typical visitor types,\n    creatures: Array of any monsters/animals\n  }\n- encounter_areas: Spaces suitable for encounters\n  Each area: {\n    space_id: string,\n    encounter_type: \"combat\"|\"social\"|\"puzzle\"|\"trap\"|\"exploration\",\n    description: string,\n    tactical_notes: string (if combat)\n  }\n- secrets: Secret features (passages, rooms, compartments, doors)\n  Each secret: {type, location, description, how_to_find}\n- treasure_locations: Hidden or secured treasure spots\n- history: Narrative history (2-3 paragraphs)\n- current_events: What's happening now (plot hooks)\n- adventure_hooks: Array of adventure seeds\n- special_features: Unique or magical features\n- cinematic_walkthrough: Narrative walkthrough of exploring the location (3-4 paragraphs)\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"details\",\n  \"complete_structure\": {\n    \"purpose\": {},\n    \"foundation\": {},\n    \"spaces\": {}\n  },\n  \"instructions\": \"Add rich narrative details to this location.\\n\\nInclude:\\n- Materials, lighting, atmosphere\\n- Inhabitants and notable NPCs\\n- Encounter areas with tactical notes\\n- Secrets and treasure locations\\n- History and current events\\n- Adventure hooks\\n- A cinematic walkthrough that brings it to life\\n\\nMake it vivid and usable at the table.\",\n  \"canon_context\": \"Use factpack for NPCs, creatures, historical events, and plot hooks.\"\n}",
+      "response": null,
+      "timestamp": "2025-11-20T17:17:19.406Z",
+      "status": "pending"
+    },
+    {
+      "stage": "Spaces",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 3/5: Spaces (Iterative Generation).\n\nYou are generating individual spaces (rooms, areas, chambers) one at a time.\n\nMETADATA LINKING FOR PERFECT MESHING:\nEach space you generate MUST include linking metadata to mesh perfectly with other chunks:\n- chunk_id: Unique identifier for this space chunk\n- mesh_anchors: Object describing connection points\n  {\n    connects_to: Array of space IDs this connects to (or \"pending\" for future chunks),\n    connection_types: Array of connection methods (e.g., \"door\", \"hallway\", \"stairs\", \"open\"),\n    boundary_interface: Precise description of where this chunk meets others,\n    spatial_relationship: How this chunk fits in the hierarchy (e.g., \"ground_floor.main_hall.alcove\")\n  }\n\nADAPTIVE COMPLEXITY BASED ON SCALE:\n\nFOR SIMPLE/MODERATE (taverns, small buildings):\n- id, name, purpose, description\n- dimensions: {length, width, height} (can be approximate)\n- connections: Array of {to: space_id, type: \"door\"|\"archway\"|\"stairs\"}\n- features: Array of notable features\n- lighting, inhabitants\n\nFOR COMPLEX/MASSIVE (castles, mega-dungeons):\nAdd geometry validation:\n- geometry: Object with precise dimensional data\n  {\n    dimensions: exact measurements,\n    position: coordinates or relative positioning,\n    locking_points: which structural anchors this attaches to,\n    walls: wall descriptions with load-bearing status\n  }\n- validation_notes: Array of geometry checks performed\n\nCONFLICT DETECTION:\nIf you detect issues (overlaps, impossible connections, dimension conflicts), add a proposal:\n{\n  question: \"Describe the specific conflict\",\n  options: [\"Solution 1\", \"Solution 2\", \"Solution 3\", \"Custom\"],\n  rule_impact: \"What constraint is violated\",\n  field_path: \"geometry.dimensions\",\n  severity: \"blocking\" | \"warning\"\n}\n\nReturn ONLY a JSON object with the space fields PLUS mesh_anchors and (if conflicts) proposals[].\nNo markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"spaces\",\n  \"purpose\": {},\n  \"foundation\": {},\n  \"castle_state\": {\n    \"existing_spaces\": [],\n    \"mesh_metadata\": {}\n  },\n  \"instructions\": \"Generate the next space with proper mesh_anchors for integration.\",\n  \"canon_context\": \"Use factpack for appropriate features, NPCs, and details.\"\n}",
+      "response": "{\n  \"id\": \"L2_KEEP_COUNCIL_CHAMBER\",\n  \"name\": \"Council Chamber of the Scarlet Pact\",\n  \"location_type\": \"chamber_meeting\",\n  \"purpose\": \"Governing body meetings, high-stakes diplomacy, and internal judicial rulings.\",\n  \"description\": \"A long, richly furnished room dominated by a massive, crescent-shaped table of polished black granite. The East wall is windowless and carved with the history of the ruling family's bloodline. The atmosphere is formal and tense, perpetually prepared for an emergency siege or immediate execution.\",\n  \"scale\": \"large\",\n  \"geometry\": {\n    \"dimensions\": {\n      \"length\": \"45 ft (East-West)\",\n      \"width\": \"80 ft (North-South)\",\n      \"height\": \"20 ft\"\n    },\n    \"position\": {\n      \"relative_to_keep\": \"Easternmost interior space of the Keep's East Wing.\",\n      \"coordinates\": \"Located 15 ft East of the L2_KEEP_EAST_CORRIDOR, centered within the 150 ft N-S length of the corridor.\"\n    },\n    \"walls\": {\n      \"east_wall\": \"Outer Keep Wall (Load-bearing, windowless, carved with lore)\",\n      \"west_wall\": \"Load-bearing partition, shared with L2_KEEP_EAST_CORRIDOR (Main door)\",\n      \"north_south_walls\": \"Interior partitions leading to smaller chambers/offices.\"\n    },\n    \"locking_points\": [\n      \"LP_COUNCIL_MAIN_DOOR\",\n      \"LP_COUNCIL_VAULT\"\n    ]\n  },\n  \"mesh_anchors\": {\n    \"chunk_id\": \"L2_KEEP_COUNCIL_CHAMBER\",\n    \"connects_to\": [\n      \"L2_KEEP_EAST_CORRIDOR\",\n      \"L2_KEEP_EAST_ANTECHAMBER_N\",\n      \"L2_KEEP_EAST_ARCHIVE_S\"\n    ],\n    \"connection_types\": [\n      \"Heavy Secured Door (West)\",\n      \"Small Door (North, Pending)\",\n      \"Small Door (South, Pending)\"\n    ],\n    \"boundary_interface\": \"Utilizes the remaining 45ft width of the East Wing, leaving 35ft North and 35ft South for adjacent rooms along the corridor.\",\n    \"spatial_relationship\": \"first_floor_keep.east_wing.council_chamber\"\n  },\n  \"features\": [\n    \"Crescent-shaped black granite council table (seats 12, heavily enchanted)\",\n    \"Four ornate iron cages (for high-profile detainees or witnesses)\",\n    \"Ornate iron vault door concealed behind a movable tapestry (East Wall, contains vital documents)\"\n  ],\n  \"lighting\": \"Bright, magical light (Enchanted Silver Lanterns) during sessions; otherwise Dim Light from Gloom Gems.\",\n  \"inhabitants\": \"Vampire Council members, Captain Varkos (Warden), Thrall scribes.\",\n  \"validation_notes\": [\n    \"Dimensions (45x80 ft) fit perfectly within the 60ft E-W East Wing space (leaving 15ft for the corridor) and the 150ft N-S alignment of the Great Hall/Corridor.\"\n  ]\n}",
+      "timestamp": "2025-11-20T17:18:26.061Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Details",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D location. This is stage 4/5: Details.\n\nThe structure is now complete. Add rich narrative details that bring the location to life.\n\nFocus on these fields:\n- materials: Construction materials used\n- lighting_scheme: Overall lighting approach\n- atmosphere: Mood and feeling (2-3 sentences)\n- inhabitants: Who lives/works/visits here\n  {\n    permanent_residents: Array of {type, count},\n    notable_npcs: Array of {name, role, location},\n    visitors: Array of typical visitor types,\n    creatures: Array of any monsters/animals\n  }\n- encounter_areas: Spaces suitable for encounters\n  Each area: {\n    space_id: string,\n    encounter_type: \"combat\"|\"social\"|\"puzzle\"|\"trap\"|\"exploration\",\n    description: string,\n    tactical_notes: string (if combat)\n  }\n- secrets: Secret features (passages, rooms, compartments, doors)\n  Each secret: {type, location, description, how_to_find}\n- treasure_locations: Hidden or secured treasure spots\n- history: Narrative history (2-3 paragraphs)\n- current_events: What's happening now (plot hooks)\n- adventure_hooks: Array of adventure seeds\n- special_features: Unique or magical features\n- cinematic_walkthrough: Narrative walkthrough of exploring the location (3-4 paragraphs)\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"details\",\n  \"complete_structure\": {\n    \"purpose\": {},\n    \"foundation\": {},\n    \"spaces\": {}\n  },\n  \"instructions\": \"Add rich narrative details to this location.\\n\\nInclude:\\n- Materials, lighting, atmosphere\\n- Inhabitants and notable NPCs\\n- Encounter areas with tactical notes\\n- Secrets and treasure locations\\n- History and current events\\n- Adventure hooks\\n- A cinematic walkthrough that brings it to life\\n\\nMake it vivid and usable at the table.\",\n  \"canon_context\": \"Use factpack for NPCs, creatures, historical events, and plot hooks.\"\n}",
+      "response": "{\n  \"materials\": \"The corridor features a floor of polished **Black Basalt**, perpetually cool to the touch, and load-bearing walls of dark, rough-hewn granite. All doorways are framed by heavy, gilded iron and secured by thick **Reinforced Oak** doors. The western wall is almost entirely covered by thick, blood-red velvet tapestries, hung to dampen sound.\",\n  \"lighting_scheme\": \"The space is cast in **Dim Light** exclusively by iron sconces holding cold, blue **Gloom Gems**. The gems emit just enough light to prevent total darkness, but they amplify shadows, making the 15ft width feel cavernous and unsafe. No natural light ever penetrates this interior spine.\",\n  \"atmosphere\": \"The corridor is characterized by an **oppressive silence**. The heavy tapestries absorb sound, giving footsteps a flat, heavy quality. The air is still and cold, carrying a faint metallic tang of dried blood polish, instilling a mood of constant **vigilance and silent dread**—a place where official authority is rarely questioned.\",\n  \"inhabitants\": {\n    \"permanent_residents\": [\n      {\n        \"type\": \"Elite Vampire Guards (Watch)\",\n        \"count\": 6\n      },\n      {\n        \"type\": \"Administrative Thralls (Runners)\",\n        \"count\": 2\n      }\n    ],\n    \"notable_npcs\": [\n      {\n        \"name\": \"Captain Varkos\",\n        \"role\": \"Warden of the East Wing\",\n        \"location\": \"Council Chamber Antechamber (Secured Door off Corridor)\"\n      }\n    ],\n    \"visitors\": [\n      \"Ambassadors seeking an audience with the Council\",\n      \"Bound servants carrying archival material\",\n      \"Minor vassals reporting tax remittance\"\n    ],\n    \"creatures\": [\n      \"Shadows (40% chance of 1d2 near recessed alcoves)\"\n    ]\n  },\n  \"encounter_areas\": [\n    {\n      \"space_id\": \"L2_KEEP_EAST_CORRIDOR\",\n      \"encounter_type\": \"combat\",\n      \"description\": \"The 250ft long, 15ft wide corridor is ideal for a classic linear ambush or chase scene, offering limited lateral movement but long sight lines.\",\n      \"tactical_notes\": \"The Guard Alcoves provide half cover for ranged attackers. The long line of sight favors archers or spellcasters; players attempting stealth should utilize the velvet tapestries (DC 15 Dexterity (Stealth) check to press against them and move unnoticed). Patrols are frequent (check every 5 rounds).\"\n    },\n    {\n      \"space_id\": \"L2_KEEP_EAST_CORRIDOR\",\n      \"encounter_type\": \"trap\",\n      \"description\": \"A section of the basalt floor near the Council entrance contains ancient, barely visible pressure plates linked to iron portcullises that can seal the corridor.\",\n      \"tactical_notes\": \"DC 18 Perception check to spot the worn pressure plates. Failure triggers Portcullis Drop (DC 14 Reflex Save vs 4d6 damage and becoming trapped in a 20ft section of the corridor).\"\n    }\n  ],\n  \"secrets\": [\n    {\n      \"type\": \"Mechanism\",\n      \"location\": \"Western Wall (near Great Hall doors)\",\n      \"description\": \"A hidden lever concealed beneath a loose piece of the carved basalt floor allows the user to drop massive reinforced bars across the Great Hall's double doors, locking them instantly.\",\n      \"how_to_find\": \"DC 16 Investigation check, requiring the knowledge that this mechanism exists (or observation of Guard Captains using it).\"\n    },\n    {\n      \"type\": \"Compartment\",\n      \"location\": \"Tapestry behind a sconce\",\n      \"description\": \"A small, fireproof leather pouch containing a spare set of Council Chamber keys (or a low-ranking officer's security token) is sewn into the backing of a tapestry.\",\n      \"how_to_find\": \"DC 18 Perception check while examining the tapestries.\"\n    }\n  ],\n  \"treasure_locations\": [\n    {\n      \"location\": \"Guard Alcove (South)\",\n      \"description\": \"A forgotten patrol kit containing 10 ft of silver chain, 3 vials of Holy Water, and a small, non-magical **Signet Ring** bearing the seal of a disgraced noble family.\"\n    }\n  ],\n  \"history\": \"For centuries, the East Wing Corridor has been the administrative heart of the regime, witnessing every major political shift since the Keep's construction. Its current name, the 'Corridor of Oaths,' dates back two decades, when the paranoid Lord Malakor mandated that all high officials must physically touch the corridor's floor carvings—supposedly blessed with an anti-betrayal curse—upon entering council. The security measures and silent atmosphere are the result of several high-profile assassinations that took place here during the last blood-succession crisis.\",\n  \"current_events\": \"A high-stakes diplomatic meeting between two rival vampire houses is scheduled for the Council Chamber this evening. Security patrols have been doubled, and guards are operating under 'no tolerance' orders. Captain Varkos is stressed, having just received word that a minor noble vassal was seen loitering near the Great Hall doors, potentially scouting the defenses before the meeting.\",\n  \"adventure_hooks\": [\n    \"**The Diplomatic Pass:** The party must infiltrate the East Wing to recover an item or document vital to the Council meeting before the rival houses arrive, necessitating bypassing the trap plates and patrols.\",\n    \"**The Cursed Oaths:** The party is hired to retrieve a sample of the anti-betrayal floor carving dust for a ritual, which requires disabling the floor traps and chiseling the black basalt without alerting the guards.\",\n    \"**Retrieve the Messenger:** A friendly NPC carrying a plea for help was detained by Captain Varkos in the East Wing and must be quietly extracted before he is interrogated.\"\n  ],\n  \"special_features\": {\n    \"Anti-Betrayal Stone\": \"The basalt floor carvings are charged with a weak, ancient protective enchantment. Any non-vampire creature attempting to make a Charisma (Deception) check while standing on the carvings does so with Disadvantage.\",\n    \"The Echo-Dampening Drapes\": \"The heavy velvet tapestries on the West wall provide cover from noise. When combat begins, the noise is largely contained within the 15ft corridor width, imposing Disadvantage on Perception checks made by creatures outside the corridor to hear the commotion.\"\n  },\n  \"cinematic_walkthrough\": \"Stepping through the heavy double doors from the Great Hall, you are immediately plunged into an uneasy silence. The air is cold and heavy, a stark contrast to the vast space you just left. The Corridor of Oaths stretches out before you, an unnervingly straight, 250-foot funnel defined by low-hanging, sound-dampening velvet tapestries that line the wall to your left (West).\\n\\nOnly the cold, blue light of the Gloom Gems, mounted in grotesque iron sconces, cuts through the gloom. The light is harsh and unforgiving, turning the black basalt floor into a mirror that reflects your own cautious, flattened steps. The silence here is tactical; it forces you to rely entirely on sight, making the deep shadows along the eastern wall—where secured doors lead to the heart of the castle's bureaucracy—feel menacing and filled with unseen eyes.\\n\\nAs you walk the long passage, you pass recessed guard alcoves, their corners swallowed by darkness. The atmosphere is tense, suggesting that even a whisper would be a violation. This is the spine of authority, and you feel the weight of every oath ever taken (and broken) pressing down on you.\"\n}",
+      "timestamp": "2025-11-20T17:18:51.013Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Accuracy Refinement",
+      "chunkIndex": null,
+      "prompt": "You are refining a D&D location for maximum accuracy. This is stage 5/5: Accuracy Refinement.\n\nThe location is complete. Your task is to review and refine for accuracy, consistency, and usability.\n\nCRITICAL CHECKS:\n1. DIMENSIONAL ACCURACY: Verify all space dimensions fit within the overall footprint\n2. CONNECTION CONSISTENCY: Ensure all doors/passages reference existing space IDs\n3. VERTICAL ALIGNMENT: Check that staircases connect valid floor levels\n4. NARRATIVE CONSISTENCY: Ensure descriptions match the actual layout\n5. USABILITY: Add any missing tactical notes, encounter areas, or GM guidance\n\nFocus on these refinement fields:\n- accuracy_report: Object with findings\n  {\n    dimensional_issues: Array of dimension conflicts found,\n    connection_issues: Array of invalid connections,\n    vertical_issues: Array of stair/floor misalignments,\n    narrative_inconsistencies: Array of description mismatches,\n    recommendations: Array of suggested improvements\n  }\n- refined_spaces: Updated spaces array with corrections applied\n- refined_details: Updated details with corrections applied\n- gm_notes: Array of important notes for the GM about running this location\n- tactical_summary: Object with combat/encounter guidance\n  {\n    choke_points: Array of tactical bottlenecks,\n    escape_routes: Array of emergency exits,\n    defensible_positions: Array of strategic locations,\n    hazards: Array of environmental dangers\n  }\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"We are going to do a detailed build floor by floor of Castle Blood Forge. You are going to ensure consistency and dimensional alignment. The overview of each floor is below, I need you to start with the first floor of the castle at ground level. Overall footprint Outer walls: about 1,040 ft (east–west) by 840 ft (north–south). Enclosed area: roughly 874,000 sq ft, just over 20 acres inside the walls. This comfortably holds multiple large internal wings, courtyards, and yards. Curtain walls East wall: 1,040 ft long, 70 ft high (taller for sunrise shade). West wall: 1,040 ft long, 45 ft high (mountains already give shade). North wall: 840 ft long, 45 ft high. South wall: 840 ft long, 60 ft high (coastal, sun and siege facing). You can picture the walls forming a big, slightly elongated rectangle. Think of the inside divided loosely into three east–west bands: north ward, central ward, south/industrial ward. Central keep base: about 360 ft (east–west) by 300 ft (north–south). It sits roughly in the middle of the castle, leaving wide courtyards on all sides. Central spire rises from its West Side, protruding about halfway from west wall of the keep,120+ ft tall. South Industrial / Forge Zone (above the underground blood forge) Massive chimneys, hoists, and winch houses sit here, aligned vertically with the Bloodforge beneath. Southeast Outer Ward (gates, stables, wagons) Outer ward: about 300 ft (east–west) by 240 ft (north–south) in the southeast corner, just inside the main gate. Holds stables for 60–80 horses, wagon sheds, smithy for mundane repairs, and a mustering yard. This ward nestles between the south wall, east wall, and the service wing; it does not encroach on the central keep’s space. North Ward (administration and quieter areas) The northern band of the castle, between the north curtain wall and the central keep, is mostly 200–250 ft deep. Vertical structure Ground level: courtyards, barracks, stables, service halls, main halls of the keep. First and second floors of the keep: great hall, feast chambers, council rooms, noble and vampire apartments. Third floor and spires: private sanctums, laboratories, and secure chambers. Below: castle storage, then the Bloodforge storage level, then the Bloodforge itself, then the mining line.\\n\",\n  \"deliverable\": \"location\",\n  \"stage\": \"accuracy_refinement\",\n  \"complete_location\": {\n    \"purpose\": {},\n    \"foundation\": {},\n    \"spaces\": {},\n    \"details\": {}\n  },\n  \"instructions\": \"Perform a thorough accuracy check on this location.\\n\\nReview ALL 0 spaces for:\\n1. Do all space dimensions fit within the overall Unknown × Unknown footprint?\\n2. Do all connections (doors, stairs, passages) reference valid space IDs?\\n3. Do all vertical connections (stairs) align with valid floor levels?\\n4. Are there any contradictions between descriptions and actual layout?\\n\\nProvide specific, actionable findings in accuracy_report.\\nApply corrections to refined_spaces and refined_details.\\nAdd tactical_summary to help GMs run encounters in this location.\\n\\nBe thorough and precise - this is the final quality check before delivery.\",\n  \"canon_context\": \"Verify all named NPCs, creatures, and items align with canon facts.\"\n}",
+      "response": "{\n  \"accuracy_report\": {\n    \"dimensional_issues\": [\n      \"The generated N-S width of the corridor (250 ft) exceeded the N-S length of the Great Hall (150 ft) which it is meant to parallel, causing alignment conflicts with the 75 ft North and South circulation areas. The N-S width has been corrected to 150 ft to run precisely alongside the L2_KEEP_GREAT_HALL.\"\n    ],\n    \"connection_issues\": [\n      \"Connections to L2_KEEP_SOUTH_LANDING, L2_KEEP_COUNCIL_CHAMBER, and L3_KEEP_EAST_STAIRS are currently placeholders and require future chunk generation for validation.\"\n    ],\n    \"vertical_issues\": [],\n    \"narrative_inconsistencies\": [],\n    \"recommendations\": [\n      \"Future generation must define the L2_KEEP_SOUTH_LANDING (75ft depth) and L2_KEEP_NORTH_SERVICE (75ft depth) areas to complete the 300ft N-S span of the Keep.\",\n      \"The 'Anti-Betrayal Stone' feature should be detailed with its exact school of magic (e.g., Abjuration) and the source of the curse, aligning with canon lore.\"\n    ]\n  },\n  \"refined_spaces\": [\n    {\n      \"id\": \"L2_KEEP_EAST_CORRIDOR\",\n      \"name\": \"East Wing Corridor of Oaths\",\n      \"location_type\": \"hallway\",\n      \"purpose\": \"Primary access spine for administration and council rooms; security patrol route.\",\n      \"description\": \"A long, shadowed corridor lined with tall, slender columns and heavy velvet drapes that mute all sound. Iron sconces fitted with cold blue Gloom Gems provide minimal light. Several heavy, reinforced oak doors line the eastern wall, leading to important chambers.\",\n      \"scale\": \"moderate\",\n      \"geometry\": {\n        \"dimensions\": {\n          \"length\": \"15 ft (East-West)\",\n          \"width\": \"**150 ft (North-South)**\",\n          \"height\": \"20 ft\"\n        },\n        \"position\": {\n          \"relative_to_keep\": \"Eastern circulation band, parallel to the Great Hall.\",\n          \"coordinates\": \"Starts approx. 240 ft East of the Keep's West wall, spans 15 ft East, aligned with the Great Hall's N-S dimension.\"\n        },\n        \"walls\": {\n          \"west_wall\": \"Load-bearing partition, shared with L2_KEEP_GREAT_HALL (4 large double doors open onto the corridor)\",\n          \"east_wall\": \"Inner load-bearing wall, separating corridor from East Wing Chambers (many secured doors)\",\n          \"north_south_ends\": \"Connects to North Service area and South Stair Landing area.\"\n        },\n        \"locking_points\": []\n      },\n      \"mesh_anchors\": {\n        \"chunk_id\": \"L2_KEEP_EAST_CORRIDOR\",\n        \"connects_to\": [\n          \"L2_KEEP_GREAT_HALL\",\n          \"L2_KEEP_SOUTH_LANDING\",\n          \"L2_KEEP_COUNCIL_CHAMBER\",\n          \"L3_KEEP_EAST_STAIRS\"\n        ],\n        \"connection_types\": [\n          \"Double Doors (West)\",\n          \"Archway (South)\",\n          \"Secured Door (East)\",\n          \"Stairs (North End)\"\n        ],\n        \"boundary_interface\": \"Runs parallel to the 150ft length of the Great Hall, providing main access to the East Wing.\",\n        \"spatial_relationship\": \"first_floor_keep.east_wing.corridor\"\n      },\n      \"features\": [\n        \"Recessed Guard Alcoves (four total, spaced evenly)\",\n        \"Heavy, sound-dampening velvet tapestries (Conceal DC 15 required)\",\n        \"Stone flooring carved with strict heraldic oaths\"\n      ],\n      \"lighting\": \"Dim light (Magical Gloom Gems) everywhere, creating large pools of shadow along the walls.\",\n      \"inhabitants\": \"Elite Vampire Guards (patrol), Administrative Thralls (transiting).\",\n      \"validation_notes\": [\n        \"N-S dimension corrected to 150ft for structural consistency with the Great Hall alignment.\"\n      ]\n    }\n  ],\n  \"refined_details\": {\n    \"materials\": \"The corridor features a floor of polished Black Basalt, perpetually cool to the touch, and load-bearing walls of dark, rough-hewn granite. All doorways are framed by heavy, gilded iron and secured by thick Reinforced Oak doors.\",\n    \"lighting_scheme\": \"The space is cast in Dim Light exclusively by iron sconces holding cold, blue Gloom Gems, amplifying shadows.\",\n    \"atmosphere\": \"Oppressively quiet. The heavy drapes absorb sound, giving footsteps a flat, heavy quality, instilling a mood of constant vigilance and silent dread.\",\n    \"inhabitants\": {\n      \"permanent_residents\": [\n        { \"type\": \"Elite Vampire Guards (Watch)\", \"count\": 6 },\n        { \"type\": \"Administrative Thralls (Runners)\", \"count\": 2 }\n      ],\n      \"notable_npcs\": [\n        { \"name\": \"Captain Varkos\", \"role\": \"Warden of the East Wing\", \"location\": \"Council Chamber Antechamber (Secured Door off Corridor)\" }\n      ],\n      \"visitors\": [\n        \"Ambassadors seeking an audience with the Council\",\n        \"Bound servants carrying archival material\"\n      ],\n      \"creatures\": [\n        \"Shadows (40% chance of 1d2 near recessed alcoves)\"\n      ]\n    },\n    \"encounter_areas\": [\n      {\n        \"space_id\": \"L2_KEEP_EAST_CORRIDOR\",\n        \"encounter_type\": \"combat\",\n        \"description\": \"The 150ft long, 15ft wide corridor is ideal for a linear ambush or chase scene, offering limited lateral movement but long sight lines.\",\n        \"tactical_notes\": \"The Guard Alcoves provide half cover. Patrols are frequent (check every 5 rounds). The confined space favors area-of-effect attacks but also offers limited movement for the party.\"\n      },\n      {\n        \"space_id\": \"L2_KEEP_EAST_CORRIDOR\",\n        \"encounter_type\": \"trap\",\n        \"description\": \"A section of the basalt floor near the central Council entrance (approx. N-S midpoint) contains pressure plates linked to iron portcullises that can seal the corridor.\",\n        \"tactical_notes\": \"DC 18 Perception check to spot. Failure triggers Portcullis Drop (DC 14 Reflex Save vs 4d6 damage and becoming Trapped in a 20ft section).\"\n      }\n    ],\n    \"secrets\": [\n      {\n        \"type\": \"Mechanism\",\n        \"location\": \"Western Wall (near Great Hall doors)\",\n        \"description\": \"A hidden lever beneath the basalt floor allows the user to drop massive reinforced bars across the Great Hall's double doors, locking them instantly.\",\n        \"how_to_find\": \"DC 16 Investigation check.\"\n      }\n    ],\n    \"special_features\": {\n      \"Anti-Betrayal Stone\": \"The basalt floor carvings are charged with a weak Abjuration enchantment. Any non-vampire creature attempting a Charisma (Deception) check while standing on the carvings does so with Disadvantage.\",\n      \"The Echo-Dampening Drapes\": \"The heavy velvet tapestries on the West wall absorb sound. When combat begins, the noise is largely contained within the 15ft corridor width, imposing Disadvantage on Wisdom (Perception) checks made by creatures outside the corridor to hear the commotion.\"\n    }\n  },\n  \"gm_notes\": [\n    \"**Silence Mechanic:** Use the 'Echo-Dampening Drapes' feature to justify why guards in the Great Hall or adjacent wings might not immediately hear combat start here, buying the party crucial time.\",\n    \"**High Alert:** Due to current events, patrols are exceptionally vigilant (lowering Stealth DCs by 2). If combat starts, reinforcements from the North or South (1d4 guards) arrive in 1d4 rounds.\",\n    \"**Limited Light:** Combatants reliant on sight in darkness (e.g., humans without darkvision) suffer Disadvantage on Wisdom (Perception) checks in areas away from the Gloom Sconces.\"\n  ],\n  \"tactical_summary\": {\n    \"choke_points\": [\n      \"**Trap Zone (Midpoint):** The portcullis trap can be used by guards (or players) to split the party or isolate a target.\",\n      \"**Archway (South):** The only wide exit leading to the South Landing, a natural funnel point.\"\n    ],\n    \"escape_routes\": [\n      \"**East Doors:** Successfully bypassing the secured doors leads to complex administrative offices, offering numerous hiding places but requiring successful skill checks (Lockpicking or stealth).\",\n      \"**North Stairs:** Leads up to the L3 East Wing (requires clearing the North end of the corridor).\"\n    ],\n    \"defensible_positions\": [\n      \"**Guard Alcoves:** Offer half cover against linear fire (missile or spells).\",\n      \"**Corridor Ends:** Ranged attackers can dominate the length of the corridor.\"\n    ],\n    \"hazards\": [\n      \"**Portcullis Trap:** Activated by pressure plate (or remote trigger by guards in an adjacent room).\",\n      \"**Reinforcement:** The corridor's purpose is patrolling; any loud disturbance guarantees rapid guard response.\"\n    ]\n  }\n}",
+      "timestamp": "2025-11-20T17:19:00.581Z",
+      "status": "completed"
+    }
+  ],
+  "stageResults": {
+    "purpose": {
+      "name": "Castle Blood Forge - First Floor Keep",
+      "location_type": "castle",
+      "description": "The first floor of the central Keep, situated above the ground level, serves as the heart of the castle's social and political power. It houses the Great Hall, main feast chambers, and key council rooms, designed for ceremony and display rather than defense or logistics.",
+      "purpose": "Vampire nobility residence, Great Hall, and feast chambers",
+      "scale": "complex",
+      "estimated_spaces": 25,
+      "architectural_style": "Gothic Nobility",
+      "setting": "Central Keep structure within a massive fortress",
+      "key_features": [
+        "The Great Hall (occupies major footprint)",
+        "Feast Chambers and kitchens (linked to service wings)",
+        "Council Chambers for vampire meetings",
+        "Access point to upper noble apartments",
+        "Viewports/balconies overlooking the courtyards below"
+      ]
+    },
+    "foundation": {
+      "layout": {
+        "description": "The First Floor (L2) occupies the full 360 ft x 300 ft footprint of the Central Keep base. It is dominated by the Great Hall, which is a massive, double-height space situated centrally. This hall is flanked by structured wings containing administrative offices and minor apartments.",
+        "dimensions": {
+          "length": "360 ft (East-West)",
+          "width": "300 ft (North-South)",
+          "height": "Average 25 ft (45 ft in Great Hall)"
+        },
+        "levels": [
+          "First Floor Keep (L2)"
+        ]
+      },
+      "wings": [
+        {
+          "name": "The Great Hall & Feast Chamber",
+          "position": "Central and South-facing",
+          "function": "Ceremonial space, hosting, and dining."
+        },
+        {
+          "name": "East Council Wing",
+          "position": "Eastern side of the Keep",
+          "function": "Council rooms, map rooms, and minor administration offices."
+        },
+        {
+          "name": "West Residential Wing",
+          "position": "Western side of the Keep",
+          "function": "Noble apartments and secure servant quarters."
+        },
+        {
+          "name": "North Service Balcony",
+          "position": "North rear, overlooking the Courtyard",
+          "function": "Kitchen access, minstrel gallery, and secondary storage access."
+        }
+      ],
+      "floors": {
+        "first_floor_keep": {
+          "elevation": "20 ft (above ground level)",
+          "zones": [
+            "Great Hall (Double Height)",
+            "East Wing Offices",
+            "West Wing Apartments",
+            "Minstrel Gallery"
+          ]
+        }
+      },
+      "locking_points": [
+        {
+          "id": "LP_GREAT_HALL_HEARTH",
+          "location": "North end of Great Hall",
+          "notes": "Large, fixed chimney structure, runs L1 through L3."
+        },
+        {
+          "id": "LP_MAIN_STAIRWELL_L2",
+          "location": "South-center entry point from ground level",
+          "notes": "Termination of the Grand Staircase from L1."
+        },
+        {
+          "id": "LP_SPIRE_BASE_ACCESS",
+          "location": "West Wall of Great Hall/West Wing",
+          "notes": "Secure entry point to the Central Spire structure."
+        }
+      ],
+      "load_bearing_walls": [
+        "Keep Perimeter Walls (360x300 ft)",
+        "Pillar columns supporting the Great Hall roof and L3 floor (Internal)",
+        "Structural elements beneath the Great Hall supporting the main Hearth/Chimney"
+      ],
+      "vertical_connections": [
+        "Grand Staircase (Up from L1)",
+        "Private Staircase (Up to L3 sanctums/apartments)",
+        "Service Lift/Dumbwaiter (Kitchen access to L1 service hall)",
+        "Spire Access Staircase (Secured)"
+      ],
+      "constraints": [
+        "Great Hall must occupy at least 1/3 of the floor area and be double-height (20ft above L2 ceiling).",
+        "East Wing and West Wing must maintain symmetry around the Great Hall axis.",
+        "All service connections must be hidden from the Great Hall view."
+      ],
+      "chunk_mesh_metadata": {
+        "connection_protocol": "Hallways and Secured Doors",
+        "boundary_markers": [
+          "Great_Hall_Perimeter",
+          "East_Wing_Corridor_Junction",
+          "West_Wing_Apartment_Access"
+        ],
+        "spatial_hierarchy": "Floor > Wing > Room",
+        "coordinate_system": "Absolute Grid (Relative to Keep South Face Center)"
+      }
+    },
+    "spaces": {
+      "id": "L2_KEEP_COUNCIL_CHAMBER",
+      "name": "Council Chamber of the Scarlet Pact",
+      "location_type": "chamber_meeting",
+      "purpose": "Governing body meetings, high-stakes diplomacy, and internal judicial rulings.",
+      "description": "A long, richly furnished room dominated by a massive, crescent-shaped table of polished black granite. The East wall is windowless and carved with the history of the ruling family's bloodline. The atmosphere is formal and tense, perpetually prepared for an emergency siege or immediate execution.",
+      "scale": "large",
+      "geometry": {
+        "dimensions": {
+          "length": "45 ft (East-West)",
+          "width": "80 ft (North-South)",
+          "height": "20 ft"
+        },
+        "position": {
+          "relative_to_keep": "Easternmost interior space of the Keep's East Wing.",
+          "coordinates": "Located 15 ft East of the L2_KEEP_EAST_CORRIDOR, centered within the 150 ft N-S length of the corridor."
+        },
+        "walls": {
+          "east_wall": "Outer Keep Wall (Load-bearing, windowless, carved with lore)",
+          "west_wall": "Load-bearing partition, shared with L2_KEEP_EAST_CORRIDOR (Main door)",
+          "north_south_walls": "Interior partitions leading to smaller chambers/offices."
+        },
+        "locking_points": [
+          "LP_COUNCIL_MAIN_DOOR",
+          "LP_COUNCIL_VAULT"
+        ]
+      },
+      "mesh_anchors": {
+        "chunk_id": "L2_KEEP_COUNCIL_CHAMBER",
+        "connects_to": [
+          "L2_KEEP_EAST_CORRIDOR",
+          "L2_KEEP_EAST_ANTECHAMBER_N",
+          "L2_KEEP_EAST_ARCHIVE_S"
+        ],
+        "connection_types": [
+          "Heavy Secured Door (West)",
+          "Small Door (North, Pending)",
+          "Small Door (South, Pending)"
+        ],
+        "boundary_interface": "Utilizes the remaining 45ft width of the East Wing, leaving 35ft North and 35ft South for adjacent rooms along the corridor.",
+        "spatial_relationship": "first_floor_keep.east_wing.council_chamber"
+      },
+      "features": [
+        "Crescent-shaped black granite council table (seats 12, heavily enchanted)",
+        "Four ornate iron cages (for high-profile detainees or witnesses)",
+        "Ornate iron vault door concealed behind a movable tapestry (East Wall, contains vital documents)"
+      ],
+      "lighting": "Bright, magical light (Enchanted Silver Lanterns) during sessions; otherwise Dim Light from Gloom Gems.",
+      "inhabitants": "Vampire Council members, Captain Varkos (Warden), Thrall scribes.",
+      "validation_notes": [
+        "Dimensions (45x80 ft) fit perfectly within the 60ft E-W East Wing space (leaving 15ft for the corridor) and the 150ft N-S alignment of the Great Hall/Corridor."
+      ]
+    },
+    "details": {
+      "materials": "The corridor features a floor of polished **Black Basalt**, perpetually cool to the touch, and load-bearing walls of dark, rough-hewn granite. All doorways are framed by heavy, gilded iron and secured by thick **Reinforced Oak** doors. The western wall is almost entirely covered by thick, blood-red velvet tapestries, hung to dampen sound.",
+      "lighting_scheme": "The space is cast in **Dim Light** exclusively by iron sconces holding cold, blue **Gloom Gems**. The gems emit just enough light to prevent total darkness, but they amplify shadows, making the 15ft width feel cavernous and unsafe. No natural light ever penetrates this interior spine.",
+      "atmosphere": "The corridor is characterized by an **oppressive silence**. The heavy tapestries absorb sound, giving footsteps a flat, heavy quality. The air is still and cold, carrying a faint metallic tang of dried blood polish, instilling a mood of constant **vigilance and silent dread**—a place where official authority is rarely questioned.",
+      "inhabitants": {
+        "permanent_residents": [
+          {
+            "type": "Elite Vampire Guards (Watch)",
+            "count": 6
+          },
+          {
+            "type": "Administrative Thralls (Runners)",
+            "count": 2
+          }
+        ],
+        "notable_npcs": [
+          {
+            "name": "Captain Varkos",
+            "role": "Warden of the East Wing",
+            "location": "Council Chamber Antechamber (Secured Door off Corridor)"
+          }
+        ],
+        "visitors": [
+          "Ambassadors seeking an audience with the Council",
+          "Bound servants carrying archival material",
+          "Minor vassals reporting tax remittance"
+        ],
+        "creatures": [
+          "Shadows (40% chance of 1d2 near recessed alcoves)"
+        ]
+      },
+      "encounter_areas": [
+        {
+          "space_id": "L2_KEEP_EAST_CORRIDOR",
+          "encounter_type": "combat",
+          "description": "The 250ft long, 15ft wide corridor is ideal for a classic linear ambush or chase scene, offering limited lateral movement but long sight lines.",
+          "tactical_notes": "The Guard Alcoves provide half cover for ranged attackers. The long line of sight favors archers or spellcasters; players attempting stealth should utilize the velvet tapestries (DC 15 Dexterity (Stealth) check to press against them and move unnoticed). Patrols are frequent (check every 5 rounds)."
+        },
+        {
+          "space_id": "L2_KEEP_EAST_CORRIDOR",
+          "encounter_type": "trap",
+          "description": "A section of the basalt floor near the Council entrance contains ancient, barely visible pressure plates linked to iron portcullises that can seal the corridor.",
+          "tactical_notes": "DC 18 Perception check to spot the worn pressure plates. Failure triggers Portcullis Drop (DC 14 Reflex Save vs 4d6 damage and becoming trapped in a 20ft section of the corridor)."
+        }
+      ],
+      "secrets": [
+        {
+          "type": "Mechanism",
+          "location": "Western Wall (near Great Hall doors)",
+          "description": "A hidden lever concealed beneath a loose piece of the carved basalt floor allows the user to drop massive reinforced bars across the Great Hall's double doors, locking them instantly.",
+          "how_to_find": "DC 16 Investigation check, requiring the knowledge that this mechanism exists (or observation of Guard Captains using it)."
+        },
+        {
+          "type": "Compartment",
+          "location": "Tapestry behind a sconce",
+          "description": "A small, fireproof leather pouch containing a spare set of Council Chamber keys (or a low-ranking officer's security token) is sewn into the backing of a tapestry.",
+          "how_to_find": "DC 18 Perception check while examining the tapestries."
+        }
+      ],
+      "treasure_locations": [
+        {
+          "location": "Guard Alcove (South)",
+          "description": "A forgotten patrol kit containing 10 ft of silver chain, 3 vials of Holy Water, and a small, non-magical **Signet Ring** bearing the seal of a disgraced noble family."
+        }
+      ],
+      "history": "For centuries, the East Wing Corridor has been the administrative heart of the regime, witnessing every major political shift since the Keep's construction. Its current name, the 'Corridor of Oaths,' dates back two decades, when the paranoid Lord Malakor mandated that all high officials must physically touch the corridor's floor carvings—supposedly blessed with an anti-betrayal curse—upon entering council. The security measures and silent atmosphere are the result of several high-profile assassinations that took place here during the last blood-succession crisis.",
+      "current_events": "A high-stakes diplomatic meeting between two rival vampire houses is scheduled for the Council Chamber this evening. Security patrols have been doubled, and guards are operating under 'no tolerance' orders. Captain Varkos is stressed, having just received word that a minor noble vassal was seen loitering near the Great Hall doors, potentially scouting the defenses before the meeting.",
+      "adventure_hooks": [
+        "**The Diplomatic Pass:** The party must infiltrate the East Wing to recover an item or document vital to the Council meeting before the rival houses arrive, necessitating bypassing the trap plates and patrols.",
+        "**The Cursed Oaths:** The party is hired to retrieve a sample of the anti-betrayal floor carving dust for a ritual, which requires disabling the floor traps and chiseling the black basalt without alerting the guards.",
+        "**Retrieve the Messenger:** A friendly NPC carrying a plea for help was detained by Captain Varkos in the East Wing and must be quietly extracted before he is interrogated."
+      ],
+      "special_features": {
+        "Anti-Betrayal Stone": "The basalt floor carvings are charged with a weak, ancient protective enchantment. Any non-vampire creature attempting to make a Charisma (Deception) check while standing on the carvings does so with Disadvantage.",
+        "The Echo-Dampening Drapes": "The heavy velvet tapestries on the West wall provide cover from noise. When combat begins, the noise is largely contained within the 15ft corridor width, imposing Disadvantage on Perception checks made by creatures outside the corridor to hear the commotion."
+      },
+      "cinematic_walkthrough": "Stepping through the heavy double doors from the Great Hall, you are immediately plunged into an uneasy silence. The air is cold and heavy, a stark contrast to the vast space you just left. The Corridor of Oaths stretches out before you, an unnervingly straight, 250-foot funnel defined by low-hanging, sound-dampening velvet tapestries that line the wall to your left (West).\n\nOnly the cold, blue light of the Gloom Gems, mounted in grotesque iron sconces, cuts through the gloom. The light is harsh and unforgiving, turning the black basalt floor into a mirror that reflects your own cautious, flattened steps. The silence here is tactical; it forces you to rely entirely on sight, making the deep shadows along the eastern wall—where secured doors lead to the heart of the castle's bureaucracy—feel menacing and filled with unseen eyes.\n\nAs you walk the long passage, you pass recessed guard alcoves, their corners swallowed by darkness. The atmosphere is tense, suggesting that even a whisper would be a violation. This is the spine of authority, and you feel the weight of every oath ever taken (and broken) pressing down on you."
+    },
+    "accuracy_refinement": {
+      "accuracy_report": {
+        "dimensional_issues": [
+          "The generated N-S width of the corridor (250 ft) exceeded the N-S length of the Great Hall (150 ft) which it is meant to parallel, causing alignment conflicts with the 75 ft North and South circulation areas. The N-S width has been corrected to 150 ft to run precisely alongside the L2_KEEP_GREAT_HALL."
+        ],
+        "connection_issues": [
+          "Connections to L2_KEEP_SOUTH_LANDING, L2_KEEP_COUNCIL_CHAMBER, and L3_KEEP_EAST_STAIRS are currently placeholders and require future chunk generation for validation."
+        ],
+        "vertical_issues": [],
+        "narrative_inconsistencies": [],
+        "recommendations": [
+          "Future generation must define the L2_KEEP_SOUTH_LANDING (75ft depth) and L2_KEEP_NORTH_SERVICE (75ft depth) areas to complete the 300ft N-S span of the Keep.",
+          "The 'Anti-Betrayal Stone' feature should be detailed with its exact school of magic (e.g., Abjuration) and the source of the curse, aligning with canon lore."
+        ]
+      },
+      "refined_spaces": [
+        {
+          "id": "L2_KEEP_EAST_CORRIDOR",
+          "name": "East Wing Corridor of Oaths",
+          "location_type": "hallway",
+          "purpose": "Primary access spine for administration and council rooms; security patrol route.",
+          "description": "A long, shadowed corridor lined with tall, slender columns and heavy velvet drapes that mute all sound. Iron sconces fitted with cold blue Gloom Gems provide minimal light. Several heavy, reinforced oak doors line the eastern wall, leading to important chambers.",
+          "scale": "moderate",
+          "geometry": {
+            "dimensions": {
+              "length": "15 ft (East-West)",
+              "width": "**150 ft (North-South)**",
+              "height": "20 ft"
+            },
+            "position": {
+              "relative_to_keep": "Eastern circulation band, parallel to the Great Hall.",
+              "coordinates": "Starts approx. 240 ft East of the Keep's West wall, spans 15 ft East, aligned with the Great Hall's N-S dimension."
+            },
+            "walls": {
+              "west_wall": "Load-bearing partition, shared with L2_KEEP_GREAT_HALL (4 large double doors open onto the corridor)",
+              "east_wall": "Inner load-bearing wall, separating corridor from East Wing Chambers (many secured doors)",
+              "north_south_ends": "Connects to North Service area and South Stair Landing area."
+            },
+            "locking_points": []
+          },
+          "mesh_anchors": {
+            "chunk_id": "L2_KEEP_EAST_CORRIDOR",
+            "connects_to": [
+              "L2_KEEP_GREAT_HALL",
+              "L2_KEEP_SOUTH_LANDING",
+              "L2_KEEP_COUNCIL_CHAMBER",
+              "L3_KEEP_EAST_STAIRS"
+            ],
+            "connection_types": [
+              "Double Doors (West)",
+              "Archway (South)",
+              "Secured Door (East)",
+              "Stairs (North End)"
+            ],
+            "boundary_interface": "Runs parallel to the 150ft length of the Great Hall, providing main access to the East Wing.",
+            "spatial_relationship": "first_floor_keep.east_wing.corridor"
+          },
+          "features": [
+            "Recessed Guard Alcoves (four total, spaced evenly)",
+            "Heavy, sound-dampening velvet tapestries (Conceal DC 15 required)",
+            "Stone flooring carved with strict heraldic oaths"
+          ],
+          "lighting": "Dim light (Magical Gloom Gems) everywhere, creating large pools of shadow along the walls.",
+          "inhabitants": "Elite Vampire Guards (patrol), Administrative Thralls (transiting).",
+          "validation_notes": [
+            "N-S dimension corrected to 150ft for structural consistency with the Great Hall alignment."
+          ]
+        }
+      ],
+      "refined_details": {
+        "materials": "The corridor features a floor of polished Black Basalt, perpetually cool to the touch, and load-bearing walls of dark, rough-hewn granite. All doorways are framed by heavy, gilded iron and secured by thick Reinforced Oak doors.",
+        "lighting_scheme": "The space is cast in Dim Light exclusively by iron sconces holding cold, blue Gloom Gems, amplifying shadows.",
+        "atmosphere": "Oppressively quiet. The heavy drapes absorb sound, giving footsteps a flat, heavy quality, instilling a mood of constant vigilance and silent dread.",
+        "inhabitants": {
+          "permanent_residents": [
+            {
+              "type": "Elite Vampire Guards (Watch)",
+              "count": 6
+            },
+            {
+              "type": "Administrative Thralls (Runners)",
+              "count": 2
+            }
+          ],
+          "notable_npcs": [
+            {
+              "name": "Captain Varkos",
+              "role": "Warden of the East Wing",
+              "location": "Council Chamber Antechamber (Secured Door off Corridor)"
+            }
+          ],
+          "visitors": [
+            "Ambassadors seeking an audience with the Council",
+            "Bound servants carrying archival material"
+          ],
+          "creatures": [
+            "Shadows (40% chance of 1d2 near recessed alcoves)"
+          ]
+        },
+        "encounter_areas": [
+          {
+            "space_id": "L2_KEEP_EAST_CORRIDOR",
+            "encounter_type": "combat",
+            "description": "The 150ft long, 15ft wide corridor is ideal for a linear ambush or chase scene, offering limited lateral movement but long sight lines.",
+            "tactical_notes": "The Guard Alcoves provide half cover. Patrols are frequent (check every 5 rounds). The confined space favors area-of-effect attacks but also offers limited movement for the party."
+          },
+          {
+            "space_id": "L2_KEEP_EAST_CORRIDOR",
+            "encounter_type": "trap",
+            "description": "A section of the basalt floor near the central Council entrance (approx. N-S midpoint) contains pressure plates linked to iron portcullises that can seal the corridor.",
+            "tactical_notes": "DC 18 Perception check to spot. Failure triggers Portcullis Drop (DC 14 Reflex Save vs 4d6 damage and becoming Trapped in a 20ft section)."
+          }
+        ],
+        "secrets": [
+          {
+            "type": "Mechanism",
+            "location": "Western Wall (near Great Hall doors)",
+            "description": "A hidden lever beneath the basalt floor allows the user to drop massive reinforced bars across the Great Hall's double doors, locking them instantly.",
+            "how_to_find": "DC 16 Investigation check."
+          }
+        ],
+        "special_features": {
+          "Anti-Betrayal Stone": "The basalt floor carvings are charged with a weak Abjuration enchantment. Any non-vampire creature attempting a Charisma (Deception) check while standing on the carvings does so with Disadvantage.",
+          "The Echo-Dampening Drapes": "The heavy velvet tapestries on the West wall absorb sound. When combat begins, the noise is largely contained within the 15ft corridor width, imposing Disadvantage on Wisdom (Perception) checks made by creatures outside the corridor to hear the commotion."
+        }
+      },
+      "gm_notes": [
+        "**Silence Mechanic:** Use the 'Echo-Dampening Drapes' feature to justify why guards in the Great Hall or adjacent wings might not immediately hear combat start here, buying the party crucial time.",
+        "**High Alert:** Due to current events, patrols are exceptionally vigilant (lowering Stealth DCs by 2). If combat starts, reinforcements from the North or South (1d4 guards) arrive in 1d4 rounds.",
+        "**Limited Light:** Combatants reliant on sight in darkness (e.g., humans without darkvision) suffer Disadvantage on Wisdom (Perception) checks in areas away from the Gloom Sconces."
+      ],
+      "tactical_summary": {
+        "choke_points": [
+          "**Trap Zone (Midpoint):** The portcullis trap can be used by guards (or players) to split the party or isolate a target.",
+          "**Archway (South):** The only wide exit leading to the South Landing, a natural funnel point."
+        ],
+        "escape_routes": [
+          "**East Doors:** Successfully bypassing the secured doors leads to complex administrative offices, offering numerous hiding places but requiring successful skill checks (Lockpicking or stealth).",
+          "**North Stairs:** Leads up to the L3 East Wing (requires clearing the North end of the corridor)."
+        ],
+        "defensible_positions": [
+          "**Guard Alcoves:** Offer half cover against linear fire (missile or spells).",
+          "**Corridor Ends:** Ranged attackers can dominate the length of the corridor."
+        ],
+        "hazards": [
+          "**Portcullis Trap:** Activated by pressure plate (or remote trigger by guards in an adjacent room).",
+          "**Reinforcement:** The corridor's purpose is patrolling; any loud disturbance guarantees rapid guard response."
+        ]
+      }
+    }
+  },
+  "currentStageIndex": 4
+}

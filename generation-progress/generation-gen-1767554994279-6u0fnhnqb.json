@@ -1,0 +1,432 @@
+{
+  "sessionId": "gen-1767554994279-6u0fnhnqb",
+  "sessionName": "NPC: A level 21 equivalent characte...",
+  "createdAt": "2026-01-04T19:29:54.278Z",
+  "lastUpdatedAt": "2026-01-06T00:28:24.540Z",
+  "config": {
+    "type": "npc",
+    "prompt": "A level 21 equivalent character that is a silver dragon wyrmling. ",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Creator: Core Details",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the CORE DETAILS & PERSONALITY section of an NPC.\n\nYour focus: Personality traits, ideals, bonds, flaws, goals, fears, quirks, voice/mannerisms, hooks.\n\n\n=== CORE DETAILS & PERSONALITY SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"role\": {\n      \"type\": \"string\",\n      \"description\": \"Narrative role in the story\"\n    },\n    \"hooks\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Story hooks and adventure seeds\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nBuild a rich, memorable personality that aligns with the basic information from the previous stage.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"A level 21 equivalent character that is a silver dragon wyrmling. \",\n  \"basic_info\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null\n}",
+      "response": "{\n\"schema_version\": \"1.1\",\n\"name\": \"Unnamed Silver Dragon Wyrmling\",\n\"class_levels\": [],\n\"multiclass_features\": [],\n\"ability_scores\": {\n\"str\": 23,\n\"dex\": 14,\n\"con\": 23,\n\"int\": 16,\n\"wis\": 15,\n\"cha\": 21\n},\n\"armor_class\": 20,\n\"hit_points\": {\n\"average\": 264,\n\"formula\": \"21d12 + 126\",\n\"notes\": \"Epic-scaled dragon hit dice using Constitution modifier\"\n},\n\"hit_dice\": \"21d12\",\n\"speed\": {\n\"walk\": \"30 ft.\",\n\"fly\": \"120 ft.\",\n\"swim\": \"30 ft.\"\n},\n\"proficiency_bonus\": 7,\n\"senses\": [\n\"blindsight 30 ft.\",\n\"darkvision 120 ft.\",\n\"passive Perception 19\"\n],\n\"languages\": [\n\"Common\",\n\"Draconic\"\n],\n\"saving_throws\": [\n{\n\"name\": \"Dexterity\",\n\"value\": \"+9\"\n},\n{\n\"name\": \"Constitution\",\n\"value\": \"+13\"\n},\n{\n\"name\": \"Wisdom\",\n\"value\": \"+9\"\n},\n{\n\"name\": \"Charisma\",\n\"value\": \"+12\"\n}\n],\n\"skill_proficiencies\": [\n{\n\"name\": \"Perception\",\n\"value\": \"+9\"\n},\n{\n\"name\": \"Insight\",\n\"value\": \"+9\"\n},\n{\n\"name\": \"Stealth\",\n\"value\": \"+9\"\n}\n],\n\"damage_resistances\": [],\n\"damage_immunities\": [\n\"cold\"\n],\n\"damage_vulnerabilities\": [],\n\"condition_immunities\": [],\n\"sources_used\": [],\n\"assumptions\": [\n\"Epic statistics are derived by scaling the published silver dragon wyrmling baseline to a level 21 equivalent threat.\",\n\"Ability scores and durability reflect a young dragon with legendary-tier growth.\"\n],\n\"proposals\": [],\n\"canon_update\": \"No canon changes needed\"\n}\n",
+      "timestamp": "2026-01-04T19:33:03.903Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Combat",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the COMBAT & ACTIONS section of an NPC.\n\nYour focus: Abilities (special traits), actions, bonus actions, reactions, multiattack, tactics.\n\n\n=== COMBAT & ACTIONS SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"abilities\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"description\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"uses\": {\n            \"type\": \"string\"\n          },\n          \"recharge\": {\n            \"type\": \"string\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          },\n          \"source\": {\n            \"type\": \"string\",\n            \"description\": \"Where this ability comes from (e.g., 'Vampire', 'Artificer')\"\n          }\n        }\n      },\n      \"description\": \"Special abilities and traits (also accepts 'traits' as alias)\"\n    },\n    \"actions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"description\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"uses\": {\n            \"type\": \"string\"\n          },\n          \"recharge\": {\n            \"type\": \"string\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Actions available in combat\"\n    },\n    \"bonus_actions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"description\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"uses\": {\n            \"type\": \"string\"\n          },\n          \"recharge\": {\n            \"type\": \"string\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Bonus actions available\"\n    },\n    \"reactions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"description\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"uses\": {\n            \"type\": \"string\"\n          },\n          \"recharge\": {\n            \"type\": \"string\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Reactions available\"\n    },\n    \"tactics\": {\n      \"type\": \"string\",\n      \"description\": \"Combat tactics and strategy\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nCRITICAL D&D 5E COMBAT RULES (if applicable):\n- Attack bonus = proficiency bonus + relevant ability modifier\n- Damage should match CR and threat level\n- Special abilities should have clear mechanics (uses, recharge, range, duration)\n- Tactics should leverage abilities and reflect intelligence/personality\n\nCreate engaging combat capabilities that fit the CR and character concept.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"A level 21 equivalent character that is a silver dragon wyrmling. \",\n  \"basic_info\": {},\n  \"core_details\": {},\n  \"stats\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null,\n  \"previous_decisions\": {\n    \"proposal_0\": \"Yes\"\n  }\n}",
+      "response": "{\n\"schema_version\": \"1.1\",\n\"name\": \"Unnamed Silver Dragon Wyrmling\",\n\"abilities\": [],\n\"actions\": [],\n\"bonus_actions\": [],\n\"reactions\": [],\n\"tactics\": \"\",\n\"sources_used\": [],\n\"assumptions\": [\n\"No relevant canon combat features were provided for this NPC.\",\n\"Because invention is limited to cosmetic only, combat mechanics (attacks, breath weapon, spellcasting, recharge, and numerical effects) are omitted rather than invented.\"\n],\n\"proposals\": [],\n\"canon_update\": \"No canon changes needed\"\n}\n",
+      "timestamp": "2026-01-04T19:33:33.027Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Spellcasting",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the SPELLCASTING section of an NPC.\n\nYour focus: Spellcasting ability, cantrips, prepared spells, spell slots, innate spellcasting, spell focus, spell-storing items.\n\n\n=== SPELLCASTING SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"spellcasting\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"type\": {\n          \"type\": \"string\",\n          \"description\": \"e.g., 'Innate', 'Prepared', 'Known', 'Artificer'\"\n        },\n        \"ability\": {\n          \"type\": \"string\",\n          \"description\": \"Spellcasting ability (e.g., 'INT', 'WIS', 'CHA')\"\n        },\n        \"save_dc\": {\n          \"type\": \"integer\",\n          \"minimum\": 0\n        },\n        \"attack_bonus\": {\n          \"type\": \"integer\"\n        },\n        \"notes\": {\n          \"type\": \"string\"\n        },\n        \"cantrips\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"Cantrips known (separate from known_spells)\"\n        },\n        \"spellcasting_focus\": {\n          \"type\": \"string\",\n          \"description\": \"e.g., 'arcane focus', 'component pouch', 'holy symbol'\"\n        },\n        \"spell_storing_items\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"item\",\n              \"spell\"\n            ],\n            \"properties\": {\n              \"item\": {\n                \"type\": \"string\",\n                \"description\": \"e.g., 'Ring of Spell Storing'\"\n              },\n              \"spell\": {\n                \"type\": \"string\"\n              },\n              \"level\": {\n                \"type\": \"integer\",\n                \"minimum\": 0,\n                \"maximum\": 9\n              },\n              \"uses\": {\n                \"type\": \"integer\",\n                \"minimum\": 0\n              }\n            }\n          },\n          \"description\": \"Artificer spell-storing items or similar mechanics\"\n        },\n        \"spell_slots\": {\n          \"type\": \"object\",\n          \"additionalProperties\": {\n            \"type\": \"integer\",\n            \"minimum\": 0\n          },\n          \"description\": \"Spell slots by level (e.g., {'1st': 4, '2nd': 3})\"\n        },\n        \"prepared_spells\": {\n          \"type\": \"object\",\n          \"additionalProperties\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            }\n          },\n          \"description\": \"Prepared spells by level (e.g., {'1st': ['Shield', 'Cure Wounds']})\"\n        },\n        \"innate_spells\": {\n          \"type\": \"object\",\n          \"additionalProperties\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            }\n          },\n          \"description\": \"Innate spells by uses per day (e.g., {'At will': ['Detect Magic'], '3/day': ['Fireball']})\"\n        },\n        \"known_spells\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"All spells known (excluding cantrips)\"\n        }\n      },\n      \"description\": \"Spellcasting information with enhanced Artificer support\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nCRITICAL SPELLCASTING RULES (if D&D 5E):\n- Spell save DC = 8 + proficiency bonus + spellcasting ability modifier\n- Spell attack bonus = proficiency bonus + spellcasting ability modifier\n- Spell slots based on class level(s)\n- Cantrips scale with total character level\n- Prepared spells = spellcasting ability modifier + class level\n\nOnly include this section if the NPC has spellcasting abilities. If not a spellcaster, output minimal JSON with empty fields.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"A level 21 equivalent character that is a silver dragon wyrmling. \",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null,\n  \"previous_decisions\": {\n    \"proposal_0\": \"Yes\"\n  }\n}",
+      "response": "{\n\"schema_version\": \"1.1\",\n\"name\": \"Unnamed Silver Dragon Wyrmling\",\n\"spellcasting\": {},\n\"sources_used\": [],\n\"assumptions\": [\n\"No relevant canon spellcasting data was provided for this NPC, so spellcasting details are omitted.\"\n],\n\"proposals\": [],\n\"canon_update\": \"No canon changes needed\"\n}\n",
+      "timestamp": "2026-01-04T19:34:11.629Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Legendary",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the LEGENDARY & MYTHIC ACTIONS section of an NPC.\n\nYour focus: Legendary actions, mythic actions, lair actions, regional effects.\n\n\n=== LEGENDARY & MYTHIC ACTIONS SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"legendary_actions\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"summary\": {\n          \"type\": \"string\"\n        },\n        \"count\": {\n          \"type\": \"integer\",\n          \"minimum\": 1,\n          \"description\": \"Number of legendary actions per round\"\n        },\n        \"reset\": {\n          \"type\": \"string\",\n          \"description\": \"When legendary actions reset (e.g., 'start of turn', 'short rest')\"\n        },\n        \"options\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"name\",\n              \"description\"\n            ],\n            \"properties\": {\n              \"name\": {\n                \"type\": \"string\"\n              },\n              \"description\": {\n                \"type\": \"string\"\n              },\n              \"cost\": {\n                \"type\": \"integer\",\n                \"minimum\": 1,\n                \"description\": \"How many legendary actions this costs\"\n              },\n              \"uses\": {\n                \"type\": \"string\"\n              },\n              \"recharge\": {\n                \"type\": \"string\"\n              },\n              \"notes\": {\n                \"type\": \"string\"\n              }\n            }\n          }\n        }\n      },\n      \"description\": \"Legendary actions with enhanced tracking\"\n    },\n    \"mythic_actions\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"summary\": {\n          \"type\": \"string\"\n        },\n        \"trigger\": {\n          \"type\": \"string\",\n          \"description\": \"What triggers mythic actions (e.g., 'reduced to 0 HP')\"\n        },\n        \"options\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"name\",\n              \"description\"\n            ],\n            \"properties\": {\n              \"name\": {\n                \"type\": \"string\"\n              },\n              \"description\": {\n                \"type\": \"string\"\n              },\n              \"uses\": {\n                \"type\": \"string\"\n              },\n              \"recharge\": {\n                \"type\": \"string\"\n              },\n              \"notes\": {\n                \"type\": \"string\"\n              }\n            }\n          }\n        }\n      },\n      \"description\": \"Mythic actions\"\n    },\n    \"lair_actions\": {\n      \"oneOf\": [\n        {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"Simple lair actions (legacy format)\"\n        },\n        {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"action\",\n              \"description\"\n            ],\n            \"properties\": {\n              \"initiative\": {\n                \"type\": \"integer\",\n                \"minimum\": 0,\n                \"maximum\": 30,\n                \"description\": \"Initiative count when action occurs\"\n              },\n              \"action\": {\n                \"type\": \"string\"\n              },\n              \"description\": {\n                \"type\": \"string\"\n              }\n            }\n          },\n          \"description\": \"Enhanced lair actions with initiative tracking\"\n        }\n      ],\n      \"description\": \"Actions available in the NPC's lair\"\n    },\n    \"regional_effects\": {\n      \"oneOf\": [\n        {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"Simple regional effects (legacy format)\"\n        },\n        {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"effect\",\n              \"description\"\n            ],\n            \"properties\": {\n              \"radius\": {\n                \"type\": \"string\",\n                \"description\": \"e.g., '1 mile', '5 miles'\"\n              },\n              \"effect\": {\n                \"type\": \"string\"\n              },\n              \"description\": {\n                \"type\": \"string\"\n              },\n              \"duration\": {\n                \"type\": \"string\",\n                \"description\": \"How long effect lasts after death/departure\"\n              }\n            }\n          },\n          \"description\": \"Enhanced regional effects with radius/duration\"\n        }\n      ],\n      \"description\": \"Regional effects around the NPC's lair\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nCRITICAL LEGENDARY ACTION RULES (if D&D 5E):\n- Legendary creatures can take 3 legendary actions per round\n- Only one legendary action at a time, at the end of another creature's turn\n- Legendary actions should cost 1-3 actions depending on power\n- Lair actions happen on initiative count 20\n- Regional effects persist even when the creature is elsewhere\n\nOnly include this section if the NPC has legendary/mythic status (typically CR 11+). If not legendary, output minimal JSON with empty fields.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"A level 21 equivalent character that is a silver dragon wyrmling. \",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"combat\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null,\n  \"previous_decisions\": {\n    \"proposal_0\": \"Yes\"\n  }\n}",
+      "response": null,
+      "timestamp": "2026-01-04T19:34:11.771Z",
+      "status": "pending"
+    },
+    {
+      "stage": "Creator: Spellcasting",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the SPELLCASTING section of an NPC.\n\nYour focus: Spellcasting ability, cantrips, prepared spells, spell slots, innate spellcasting, spell focus, spell-storing items.\n\n\n=== SPELLCASTING SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"spellcasting\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"type\": {\n          \"type\": \"string\",\n          \"description\": \"e.g., 'Innate', 'Prepared', 'Known', 'Artificer'\"\n        },\n        \"ability\": {\n          \"type\": \"string\",\n          \"description\": \"Spellcasting ability (e.g., 'INT', 'WIS', 'CHA')\"\n        },\n        \"save_dc\": {\n          \"type\": \"integer\",\n          \"minimum\": 0\n        },\n        \"attack_bonus\": {\n          \"type\": \"integer\"\n        },\n        \"notes\": {\n          \"type\": \"string\"\n        },\n        \"cantrips\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"Cantrips known (separate from known_spells)\"\n        },\n        \"spellcasting_focus\": {\n          \"type\": \"string\",\n          \"description\": \"e.g., 'arcane focus', 'component pouch', 'holy symbol'\"\n        },\n        \"spell_storing_items\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"item\",\n              \"spell\"\n            ],\n            \"properties\": {\n              \"item\": {\n                \"type\": \"string\",\n                \"description\": \"e.g., 'Ring of Spell Storing'\"\n              },\n              \"spell\": {\n                \"type\": \"string\"\n              },\n              \"level\": {\n                \"type\": \"integer\",\n                \"minimum\": 0,\n                \"maximum\": 9\n              },\n              \"uses\": {\n                \"type\": \"integer\",\n                \"minimum\": 0\n              }\n            }\n          },\n          \"description\": \"Artificer spell-storing items or similar mechanics\"\n        },\n        \"spell_slots\": {\n          \"type\": \"object\",\n          \"additionalProperties\": {\n            \"type\": \"integer\",\n            \"minimum\": 0\n          },\n          \"description\": \"Spell slots by level (e.g., {'1st': 4, '2nd': 3})\"\n        },\n        \"prepared_spells\": {\n          \"type\": \"object\",\n          \"additionalProperties\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            }\n          },\n          \"description\": \"Prepared spells by level (e.g., {'1st': ['Shield', 'Cure Wounds']})\"\n        },\n        \"innate_spells\": {\n          \"type\": \"object\",\n          \"additionalProperties\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            }\n          },\n          \"description\": \"Innate spells by uses per day (e.g., {'At will': ['Detect Magic'], '3/day': ['Fireball']})\"\n        },\n        \"known_spells\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"All spells known (excluding cantrips)\"\n        }\n      },\n      \"description\": \"Spellcasting information with enhanced Artificer support\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nCRITICAL SPELLCASTING RULES (if D&D 5E):\n- Spell save DC = 8 + proficiency bonus + spellcasting ability modifier\n- Spell attack bonus = proficiency bonus + spellcasting ability modifier\n- Spell slots based on class level(s)\n- Cantrips scale with total character level\n- Prepared spells = spellcasting ability modifier + class level\n\nOnly include this section if the NPC has spellcasting abilities. If not a spellcaster, output minimal JSON with empty fields.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"A level 21 equivalent character that is a silver dragon wyrmling. \",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null,\n  \"previous_decisions\": {\n    \"proposal_0\": \"Yes\"\n  }\n}",
+      "response": "{\n\"schema_version\": \"1.1\",\n\"name\": \"Unnamed Silver Dragon Wyrmling\",\n\"spellcasting\": {\n\"type\": \"Known\",\n\"ability\": \"CHA\",\n\"save_dc\": 19,\n\"attack_bonus\": 11,\n\"notes\": \"Equivalent to a 17th-level Divine Soul Sorcerer; spell list draws from Sorcerer and Cleric lists.\",\n\"cantrips\": [\n\"Sacred Flame\",\n\"Guidance\",\n\"Light\",\n\"Mage Hand\",\n\"Prestidigitation\",\n\"Ray of Frost\"\n],\n\"spellcasting_focus\": \"innate draconic magic\",\n\"spell_slots\": {\n\"1st\": 4,\n\"2nd\": 3,\n\"3rd\": 3,\n\"4th\": 3,\n\"5th\": 3,\n\"6th\": 2,\n\"7th\": 2,\n\"8th\": 1,\n\"9th\": 1\n},\n\"known_spells\": [\n\"Shield\",\n\"Absorb Elements\",\n\"Bless\",\n\"Cure Wounds\",\n\"Lesser Restoration\",\n\"Aid\",\n\"Counterspell\",\n\"Dispel Magic\",\n\"Revivify\",\n\"Spirit Guardians\",\n\"Freedom of Movement\",\n\"Banishment\",\n\"Greater Restoration\",\n\"Wall of Ice\",\n\"Heal\",\n\"Sunbeam\",\n\"Plane Shift\",\n\"Holy Aura\",\n\"Mass Heal\",\n\"Wish\"\n]\n},\n\"sources_used\": [],\n\"assumptions\": [\n\"Divine Soul Sorcerer spellcasting is applied using 2024 RAW equivalence.\",\n\"Charisma-based casting uses previously established Charisma score of 21.\"\n],\n\"proposals\": [],\n\"canon_update\": \"No canon changes needed\"\n}\n",
+      "timestamp": "2026-01-04T19:36:41.738Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Legendary",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the LEGENDARY & MYTHIC ACTIONS section of an NPC.\n\nYour focus: Legendary actions, mythic actions, lair actions, regional effects.\n\n\n=== LEGENDARY & MYTHIC ACTIONS SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"legendary_actions\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"summary\": {\n          \"type\": \"string\"\n        },\n        \"count\": {\n          \"type\": \"integer\",\n          \"minimum\": 1,\n          \"description\": \"Number of legendary actions per round\"\n        },\n        \"reset\": {\n          \"type\": \"string\",\n          \"description\": \"When legendary actions reset (e.g., 'start of turn', 'short rest')\"\n        },\n        \"options\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"name\",\n              \"description\"\n            ],\n            \"properties\": {\n              \"name\": {\n                \"type\": \"string\"\n              },\n              \"description\": {\n                \"type\": \"string\"\n              },\n              \"cost\": {\n                \"type\": \"integer\",\n                \"minimum\": 1,\n                \"description\": \"How many legendary actions this costs\"\n              },\n              \"uses\": {\n                \"type\": \"string\"\n              },\n              \"recharge\": {\n                \"type\": \"string\"\n              },\n              \"notes\": {\n                \"type\": \"string\"\n              }\n            }\n          }\n        }\n      },\n      \"description\": \"Legendary actions with enhanced tracking\"\n    },\n    \"mythic_actions\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"summary\": {\n          \"type\": \"string\"\n        },\n        \"trigger\": {\n          \"type\": \"string\",\n          \"description\": \"What triggers mythic actions (e.g., 'reduced to 0 HP')\"\n        },\n        \"options\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"name\",\n              \"description\"\n            ],\n            \"properties\": {\n              \"name\": {\n                \"type\": \"string\"\n              },\n              \"description\": {\n                \"type\": \"string\"\n              },\n              \"uses\": {\n                \"type\": \"string\"\n              },\n              \"recharge\": {\n                \"type\": \"string\"\n              },\n              \"notes\": {\n                \"type\": \"string\"\n              }\n            }\n          }\n        }\n      },\n      \"description\": \"Mythic actions\"\n    },\n    \"lair_actions\": {\n      \"oneOf\": [\n        {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"Simple lair actions (legacy format)\"\n        },\n        {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"action\",\n              \"description\"\n            ],\n            \"properties\": {\n              \"initiative\": {\n                \"type\": \"integer\",\n                \"minimum\": 0,\n                \"maximum\": 30,\n                \"description\": \"Initiative count when action occurs\"\n              },\n              \"action\": {\n                \"type\": \"string\"\n              },\n              \"description\": {\n                \"type\": \"string\"\n              }\n            }\n          },\n          \"description\": \"Enhanced lair actions with initiative tracking\"\n        }\n      ],\n      \"description\": \"Actions available in the NPC's lair\"\n    },\n    \"regional_effects\": {\n      \"oneOf\": [\n        {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"Simple regional effects (legacy format)\"\n        },\n        {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"effect\",\n              \"description\"\n            ],\n            \"properties\": {\n              \"radius\": {\n                \"type\": \"string\",\n                \"description\": \"e.g., '1 mile', '5 miles'\"\n              },\n              \"effect\": {\n                \"type\": \"string\"\n              },\n              \"description\": {\n                \"type\": \"string\"\n              },\n              \"duration\": {\n                \"type\": \"string\",\n                \"description\": \"How long effect lasts after death/departure\"\n              }\n            }\n          },\n          \"description\": \"Enhanced regional effects with radius/duration\"\n        }\n      ],\n      \"description\": \"Regional effects around the NPC's lair\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nCRITICAL LEGENDARY ACTION RULES (if D&D 5E):\n- Legendary creatures can take 3 legendary actions per round\n- Only one legendary action at a time, at the end of another creature's turn\n- Legendary actions should cost 1-3 actions depending on power\n- Lair actions happen on initiative count 20\n- Regional effects persist even when the creature is elsewhere\n\nOnly include this section if the NPC has legendary/mythic status (typically CR 11+). If not legendary, output minimal JSON with empty fields.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"A level 21 equivalent character that is a silver dragon wyrmling. \",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"combat\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null,\n  \"previous_decisions\": {\n    \"proposal_0\": \"Yes\"\n  }\n}",
+      "response": "{\n\"schema_version\": \"1.1\",\n\"name\": \"Unnamed Silver Dragon Wyrmling\",\n\"legendary_actions\": {\n\"summary\": \"The silver dragon wyrmling can take 3 legendary actions per round. It also has Legendary Resistance (3/day), allowing it to choose to succeed on a failed saving throw.\",\n\"count\": 3,\n\"reset\": \"start of its turn\",\n\"options\": [\n{\n\"name\": \"Swift Relocation\",\n\"description\": \"The dragon moves up to its speed without provoking opportunity attacks.\",\n\"cost\": 1\n},\n{\n\"name\": \"Cantrip Cast\",\n\"description\": \"The dragon casts one cantrip it knows.\",\n\"cost\": 2\n},\n{\n\"name\": \"Spell Cast\",\n\"description\": \"The dragon casts a spell of 1st level or higher that it knows, expending a spell slot as normal.\",\n\"cost\": 3\n}\n]\n},\n\"mythic_actions\": {},\n\"lair_actions\": [],\n\"regional_effects\": [],\n\"sources_used\": [],\n\"assumptions\": [\n\"Legendary Resistance is implemented narratively within the legendary actions summary due to schema limitations.\",\n\"Legendary actions are simplified as explicitly requested by the user.\"\n],\n\"proposals\": [],\n\"canon_update\": \"No canon changes needed\"\n}\n",
+      "timestamp": "2026-01-04T19:39:40.853Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Relationships",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the RELATIONSHIPS & NETWORKS section of an NPC.\n\nYour focus: Allies/friends, foes, rivals, mentors, students, family, factions, minions, conflicts.\n\n\n=== RELATIONSHIPS & NETWORKS SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"allies_friends\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"type\",\n          \"relationship\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"type\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'vampire spawn', 'construct', 'NPC'\"\n          },\n          \"relationship\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Childe', 'Servant', 'Ally'\"\n          },\n          \"location\": {\n            \"type\": \"string\"\n          },\n          \"stat_summary\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'CR 5 vampire spawn'\"\n          },\n          \"stat_block_ref\": {\n            \"type\": \"string\",\n            \"description\": \"Reference to full NPC file if it exists\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Detailed ally and friend stat blocks for complex NPCs with networks\"\n    },\n    \"factions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"role\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"role\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Leader', 'Member', 'Enemy', 'Rival'\"\n          },\n          \"standing\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Exalted', 'Honored', 'Neutral', 'Hostile'\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Faction affiliations and standings\"\n    },\n    \"minions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"type\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"type\": {\n            \"type\": \"string\",\n            \"description\": \"Type of minion (e.g., 'Vampire Spawn', 'Construct')\"\n          },\n          \"quantity\": {\n            \"type\": \"integer\",\n            \"minimum\": 1\n          },\n          \"loyalty\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Absolute', 'Strong', 'Conditional'\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Controlled creatures, constructs, or servants\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nBuild a rich social network that:\n- Connects the NPC to the broader world\n- Creates adventure hooks and complications\n- Reflects the NPC's personality and background\n- Uses canon entities where applicable\n\nFocus on relationships that GMs can leverage in their campaigns.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"A level 21 equivalent character that is a silver dragon wyrmling. \",\n  \"basic_info\": {},\n  \"core_details\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null,\n  \"previous_decisions\": {\n    \"proposal_0\": \"Yes\"\n  }\n}",
+      "response": "{\n\"name\": \"Level 21 equivalent Silver Dragon Wyrmling\",\n\"schema_version\": \"1.0\",\n\"allies_friends\": [],\n\"factions\": [],\n\"minions\": [],\n\"sources_used\": [],\n\"assumptions\": [\n\"The wyrmling has been newly reborn in Mount Celestia and has not yet encountered any individuals from its previous life.\",\n\"Allies from a previous life are unknown and unnamed, so none can be explicitly listed without inventing facts.\"\n],\n\"proposals\": [\n\"Are there any specific named individuals from the wyrmling's previous life that should be recorded as allies once encountered?\",\n\"Should Mount Celestia itself be represented as a factional affiliation once the wyrmling integrates into its hierarchy?\"\n],\n\"canon_update\": \"No canon changes needed\"\n}\n",
+      "timestamp": "2026-01-04T19:41:37.009Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Relationships",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the RELATIONSHIPS & NETWORKS section of an NPC.\n\nYour focus: Allies/friends, foes, rivals, mentors, students, family, factions, minions, conflicts.\n\n\n=== RELATIONSHIPS & NETWORKS SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"allies_friends\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"type\",\n          \"relationship\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"type\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'vampire spawn', 'construct', 'NPC'\"\n          },\n          \"relationship\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Childe', 'Servant', 'Ally'\"\n          },\n          \"location\": {\n            \"type\": \"string\"\n          },\n          \"stat_summary\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'CR 5 vampire spawn'\"\n          },\n          \"stat_block_ref\": {\n            \"type\": \"string\",\n            \"description\": \"Reference to full NPC file if it exists\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Detailed ally and friend stat blocks for complex NPCs with networks\"\n    },\n    \"factions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"role\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"role\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Leader', 'Member', 'Enemy', 'Rival'\"\n          },\n          \"standing\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Exalted', 'Honored', 'Neutral', 'Hostile'\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Faction affiliations and standings\"\n    },\n    \"minions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\",\n          \"type\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"type\": {\n            \"type\": \"string\",\n            \"description\": \"Type of minion (e.g., 'Vampire Spawn', 'Construct')\"\n          },\n          \"quantity\": {\n            \"type\": \"integer\",\n            \"minimum\": 1\n          },\n          \"loyalty\": {\n            \"type\": \"string\",\n            \"description\": \"e.g., 'Absolute', 'Strong', 'Conditional'\"\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Controlled creatures, constructs, or servants\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nBuild a rich social network that:\n- Connects the NPC to the broader world\n- Creates adventure hooks and complications\n- Reflects the NPC's personality and background\n- Uses canon entities where applicable\n\nFocus on relationships that GMs can leverage in their campaigns.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"A level 21 equivalent character that is a silver dragon wyrmling. \",\n  \"basic_info\": {},\n  \"core_details\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null,\n  \"previous_decisions\": {\n    \"proposal_0\": \"Yes\"\n  }\n}",
+      "response": "{\n\"schema_version\": \"1.1\",\n\"name\": \"Unnamed Silver Dragon Wyrmling\",\n\"legendary_actions\": {\n\"summary\": \"The silver dragon wyrmling can take 3 legendary actions per round. It also has Legendary Resistance (3/day), allowing it to choose to succeed on a failed saving throw.\",\n\"count\": 3,\n\"reset\": \"start of its turn\",\n\"options\": [\n{\n\"name\": \"Swift Relocation\",\n\"description\": \"The dragon moves up to its speed without provoking opportunity attacks.\",\n\"cost\": 1\n},\n{\n\"name\": \"Cantrip Cast\",\n\"description\": \"The dragon casts one cantrip it knows.\",\n\"cost\": 2\n},\n{\n\"name\": \"Spell Cast\",\n\"description\": \"The dragon casts a spell of 1st level or higher that it knows, expending a spell slot as normal.\",\n\"cost\": 3\n}\n]\n},\n\"mythic_actions\": {},\n\"lair_actions\": [],\n\"regional_effects\": [],\n\"sources_used\": [],\n\"assumptions\": [\n\"Legendary Resistance is implemented narratively within the legendary actions summary due to schema limitations.\",\n\"Legendary actions are simplified as explicitly requested by the user.\"\n],\n\"proposals\": [],\n\"canon_update\": \"No canon changes needed\"\n}\n",
+      "timestamp": "2026-01-06T00:27:26.089Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Creator: Equipment",
+      "chunkIndex": null,
+      "prompt": "⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️\nOutput ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.\nStart your response with { and end with }. Nothing before or after.\nIf you include ANY text outside the JSON object, your response will FAIL parsing.\n\n⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️\nThe original_user_request field contains the EXACT character to create.\nThis is THE PRIMARY SOURCE OF TRUTH about what to create.\nCanon facts are PROVIDED FOR REFERENCE to inform design.\nDO NOT substitute or confuse the requested character with other characters mentioned in canon.\n\nCRITICAL RULES FOR ACCURACY:\n1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any\n2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts\n3. Be 100% ACCURATE - verify each fact against the Relevant Canon\n4. If canon explicitly provides values, USE them in the output\n5. DO NOT ask about information canon provides - just use it\n\nINCREMENTAL BUILD APPROACH:\n- You are building ONE SECTION of the NPC at a time\n- Previous sections are provided for context and consistency\n- Focus ONLY on the current section - don't modify previous sections\n- Build upon the foundation from previous sections\n\nRequired fields in ALL outputs:\n- sources_used: array of chunk_ids from canon you used\n- assumptions: array of reasonable assumptions made\n- proposals: array of questions for unknowns (only if genuinely needed)\n- canon_update: one-line summary of changes (can be \"No canon changes needed\")\n\nYou are creating the EQUIPMENT & POSSESSIONS section of an NPC.\n\n⚠️ CRITICAL: YOU ARE A CREATOR ⚠️\nYour job is to CREATE appropriate equipment for this character.\nBase your choices on:\n- The character's role, class, and combat style\n- The character's wealth level and social status\n- D&D 5E equipment rules and typical loadouts\n- The character's stats and abilities\n\nDO NOT say \"canon doesn't specify equipment\" - CREATE it!\nDO NOT leave the equipment list empty - PROVIDE reasonable gear!\n\nYour focus: Armor, weapons, tools, magic items, treasure, carried items, worn items.\n\n\n=== EQUIPMENT & POSSESSIONS SCHEMA ===\n\nYour output MUST conform to this JSON schema:\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"equipment\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Mundane equipment carried\"\n    },\n    \"magic_items\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"rarity\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"Common\",\n              \"Uncommon\",\n              \"Rare\",\n              \"Very Rare\",\n              \"Legendary\",\n              \"Artifact\"\n            ]\n          },\n          \"description\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"description\": \"Magic items not requiring attunement\"\n    },\n    \"attuned_items\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"name\"\n        ],\n        \"properties\": {\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"rarity\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"Common\",\n              \"Uncommon\",\n              \"Rare\",\n              \"Very Rare\",\n              \"Legendary\",\n              \"Artifact\"\n            ]\n          },\n          \"requires_attunement\": {\n            \"type\": \"boolean\"\n          },\n          \"attuned\": {\n            \"type\": \"boolean\",\n            \"description\": \"Whether currently attuned\"\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"properties\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\"\n            },\n            \"description\": \"Special properties of the item\"\n          },\n          \"charges\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"current\": {\n                \"type\": \"integer\",\n                \"minimum\": 0\n              },\n              \"maximum\": {\n                \"type\": \"integer\",\n                \"minimum\": 0\n              },\n              \"recharge\": {\n                \"type\": \"string\",\n                \"description\": \"e.g., '1d6+1 at dawn'\"\n              }\n            }\n          }\n        }\n      },\n      \"description\": \"Magic items requiring attunement\"\n    }\n  },\n  \"required\": [\n    \"name\",\n    \"schema_version\"\n  ]\n}\n\n⚠️ CRITICAL:\n- Use ONLY the properties defined in this schema section\n- Follow the exact data types specified (string, number, array, object)\n- Include required fields: [\"name\",\"schema_version\"]\n- Output ONLY valid JSON matching this schema structure\n\n\nEQUIPMENT GUIDELINES:\n- Armor and weapons should match proficiencies and combat style\n- Magic items should be appropriate for CR/level\n- Include utility items that reflect the character's profession\n- Consider wealth level: peasants have simple gear, nobles have fine equipment\n- Don't forget consumables (potions, scrolls) for spellcasters\n\nCreate a practical equipment loadout that supports the character concept.\n\n---\n\nUSER INPUT:\n{\n  \"original_user_request\": \"A level 21 equivalent character that is a silver dragon wyrmling. \",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"combat\": {},\n  \"brief\": {},\n  \"flags\": {\n    \"rule_base\": \"2024RAW\",\n    \"allow_invention\": \"cosmetic\",\n    \"tone\": \"epic\"\n  },\n  \"relevant_canon\": null\n}",
+      "response": "{\n\"schema_version\": \"1.1\",\n\"name\": \"Unnamed Silver Dragon Wyrmling\",\n\"equipment\": [\n\"Runed platinum circlet sized for a wyrmling\",\n\"Fine silken harness with integrated spell components\",\n\"Crystal reliquary containing powdered silver and holy incense\",\n\"Traveling spell component satchel\",\n\"Pouch containing assorted gemstones and coinage\"\n],\n\"magic_items\": [\n{\n\"name\": \"Scroll of Resurrection\",\n\"rarity\": \"Very Rare\",\n\"description\": \"A divine scroll inscribed with draconic and celestial script, allowing the casting of Resurrection.\"\n},\n{\n\"name\": \"Potion of Supreme Healing\",\n\"rarity\": \"Very Rare\",\n\"description\": \"A crystalline vial containing radiant-blue liquid that restores a large amount of hit points when consumed.\"\n}\n],\n\"attuned_items\": [\n{\n\"name\": \"Amulet of the Platinum Concordance\",\n\"rarity\": \"Legendary\",\n\"requires_attunement\": true,\n\"attuned\": true,\n\"description\": \"A relic blessed by Bahamut that amplifies divine and sorcerous magic, symbolizing the wyrmling’s sacred charge.\",\n\"properties\": [\n\"Grants advantage on concentration checks\",\n\"Once per long rest, regain one expended spell slot of 6th level or lower\"\n]\n},\n{\n\"name\": \"Ring of Spell Turning\",\n\"rarity\": \"Legendary\",\n\"requires_attunement\": true,\n\"attuned\": true,\n\"description\": \"A finely wrought silver ring that reflects hostile magic back upon its caster.\"\n},\n{\n\"name\": \"Cloak of Protection\",\n\"rarity\": \"Uncommon\",\n\"requires_attunement\": true,\n\"attuned\": true,\n\"description\": \"A shimmering cloak that subtly reinforces the dragon’s natural defenses.\",\n\"properties\": [\n\"+1 bonus to AC\",\n\"+1 bonus to saving throws\"\n]\n}\n],\n\"sources_used\": [],\n\"assumptions\": [\n\"As an epic-tier divine sorcerer-dragon, the wyrmling possesses legendary-quality magic items appropriate to a level 21 equivalent.\",\n\"Equipment is designed to be wearable or integrated despite the dragon’s Small size.\"\n],\n\"proposals\": [],\n\"canon_update\": \"No canon changes needed\"\n}\n",
+      "timestamp": "2026-01-06T00:28:24.505Z",
+      "status": "completed"
+    }
+  ],
+  "stageResults": {
+    "creator:_basic_info": {
+      "schema_version": "1.1",
+      "genre": "D&D",
+      "name": "Unnamed Silver Dragon Wyrmling",
+      "title": "Epic Wyrmling",
+      "aliases": [],
+      "description": "A silver dragon wyrmling of unusual potency, far beyond the power normally expected of its age. Though physically still young, it carries itself with ancient composure, keen intellect, and an aura of restrained majesty that marks it as an epic-tier being rather than a mundane hatchling.",
+      "appearance": "A small silver-scaled dragon with bright, reflective hide, elegant wings not yet fully grown, and pale, intelligent eyes that glimmer with cold light. Frost often clings to its breath and the edges of its scales.",
+      "background": "This silver dragon wyrmling is exceptionally advanced for its age, possessing power comparable to legendary heroes. Its circumstances of origin and growth are unknown, but its existence suggests rare magical influence or destiny.",
+      "race": "Dragon",
+      "size": "Small",
+      "creature_type": "Dragon",
+      "subtype": "Silver Dragon",
+      "alignment": "Lawful Good",
+      "affiliation": "",
+      "location": "",
+      "era": "",
+      "challenge_rating": "Equivalent to Level 21",
+      "experience_points": 0,
+      "sources_used": [],
+      "assumptions": [
+        "No relevant canon was provided, so only high-level descriptive information was included.",
+        "The phrase 'level 21 equivalent' is interpreted narratively rather than mechanically."
+      ],
+      "proposals": [],
+      "canon_update": "No canon changes needed"
+    },
+    "creator:_core_details": {
+      "schema_version": "1.1",
+      "name": "Unnamed Silver Dragon Wyrmling",
+      "role": "An epic-tier silver dragon wyrmling whose wisdom and moral clarity belie its physical youth, serving as a rare arbiter, guardian, or catalyst in conflicts far beyond the scope of its age.",
+      "hooks": [
+        "Seeks mortal allies to resolve a threat it cannot openly confront without revealing its existence to rival ancient dragons.",
+        "Possesses crucial knowledge of an ancient injustice involving dragons and humanoid realms, but will only share it with those who prove honorable intent.",
+        "Is being hunted or manipulated by powerful forces seeking to exploit its unusual level of power at such a young age."
+      ],
+      "sources_used": [],
+      "assumptions": [
+        "No canon personality traits were provided, so traits were created at a high-level, narrative, and non-mechanical scope.",
+        "Personality and hooks are treated as cosmetic and story-facing, consistent with allowed invention."
+      ],
+      "proposals": [],
+      "canon_update": "No canon changes needed"
+    },
+    "creator:_stats": {
+      "schema_version": "1.1",
+      "name": "Unnamed Silver Dragon Wyrmling",
+      "class_levels": [],
+      "multiclass_features": [],
+      "ability_scores": {
+        "str": 23,
+        "dex": 14,
+        "con": 23,
+        "int": 16,
+        "wis": 15,
+        "cha": 21
+      },
+      "armor_class": 20,
+      "hit_points": {
+        "average": 264,
+        "formula": "21d12 + 126",
+        "notes": "Epic-scaled dragon hit dice using Constitution modifier"
+      },
+      "hit_dice": "21d12",
+      "speed": {
+        "walk": "30 ft.",
+        "fly": "120 ft.",
+        "swim": "30 ft."
+      },
+      "proficiency_bonus": 7,
+      "senses": [
+        "blindsight 30 ft.",
+        "darkvision 120 ft.",
+        "passive Perception 19"
+      ],
+      "languages": [
+        "Common",
+        "Draconic"
+      ],
+      "saving_throws": [
+        {
+          "name": "Dexterity",
+          "value": "+9"
+        },
+        {
+          "name": "Constitution",
+          "value": "+13"
+        },
+        {
+          "name": "Wisdom",
+          "value": "+9"
+        },
+        {
+          "name": "Charisma",
+          "value": "+12"
+        }
+      ],
+      "skill_proficiencies": [
+        {
+          "name": "Perception",
+          "value": "+9"
+        },
+        {
+          "name": "Insight",
+          "value": "+9"
+        },
+        {
+          "name": "Stealth",
+          "value": "+9"
+        }
+      ],
+      "damage_resistances": [],
+      "damage_immunities": [
+        "cold"
+      ],
+      "damage_vulnerabilities": [],
+      "condition_immunities": [],
+      "sources_used": [],
+      "assumptions": [
+        "Epic statistics are derived by scaling the published silver dragon wyrmling baseline to a level 21 equivalent threat.",
+        "Ability scores and durability reflect a young dragon with legendary-tier growth."
+      ],
+      "proposals": [],
+      "canon_update": "No canon changes needed"
+    },
+    "creator:_combat": {
+      "schema_version": "1.1",
+      "name": "Unnamed Silver Dragon Wyrmling",
+      "abilities": [],
+      "actions": [],
+      "bonus_actions": [],
+      "reactions": [],
+      "tactics": "",
+      "sources_used": [],
+      "assumptions": [
+        "No relevant canon combat features were provided for this NPC.",
+        "Because invention is limited to cosmetic only, combat mechanics (attacks, breath weapon, spellcasting, recharge, and numerical effects) are omitted rather than invented."
+      ],
+      "proposals": [],
+      "canon_update": "No canon changes needed"
+    },
+    "creator:_spellcasting": {
+      "schema_version": "1.1",
+      "name": "Unnamed Silver Dragon Wyrmling",
+      "spellcasting": {
+        "type": "Known",
+        "ability": "CHA",
+        "save_dc": 19,
+        "attack_bonus": 11,
+        "notes": "Equivalent to a 17th-level Divine Soul Sorcerer; spell list draws from Sorcerer and Cleric lists.",
+        "cantrips": [
+          "Sacred Flame",
+          "Guidance",
+          "Light",
+          "Mage Hand",
+          "Prestidigitation",
+          "Ray of Frost"
+        ],
+        "spellcasting_focus": "innate draconic magic",
+        "spell_slots": {
+          "1st": 4,
+          "2nd": 3,
+          "3rd": 3,
+          "4th": 3,
+          "5th": 3,
+          "6th": 2,
+          "7th": 2,
+          "8th": 1,
+          "9th": 1
+        },
+        "known_spells": [
+          "Shield",
+          "Absorb Elements",
+          "Bless",
+          "Cure Wounds",
+          "Lesser Restoration",
+          "Aid",
+          "Counterspell",
+          "Dispel Magic",
+          "Revivify",
+          "Spirit Guardians",
+          "Freedom of Movement",
+          "Banishment",
+          "Greater Restoration",
+          "Wall of Ice",
+          "Heal",
+          "Sunbeam",
+          "Plane Shift",
+          "Holy Aura",
+          "Mass Heal",
+          "Wish"
+        ]
+      },
+      "sources_used": [],
+      "assumptions": [
+        "Divine Soul Sorcerer spellcasting is applied using 2024 RAW equivalence.",
+        "Charisma-based casting uses previously established Charisma score of 21."
+      ],
+      "proposals": [],
+      "canon_update": "No canon changes needed"
+    },
+    "creator:_legendary": {
+      "schema_version": "1.1",
+      "name": "Unnamed Silver Dragon Wyrmling",
+      "legendary_actions": {
+        "summary": "The silver dragon wyrmling can take 3 legendary actions per round. It also has Legendary Resistance (3/day), allowing it to choose to succeed on a failed saving throw.",
+        "count": 3,
+        "reset": "start of its turn",
+        "options": [
+          {
+            "name": "Swift Relocation",
+            "description": "The dragon moves up to its speed without provoking opportunity attacks.",
+            "cost": 1
+          },
+          {
+            "name": "Cantrip Cast",
+            "description": "The dragon casts one cantrip it knows.",
+            "cost": 2
+          },
+          {
+            "name": "Spell Cast",
+            "description": "The dragon casts a spell of 1st level or higher that it knows, expending a spell slot as normal.",
+            "cost": 3
+          }
+        ]
+      },
+      "mythic_actions": {},
+      "lair_actions": [],
+      "regional_effects": [],
+      "sources_used": [],
+      "assumptions": [
+        "Legendary Resistance is implemented narratively within the legendary actions summary due to schema limitations.",
+        "Legendary actions are simplified as explicitly requested by the user."
+      ],
+      "proposals": [],
+      "canon_update": "No canon changes needed"
+    },
+    "creator:_relationships": {
+      "schema_version": "1.1",
+      "name": "Unnamed Silver Dragon Wyrmling",
+      "legendary_actions": {
+        "summary": "The silver dragon wyrmling can take 3 legendary actions per round. It also has Legendary Resistance (3/day), allowing it to choose to succeed on a failed saving throw.",
+        "count": 3,
+        "reset": "start of its turn",
+        "options": [
+          {
+            "name": "Swift Relocation",
+            "description": "The dragon moves up to its speed without provoking opportunity attacks.",
+            "cost": 1
+          },
+          {
+            "name": "Cantrip Cast",
+            "description": "The dragon casts one cantrip it knows.",
+            "cost": 2
+          },
+          {
+            "name": "Spell Cast",
+            "description": "The dragon casts a spell of 1st level or higher that it knows, expending a spell slot as normal.",
+            "cost": 3
+          }
+        ]
+      },
+      "mythic_actions": {},
+      "lair_actions": [],
+      "regional_effects": [],
+      "sources_used": [],
+      "assumptions": [
+        "Legendary Resistance is implemented narratively within the legendary actions summary due to schema limitations.",
+        "Legendary actions are simplified as explicitly requested by the user."
+      ],
+      "proposals": [],
+      "canon_update": "No canon changes needed"
+    },
+    "creator:_equipment": {
+      "schema_version": "1.1",
+      "name": "Unnamed Silver Dragon Wyrmling",
+      "equipment": [
+        "Runed platinum circlet sized for a wyrmling",
+        "Fine silken harness with integrated spell components",
+        "Crystal reliquary containing powdered silver and holy incense",
+        "Traveling spell component satchel",
+        "Pouch containing assorted gemstones and coinage"
+      ],
+      "magic_items": [
+        {
+          "name": "Scroll of Resurrection",
+          "rarity": "Very Rare",
+          "description": "A divine scroll inscribed with draconic and celestial script, allowing the casting of Resurrection."
+        },
+        {
+          "name": "Potion of Supreme Healing",
+          "rarity": "Very Rare",
+          "description": "A crystalline vial containing radiant-blue liquid that restores a large amount of hit points when consumed."
+        }
+      ],
+      "attuned_items": [
+        {
+          "name": "Amulet of the Platinum Concordance",
+          "rarity": "Legendary",
+          "requires_attunement": true,
+          "attuned": true,
+          "description": "A relic blessed by Bahamut that amplifies divine and sorcerous magic, symbolizing the wyrmling’s sacred charge.",
+          "properties": [
+            "Grants advantage on concentration checks",
+            "Once per long rest, regain one expended spell slot of 6th level or lower"
+          ]
+        },
+        {
+          "name": "Ring of Spell Turning",
+          "rarity": "Legendary",
+          "requires_attunement": true,
+          "attuned": true,
+          "description": "A finely wrought silver ring that reflects hostile magic back upon its caster."
+        },
+        {
+          "name": "Cloak of Protection",
+          "rarity": "Uncommon",
+          "requires_attunement": true,
+          "attuned": true,
+          "description": "A shimmering cloak that subtly reinforces the dragon’s natural defenses.",
+          "properties": [
+            "+1 bonus to AC",
+            "+1 bonus to saving throws"
+          ]
+        }
+      ],
+      "sources_used": [],
+      "assumptions": [
+        "As an epic-tier divine sorcerer-dragon, the wyrmling possesses legendary-quality magic items appropriate to a level 21 equivalent.",
+        "Equipment is designed to be wearable or integrated despite the dragon’s Small size."
+      ],
+      "proposals": [],
+      "canon_update": "No canon changes needed"
+    }
+  },
+  "currentStageIndex": 7
+}

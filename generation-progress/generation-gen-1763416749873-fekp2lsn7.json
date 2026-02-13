@@ -1,0 +1,228 @@
+{
+  "sessionId": "gen-1763416749873-fekp2lsn7",
+  "createdAt": "2025-11-17T21:59:09.873Z",
+  "lastUpdatedAt": "2025-11-17T23:15:50.397Z",
+  "config": {
+    "type": "monster",
+    "prompt": "Blood Knight\nMedium Construct (Undead-Construct Hybrid), Lawful Evil\nArmor Class: 19 (Bloodsteel Armor and Shield)\nHit Points: 200 (19d10 + 95)\nSpeed: 30 ft., fly 30 ft. (hover)\nSTR 20 (+5), DEX 15 (+2), CON 20 (+5), INT 12 (+1), WIS 12 (+1), CHA 8 (-1)\nSaving Throws: Str +9, Con +10, Wis +6\nSkills: Perception +6, Intimidation +4\nDamage Resistances: Necrotic, Cold, Lightning\nDamage Immunities: Poison; Force; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks\nCondition Immunities: Blinded, Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 16\nLanguages: Understands Common plus languages of its creator but can’t speak\nChallenge: 10 (5,900 XP; PB +4)\nTraits\nMagic Resistance. The Blood Knight has advantage on saving throws against spells and other magical effects.\nSpell Immunity. The Blood Knight is immune to three specific spells chosen by its creator (Heat Metal, Lightning Bolt, and Hold Monster).\nBloodsteel Form. The Blood Knight is a hybrid construct and undead creature fueled by blood magic. It is immune to effects that target only constructs or undead but is affected by effects that target either.\nBloodsteel Armor. The Blood Knight reduces all non-magical slashing, bludgeoning, and piercing damage taken by 5.\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\nActions\nMultiattack. The Blood Knight makes two Bloodforged Blade attacks.\nBloodforged Blade (+1). Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 14 (1d8 + 6) slashing damage plus 9 (2d8) necrotic damage. The Blood Knight heals equal the necrotic damage dealt.\nBlood Corruption Blast (Recharge 5+). The Blood Knight takes 10 points of damage reducing its max HP as it uses its blood infusions to expels necrotic energy in a 20-foot radius sphere centered on itself. Each creature in that area must succeed on a DC 17 Constitution saving throw or take 22 (5d8) necrotic damage, save for half, reducing their maximum hit points by that amount until they complete a long rest.\nReactions\nBloodforged Shield. When hit by an attack or targeted by a spell, the Blood Knight can use its reaction and takes 10 points of damage reducing its max HP as it uses its blood infusions to raise its shield of bloodsteel, granting itself a +4 bonus to AC against that attack or advantage on the saving throw against that spell.\n",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Stats & Defenses",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 2/5: Stats and Defenses.\n\nYou are building upon the basic info from stage 1.\n\nFocus ONLY on these fields:\n- ability_scores: Object with str, dex, con, int, wis, cha (all integers 1-30, required)\n- armor_class: Integer or array of AC objects with value/type/notes (required)\n- hit_points: Integer or object with average and formula (required)\n- hit_dice: String like \"8d10\" or \"15d8+45\"\n- proficiency_bonus: Integer +2 to +9 based on CR (required)\n- speed: Object with walk, fly, swim, climb, burrow speeds (strings like \"30 ft.\")\n- saving_throws: Array of {name, value, notes} for proficient saves\n- skill_proficiencies: Array of {name, value, notes} for proficient skills\n- damage_vulnerabilities: Array of damage types\n- damage_resistances: Array of damage types\n- damage_immunities: Array of damage types\n- condition_immunities: Array of conditions\n- senses: Array of special senses (e.g., \"darkvision 60 ft.\", \"blindsight 30 ft.\")\n- languages: Array of languages understood/spoken\n\nCalculate stats appropriate for the monster's CR and type. Use D&D 5e guidelines for CR-appropriate values.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Blood Knight\\nMedium Construct (Undead-Construct Hybrid), Lawful Evil\\nArmor Class: 19 (Bloodsteel Armor and Shield)\\nHit Points: 200 (19d10 + 95)\\nSpeed: 30 ft., fly 30 ft. (hover)\\nSTR 20 (+5), DEX 15 (+2), CON 20 (+5), INT 12 (+1), WIS 12 (+1), CHA 8 (-1)\\nSaving Throws: Str +9, Con +10, Wis +6\\nSkills: Perception +6, Intimidation +4\\nDamage Resistances: Necrotic, Cold, Lightning\\nDamage Immunities: Poison; Force; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks\\nCondition Immunities: Blinded, Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 16\\nLanguages: Understands Common plus languages of its creator but can’t speak\\nChallenge: 10 (5,900 XP; PB +4)\\nTraits\\nMagic Resistance. The Blood Knight has advantage on saving throws against spells and other magical effects.\\nSpell Immunity. The Blood Knight is immune to three specific spells chosen by its creator (Heat Metal, Lightning Bolt, and Hold Monster).\\nBloodsteel Form. The Blood Knight is a hybrid construct and undead creature fueled by blood magic. It is immune to effects that target only constructs or undead but is affected by effects that target either.\\nBloodsteel Armor. The Blood Knight reduces all non-magical slashing, bludgeoning, and piercing damage taken by 5.\\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\\nActions\\nMultiattack. The Blood Knight makes two Bloodforged Blade attacks.\\nBloodforged Blade (+1). Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 14 (1d8 + 6) slashing damage plus 9 (2d8) necrotic damage. The Blood Knight heals equal the necrotic damage dealt.\\nBlood Corruption Blast (Recharge 5+). The Blood Knight takes 10 points of damage reducing its max HP as it uses its blood infusions to expels necrotic energy in a 20-foot radius sphere centered on itself. Each creature in that area must succeed on a DC 17 Constitution saving throw or take 22 (5d8) necrotic damage, save for half, reducing their maximum hit points by that amount until they complete a long rest.\\nReactions\\nBloodforged Shield. When hit by an attack or targeted by a spell, the Blood Knight can use its reaction and takes 10 points of damage reducing its max HP as it uses its blood infusions to raise its shield of bloodsteel, granting itself a +4 bonus to AC against that attack or advantage on the saving throw against that spell.\\n\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"stats\",\n  \"basic_info\": {},\n  \"instructions\": \"Generate stats and defenses for this monster. Ensure values are appropriate for CR unknown.\"\n}",
+      "response": "{\n  \"ability_scores\": {\n    \"str\": 20,\n    \"dex\": 15,\n    \"con\": 20,\n    \"int\": 12,\n    \"wis\": 12,\n    \"cha\": 8\n  },\n  \"armor_class\": [\n    {\n      \"value\": 19,\n      \"type\": \"Bloodsteel Armor\",\n      \"notes\": \"and Shield\"\n    }\n  ],\n  \"hit_points\": {\n    \"average\": 200,\n    \"formula\": \"19d10 + 95\"\n  },\n  \"hit_dice\": \"19d10\",\n  \"proficiency_bonus\": 4,\n  \"speed\": {\n    \"walk\": \"30 ft.\",\n    \"fly\": \"30 ft. (hover)\"\n  },\n  \"saving_throws\": [\n    {\n      \"name\": \"Str\",\n      \"value\": 9\n    },\n    {\n      \"name\": \"Con\",\n      \"value\": 10\n    },\n    {\n      \"name\": \"Wis\",\n      \"value\": 6\n    }\n  ],\n  \"skill_proficiencies\": [\n    {\n      \"name\": \"Perception\",\n      \"value\": 6\n    },\n    {\n      \"name\": \"Intimidation\",\n      \"value\": 4\n    }\n  ],\n  \"damage_vulnerabilities\": [],\n  \"damage_resistances\": [\n    \"necrotic\",\n    \"cold\",\n    \"lightning\"\n  ],\n  \"damage_immunities\": [\n    \"poison\",\n    \"force\",\n    \"bludgeoning, piercing, and slashing from nonmagical attacks\"\n  ],\n  \"condition_immunities\": [\n    \"blinded\",\n    \"charmed\",\n    \"deafened\",\n    \"exhaustion\",\n    \"frightened\",\n    \"paralyzed\",\n    \"petrified\",\n    \"poisoned\",\n    \"stunned\"\n  ],\n  \"senses\": [\n    \"blindsight 60 ft.\",\n    \"darkvision 120 ft.\",\n    \"Passive Perception 16\"\n  ],\n  \"languages\": [\n    \"understands Common plus languages of its creator but can't speak\"\n  ]\n}",
+      "timestamp": "2025-11-17T23:05:26.221Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Combat & Abilities",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 3/5: Combat and Abilities.\n\nYou are building upon previous stages.\n\nFocus ONLY on these fields:\n- abilities: Array of special traits/abilities (passive features like Magic Resistance, Pack Tactics, etc.)\n  Each ability: {name, description, uses?, recharge?, notes?}\n- actions: Array of actions the monster can take (attacks, special actions)\n  Each action: {name, description, uses?, recharge?, notes?}\n  Include attack bonus, damage, and DC values in descriptions\n- bonus_actions: Array of bonus actions if applicable\n- reactions: Array of reactions if applicable\n- tactics: String describing combat tactics and behavior patterns\n\nCreate abilities and actions appropriate for the monster's CR and type. Include:\n- At least 1-2 attack actions\n- Special abilities that make the monster interesting/unique\n- Appropriate attack bonuses and save DCs for the CR\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Blood Knight\\nMedium Construct (Undead-Construct Hybrid), Lawful Evil\\nArmor Class: 19 (Bloodsteel Armor and Shield)\\nHit Points: 200 (19d10 + 95)\\nSpeed: 30 ft., fly 30 ft. (hover)\\nSTR 20 (+5), DEX 15 (+2), CON 20 (+5), INT 12 (+1), WIS 12 (+1), CHA 8 (-1)\\nSaving Throws: Str +9, Con +10, Wis +6\\nSkills: Perception +6, Intimidation +4\\nDamage Resistances: Necrotic, Cold, Lightning\\nDamage Immunities: Poison; Force; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks\\nCondition Immunities: Blinded, Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 16\\nLanguages: Understands Common plus languages of its creator but can’t speak\\nChallenge: 10 (5,900 XP; PB +4)\\nTraits\\nMagic Resistance. The Blood Knight has advantage on saving throws against spells and other magical effects.\\nSpell Immunity. The Blood Knight is immune to three specific spells chosen by its creator (Heat Metal, Lightning Bolt, and Hold Monster).\\nBloodsteel Form. The Blood Knight is a hybrid construct and undead creature fueled by blood magic. It is immune to effects that target only constructs or undead but is affected by effects that target either.\\nBloodsteel Armor. The Blood Knight reduces all non-magical slashing, bludgeoning, and piercing damage taken by 5.\\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\\nActions\\nMultiattack. The Blood Knight makes two Bloodforged Blade attacks.\\nBloodforged Blade (+1). Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 14 (1d8 + 6) slashing damage plus 9 (2d8) necrotic damage. The Blood Knight heals equal the necrotic damage dealt.\\nBlood Corruption Blast (Recharge 5+). The Blood Knight takes 10 points of damage reducing its max HP as it uses its blood infusions to expels necrotic energy in a 20-foot radius sphere centered on itself. Each creature in that area must succeed on a DC 17 Constitution saving throw or take 22 (5d8) necrotic damage, save for half, reducing their maximum hit points by that amount until they complete a long rest.\\nReactions\\nBloodforged Shield. When hit by an attack or targeted by a spell, the Blood Knight can use its reaction and takes 10 points of damage reducing its max HP as it uses its blood infusions to raise its shield of bloodsteel, granting itself a +4 bonus to AC against that attack or advantage on the saving throw against that spell.\\n\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"combat\",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"instructions\": \"Generate combat abilities and actions for this monster. Make it interesting and mechanically appropriate for CR unknown.\"\n}",
+      "response": "{\n  \"abilities\": [\n    {\n      \"name\": \"Magic Resistance\",\n      \"description\": \"The Blood Knight has advantage on saving throws against spells and other magical effects.\"\n    },\n    {\n      \"name\": \"Spell Immunity\",\n      \"description\": \"The Blood Knight is immune to three specific spells chosen by its creator: *heat metal*, *lightning bolt*, and *hold monster*.\"\n    },\n    {\n      \"name\": \"Bloodsteel Form\",\n      \"description\": \"The Blood Knight is a hybrid construct and undead creature fueled by blood magic. It is immune to effects that target only constructs or undead but is affected by effects that target either.\"\n    },\n    {\n      \"name\": \"Bloodsteel Armor\",\n      \"description\": \"The Blood Knight reduces all non-magical slashing, bludgeoning, and piercing damage taken by 5.\"\n    },\n    {\n      \"name\": \"Blood Infusions\",\n      \"description\": \"The bloodsteel is infused with blood-based magic and powers some of its abilities, often at the cost of its maximum hit points.\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"name\": \"Multiattack\",\n      \"description\": \"The Blood Knight makes two Bloodforged Blade attacks.\"\n    },\n    {\n      \"name\": \"Bloodforged Blade (+1)\",\n      \"description\": \"Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 14 (1d8 + 6) slashing damage plus 9 (2d8) necrotic damage. The Blood Knight regains hit points equal to the necrotic damage dealt.\"\n    },\n    {\n      \"name\": \"Blood Corruption Blast\",\n      \"description\": \"The Blood Knight takes 10 points of damage, reducing its maximum hit points by that amount, as it uses its blood infusions to expel necrotic energy in a 20-foot radius sphere centered on itself. Each creature in that area must make a DC 17 Constitution saving throw, taking 22 (5d8) necrotic damage on a failed save, or half as much damage on a successful one. A creature's maximum hit points are reduced by the damage taken until it finishes a long rest.\",\n      \"recharge\": \"5-6\"\n    }\n  ],\n  \"bonus_actions\": [],\n  \"reactions\": [\n    {\n      \"name\": \"Bloodforged Shield\",\n      \"description\": \"When hit by an attack or targeted by a spell, the Blood Knight can use its reaction and takes 10 points of damage, reducing its maximum hit points by that amount. It gains a +4 bonus to AC against that attack or has advantage on the saving throw against that spell.\"\n    }\n  ],\n  \"tactics\": \"The Blood Knight is a relentless frontline tank, leveraging its high AC and immunities to draw enemy fire. It uses its Multiattack to quickly heal itself with the Bloodforged Blade. When surrounded or facing clustered enemies, it utilizes the Blood Corruption Blast to deal mass damage and weaken foes by reducing their maximum HP, accepting the temporary reduction to its own power for battlefield control. It prioritizes using its Bloodforged Shield reaction against critical attacks or high-level spells to maintain its longevity.\"\n}",
+      "timestamp": "2025-11-17T23:06:12.505Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Legendary & Lair",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 4/5: Legendary and Lair Features.\n\nYou are building upon previous stages. This stage is OPTIONAL - only include these if the monster is powerful/important enough (typically CR 5+).\n\nFocus ONLY on these fields (only if appropriate):\n- legendary_actions: Object with {summary, options}\n  summary: String explaining how many legendary actions the creature gets\n  options: Array of legendary actions, each with {name, description, uses?, recharge?, notes?}\n- mythic_actions: Object with {summary, options} - only for extremely powerful creatures\n- lair_actions: Array of strings describing lair actions (if the creature has a lair)\n- regional_effects: Array of strings describing regional effects (if applicable)\n\nMost monsters will NOT need these fields. Only include if:\n- CR is 5+ for legendary actions\n- CR is 15+ for mythic actions\n- The monster is significant enough to have a lair\n\nIf not applicable, return an empty object {} or omit these fields.\n\nReturn ONLY a JSON object. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Blood Knight\\nMedium Construct (Undead-Construct Hybrid), Lawful Evil\\nArmor Class: 19 (Bloodsteel Armor and Shield)\\nHit Points: 200 (19d10 + 95)\\nSpeed: 30 ft., fly 30 ft. (hover)\\nSTR 20 (+5), DEX 15 (+2), CON 20 (+5), INT 12 (+1), WIS 12 (+1), CHA 8 (-1)\\nSaving Throws: Str +9, Con +10, Wis +6\\nSkills: Perception +6, Intimidation +4\\nDamage Resistances: Necrotic, Cold, Lightning\\nDamage Immunities: Poison; Force; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks\\nCondition Immunities: Blinded, Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 16\\nLanguages: Understands Common plus languages of its creator but can’t speak\\nChallenge: 10 (5,900 XP; PB +4)\\nTraits\\nMagic Resistance. The Blood Knight has advantage on saving throws against spells and other magical effects.\\nSpell Immunity. The Blood Knight is immune to three specific spells chosen by its creator (Heat Metal, Lightning Bolt, and Hold Monster).\\nBloodsteel Form. The Blood Knight is a hybrid construct and undead creature fueled by blood magic. It is immune to effects that target only constructs or undead but is affected by effects that target either.\\nBloodsteel Armor. The Blood Knight reduces all non-magical slashing, bludgeoning, and piercing damage taken by 5.\\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\\nActions\\nMultiattack. The Blood Knight makes two Bloodforged Blade attacks.\\nBloodforged Blade (+1). Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 14 (1d8 + 6) slashing damage plus 9 (2d8) necrotic damage. The Blood Knight heals equal the necrotic damage dealt.\\nBlood Corruption Blast (Recharge 5+). The Blood Knight takes 10 points of damage reducing its max HP as it uses its blood infusions to expels necrotic energy in a 20-foot radius sphere centered on itself. Each creature in that area must succeed on a DC 17 Constitution saving throw or take 22 (5d8) necrotic damage, save for half, reducing their maximum hit points by that amount until they complete a long rest.\\nReactions\\nBloodforged Shield. When hit by an attack or targeted by a spell, the Blood Knight can use its reaction and takes 10 points of damage reducing its max HP as it uses its blood infusions to raise its shield of bloodsteel, granting itself a +4 bonus to AC against that attack or advantage on the saving throw against that spell.\\n\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"legendary\",\n  \"basic_info\": {},\n  \"instructions\": \"If appropriate for CR unknown, generate legendary actions and/or lair features. Otherwise return an empty object.\"\n}",
+      "response": "{\n  \"legendary_actions\": {\n    \"summary\": \"The Blood Knight can take 3 legendary actions, choosing from the options below. Only one legendary action option can be used at a time and only at the end of another creature's turn. The Blood Knight regains spent legendary actions at the start of its turn.\",\n    \"options\": [\n      {\n        \"name\": \"Bloodforged Strike (1 Action)\",\n        \"description\": \"The Blood Knight makes one Bloodforged Blade attack.\"\n      },\n      {\n        \"name\": \"Intimidating Presence (1 Action)\",\n        \"description\": \"One creature of the Blood Knight's choice within 30 feet must succeed on a DC 12 Wisdom saving throw or be frightened until the end of the creature's next turn.\"\n      },\n      {\n        \"name\": \"Sanguine Leap (2 Actions)\",\n        \"description\": \"The Blood Knight moves up to its fly speed without provoking opportunity attacks. It may optionally use this movement to gain half cover behind an object or obstacle.\"\n      }\n    ]\n  }\n}",
+      "timestamp": "2025-11-17T23:07:14.303Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Ecology & Lore",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 5/5: Ecology and Lore.\n\nYou are building upon all previous stages to add final context and flavor.\n\nFocus ONLY on these fields:\n- ecology: String (2-3 sentences) describing habitat, diet, social structure, and behavior in its natural environment\n- lore: String (2-3 sentences) providing background lore, origin, or interesting facts about the creature\n- notes: Array of strings with any additional GM notes or adventure hooks\n- sources: Array of strings citing any source books or references\n\nThis is the final polish stage - provide interesting context that helps a GM use this monster effectively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Blood Knight\\nMedium Construct (Undead-Construct Hybrid), Lawful Evil\\nArmor Class: 19 (Bloodsteel Armor and Shield)\\nHit Points: 200 (19d10 + 95)\\nSpeed: 30 ft., fly 30 ft. (hover)\\nSTR 20 (+5), DEX 15 (+2), CON 20 (+5), INT 12 (+1), WIS 12 (+1), CHA 8 (-1)\\nSaving Throws: Str +9, Con +10, Wis +6\\nSkills: Perception +6, Intimidation +4\\nDamage Resistances: Necrotic, Cold, Lightning\\nDamage Immunities: Poison; Force; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks\\nCondition Immunities: Blinded, Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 16\\nLanguages: Understands Common plus languages of its creator but can’t speak\\nChallenge: 10 (5,900 XP; PB +4)\\nTraits\\nMagic Resistance. The Blood Knight has advantage on saving throws against spells and other magical effects.\\nSpell Immunity. The Blood Knight is immune to three specific spells chosen by its creator (Heat Metal, Lightning Bolt, and Hold Monster).\\nBloodsteel Form. The Blood Knight is a hybrid construct and undead creature fueled by blood magic. It is immune to effects that target only constructs or undead but is affected by effects that target either.\\nBloodsteel Armor. The Blood Knight reduces all non-magical slashing, bludgeoning, and piercing damage taken by 5.\\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\\nActions\\nMultiattack. The Blood Knight makes two Bloodforged Blade attacks.\\nBloodforged Blade (+1). Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 14 (1d8 + 6) slashing damage plus 9 (2d8) necrotic damage. The Blood Knight heals equal the necrotic damage dealt.\\nBlood Corruption Blast (Recharge 5+). The Blood Knight takes 10 points of damage reducing its max HP as it uses its blood infusions to expels necrotic energy in a 20-foot radius sphere centered on itself. Each creature in that area must succeed on a DC 17 Constitution saving throw or take 22 (5d8) necrotic damage, save for half, reducing their maximum hit points by that amount until they complete a long rest.\\nReactions\\nBloodforged Shield. When hit by an attack or targeted by a spell, the Blood Knight can use its reaction and takes 10 points of damage reducing its max HP as it uses its blood infusions to raise its shield of bloodsteel, granting itself a +4 bonus to AC against that attack or advantage on the saving throw against that spell.\\n\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"lore\",\n  \"basic_info\": {},\n  \"stats_summary\": {\n    \"has_legendary\": false\n  },\n  \"instructions\": \"Generate ecology and lore information for this monster. Provide context that helps GMs use it effectively.\"\n}",
+      "response": "{\n  \"ecology\": \"As an engineered entity, the Blood Knight possesses no natural habitat or diet, instead serving as a dedicated, tireless sentinel in fortified strongholds or necromantic war zones. It operates entirely under the command of its dark master, usually acting alone or in small, terrifying contingents to guard key artifacts or command undead armies. Its 'feeding' cycle is metaphorical, as it requires the life force drained through combat to fuel its bloodsteel core and maintain its maximum power.\",\n  \"lore\": \"Blood Knights are grim fusion golems created by powerful necromancers or blood mages, often involving the sacrifice of a loyal but disgraced knight whose soul is bound to the bloodsteel armor. The armor itself is forged in a ritual using the blood of numerous victims, giving it its dark red sheen and potent necrotic properties. They are prized for their exceptional loyalty, resilience, and unique ability to resist common tactics that defeat either constructs or undead alone.\",\n  \"notes\": [\n    \"The Blood Knight's ability to self-heal and reduce its own maximum HP for powerful attacks/defenses makes it a highly strategic encounter.\",\n    \"Targeting the Blood Knight's creator or power source (e.g., a massive blood font) could be a secondary objective in the encounter.\",\n    \"This monster serves as an excellent bodyguard for a CR 15+ boss.\",\n    \"The Blood Corruption Blast creates a lingering threat (max HP reduction) that persists beyond the immediate combat.\"\n  ],\n  \"sources\": [\n    \"Custom Monster (Blood Magic/Necromantic Subtheme)\"\n  ]\n}",
+      "timestamp": "2025-11-17T23:15:50.238Z",
+      "status": "completed"
+    }
+  ],
+  "stageResults": {
+    "basic_info": {
+      "name": "Blood Knight",
+      "description": "This fearsome warrior is a suit of dark, bloodsteel plate armor animated by necromantic and blood magic. It appears as a hulking figure, often seen hovering silently with a massive sword and shield. Though it lacks a voice, its movements and presence are chillingly purposeful and malevolent.",
+      "size": "Medium",
+      "creature_type": "Construct",
+      "subtype": "undead",
+      "alignment": "Lawful Evil",
+      "challenge_rating": "10",
+      "experience_points": 5900,
+      "location": "Necromantic laboratories, abandoned battlefields, heavily guarded fortresses"
+    },
+    "stats_&_defenses": {
+      "ability_scores": {
+        "str": 20,
+        "dex": 15,
+        "con": 20,
+        "int": 12,
+        "wis": 12,
+        "cha": 8
+      },
+      "armor_class": [
+        {
+          "value": 19,
+          "type": "Bloodsteel Armor",
+          "notes": "and Shield"
+        }
+      ],
+      "hit_points": {
+        "average": 200,
+        "formula": "19d10 + 95"
+      },
+      "hit_dice": "19d10",
+      "proficiency_bonus": 4,
+      "speed": {
+        "walk": "30 ft.",
+        "fly": "30 ft. (hover)"
+      },
+      "saving_throws": [
+        {
+          "name": "Str",
+          "value": 9
+        },
+        {
+          "name": "Con",
+          "value": 10
+        },
+        {
+          "name": "Wis",
+          "value": 6
+        }
+      ],
+      "skill_proficiencies": [
+        {
+          "name": "Perception",
+          "value": 6
+        },
+        {
+          "name": "Intimidation",
+          "value": 4
+        }
+      ],
+      "damage_vulnerabilities": [],
+      "damage_resistances": [
+        "necrotic",
+        "cold",
+        "lightning"
+      ],
+      "damage_immunities": [
+        "poison",
+        "force",
+        "bludgeoning, piercing, and slashing from nonmagical attacks"
+      ],
+      "condition_immunities": [
+        "blinded",
+        "charmed",
+        "deafened",
+        "exhaustion",
+        "frightened",
+        "paralyzed",
+        "petrified",
+        "poisoned",
+        "stunned"
+      ],
+      "senses": [
+        "blindsight 60 ft.",
+        "darkvision 120 ft.",
+        "Passive Perception 16"
+      ],
+      "languages": [
+        "understands Common plus languages of its creator but can't speak"
+      ]
+    },
+    "combat_&_abilities": {
+      "abilities": [
+        {
+          "name": "Magic Resistance",
+          "description": "The Blood Knight has advantage on saving throws against spells and other magical effects."
+        },
+        {
+          "name": "Spell Immunity",
+          "description": "The Blood Knight is immune to three specific spells chosen by its creator: *heat metal*, *lightning bolt*, and *hold monster*."
+        },
+        {
+          "name": "Bloodsteel Form",
+          "description": "The Blood Knight is a hybrid construct and undead creature fueled by blood magic. It is immune to effects that target only constructs or undead but is affected by effects that target either."
+        },
+        {
+          "name": "Bloodsteel Armor",
+          "description": "The Blood Knight reduces all non-magical slashing, bludgeoning, and piercing damage taken by 5."
+        },
+        {
+          "name": "Blood Infusions",
+          "description": "The bloodsteel is infused with blood-based magic and powers some of its abilities, often at the cost of its maximum hit points."
+        }
+      ],
+      "actions": [
+        {
+          "name": "Multiattack",
+          "description": "The Blood Knight makes two Bloodforged Blade attacks."
+        },
+        {
+          "name": "Bloodforged Blade (+1)",
+          "description": "Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 14 (1d8 + 6) slashing damage plus 9 (2d8) necrotic damage. The Blood Knight regains hit points equal to the necrotic damage dealt."
+        },
+        {
+          "name": "Blood Corruption Blast",
+          "description": "The Blood Knight takes 10 points of damage, reducing its maximum hit points by that amount, as it uses its blood infusions to expel necrotic energy in a 20-foot radius sphere centered on itself. Each creature in that area must make a DC 17 Constitution saving throw, taking 22 (5d8) necrotic damage on a failed save, or half as much damage on a successful one. A creature's maximum hit points are reduced by the damage taken until it finishes a long rest.",
+          "recharge": "5-6"
+        }
+      ],
+      "bonus_actions": [],
+      "reactions": [
+        {
+          "name": "Bloodforged Shield",
+          "description": "When hit by an attack or targeted by a spell, the Blood Knight can use its reaction and takes 10 points of damage, reducing its maximum hit points by that amount. It gains a +4 bonus to AC against that attack or has advantage on the saving throw against that spell."
+        }
+      ],
+      "tactics": "The Blood Knight is a relentless frontline tank, leveraging its high AC and immunities to draw enemy fire. It uses its Multiattack to quickly heal itself with the Bloodforged Blade. When surrounded or facing clustered enemies, it utilizes the Blood Corruption Blast to deal mass damage and weaken foes by reducing their maximum HP, accepting the temporary reduction to its own power for battlefield control. It prioritizes using its Bloodforged Shield reaction against critical attacks or high-level spells to maintain its longevity."
+    },
+    "legendary_&_lair": {
+      "legendary_actions": {
+        "summary": "The Blood Knight can take 3 legendary actions, choosing from the options below. Only one legendary action option can be used at a time and only at the end of another creature's turn. The Blood Knight regains spent legendary actions at the start of its turn.",
+        "options": [
+          {
+            "name": "Bloodforged Strike (1 Action)",
+            "description": "The Blood Knight makes one Bloodforged Blade attack."
+          },
+          {
+            "name": "Intimidating Presence (1 Action)",
+            "description": "One creature of the Blood Knight's choice within 30 feet must succeed on a DC 12 Wisdom saving throw or be frightened until the end of the creature's next turn."
+          },
+          {
+            "name": "Sanguine Leap (2 Actions)",
+            "description": "The Blood Knight moves up to its fly speed without provoking opportunity attacks. It may optionally use this movement to gain half cover behind an object or obstacle."
+          }
+        ]
+      }
+    },
+    "ecology_&_lore": {
+      "ecology": "As an engineered entity, the Blood Knight possesses no natural habitat or diet, instead serving as a dedicated, tireless sentinel in fortified strongholds or necromantic war zones. It operates entirely under the command of its dark master, usually acting alone or in small, terrifying contingents to guard key artifacts or command undead armies. Its 'feeding' cycle is metaphorical, as it requires the life force drained through combat to fuel its bloodsteel core and maintain its maximum power.",
+      "lore": "Blood Knights are grim fusion golems created by powerful necromancers or blood mages, often involving the sacrifice of a loyal but disgraced knight whose soul is bound to the bloodsteel armor. The armor itself is forged in a ritual using the blood of numerous victims, giving it its dark red sheen and potent necrotic properties. They are prized for their exceptional loyalty, resilience, and unique ability to resist common tactics that defeat either constructs or undead alone.",
+      "notes": [
+        "The Blood Knight's ability to self-heal and reduce its own maximum HP for powerful attacks/defenses makes it a highly strategic encounter.",
+        "Targeting the Blood Knight's creator or power source (e.g., a massive blood font) could be a secondary objective in the encounter.",
+        "This monster serves as an excellent bodyguard for a CR 15+ boss.",
+        "The Blood Corruption Blast creates a lingering threat (max HP reduction) that persists beyond the immediate combat."
+      ],
+      "sources": [
+        "Custom Monster (Blood Magic/Necromantic Subtheme)"
+      ]
+    }
+  },
+  "currentStageIndex": 4
+}

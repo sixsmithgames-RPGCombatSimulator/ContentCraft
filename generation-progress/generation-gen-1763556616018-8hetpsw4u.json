@@ -1,0 +1,222 @@
+{
+  "sessionId": "gen-1763556616018-8hetpsw4u",
+  "createdAt": "2025-11-19T12:50:16.018Z",
+  "lastUpdatedAt": "2025-11-19T12:56:46.893Z",
+  "config": {
+    "type": "monster",
+    "prompt": "Steel Reaper\nLarge Construct (Undead-Construct Hybrid), Lawful Evil\nArmor Class: 21 (Bloodsteel Armor) Hit Points: 192 (12d10 + 72) Speed: 40 ft., climb 30 ft.\nSTR 24 (+7), DEX 17 (+3), CON 22 (+6), INT 4 (-3), WIS 14 (+2), CHA 6 (-2)\nSaving Throws: STR +12, CON +11, WIS +7\nSkills: Perception +6, Stealth +7\nDamage Resistances: Necrotic, Cold, Lightning\nDamage Immunities: Poison; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks; Psychic\nCondition Immunities: Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 17\nLanguages: Understands Common and the languages of its creator but cannot speak\nChallenge: 12\nTraits\nBloodsteel Form. The Steel Reaper is a hybrid construct and undead creature fueled by blood magic. It is resistant to effects that target only constructs or undead but is affected by effects that target either.\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\nMagic Resistance. The Steel Reaper has advantage on saving throws against spells and other magical effects.\nMagic Weapons. The Steel Reaper's weapon attacks are magical.\nActions\nMultiattack. The Steel Reaper makes two attacks: one with its bite and one with its bloodsteel claws.\nBite. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 11 (1d6 + 7) piercing damage plus 11 (3d6) necrotic damage. Heals damage equal to the necrotic damage it deals. Creatures bitten reduce their max HP by the necrotic damage dealt. Using a blood infusion which reduces its maximum hit points by 20, it can make the necrotic damage it dealt leave a permanent mark that allows the Steel Reaper to track (survival check) that creature anywhere as long as it is on the same plane and not protected from scrying.\nBloodsteel Claw. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 18 (2d10 + 7) slashing damage.\nDestructive Roar (Recharge 5+). The Steel Reaper takes 10 points of damage reducing its max HP as it uses its blood infusions and unleashes a horrifying roar in a 30-foot cone. Each creature in that area must make a DC 18 Constitution saving throw, taking 18 (5d6) thunder and 18 (5d6) necrotic damage on a failed save and are knocked prone, or half as much on a successful one and are not prone.\nBonus Actions\nShadow Step (Recharge 5+). As a bonus action, the Steel Reaper can teleport up to 60 feet between areas of darkness or dim light it can see, appearing silently and gaining advantage on the first attack it makes immediately after teleporting.\nDetect. The Steel Reaper makes a Wisdom (Perception) check. If it previously wounded the target the roll is made with advantage.\nReactions\nBlood Frenzy. When the Steel Reaper is hit by an attack, it can use its reaction to enter into a frenzy until the end of its next turn. It takes 10 points of damage reducing its max HP as it uses its blood infusions. All attacks deal an extra 7 (2d6) necrotic damage, and all abilities it has recharge instantly.\nBloodsteel Claw. If a melee attack misses, the Steel Reaper makes one bloodsteel claw attack at the creature that missed.",
+    "max_canon_facts": 50,
+    "flags": {
+      "rule_base": "2024RAW",
+      "allow_invention": "cosmetic",
+      "tone": "epic"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [
+    {
+      "stage": "Stats & Defenses",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 2/5: Stats and Defenses.\n\nYou are building upon the basic info from stage 1.\n\nFocus ONLY on these fields:\n- ability_scores: Object with str, dex, con, int, wis, cha (all integers 1-30, required)\n- armor_class: Integer or array of AC objects with value/type/notes (required)\n- hit_points: Integer or object with average and formula (required)\n- hit_dice: String like \"8d10\" or \"15d8+45\"\n- proficiency_bonus: Integer +2 to +9 based on CR (required)\n- speed: Object with walk, fly, swim, climb, burrow speeds (strings like \"30 ft.\")\n- saving_throws: Array of {name: string, value: string, notes?: string} - value MUST be string like \"+5\" or \"-1\"\n- skill_proficiencies: Array of {name: string, value: string, notes?: string} - value MUST be string like \"+7\" or \"+0\"\n- damage_vulnerabilities: Array of damage types\n- damage_resistances: Array of damage types\n- damage_immunities: Array of damage types\n- condition_immunities: Array of conditions\n- senses: Array of special senses (e.g., \"darkvision 60 ft.\", \"blindsight 30 ft.\")\n- languages: Array of languages understood/spoken\n\nCalculate stats appropriate for the monster's CR and type. Use D&D 5e guidelines for CR-appropriate values.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Steel Reaper\\nLarge Construct (Undead-Construct Hybrid), Lawful Evil\\nArmor Class: 21 (Bloodsteel Armor) Hit Points: 192 (12d10 + 72) Speed: 40 ft., climb 30 ft.\\nSTR 24 (+7), DEX 17 (+3), CON 22 (+6), INT 4 (-3), WIS 14 (+2), CHA 6 (-2)\\nSaving Throws: STR +12, CON +11, WIS +7\\nSkills: Perception +6, Stealth +7\\nDamage Resistances: Necrotic, Cold, Lightning\\nDamage Immunities: Poison; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks; Psychic\\nCondition Immunities: Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 17\\nLanguages: Understands Common and the languages of its creator but cannot speak\\nChallenge: 12\\nTraits\\nBloodsteel Form. The Steel Reaper is a hybrid construct and undead creature fueled by blood magic. It is resistant to effects that target only constructs or undead but is affected by effects that target either.\\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\\nMagic Resistance. The Steel Reaper has advantage on saving throws against spells and other magical effects.\\nMagic Weapons. The Steel Reaper's weapon attacks are magical.\\nActions\\nMultiattack. The Steel Reaper makes two attacks: one with its bite and one with its bloodsteel claws.\\nBite. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 11 (1d6 + 7) piercing damage plus 11 (3d6) necrotic damage. Heals damage equal to the necrotic damage it deals. Creatures bitten reduce their max HP by the necrotic damage dealt. Using a blood infusion which reduces its maximum hit points by 20, it can make the necrotic damage it dealt leave a permanent mark that allows the Steel Reaper to track (survival check) that creature anywhere as long as it is on the same plane and not protected from scrying.\\nBloodsteel Claw. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 18 (2d10 + 7) slashing damage.\\nDestructive Roar (Recharge 5+). The Steel Reaper takes 10 points of damage reducing its max HP as it uses its blood infusions and unleashes a horrifying roar in a 30-foot cone. Each creature in that area must make a DC 18 Constitution saving throw, taking 18 (5d6) thunder and 18 (5d6) necrotic damage on a failed save and are knocked prone, or half as much on a successful one and are not prone.\\nBonus Actions\\nShadow Step (Recharge 5+). As a bonus action, the Steel Reaper can teleport up to 60 feet between areas of darkness or dim light it can see, appearing silently and gaining advantage on the first attack it makes immediately after teleporting.\\nDetect. The Steel Reaper makes a Wisdom (Perception) check. If it previously wounded the target the roll is made with advantage.\\nReactions\\nBlood Frenzy. When the Steel Reaper is hit by an attack, it can use its reaction to enter into a frenzy until the end of its next turn. It takes 10 points of damage reducing its max HP as it uses its blood infusions. All attacks deal an extra 7 (2d6) necrotic damage, and all abilities it has recharge instantly.\\nBloodsteel Claw. If a melee attack misses, the Steel Reaper makes one bloodsteel claw attack at the creature that missed.\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"stats\",\n  \"basic_info\": {},\n  \"instructions\": \"Generate stats and defenses for this monster. Ensure values are appropriate for CR unknown.\"\n}",
+      "response": "{\n  \"ability_scores\": {\n    \"str\": 24,\n    \"dex\": 17,\n    \"con\": 22,\n    \"int\": 4,\n    \"wis\": 14,\n    \"cha\": 6\n  },\n  \"armor_class\": [\n    {\n      \"value\": 21,\n      \"type\": \"natural armor\",\n      \"notes\": \"Bloodsteel Armor\"\n    }\n  ],\n  \"hit_points\": {\n    \"average\": 192,\n    \"formula\": \"16d10 + 104\"\n  },\n  \"hit_dice\": \"16d10\",\n  \"proficiency_bonus\": 5,\n  \"speed\": {\n    \"walk\": \"40 ft.\",\n    \"climb\": \"30 ft.\"\n  },\n  \"saving_throws\": [\n    {\n      \"name\": \"STR\",\n      \"value\": \"+12\"\n    },\n    {\n      \"name\": \"CON\",\n      \"value\": \"+11\"\n    },\n    {\n      \"name\": \"WIS\",\n      \"value\": \"+7\"\n    }\n  ],\n  \"skill_proficiencies\": [\n    {\n      \"name\": \"Perception\",\n      \"value\": \"+7\"\n    },\n    {\n      \"name\": \"Stealth\",\n      \"value\": \"+8\"\n    }\n  ],\n  \"damage_vulnerabilities\": [],\n  \"damage_resistances\": [\n    \"cold\",\n    \"lightning\",\n    \"necrotic\"\n  ],\n  \"damage_immunities\": [\n    \"poison\",\n    \"psychic\",\n    \"bludgeoning, piercing, and slashing from nonmagical attacks\"\n  ],\n  \"condition_immunities\": [\n    \"charmed\",\n    \"exhaustion\",\n    \"frightened\",\n    \"paralyzed\",\n    \"petrified\",\n    \"poisoned\",\n    \"stunned\"\n  ],\n  \"senses\": [\n    \"blindsight 60 ft.\",\n    \"darkvision 120 ft.\",\n    \"Passive Perception 17\"\n  ],\n  \"languages\": [\n    \"understands Common and the languages of its creator but cannot speak\"\n  ]\n}",
+      "timestamp": "2025-11-19T12:52:51.889Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Combat & Abilities",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 3/5: Combat and Abilities.\n\nYou are building upon previous stages.\n\nFocus ONLY on these fields:\n- abilities: Array of special traits/abilities (passive features like Magic Resistance, Pack Tactics, etc.)\n  Each ability: {name, description, uses?, recharge?, notes?}\n- actions: Array of actions the monster can take (attacks, special actions)\n  Each action: {name, description, uses?, recharge?, notes?}\n  Include attack bonus, damage, and DC values in descriptions\n- bonus_actions: Array of bonus actions if applicable\n- reactions: Array of reactions if applicable\n- tactics: String describing combat tactics and behavior patterns\n\nCreate abilities and actions appropriate for the monster's CR and type. Include:\n- At least 1-2 attack actions\n- Special abilities that make the monster interesting/unique\n- Appropriate attack bonuses and save DCs for the CR\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Steel Reaper\\nLarge Construct (Undead-Construct Hybrid), Lawful Evil\\nArmor Class: 21 (Bloodsteel Armor) Hit Points: 192 (12d10 + 72) Speed: 40 ft., climb 30 ft.\\nSTR 24 (+7), DEX 17 (+3), CON 22 (+6), INT 4 (-3), WIS 14 (+2), CHA 6 (-2)\\nSaving Throws: STR +12, CON +11, WIS +7\\nSkills: Perception +6, Stealth +7\\nDamage Resistances: Necrotic, Cold, Lightning\\nDamage Immunities: Poison; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks; Psychic\\nCondition Immunities: Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 17\\nLanguages: Understands Common and the languages of its creator but cannot speak\\nChallenge: 12\\nTraits\\nBloodsteel Form. The Steel Reaper is a hybrid construct and undead creature fueled by blood magic. It is resistant to effects that target only constructs or undead but is affected by effects that target either.\\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\\nMagic Resistance. The Steel Reaper has advantage on saving throws against spells and other magical effects.\\nMagic Weapons. The Steel Reaper's weapon attacks are magical.\\nActions\\nMultiattack. The Steel Reaper makes two attacks: one with its bite and one with its bloodsteel claws.\\nBite. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 11 (1d6 + 7) piercing damage plus 11 (3d6) necrotic damage. Heals damage equal to the necrotic damage it deals. Creatures bitten reduce their max HP by the necrotic damage dealt. Using a blood infusion which reduces its maximum hit points by 20, it can make the necrotic damage it dealt leave a permanent mark that allows the Steel Reaper to track (survival check) that creature anywhere as long as it is on the same plane and not protected from scrying.\\nBloodsteel Claw. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 18 (2d10 + 7) slashing damage.\\nDestructive Roar (Recharge 5+). The Steel Reaper takes 10 points of damage reducing its max HP as it uses its blood infusions and unleashes a horrifying roar in a 30-foot cone. Each creature in that area must make a DC 18 Constitution saving throw, taking 18 (5d6) thunder and 18 (5d6) necrotic damage on a failed save and are knocked prone, or half as much on a successful one and are not prone.\\nBonus Actions\\nShadow Step (Recharge 5+). As a bonus action, the Steel Reaper can teleport up to 60 feet between areas of darkness or dim light it can see, appearing silently and gaining advantage on the first attack it makes immediately after teleporting.\\nDetect. The Steel Reaper makes a Wisdom (Perception) check. If it previously wounded the target the roll is made with advantage.\\nReactions\\nBlood Frenzy. When the Steel Reaper is hit by an attack, it can use its reaction to enter into a frenzy until the end of its next turn. It takes 10 points of damage reducing its max HP as it uses its blood infusions. All attacks deal an extra 7 (2d6) necrotic damage, and all abilities it has recharge instantly.\\nBloodsteel Claw. If a melee attack misses, the Steel Reaper makes one bloodsteel claw attack at the creature that missed.\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"combat\",\n  \"basic_info\": {},\n  \"stats\": {},\n  \"instructions\": \"Generate combat abilities and actions for this monster. Make it interesting and mechanically appropriate for CR unknown.\"\n}",
+      "response": "{\n  \"abilities\": [\n    {\n      \"name\": \"Bloodsteel Form\",\n      \"description\": \"The Steel Reaper is a hybrid **construct and undead** creature fueled by blood magic. It is resistant to effects that target only constructs or undead (such as *Turn Undead*) but is affected by any effect that targets either type.\"\n    },\n    {\n      \"name\": \"Blood Infusions\",\n      \"description\": \"The bloodsteel is infused with blood-based magic and powers some of the reaper's abilities. Certain abilities require the Steel Reaper to **reduce its own maximum Hit Points**, representing the consumption of this internal power source. This reduction lasts until the Steel Reaper finishes a long rest.\"\n    },\n    {\n      \"name\": \"Magic Resistance\",\n      \"description\": \"The Steel Reaper has **advantage** on saving throws against spells and other magical effects.\"\n    },\n    {\n      \"name\": \"Magic Weapons\",\n      \"description\": \"The Steel Reaper's weapon attacks are magical.\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"name\": \"Multiattack\",\n      \"description\": \"The Steel Reaper makes two attacks: one with its **Bite** and one with its **Bloodsteel Claw**.\"\n    },\n    {\n      \"name\": \"Bite\",\n      \"description\": \"Melee Weapon Attack: +12 to hit, reach 5 ft., one target. Hit: 11 (1d6 + 8) piercing damage plus 11 (3d6) necrotic damage. The Steel Reaper **heals damage equal to the necrotic damage it deals**. A creature hit by this attack must reduce its **maximum hit points** by the amount of necrotic damage taken. This reduction lasts until the creature finishes a long rest or is cured by the *greater restoration* spell or similar magic.\\n\\n**Blood Mark (Blood Infusion)**: When the Steel Reaper hits with this attack, it can choose to **reduce its own maximum hit points by 20**. If it does, the reduction to the target's maximum hit points becomes a permanent mark that allows the Steel Reaper to track the creature anywhere on the same plane as long as the target is not protected from scrying. The mark can be removed by the *remove curse* or *greater restoration* spells.\"\n    },\n    {\n      \"name\": \"Bloodsteel Claw\",\n      \"description\": \"Melee Weapon Attack: +12 to hit, reach 5 ft., one target. Hit: 18 (2d10 + 8) slashing damage.\"\n    },\n    {\n      \"name\": \"Destructive Roar\",\n      \"recharge\": \"5-6\",\n      \"description\": \"The Steel Reaper takes **10 points of damage**, reducing its maximum Hit Points by 10, as it uses its blood infusions. It unleashes a horrifying roar in a **30-foot cone**. Each creature in that area must make a DC 18 Constitution saving throw, taking 18 (5d6) thunder damage and 18 (5d6) necrotic damage on a failed save and are **knocked prone**, or half as much damage on a successful one and are not knocked prone.\"\n    }\n  ],\n  \"bonus_actions\": [\n    {\n      \"name\": \"Shadow Step\",\n      \"recharge\": \"5-6\",\n      \"description\": \"The Steel Reaper teleports up to 60 feet between areas of darkness or dim light it can see, appearing silently. The first attack it makes immediately after teleporting has **advantage**.\"\n    },\n    {\n      \"name\": \"Detect\",\n      \"description\": \"The Steel Reaper makes a Wisdom (Perception) check (+7). If the Steel Reaper has previously wounded the target (even if the wound is now healed), the roll is made with **advantage**.\"\n    }\n  ],\n  \"reactions\": [\n    {\n      \"name\": \"Blood Frenzy\",\n      \"description\": \"When the Steel Reaper is hit by an attack, it can use its reaction to enter into a frenzy until the end of its next turn. It takes **10 points of damage**, reducing its maximum Hit Points by 10, as it uses its blood infusions. For the duration, all of the Steel Reaper's attacks deal an **extra 7 (2d6) necrotic damage**, and all of its **abilities with a recharge instantly recharge** (Shadow Step and Destructive Roar).\"\n    },\n    {\n      \"name\": \"Bloodsteel Riposte\",\n      \"description\": \"If a creature makes a melee attack against the Steel Reaper and misses, the Reaper can use its reaction to make one **Bloodsteel Claw** attack against that creature.\"\n    }\n  ],\n  \"tactics\": \"The Steel Reaper favors stealth and sudden violence. It uses **Shadow Step** to close the distance or reposition for the **Destructive Roar** cone attack. It targets unarmored or frail-looking opponents first, prioritizing its **Bite** attack to reduce maximum HP and mark a victim for later tracking. If injured, it will immediately use **Blood Frenzy** to punish its attackers and regain control of the battlefield with its recharged abilities, using its **Bloodsteel Riposte** to deter follow-up melee attacks. It will track marked targets across long distances, viewing combat as merely a part of the hunt.\"\n}",
+      "timestamp": "2025-11-19T12:53:28.990Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Legendary & Lair",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 4/5: Legendary and Lair Features.\n\nYou are building upon previous stages. This stage is OPTIONAL - only include these if the monster is powerful/important enough (typically CR 5+).\n\nFocus ONLY on these fields (only if appropriate):\n- legendary_actions: Object with {summary, options}\n  summary: String explaining how many legendary actions the creature gets\n  options: Array of legendary actions, each with {name, description, uses?, recharge?, notes?}\n- mythic_actions: Object with {summary, options} - only for extremely powerful creatures\n- lair_actions: Array of strings describing lair actions (if the creature has a lair)\n- regional_effects: Array of strings describing regional effects (if applicable)\n\nMost monsters will NOT need these fields. Only include if:\n- CR is 5+ for legendary actions\n- CR is 15+ for mythic actions\n- The monster is significant enough to have a lair\n\nIf not applicable, return an empty object {} or omit these fields.\n\nReturn ONLY a JSON object. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Steel Reaper\\nLarge Construct (Undead-Construct Hybrid), Lawful Evil\\nArmor Class: 21 (Bloodsteel Armor) Hit Points: 192 (12d10 + 72) Speed: 40 ft., climb 30 ft.\\nSTR 24 (+7), DEX 17 (+3), CON 22 (+6), INT 4 (-3), WIS 14 (+2), CHA 6 (-2)\\nSaving Throws: STR +12, CON +11, WIS +7\\nSkills: Perception +6, Stealth +7\\nDamage Resistances: Necrotic, Cold, Lightning\\nDamage Immunities: Poison; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks; Psychic\\nCondition Immunities: Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 17\\nLanguages: Understands Common and the languages of its creator but cannot speak\\nChallenge: 12\\nTraits\\nBloodsteel Form. The Steel Reaper is a hybrid construct and undead creature fueled by blood magic. It is resistant to effects that target only constructs or undead but is affected by effects that target either.\\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\\nMagic Resistance. The Steel Reaper has advantage on saving throws against spells and other magical effects.\\nMagic Weapons. The Steel Reaper's weapon attacks are magical.\\nActions\\nMultiattack. The Steel Reaper makes two attacks: one with its bite and one with its bloodsteel claws.\\nBite. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 11 (1d6 + 7) piercing damage plus 11 (3d6) necrotic damage. Heals damage equal to the necrotic damage it deals. Creatures bitten reduce their max HP by the necrotic damage dealt. Using a blood infusion which reduces its maximum hit points by 20, it can make the necrotic damage it dealt leave a permanent mark that allows the Steel Reaper to track (survival check) that creature anywhere as long as it is on the same plane and not protected from scrying.\\nBloodsteel Claw. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 18 (2d10 + 7) slashing damage.\\nDestructive Roar (Recharge 5+). The Steel Reaper takes 10 points of damage reducing its max HP as it uses its blood infusions and unleashes a horrifying roar in a 30-foot cone. Each creature in that area must make a DC 18 Constitution saving throw, taking 18 (5d6) thunder and 18 (5d6) necrotic damage on a failed save and are knocked prone, or half as much on a successful one and are not prone.\\nBonus Actions\\nShadow Step (Recharge 5+). As a bonus action, the Steel Reaper can teleport up to 60 feet between areas of darkness or dim light it can see, appearing silently and gaining advantage on the first attack it makes immediately after teleporting.\\nDetect. The Steel Reaper makes a Wisdom (Perception) check. If it previously wounded the target the roll is made with advantage.\\nReactions\\nBlood Frenzy. When the Steel Reaper is hit by an attack, it can use its reaction to enter into a frenzy until the end of its next turn. It takes 10 points of damage reducing its max HP as it uses its blood infusions. All attacks deal an extra 7 (2d6) necrotic damage, and all abilities it has recharge instantly.\\nBloodsteel Claw. If a melee attack misses, the Steel Reaper makes one bloodsteel claw attack at the creature that missed.\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"legendary\",\n  \"basic_info\": {},\n  \"instructions\": \"If appropriate for CR unknown, generate legendary actions and/or lair features. Otherwise return an empty object.\"\n}",
+      "response": "{}",
+      "timestamp": "2025-11-19T12:54:14.089Z",
+      "status": "completed"
+    },
+    {
+      "stage": "Ecology & Lore",
+      "chunkIndex": null,
+      "prompt": "You are creating a D&D 5e monster stat block. This is stage 5/5: Ecology and Lore.\n\nYou are building upon all previous stages to add final context and flavor.\n\nFocus ONLY on these fields:\n- ecology: String (2-3 sentences) describing habitat, diet, social structure, and behavior in its natural environment\n- lore: String (2-3 sentences) providing background lore, origin, or interesting facts about the creature\n- notes: Array of strings with any additional GM notes or adventure hooks\n- sources: Array of strings citing any source books or references\n\nThis is the final polish stage - provide interesting context that helps a GM use this monster effectively.\n\nReturn ONLY a JSON object with the specified fields. No markdown, no explanation.\n\n---\n\nUSER INPUT:\n{\n  \"request\": \"Steel Reaper\\nLarge Construct (Undead-Construct Hybrid), Lawful Evil\\nArmor Class: 21 (Bloodsteel Armor) Hit Points: 192 (12d10 + 72) Speed: 40 ft., climb 30 ft.\\nSTR 24 (+7), DEX 17 (+3), CON 22 (+6), INT 4 (-3), WIS 14 (+2), CHA 6 (-2)\\nSaving Throws: STR +12, CON +11, WIS +7\\nSkills: Perception +6, Stealth +7\\nDamage Resistances: Necrotic, Cold, Lightning\\nDamage Immunities: Poison; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks; Psychic\\nCondition Immunities: Charmed, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned, Stunned\\nSenses: Blindsight 60 ft., Darkvision 120 ft., Passive Perception 17\\nLanguages: Understands Common and the languages of its creator but cannot speak\\nChallenge: 12\\nTraits\\nBloodsteel Form. The Steel Reaper is a hybrid construct and undead creature fueled by blood magic. It is resistant to effects that target only constructs or undead but is affected by effects that target either.\\nBlood Infusions. The bloodsteel is infused with blood-based magic and powers some of its abilities.\\nMagic Resistance. The Steel Reaper has advantage on saving throws against spells and other magical effects.\\nMagic Weapons. The Steel Reaper's weapon attacks are magical.\\nActions\\nMultiattack. The Steel Reaper makes two attacks: one with its bite and one with its bloodsteel claws.\\nBite. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 11 (1d6 + 7) piercing damage plus 11 (3d6) necrotic damage. Heals damage equal to the necrotic damage it deals. Creatures bitten reduce their max HP by the necrotic damage dealt. Using a blood infusion which reduces its maximum hit points by 20, it can make the necrotic damage it dealt leave a permanent mark that allows the Steel Reaper to track (survival check) that creature anywhere as long as it is on the same plane and not protected from scrying.\\nBloodsteel Claw. Melee Weapon Attack: +11 to hit, reach 5 ft., one target. Hit: 18 (2d10 + 7) slashing damage.\\nDestructive Roar (Recharge 5+). The Steel Reaper takes 10 points of damage reducing its max HP as it uses its blood infusions and unleashes a horrifying roar in a 30-foot cone. Each creature in that area must make a DC 18 Constitution saving throw, taking 18 (5d6) thunder and 18 (5d6) necrotic damage on a failed save and are knocked prone, or half as much on a successful one and are not prone.\\nBonus Actions\\nShadow Step (Recharge 5+). As a bonus action, the Steel Reaper can teleport up to 60 feet between areas of darkness or dim light it can see, appearing silently and gaining advantage on the first attack it makes immediately after teleporting.\\nDetect. The Steel Reaper makes a Wisdom (Perception) check. If it previously wounded the target the roll is made with advantage.\\nReactions\\nBlood Frenzy. When the Steel Reaper is hit by an attack, it can use its reaction to enter into a frenzy until the end of its next turn. It takes 10 points of damage reducing its max HP as it uses its blood infusions. All attacks deal an extra 7 (2d6) necrotic damage, and all abilities it has recharge instantly.\\nBloodsteel Claw. If a melee attack misses, the Steel Reaper makes one bloodsteel claw attack at the creature that missed.\",\n  \"deliverable\": \"monster\",\n  \"stage\": \"lore\",\n  \"basic_info\": {},\n  \"stats_summary\": {\n    \"has_legendary\": false\n  },\n  \"instructions\": \"Generate ecology and lore information for this monster. Provide context that helps GMs use it effectively.\"\n}",
+      "response": "{\n  \"ecology\": \"Steel Reapers are solitary hunters that do not require sustenance, though they are compelled to inflict wounds and absorb life essence to fuel their Blood Infusions. They thrive in environments of perpetual shadow and death, often deployed by their creator to patrol her domain or hunt specific targets. They have no social structure, existing only to carry out the silent commands of the Bloodsmith.\",\n  \"lore\": \"The Steel Reaper was conceived and constructed by **Lady Erliza, the Bloodsmith**, within her infamous blood forge. This dark ritual utilized corrupted moonwells—known as **bloodwells**—combined with potent necromancy and arcane arts to infuse the construct's metal with dark vitality. These Reapers are the pinnacle of her craft, functioning as tireless, perfectly loyal assassins.\",\n  \"notes\": [\n    \"The maximum HP reduction caused by the Bite attack is cumulative and a powerful motivation for players to prioritize defeating the Reaper.\",\n    \"The Blood Mark ability can lead to a great side-quest hook: the party must find a way to remove the curse before the Reaper hunts them down wherever they go.\",\n    \"The Steel Reaper's reliance on spending its own maximum HP for powerful abilities (Roar, Frenzy, Mark) makes it a risk/reward monster that becomes slightly less durable as the fight progresses.\"\n  ],\n  \"sources\": [\n    \"Homebrew: Lady Erliza's Blood Forge\",\n    \"Inspired by: Monster Manual (Golems and Undead)\"\n  ]\n}",
+      "timestamp": "2025-11-19T12:56:46.813Z",
+      "status": "completed"
+    }
+  ],
+  "stageResults": {
+    "basic_info": {
+      "name": "Steel Reaper",
+      "description": "A terrifying amalgamation of steel and unholy necromancy, the Steel Reaper resembles a massive, skeletal humanoid encased in wickedly sharp, black metal armor. Its movements are precise and chillingly silent, driven by the dark magic of blood infusions.",
+      "size": "Large",
+      "creature_type": "Construct",
+      "subtype": "Undead",
+      "alignment": "Lawful Evil",
+      "challenge_rating": "12",
+      "experience_points": 8400,
+      "location": "Forbidden crypts, ancient battlefields, or the deep vaults of blood magic cults"
+    },
+    "stats_&_defenses": {
+      "ability_scores": {
+        "str": 24,
+        "dex": 17,
+        "con": 22,
+        "int": 4,
+        "wis": 14,
+        "cha": 6
+      },
+      "armor_class": [
+        {
+          "value": 21,
+          "type": "natural armor",
+          "notes": "Bloodsteel Armor"
+        }
+      ],
+      "hit_points": {
+        "average": 192,
+        "formula": "16d10 + 104"
+      },
+      "hit_dice": "16d10",
+      "proficiency_bonus": 5,
+      "speed": {
+        "walk": "40 ft.",
+        "climb": "30 ft."
+      },
+      "saving_throws": [
+        {
+          "name": "STR",
+          "value": "+12"
+        },
+        {
+          "name": "CON",
+          "value": "+11"
+        },
+        {
+          "name": "WIS",
+          "value": "+7"
+        }
+      ],
+      "skill_proficiencies": [
+        {
+          "name": "Perception",
+          "value": "+7"
+        },
+        {
+          "name": "Stealth",
+          "value": "+8"
+        }
+      ],
+      "damage_vulnerabilities": [],
+      "damage_resistances": [
+        "cold",
+        "lightning",
+        "necrotic"
+      ],
+      "damage_immunities": [
+        "poison",
+        "psychic",
+        "bludgeoning, piercing, and slashing from nonmagical attacks"
+      ],
+      "condition_immunities": [
+        "charmed",
+        "exhaustion",
+        "frightened",
+        "paralyzed",
+        "petrified",
+        "poisoned",
+        "stunned"
+      ],
+      "senses": [
+        "blindsight 60 ft.",
+        "darkvision 120 ft.",
+        "Passive Perception 17"
+      ],
+      "languages": [
+        "understands Common and the languages of its creator but cannot speak"
+      ]
+    },
+    "combat_&_abilities": {
+      "abilities": [
+        {
+          "name": "Bloodsteel Form",
+          "description": "The Steel Reaper is a hybrid **construct and undead** creature fueled by blood magic. It is resistant to effects that target only constructs or undead (such as *Turn Undead*) but is affected by any effect that targets either type."
+        },
+        {
+          "name": "Blood Infusions",
+          "description": "The bloodsteel is infused with blood-based magic and powers some of the reaper's abilities. Certain abilities require the Steel Reaper to **reduce its own maximum Hit Points**, representing the consumption of this internal power source. This reduction lasts until the Steel Reaper finishes a long rest."
+        },
+        {
+          "name": "Magic Resistance",
+          "description": "The Steel Reaper has **advantage** on saving throws against spells and other magical effects."
+        },
+        {
+          "name": "Magic Weapons",
+          "description": "The Steel Reaper's weapon attacks are magical."
+        }
+      ],
+      "actions": [
+        {
+          "name": "Multiattack",
+          "description": "The Steel Reaper makes two attacks: one with its **Bite** and one with its **Bloodsteel Claw**."
+        },
+        {
+          "name": "Bite",
+          "description": "Melee Weapon Attack: +12 to hit, reach 5 ft., one target. Hit: 11 (1d6 + 8) piercing damage plus 11 (3d6) necrotic damage. The Steel Reaper **heals damage equal to the necrotic damage it deals**. A creature hit by this attack must reduce its **maximum hit points** by the amount of necrotic damage taken. This reduction lasts until the creature finishes a long rest or is cured by the *greater restoration* spell or similar magic.\n\n**Blood Mark (Blood Infusion)**: When the Steel Reaper hits with this attack, it can choose to **reduce its own maximum hit points by 20**. If it does, the reduction to the target's maximum hit points becomes a permanent mark that allows the Steel Reaper to track the creature anywhere on the same plane as long as the target is not protected from scrying. The mark can be removed by the *remove curse* or *greater restoration* spells."
+        },
+        {
+          "name": "Bloodsteel Claw",
+          "description": "Melee Weapon Attack: +12 to hit, reach 5 ft., one target. Hit: 18 (2d10 + 8) slashing damage."
+        },
+        {
+          "name": "Destructive Roar",
+          "recharge": "5-6",
+          "description": "The Steel Reaper takes **10 points of damage**, reducing its maximum Hit Points by 10, as it uses its blood infusions. It unleashes a horrifying roar in a **30-foot cone**. Each creature in that area must make a DC 18 Constitution saving throw, taking 18 (5d6) thunder damage and 18 (5d6) necrotic damage on a failed save and are **knocked prone**, or half as much damage on a successful one and are not knocked prone."
+        }
+      ],
+      "bonus_actions": [
+        {
+          "name": "Shadow Step",
+          "recharge": "5-6",
+          "description": "The Steel Reaper teleports up to 60 feet between areas of darkness or dim light it can see, appearing silently. The first attack it makes immediately after teleporting has **advantage**."
+        },
+        {
+          "name": "Detect",
+          "description": "The Steel Reaper makes a Wisdom (Perception) check (+7). If the Steel Reaper has previously wounded the target (even if the wound is now healed), the roll is made with **advantage**."
+        }
+      ],
+      "reactions": [
+        {
+          "name": "Blood Frenzy",
+          "description": "When the Steel Reaper is hit by an attack, it can use its reaction to enter into a frenzy until the end of its next turn. It takes **10 points of damage**, reducing its maximum Hit Points by 10, as it uses its blood infusions. For the duration, all of the Steel Reaper's attacks deal an **extra 7 (2d6) necrotic damage**, and all of its **abilities with a recharge instantly recharge** (Shadow Step and Destructive Roar)."
+        },
+        {
+          "name": "Bloodsteel Riposte",
+          "description": "If a creature makes a melee attack against the Steel Reaper and misses, the Reaper can use its reaction to make one **Bloodsteel Claw** attack against that creature."
+        }
+      ],
+      "tactics": "The Steel Reaper favors stealth and sudden violence. It uses **Shadow Step** to close the distance or reposition for the **Destructive Roar** cone attack. It targets unarmored or frail-looking opponents first, prioritizing its **Bite** attack to reduce maximum HP and mark a victim for later tracking. If injured, it will immediately use **Blood Frenzy** to punish its attackers and regain control of the battlefield with its recharged abilities, using its **Bloodsteel Riposte** to deter follow-up melee attacks. It will track marked targets across long distances, viewing combat as merely a part of the hunt."
+    },
+    "legendary_&_lair": {},
+    "ecology_&_lore": {
+      "ecology": "Steel Reapers are solitary hunters that do not require sustenance, though they are compelled to inflict wounds and absorb life essence to fuel their Blood Infusions. They thrive in environments of perpetual shadow and death, often deployed by their creator to patrol her domain or hunt specific targets. They have no social structure, existing only to carry out the silent commands of the Bloodsmith.",
+      "lore": "The Steel Reaper was conceived and constructed by **Lady Erliza, the Bloodsmith**, within her infamous blood forge. This dark ritual utilized corrupted moonwells—known as **bloodwells**—combined with potent necromancy and arcane arts to infuse the construct's metal with dark vitality. These Reapers are the pinnacle of her craft, functioning as tireless, perfectly loyal assassins.",
+      "notes": [
+        "The maximum HP reduction caused by the Bite attack is cumulative and a powerful motivation for players to prioritize defeating the Reaper.",
+        "The Blood Mark ability can lead to a great side-quest hook: the party must find a way to remove the curse before the Reaper hunts them down wherever they go.",
+        "The Steel Reaper's reliance on spending its own maximum HP for powerful abilities (Roar, Frenzy, Mark) makes it a risk/reward monster that becomes slightly less durable as the fight progresses."
+      ],
+      "sources": [
+        "Homebrew: Lady Erliza's Blood Forge",
+        "Inspired by: Monster Manual (Golems and Undead)"
+      ]
+    }
+  },
+  "currentStageIndex": 4
+}

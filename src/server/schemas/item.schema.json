@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "item.schema.json",
+  "type": "object",
+  "allOf": [{ "$ref": "base.schema.json#/definitions/baseOutput" }],
+  "required": [
+    "name",
+    "description",
+    "type",
+    "rarity",
+    "requires_attunement"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 3
+    },
+    "description": {
+      "type": "string",
+      "minLength": 50,
+      "description": "Physical description and history"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "weapon",
+        "armor",
+        "wondrous",
+        "potion",
+        "scroll",
+        "ring",
+        "rod",
+        "staff",
+        "wand",
+        "consumable"
+      ]
+    },
+    "rarity": {
+      "type": "string",
+      "enum": ["common", "uncommon", "rare", "very-rare", "legendary", "artifact"]
+    },
+    "requires_attunement": {
+      "type": "boolean"
+    },
+    "attunement_requirements": {
+      "type": "string",
+      "description": "e.g., 'by a spellcaster', 'by a cleric or paladin'"
+    },
+    "properties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "charges": {
+            "type": "object",
+            "properties": {
+              "max": { "type": "integer", "minimum": 1 },
+              "recharge": { "type": "string" }
+            }
+          },
+          "action_type": {
+            "type": "string",
+            "enum": ["action", "bonus-action", "reaction", "passive"]
+          }
+        }
+      }
+    },
+    "weapon_properties": {
+      "type": "object",
+      "properties": {
+        "damage": { "type": "string" },
+        "damage_type": { "type": "string" },
+        "bonus_to_hit": { "type": "integer" },
+        "bonus_to_damage": { "type": "integer" },
+        "properties": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "armor_properties": {
+      "type": "object",
+      "properties": {
+        "base_ac": { "type": "integer", "minimum": 10, "maximum": 21 },
+        "ac_bonus": { "type": "integer" },
+        "armor_type": {
+          "type": "string",
+          "enum": ["light", "medium", "heavy", "shield"]
+        },
+        "stealth_disadvantage": { "type": "boolean" }
+      }
+    },
+    "value_gp": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Estimated value in gold pieces"
+    },
+    "weight_lbs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "cursed": {
+      "type": "boolean",
+      "default": false
+    },
+    "curse_description": {
+      "type": "string"
+    },
+    "lore": {
+      "type": "string",
+      "description": "Historical or legendary background"
+    }
+  }
+}
