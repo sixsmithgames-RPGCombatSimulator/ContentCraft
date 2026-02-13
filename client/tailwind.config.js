@@ -1,4 +1,9 @@
-/** @type {import('tailwindcss').Config} */
+/**
+ * © 2025 Sixsmith Games. All rights reserved.
+ * This software and associated documentation files are proprietary and confidential.
+ *
+ * @type {import('tailwindcss').Config}
+ */
 export default {
   content: [
     "./index.html",

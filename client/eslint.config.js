@@ -1,3 +1,8 @@
+/**
+ * © 2025 Sixsmith Games. All rights reserved.
+ * This software and associated documentation files are proprietary and confidential.
+ */
+
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'

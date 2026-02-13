@@ -35,7 +35,9 @@
       "Bash(node add-copyright-headers.cjs:*)",
       "Bash(git init:*)",
       "Bash(git remote add:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: ContentCraft - Containerized D&D content generation app\n\nContentCraft is a fully containerized application for creating D&D adventures,\nNPCs, locations, and other game content with AI-powered generation features.\n\nFeatures:\n- Docker containerization with MongoDB\n- Multi-stage production builds\n- AI integration (OpenAI, Anthropic, Google)\n- React frontend with TypeScript\n- Express backend with MongoDB persistence\n- Comprehensive documentation\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
