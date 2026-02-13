@@ -16,8 +16,12 @@ import { ProjectLibraryLink, generateLinkId } from '../models/ProjectLibraryLink
 import { generateEmbedding, findTopKSimilar } from '../utils/embeddings.js';
 import { logger } from '../utils/logger.js';
 import { LibraryCollection, generateCollectionId } from '../models/LibraryCollection.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 export const canonRouter = Router();
+
+// Apply auth middleware to all routes
+canonRouter.use(authMiddleware);
 
 // ============================================================================
 // CANON ENTITY ROUTES - Complete CRUD operations for canon entities
@@ -30,6 +34,7 @@ export const canonRouter = Router();
  */
 canonRouter.get('/library', async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthRequest;
     const {
       q,
       type,
@@ -44,7 +49,7 @@ canonRouter.get('/library', async (req: Request, res: Response) => {
     } = req.query;
 
     const collection = getCanonEntitiesCollection();
-    const filter: any = { scope: 'lib' };
+    const filter: any = { scope: 'lib', userId: authReq.userId };
 
     const parseCsv = (value: unknown): string[] => {
       if (typeof value !== 'string') return [];
