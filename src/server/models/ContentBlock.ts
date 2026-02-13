@@ -8,15 +8,19 @@ import { v4 as uuidv4 } from 'uuid';
 import { ContentBlock, ContentType } from '../../shared/types/index.js';
 
 export class ContentBlockModel {
-  static async create(data: Omit<ContentBlock, 'id' | 'createdAt' | 'updatedAt'>): Promise<ContentBlock> {
+  static async create(
+    userId: string,
+    data: Omit<ContentBlock, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<ContentBlock> {
     const id = uuidv4();
     const now = new Date().toISOString();
 
     await dbRun(`
-      INSERT INTO content_blocks (id, project_id, parent_id, title, content, type, order_num, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO content_blocks (id, user_id, project_id, parent_id, title, content, type, order_num, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
+      userId,
       data.projectId,
       data.parentId || null,
       data.title,
@@ -28,49 +32,63 @@ export class ContentBlockModel {
       now
     ]);
 
-    const block = await this.findById(id);
+    const block = await this.findById(userId, id);
     return block!;
   }
 
-  static async findById(id: string): Promise<ContentBlock | null> {
-    const row = await dbGet('SELECT * FROM content_blocks WHERE id = ?', [id]);
+  static async findById(userId: string, id: string): Promise<ContentBlock | null> {
+    const row = await dbGet(
+      'SELECT * FROM content_blocks WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
 
     if (!row) return null;
 
     return this.mapRowToContentBlock(row);
   }
 
-  static async findByProjectId(projectId: string, options: { page?: number; limit?: number } = {}): Promise<{ blocks: ContentBlock[]; total: number }> {
+  static async findByProjectId(
+    userId: string,
+    projectId: string,
+    options: { page?: number; limit?: number } = {}
+  ): Promise<{ blocks: ContentBlock[]; total: number }> {
     const { page = 1, limit = 50 } = options;
     const offset = (page - 1) * limit;
 
-    const countRow = await dbGet('SELECT COUNT(*) as count FROM content_blocks WHERE project_id = ?', [projectId]);
+    const countRow = await dbGet(
+      'SELECT COUNT(*) as count FROM content_blocks WHERE project_id = ? AND user_id = ?',
+      [projectId, userId]
+    );
     const total = countRow.count;
 
     const rows = await dbAll(`
       SELECT * FROM content_blocks
-      WHERE project_id = ?
+      WHERE project_id = ? AND user_id = ?
       ORDER BY order_num ASC, created_at ASC
       LIMIT ? OFFSET ?
-    `, [projectId, limit, offset]);
+    `, [projectId, userId, limit, offset]);
 
     const blocks = rows.map(row => this.mapRowToContentBlock(row));
 
     return { blocks, total };
   }
 
-  static async findByParentId(parentId: string): Promise<ContentBlock[]> {
+  static async findByParentId(userId: string, parentId: string): Promise<ContentBlock[]> {
     const rows = await dbAll(`
       SELECT * FROM content_blocks
-      WHERE parent_id = ?
+      WHERE parent_id = ? AND user_id = ?
       ORDER BY order_num ASC, created_at ASC
-    `, [parentId]);
+    `, [parentId, userId]);
 
     return rows.map(row => this.mapRowToContentBlock(row));
   }
 
-  static async update(id: string, data: Partial<Omit<ContentBlock, 'id' | 'projectId' | 'createdAt' | 'updatedAt'>>): Promise<ContentBlock | null> {
-    const existing = await this.findById(id);
+  static async update(
+    userId: string,
+    id: string,
+    data: Partial<Omit<ContentBlock, 'id' | 'projectId' | 'createdAt' | 'updatedAt'>>
+  ): Promise<ContentBlock | null> {
+    const existing = await this.findById(userId, id);
     if (!existing) return null;
 
     const now = new Date().toISOString();
@@ -107,26 +125,33 @@ export class ContentBlockModel {
     updates.push('updated_at = ?');
     values.push(now);
     values.push(id);
+    values.push(userId);
 
     await dbRun(`
       UPDATE content_blocks
       SET ${updates.join(', ')}
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `, values);
 
-    const block = await this.findById(id);
+    const block = await this.findById(userId, id);
     return block!;
   }
 
-  static async delete(id: string): Promise<boolean> {
-    const result = await dbRun('DELETE FROM content_blocks WHERE id = ?', [id]);
+  static async delete(userId: string, id: string): Promise<boolean> {
+    const result = await dbRun(
+      'DELETE FROM content_blocks WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
     return result.changes! > 0;
   }
 
-  static async reorder(projectId: string, blockIds: string[]): Promise<boolean> {
+  static async reorder(userId: string, projectId: string, blockIds: string[]): Promise<boolean> {
     try {
       for (let i = 0; i < blockIds.length; i++) {
-        await dbRun('UPDATE content_blocks SET order_num = ? WHERE id = ? AND project_id = ?', [i, blockIds[i], projectId]);
+        await dbRun(
+          'UPDATE content_blocks SET order_num = ? WHERE id = ? AND project_id = ? AND user_id = ?',
+          [i, blockIds[i], projectId, userId]
+        );
       }
       return true;
     } catch (error) {

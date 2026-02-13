@@ -12,14 +12,19 @@ import { mapGeneratedContentToContentBlock } from '../services/generatedContentM
 import { mapAndValidateNpc } from '../services/npcSchemaMapper.js';
 import { validateMonsterStrict, isMonsterContent } from '../validation/monsterValidator.js';
 import type { GeneratedContentDocument } from '../models/GeneratedContent.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 export const contentRouter = Router();
 
+// Apply auth middleware to all routes
+contentRouter.use(authMiddleware);
+
 contentRouter.get('/project/:projectId', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { projectId } = req.params;
     const pagination = PaginationSchema.parse(req.query);
-    const { blocks, total } = await ContentBlockModel.findByProjectId(projectId, pagination);
+    const { blocks, total } = await ContentBlockModel.findByProjectId(authReq.userId, projectId, pagination);
 
     const response: PaginatedResponse<typeof blocks[0]> = {
       success: true,
@@ -45,8 +50,9 @@ contentRouter.get('/project/:projectId', async (req, res) => {
 
 contentRouter.get('/:id', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { id } = req.params;
-    const block = await ContentBlockModel.findById(id);
+    const block = await ContentBlockModel.findById(authReq.userId, id);
 
     if (!block) {
       const response: APIResponse = {
@@ -74,8 +80,9 @@ contentRouter.get('/:id', async (req, res) => {
 
 contentRouter.get('/:id/children', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { id } = req.params;
-    const children = await ContentBlockModel.findByParentId(id);
+    const children = await ContentBlockModel.findByParentId(authReq.userId, id);
 
     const response: APIResponse<typeof children> = {
       success: true,
@@ -95,8 +102,9 @@ contentRouter.get('/:id/children', async (req, res) => {
 
 contentRouter.post('/', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const payload = ContentBlockSchema.parse(req.body);
-    const block = await ContentBlockModel.create({
+    const block = await ContentBlockModel.create(authReq.userId, {
       projectId: payload.projectId,
       parentId: payload.parentId,
       title: payload.title,
@@ -125,9 +133,10 @@ contentRouter.post('/', async (req, res) => {
 
 contentRouter.put('/:id', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { id } = req.params;
     const validatedData = ContentBlockSchema.partial().parse(req.body);
-    const existing = await ContentBlockModel.findById(id);
+    const existing = await ContentBlockModel.findById(authReq.userId, id);
 
     if (!existing) {
       const response: APIResponse = {
@@ -248,7 +257,7 @@ contentRouter.put('/:id', async (req, res) => {
       };
     }
 
-    const block = await ContentBlockModel.update(id, updatePayload);
+    const block = await ContentBlockModel.update(authReq.userId, id, updatePayload);
 
     if (!block) {
       const response: APIResponse = {
@@ -278,8 +287,9 @@ contentRouter.put('/:id', async (req, res) => {
 
 contentRouter.delete('/:id', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { id } = req.params;
-    const deleted = ContentBlockModel.delete(id);
+    const deleted = await ContentBlockModel.delete(authReq.userId, id);
 
     if (!deleted) {
       const response: APIResponse = {
@@ -307,6 +317,7 @@ contentRouter.delete('/:id', async (req, res) => {
 
 contentRouter.post('/reorder/:projectId', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { projectId } = req.params;
     const { blockIds } = req.body;
 
@@ -318,7 +329,7 @@ contentRouter.post('/reorder/:projectId', async (req, res) => {
       return res.status(400).json(response);
     }
 
-    const success = await ContentBlockModel.reorder(projectId, blockIds);
+    const success = await ContentBlockModel.reorder(authReq.userId, projectId, blockIds);
 
     if (!success) {
       const response: APIResponse = {
@@ -351,6 +362,7 @@ contentRouter.post('/reorder/:projectId', async (req, res) => {
  */
 contentRouter.post('/generated/save', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const {
       project_id,
       content_type,
@@ -474,6 +486,7 @@ contentRouter.post('/generated/save', async (req, res) => {
 
     const generatedDoc = {
       _id: contentId,
+      userId: authReq.userId,
       project_id,
       content_type: finalContentType,
       title: title || validatedContent.title || validatedContent.name || 'Untitled',
@@ -518,7 +531,7 @@ contentRouter.post('/generated/save', async (req, res) => {
       domain: (generatedDoc as any).metadata.domain,
     };
 
-    const contentBlock = await ContentBlockModel.create({
+    const contentBlock = await ContentBlockModel.create(authReq.userId, {
       projectId: project_id,
       title: mappedBlock.title,
       content: mappedBlock.content,
@@ -550,10 +563,11 @@ contentRouter.post('/generated/save', async (req, res) => {
  */
 contentRouter.get('/generated/list/:projectId', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { projectId } = req.params;
     const { content_type, limit = '50' } = req.query;
 
-    const query: any = { project_id: projectId };
+    const query: any = { project_id: projectId, userId: authReq.userId };
     if (content_type) query.content_type = content_type;
 
     const db = getDb();
@@ -619,10 +633,11 @@ contentRouter.get('/generated/debug/all', async (_req, res) => {
  */
 contentRouter.get('/generated/:contentId', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { contentId } = req.params;
     const db = getDb();
     const generatedContentCollection = db.collection<GeneratedContentDocument>('generated_content');
-    const content = await generatedContentCollection.findOne({ _id: contentId });
+    const content = await generatedContentCollection.findOne({ _id: contentId, userId: authReq.userId });
 
     if (!content) {
       return res.status(404).json({
@@ -651,6 +666,7 @@ contentRouter.get('/generated/:contentId', async (req, res) => {
  */
 contentRouter.put('/generated/:contentId', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { contentId } = req.params;
     const { title, generated_content, persisted_content } = req.body;
 
@@ -664,8 +680,8 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
     const db = getDb();
     const generatedContentCollection = db.collection<GeneratedContentDocument>('generated_content');
 
-    // Get existing content to check type
-    const existingContent = await generatedContentCollection.findOne({ _id: contentId });
+    // Get existing content to check type and ownership
+    const existingContent = await generatedContentCollection.findOne({ _id: contentId, userId: authReq.userId });
     if (!existingContent) {
       return res.status(404).json({
         success: false,
@@ -729,7 +745,7 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
     }
 
     const result = await generatedContentCollection.updateOne(
-      { _id: contentId },
+      { _id: contentId, userId: authReq.userId },
       { $set: updateFields }
     );
 
@@ -740,7 +756,7 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
       });
     }
 
-    const updatedContent = await generatedContentCollection.findOne({ _id: contentId });
+    const updatedContent = await generatedContentCollection.findOne({ _id: contentId, userId: authReq.userId });
 
     console.log(`[Generated Content] Updated: ${contentId}`);
 
@@ -765,10 +781,11 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
  */
 contentRouter.delete('/generated/:contentId', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const { contentId } = req.params;
     const db = getDb();
     const generatedContentCollection = db.collection<GeneratedContentDocument>('generated_content');
-    const result = await generatedContentCollection.deleteOne({ _id: contentId });
+    const result = await generatedContentCollection.deleteOne({ _id: contentId, userId: authReq.userId });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({
