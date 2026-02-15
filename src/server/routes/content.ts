@@ -21,7 +21,7 @@ contentRouter.use(authMiddleware);
 
 contentRouter.get('/project/:projectId', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { projectId } = req.params;
     const pagination = PaginationSchema.parse(req.query);
     const { blocks, total } = await ContentBlockModel.findByProjectId(authReq.userId, projectId, pagination);
@@ -50,7 +50,7 @@ contentRouter.get('/project/:projectId', async (req, res) => {
 
 contentRouter.get('/:id', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const block = await ContentBlockModel.findById(authReq.userId, id);
 
@@ -80,7 +80,7 @@ contentRouter.get('/:id', async (req, res) => {
 
 contentRouter.get('/:id/children', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const children = await ContentBlockModel.findByParentId(authReq.userId, id);
 
@@ -102,7 +102,7 @@ contentRouter.get('/:id/children', async (req, res) => {
 
 contentRouter.post('/', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const payload = ContentBlockSchema.parse(req.body);
     const block = await ContentBlockModel.create(authReq.userId, {
       projectId: payload.projectId,
@@ -133,7 +133,7 @@ contentRouter.post('/', async (req, res) => {
 
 contentRouter.put('/:id', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const validatedData = ContentBlockSchema.partial().parse(req.body);
     const existing = await ContentBlockModel.findById(authReq.userId, id);
@@ -287,7 +287,7 @@ contentRouter.put('/:id', async (req, res) => {
 
 contentRouter.delete('/:id', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const deleted = await ContentBlockModel.delete(authReq.userId, id);
 
@@ -317,7 +317,7 @@ contentRouter.delete('/:id', async (req, res) => {
 
 contentRouter.post('/reorder/:projectId', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { projectId } = req.params;
     const { blockIds } = req.body;
 
@@ -362,7 +362,7 @@ contentRouter.post('/reorder/:projectId', async (req, res) => {
  */
 contentRouter.post('/generated/save', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const {
       project_id,
       content_type,
@@ -563,7 +563,7 @@ contentRouter.post('/generated/save', async (req, res) => {
  */
 contentRouter.get('/generated/list/:projectId', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { projectId } = req.params;
     const { content_type, limit = '50' } = req.query;
 
@@ -633,7 +633,7 @@ contentRouter.get('/generated/debug/all', async (_req, res) => {
  */
 contentRouter.get('/generated/:contentId', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { contentId } = req.params;
     const db = getDb();
     const generatedContentCollection = db.collection<GeneratedContentDocument>('generated_content');
@@ -666,7 +666,7 @@ contentRouter.get('/generated/:contentId', async (req, res) => {
  */
 contentRouter.put('/generated/:contentId', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { contentId } = req.params;
     const { title, generated_content, persisted_content } = req.body;
 
@@ -781,7 +781,7 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
  */
 contentRouter.delete('/generated/:contentId', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { contentId } = req.params;
     const db = getDb();
     const generatedContentCollection = db.collection<GeneratedContentDocument>('generated_content');

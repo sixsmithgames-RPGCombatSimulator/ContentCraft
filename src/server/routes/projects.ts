@@ -16,7 +16,7 @@ projectRouter.use(authMiddleware);
 
 projectRouter.get('/', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const pagination = PaginationSchema.parse(req.query);
     const { projects, total } = await ProjectModel.findAll(authReq.userId, pagination);
 
@@ -45,7 +45,7 @@ projectRouter.get('/', async (req, res) => {
 
 projectRouter.get('/:id', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const project = await ProjectModel.findById(authReq.userId, id);
 
@@ -75,7 +75,7 @@ projectRouter.get('/:id', async (req, res) => {
 
 projectRouter.post('/', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const payload = ProjectSchema.parse(req.body);
     const project = await ProjectModel.create(authReq.userId, {
       title: payload.title,
@@ -103,7 +103,7 @@ projectRouter.post('/', async (req, res) => {
 
 projectRouter.put('/:id', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const validatedData = ProjectSchema.partial().parse(req.body);
     const project = await ProjectModel.update(authReq.userId, id, validatedData);
@@ -135,7 +135,7 @@ projectRouter.put('/:id', async (req, res) => {
 
 projectRouter.delete('/:id', async (req, res) => {
   try {
-    const authReq = req as AuthRequest;
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const deleted = await ProjectModel.delete(authReq.userId, id);
 

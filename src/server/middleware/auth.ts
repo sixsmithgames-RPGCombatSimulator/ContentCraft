@@ -13,6 +13,15 @@ import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { getDb } from '../config/mongo.js';
 
+type UserDocument = {
+  _id: string;
+  email: string;
+  displayName?: string;
+  createdAt: Date;
+  lastLogin: Date;
+  metadata: Record<string, unknown>;
+};
+
 interface JWTPayload {
   userId: string;
   email: string;
@@ -37,7 +46,7 @@ export interface AuthRequest extends Request {
  */
 async function ensureUser(payload: JWTPayload) {
   const db = getDb();
-  const usersCollection = db.collection('users');
+  const usersCollection = db.collection<UserDocument>('users');
 
   let user = await usersCollection.findOne({ _id: payload.userId });
 
@@ -74,7 +83,7 @@ async function ensureUser(payload: JWTPayload) {
  */
 async function ensureLocalUser(userId: string) {
   const db = getDb();
-  const usersCollection = db.collection('users');
+  const usersCollection = db.collection<UserDocument>('users');
 
   let user = await usersCollection.findOne({ _id: userId });
 
@@ -217,7 +226,7 @@ export async function authMiddleware(
  */
 export async function optionalAuthMiddleware(
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): Promise<void> {
   const authReq = req as AuthRequest;
