@@ -17,6 +17,7 @@ export interface ChunkMetadata {
 
 export interface CanonChunk {
   _id: string; // e.g., "npc.rhylar_frinac#c2"
+  userId?: string; // User ID for multi-tenancy
   entity_id: string; // e.g., "npc.rhylar_frinac"
   text: string; // 1-5 sentences of coherent fact
   metadata: ChunkMetadata;

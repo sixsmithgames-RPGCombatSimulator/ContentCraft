@@ -119,6 +119,7 @@ export interface NPCDetails {
 
 export interface CanonEntity {
   _id: string; // Format: "{scope}.{type}.{slug}" e.g., "lib.spell.fireball" or "proj_abc123.npc.elara"
+  userId?: string; // User ID for multi-tenancy
   scope: string; // "lib" for library entities, "proj_{projectId}" for project entities
   type: EntityType;
   canonical_name: string;

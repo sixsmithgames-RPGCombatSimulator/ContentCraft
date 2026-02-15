@@ -9,8 +9,12 @@ import type { CanonEntity } from '../models/CanonEntity.js';
 import { ObjectId } from 'mongodb';
 import fs from 'fs/promises';
 import path from 'path';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
+
+// Apply auth middleware to all routes
+router.use(authMiddleware);
 
 interface DuplicateGroup {
   text: string;
@@ -59,13 +63,14 @@ interface ScanResult {
  */
 router.post('/scan', async (req, res) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const db = getDb();
     const entitiesCol = db.collection<CanonEntity>('canon_entities');
 
     const { scope = 'all', entity_id } = req.body;
 
     // Build query filter
-    const filter: any = {};
+    const filter: any = { userId: authReq.userId };
     if (entity_id) {
       filter._id = entity_id;
     } else if (scope === 'official') {

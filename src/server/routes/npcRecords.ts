@@ -3,20 +3,26 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { nanoid } from 'nanoid';
 import { validateSchema } from '../middleware/validateSchema.js';
 import { getNpcRecordsCollection } from '../config/mongo.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 export const npcRecordsRouter = Router();
 
-npcRecordsRouter.post('/', validateSchema('npc'), async (req, res, next) => {
+// Apply auth middleware to all routes
+npcRecordsRouter.use(authMiddleware);
+
+npcRecordsRouter.post('/', validateSchema('npc'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const collection = getNpcRecordsCollection();
     const now = new Date();
 
     const record = {
       _id: req.body._id || nanoid(),
+      userId: authReq.userId,
       project_id: req.body.project_id,
       canonical_id: req.body.canonical_id,
       schemaVersion: res.locals.schemaVersion,
@@ -36,8 +42,9 @@ npcRecordsRouter.post('/', validateSchema('npc'), async (req, res, next) => {
   }
 });
 
-npcRecordsRouter.put('/:id', validateSchema('npc'), async (req, res, next) => {
+npcRecordsRouter.put('/:id', validateSchema('npc'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const collection = getNpcRecordsCollection();
     const now = new Date();
 
@@ -47,7 +54,10 @@ npcRecordsRouter.put('/:id', validateSchema('npc'), async (req, res, next) => {
       updated_at: now,
     };
 
-    const result = await collection.updateOne({ _id: req.params.id }, { $set: updates });
+    const result = await collection.updateOne(
+      { _id: req.params.id, userId: authReq.userId },
+      { $set: updates }
+    );
 
     if (result.matchedCount === 0) {
       return res.status(404).json({ success: false, error: 'NotFound' });
@@ -59,10 +69,11 @@ npcRecordsRouter.put('/:id', validateSchema('npc'), async (req, res, next) => {
   }
 });
 
-npcRecordsRouter.get('/:id', async (req, res, next) => {
+npcRecordsRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const collection = getNpcRecordsCollection();
-    const record = await collection.findOne({ _id: req.params.id });
+    const record = await collection.findOne({ _id: req.params.id, userId: authReq.userId });
 
     if (!record) {
       return res.status(404).json({ success: false, error: 'NotFound' });
@@ -74,12 +85,13 @@ npcRecordsRouter.get('/:id', async (req, res, next) => {
   }
 });
 
-npcRecordsRouter.get('/', async (req, res, next) => {
+npcRecordsRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const collection = getNpcRecordsCollection();
     const { project_id, canonical_id, tag } = req.query;
 
-    const query: Record<string, unknown> = {};
+    const query: Record<string, unknown> = { userId: authReq.userId };
 
     if (project_id) query.project_id = project_id;
     if (canonical_id) query.canonical_id = canonical_id;

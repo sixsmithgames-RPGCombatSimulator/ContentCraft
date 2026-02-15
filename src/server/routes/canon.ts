@@ -152,10 +152,11 @@ canonRouter.get('/library', async (req: Request, res: Response) => {
  */
 canonRouter.get('/entities', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { scope, type, tags, era, region, q, project_id, limit = '1000', offset = '0' } = req.query;
 
     const collection = getCanonEntitiesCollection();
-    const filter: any = {};
+    const filter: any = { userId: authReq.userId };
 
     // Add scope filter
     if (scope && typeof scope === 'string') {
@@ -216,10 +217,11 @@ canonRouter.get('/entities', async (req: Request, res: Response) => {
  */
 canonRouter.get('/entities/:id', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const collection = getCanonEntitiesCollection();
 
-    const entity = await collection.findOne({ _id: id });
+    const entity = await collection.findOne({ _id: id, userId: authReq.userId });
 
     if (!entity) {
       return res.status(404).json({ error: 'Entity not found' });
@@ -239,6 +241,7 @@ canonRouter.get('/entities/:id', async (req: Request, res: Response) => {
  */
 canonRouter.post('/entities', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const entityData = req.body;
 
     // Validate required fields
@@ -273,7 +276,7 @@ canonRouter.post('/entities', async (req: Request, res: Response) => {
     const collection = getCanonEntitiesCollection();
 
     // Check if entity already exists
-    const existing = await collection.findOne({ _id: entityId });
+    const existing = await collection.findOne({ _id: entityId, userId: authReq.userId });
     if (existing) {
       return res.status(409).json({ error: 'Entity with this ID already exists', entityId });
     }
@@ -294,6 +297,7 @@ canonRouter.post('/entities', async (req: Request, res: Response) => {
  */
 canonRouter.put('/entities/:id', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const updates = req.body;
 
@@ -307,8 +311,7 @@ canonRouter.put('/entities/:id', async (req: Request, res: Response) => {
     // Update the updated_at timestamp
     updates.updated_at = new Date();
 
-    const result = await collection.updateOne(
-      { _id: id },
+    const result = await collection.updateOne({ _id: id, userId: authReq.userId },
       { $set: updates }
     );
 
@@ -316,7 +319,7 @@ canonRouter.put('/entities/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Entity not found' });
     }
 
-    const updatedEntity = await collection.findOne({ _id: id });
+    const updatedEntity = await collection.findOne({ _id: id, userId: authReq.userId });
 
     logger.info(`Updated canon entity: ${id}`);
     res.json(updatedEntity);
@@ -456,6 +459,7 @@ canonRouter.post('/chunks', async (req: Request, res: Response) => {
  */
 canonRouter.put('/chunks/:id', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const updates = req.body;
 
@@ -479,8 +483,7 @@ canonRouter.put('/chunks/:id', async (req: Request, res: Response) => {
     }
     delete updates.regenerate_embedding;
 
-    const result = await collection.updateOne(
-      { _id: id },
+    const result = await collection.updateOne({ _id: id, userId: authReq.userId },
       { $set: updates }
     );
 
@@ -488,7 +491,7 @@ canonRouter.put('/chunks/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Chunk not found' });
     }
 
-    const updatedChunk = await collection.findOne({ _id: id });
+    const updatedChunk = await collection.findOne({ _id: id, userId: authReq.userId });
 
     logger.info(`Updated chunk: ${id}`);
     res.json(updatedChunk);
@@ -504,11 +507,12 @@ canonRouter.put('/chunks/:id', async (req: Request, res: Response) => {
  */
 canonRouter.delete('/chunks/:id', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
 
     const collection = getCanonChunksCollection();
 
-    const result = await collection.deleteOne({ _id: id });
+    const result = await collection.deleteOne({ _id: id, userId: authReq.userId });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Chunk not found' });
@@ -555,6 +559,7 @@ canonRouter.get('/projects/:projectId/links', async (req: Request, res: Response
  */
 canonRouter.post('/projects/:projectId/links', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { projectId } = req.params;
     const { library_entity_ids } = req.body;
 
@@ -571,7 +576,7 @@ canonRouter.post('/projects/:projectId/links', async (req: Request, res: Respons
       const linkId = generateLinkId(projectId, entityId);
 
       // Check if already linked
-      const existing = await collection.findOne({ _id: linkId });
+      const existing = await collection.findOne({ _id: linkId, userId: authReq.userId });
       if (existing) {
         alreadyLinked++;
         continue;
@@ -609,11 +614,12 @@ canonRouter.post('/projects/:projectId/links', async (req: Request, res: Respons
  */
 canonRouter.delete('/projects/:projectId/links/:linkId', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { linkId } = req.params;
 
     const collection = getProjectLibraryLinksCollection();
 
-    const result = await collection.deleteOne({ _id: linkId });
+    const result = await collection.deleteOne({ _id: linkId, userId: authReq.userId });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Link not found' });
@@ -837,7 +843,7 @@ canonRouter.post('/search/similar', async (req: Request, res: Response) => {
     const sourceChunks = await chunksCollection
       .find({
         entity_id,
-        embedding: { $exists: true, $ne: null }
+        embedding: { $exists: true, $ne: null } as any
       })
       .toArray();
 
@@ -964,6 +970,7 @@ canonRouter.get('/facts', async (req: Request, res: Response) => {
  */
 canonRouter.post('/entities/batch', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { entities } = req.body;
 
     if (!entities || !Array.isArray(entities)) {
@@ -986,7 +993,7 @@ canonRouter.post('/entities/batch', async (req: Request, res: Response) => {
         const entityId = generateEntityId(entityData.type, entityData.canonical_name, entityData.scope);
 
         // Check if exists
-        const existing = await collection.findOne({ _id: entityId });
+        const existing = await collection.findOne({ _id: entityId, userId: authReq.userId });
         if (existing) {
           errors.push({ entity: entityData, error: 'Entity already exists' });
           continue;
@@ -1052,10 +1059,11 @@ const extractEntityIds = (value: unknown): string[] => {
   return value.filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
 };
 
-canonRouter.get('/collections', async (_req: Request, res: Response) => {
+canonRouter.get('/collections', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const collection = getLibraryCollectionsCollection();
-    const collections = await collection.find({}).sort({ name: 1 }).toArray();
+    const collections = await collection.find({ userId: authReq.userId }).sort({ name: 1 }).toArray();
     res.json(collections);
   } catch (error) {
     logger.error('Error fetching collections:', error);
@@ -1065,6 +1073,7 @@ canonRouter.get('/collections', async (_req: Request, res: Response) => {
 
 canonRouter.post('/collections', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { name, description, category, tags, is_official = false } = req.body ?? {};
 
     if (typeof name !== 'string' || name.trim().length === 0) {
@@ -1080,7 +1089,7 @@ canonRouter.post('/collections', async (req: Request, res: Response) => {
     const now = new Date();
 
     const collection = getLibraryCollectionsCollection();
-    const existing = await collection.findOne({ _id: collectionId });
+    const existing = await collection.findOne({ _id: collectionId, userId: authReq.userId });
     if (existing) {
       return res.status(409).json({ error: 'Collection with this name already exists', collection_id: collectionId });
     }
@@ -1120,18 +1129,18 @@ canonRouter.post('/collections', async (req: Request, res: Response) => {
 
 canonRouter.put('/collections/:id', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const entityIds = extractEntityIds(req.body?.entity_ids);
 
     const collection = getLibraryCollectionsCollection();
-    const existing = await collection.findOne({ _id: id });
+    const existing = await collection.findOne({ _id: id, userId: authReq.userId });
 
     if (!existing) {
       return res.status(404).json({ error: 'Collection not found' });
     }
 
-    const result = await collection.updateOne(
-      { _id: id },
+    const result = await collection.updateOne({ _id: id, userId: authReq.userId },
       {
         $set: {
           entity_ids: entityIds,
@@ -1144,7 +1153,7 @@ canonRouter.put('/collections/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Collection not found' });
     }
 
-    const updated = await collection.findOne({ _id: id });
+    const updated = await collection.findOne({ _id: id, userId: authReq.userId });
     res.json(updated);
   } catch (error) {
     logger.error('Error updating collection:', error);
@@ -1154,10 +1163,11 @@ canonRouter.put('/collections/:id', async (req: Request, res: Response) => {
 
 canonRouter.delete('/collections/:id', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
     const collection = getLibraryCollectionsCollection();
 
-    const result = await collection.deleteOne({ _id: id });
+    const result = await collection.deleteOne({ _id: id, userId: authReq.userId });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Collection not found' });

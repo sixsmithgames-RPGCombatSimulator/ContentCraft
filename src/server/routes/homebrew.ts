@@ -8,10 +8,14 @@ import multer from 'multer';
 import { createRequire } from 'module';
 import { logger } from '../utils/logger.js';
 import { parseHomebrewChunk, parseTextToEntry } from '../parsers/homebrewParser.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 const require = createRequire(import.meta.url);
 
 export const homebrewRouter = Router();
+
+// Apply auth middleware to all routes
+homebrewRouter.use(authMiddleware);
 
 // Configure multer for file uploads
 const upload = multer({
@@ -208,6 +212,7 @@ IMPORTANT:
  */
 homebrewRouter.post('/chunk', upload.single('file'), async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }

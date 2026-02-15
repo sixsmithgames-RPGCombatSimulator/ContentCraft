@@ -3,20 +3,25 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { nanoid } from 'nanoid';
 import { getRunsCollection, getArtifactsCollection } from '../config/mongo.js';
 import { createRun, getStageOrder, type StageName } from '../models/Run.js';
 import { Orchestrator } from '../orchestration/Orchestrator.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 export const runsRouter = Router();
+
+// Apply auth middleware to all routes
+runsRouter.use(authMiddleware);
 
 /**
  * POST /api/runs
  * Create a new content generation run
  */
-runsRouter.post('/', async (req, res, next) => {
+runsRouter.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { type, prompt, flags } = req.body;
 
     if (!type || !prompt) {
@@ -25,6 +30,9 @@ runsRouter.post('/', async (req, res, next) => {
 
     const id = nanoid(8);
     const run = createRun(id, type, prompt, flags);
+
+    // Add userId to run document
+    (run as any).userId = authReq.userId;
 
     const runsCollection = getRunsCollection();
     await runsCollection.insertOne(run);
@@ -45,10 +53,11 @@ runsRouter.post('/', async (req, res, next) => {
  * GET /api/runs/:id
  * Get run status and details
  */
-runsRouter.get('/:id', async (req, res, next) => {
+runsRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const runsCollection = getRunsCollection();
-    const run = await runsCollection.findOne({ _id: req.params.id });
+    const run = await runsCollection.findOne({ _id: req.params.id, userId: authReq.userId });
 
     if (!run) {
       return res.status(404).json({ error: 'Run not found' });
@@ -64,11 +73,12 @@ runsRouter.get('/:id', async (req, res, next) => {
  * GET /api/runs
  * List all runs with optional filters
  */
-runsRouter.get('/', async (req, res, next) => {
+runsRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { type, status, limit = '50' } = req.query;
 
-    const query: any = {};
+    const query: any = { userId: authReq.userId };
     if (type) query.type = type;
     if (status) query.status = status;
 
@@ -89,11 +99,19 @@ runsRouter.get('/', async (req, res, next) => {
  * GET /api/runs/:id/artifacts/:stage
  * Get artifact from a specific stage
  */
-runsRouter.get('/:id/artifacts/:stage', async (req, res, next) => {
+runsRouter.get('/:id/artifacts/:stage', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const stageParam = req.params.stage as StageName;
     if (!getStageOrder().includes(stageParam)) {
       return res.status(400).json({ error: 'Invalid stage parameter' });
+    }
+
+    // Verify run belongs to user
+    const runsCollection = getRunsCollection();
+    const run = await runsCollection.findOne({ _id: req.params.id, userId: authReq.userId });
+    if (!run) {
+      return res.status(404).json({ error: 'Run not found' });
     }
 
     const artifactsCollection = getArtifactsCollection();
@@ -116,8 +134,17 @@ runsRouter.get('/:id/artifacts/:stage', async (req, res, next) => {
  * POST /api/runs/:id/advance
  * Manually advance/retry a run
  */
-runsRouter.post('/:id/advance', async (req, res, next) => {
+runsRouter.post('/:id/advance', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const authReq = req as unknown as AuthRequest;
+
+    // Verify run belongs to user
+    const runsCollection = getRunsCollection();
+    const run = await runsCollection.findOne({ _id: req.params.id, userId: authReq.userId });
+    if (!run) {
+      return res.status(404).json({ error: 'Run not found' });
+    }
+
     const orchestrator = new Orchestrator();
     await orchestrator.startRun(req.params.id);
     res.json({ ok: true });

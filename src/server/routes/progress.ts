@@ -7,11 +7,15 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const progressRouter = Router();
+
+// Apply auth middleware to all routes
+progressRouter.use(authMiddleware);
 
 // Directory to store progress files
 const PROGRESS_DIR = path.join(__dirname, '..', '..', '..', 'generation-progress');
@@ -31,6 +35,7 @@ async function ensureProgressDir() {
  */
 progressRouter.post('/save-progress', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { filename, data } = req.body;
 
     if (!filename || !data) {
@@ -42,8 +47,14 @@ progressRouter.post('/save-progress', async (req: Request, res: Response) => {
 
     await ensureProgressDir();
 
+    // Add userId to the data
+    const dataWithUserId = {
+      ...data,
+      userId: authReq.userId,
+    };
+
     const filepath = path.join(PROGRESS_DIR, filename);
-    await fs.writeFile(filepath, JSON.stringify(data, null, 2), 'utf-8');
+    await fs.writeFile(filepath, JSON.stringify(dataWithUserId, null, 2), 'utf-8');
 
     console.log(`[Progress] Saved to ${filepath}`);
 
@@ -67,6 +78,7 @@ progressRouter.post('/save-progress', async (req: Request, res: Response) => {
  */
 progressRouter.get('/load-progress', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { filename } = req.query;
 
     if (!filename || typeof filename !== 'string') {
@@ -90,6 +102,14 @@ progressRouter.get('/load-progress', async (req: Request, res: Response) => {
     const content = await fs.readFile(filepath, 'utf-8');
     const data = JSON.parse(content);
 
+    // Verify userId matches
+    if (data.userId && data.userId !== authReq.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+      });
+    }
+
     console.log(`[Progress] Loaded from ${filepath}`);
 
     res.json(data);
@@ -108,6 +128,7 @@ progressRouter.get('/load-progress', async (req: Request, res: Response) => {
  */
 progressRouter.get('/list-progress', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     await ensureProgressDir();
 
     const files = await fs.readdir(PROGRESS_DIR);
@@ -119,6 +140,11 @@ progressRouter.get('/list-progress', async (req: Request, res: Response) => {
           const filepath = path.join(PROGRESS_DIR, filename);
           const content = await fs.readFile(filepath, 'utf-8');
           const data = JSON.parse(content);
+
+          // Filter by userId
+          if (data.userId && data.userId !== authReq.userId) {
+            return null;
+          }
 
           return {
             filename,
@@ -137,7 +163,7 @@ progressRouter.get('/list-progress', async (req: Request, res: Response) => {
       })
     );
 
-    // Filter out any failed reads
+    // Filter out any failed reads and non-matching users
     const validFiles = progressFiles.filter(f => f !== null);
 
     res.json(validFiles);
@@ -156,6 +182,7 @@ progressRouter.get('/list-progress', async (req: Request, res: Response) => {
  */
 progressRouter.delete('/delete-progress', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { filename } = req.query;
 
     if (!filename || typeof filename !== 'string') {
@@ -173,6 +200,17 @@ progressRouter.delete('/delete-progress', async (req: Request, res: Response) =>
       return res.status(404).json({
         success: false,
         error: 'Progress file not found',
+      });
+    }
+
+    // Verify userId matches before deleting
+    const content = await fs.readFile(filepath, 'utf-8');
+    const data = JSON.parse(content);
+
+    if (data.userId && data.userId !== authReq.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
       });
     }
 

@@ -9,8 +9,12 @@ import { generateLibraryEntityId, type CanonEntity, type EntityType } from '../m
 import { generateChunkId, type CanonChunk } from '../models/CanonChunk.js';
 import { logger } from '../utils/logger.js';
 import { NpcValidationError, validateNpcStrict } from '../validation/npcValidator.js';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 export const uploadRouter = Router();
+
+// Apply auth middleware to all routes
+uploadRouter.use(authMiddleware);
 
 const ALLOWED_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'npc',
@@ -50,6 +54,7 @@ interface ApproveUploadRequestBody {
 }
 
 uploadRouter.post('/approve', async (req: Request, res: Response) => {
+  const authReq = req as unknown as AuthRequest;
   const { entities, sourceName = 'unknown_source' } = req.body as ApproveUploadRequestBody;
 
   if (!Array.isArray(entities) || entities.length === 0) {
@@ -88,6 +93,7 @@ uploadRouter.post('/approve', async (req: Request, res: Response) => {
       const now = new Date();
       const canonEntity: CanonEntity = {
         _id: entityId,
+        userId: authReq.userId,
         scope: 'lib',
         type: type as CanonEntity['type'],
         canonical_name: name,
@@ -112,9 +118,12 @@ uploadRouter.post('/approve', async (req: Request, res: Response) => {
         updated_at: now,
       };
 
-      const existing = await entitiesCollection.findOne({ _id: entityId });
+      const existing = await entitiesCollection.findOne({ _id: entityId, userId: authReq.userId });
       if (existing) {
-        await entitiesCollection.updateOne({ _id: entityId }, { $set: { ...canonEntity, created_at: existing.created_at } });
+        await entitiesCollection.updateOne(
+          { _id: entityId, userId: authReq.userId },
+          { $set: { ...canonEntity, created_at: existing.created_at } }
+        );
         updatedEntities.push(entityId);
       } else {
         await entitiesCollection.insertOne(canonEntity);
@@ -122,7 +131,7 @@ uploadRouter.post('/approve', async (req: Request, res: Response) => {
       }
 
       // Wipe existing chunks for consistency
-      await chunksCollection.deleteMany({ entity_id: entityId });
+      await chunksCollection.deleteMany({ entity_id: entityId, userId: authReq.userId });
 
       // Create chunks from claims
       const claims = canonEntity.claims ?? [];
@@ -133,6 +142,7 @@ uploadRouter.post('/approve', async (req: Request, res: Response) => {
         const chunkId = generateChunkId(entityId, chunkIndex);
         const chunk: CanonChunk = {
           _id: chunkId,
+          userId: authReq.userId,
           entity_id: entityId,
           text: claim.text,
           metadata: {
