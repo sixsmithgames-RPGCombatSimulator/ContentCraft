@@ -11,18 +11,35 @@ import { existsSync, mkdirSync } from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const dbPath = process.env.DATABASE_PATH || './data/contentcraft.db';
-const dbDir = dirname(dbPath);
+// SQLite doesn't work on Vercel (read-only filesystem except /tmp)
+// Only initialize if not running on Vercel
+const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+let _db: sqlite3.Database | null = null;
 
-if (!existsSync(dbDir)) {
-  mkdirSync(dbDir, { recursive: true });
+if (!isVercel) {
+  const dbPath = process.env.DATABASE_PATH || './data/contentcraft.db';
+  const dbDir = dirname(dbPath);
+
+  if (!existsSync(dbDir)) {
+    mkdirSync(dbDir, { recursive: true });
+  }
+
+  _db = new sqlite3.Database(dbPath);
+  _db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  console.log('✅ SQLite database initialized');
+} else {
+  console.log('⚠️ Running on Vercel - SQLite disabled (use MongoDB for persistence)');
 }
 
-export const db = new sqlite3.Database(dbPath);
-
-db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+export const db = _db as sqlite3.Database;
 
 export const initializeDatabase = (): Promise<void> => {
+  // Skip SQLite initialization on Vercel
+  if (isVercel || !_db) {
+    console.log('⏭️ Skipping SQLite initialization (not available in this environment)');
+    return Promise.resolve();
+  }
+
   return new Promise((resolve, reject) => {
     const tables = [
       `
@@ -103,9 +120,9 @@ export const initializeDatabase = (): Promise<void> => {
       `
     ];
 
-    db.serialize(() => {
+    _db!.serialize(() => {
       tables.forEach(table => {
-        db.exec(table, (err) => {
+        _db!.exec(table, (err) => {
           if (err) {
             console.error('Error creating table:', err);
             reject(err);
@@ -120,8 +137,11 @@ export const initializeDatabase = (): Promise<void> => {
 };
 
 export const dbGet = (sql: string, params: any[] = []): Promise<any> => {
+  if (!_db) {
+    return Promise.reject(new Error('SQLite not available in this environment. Use MongoDB instead.'));
+  }
   return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
+    _db!.get(sql, params, (err, row) => {
       if (err) reject(err);
       else resolve(row);
     });
@@ -129,8 +149,11 @@ export const dbGet = (sql: string, params: any[] = []): Promise<any> => {
 };
 
 export const dbAll = (sql: string, params: any[] = []): Promise<any[]> => {
+  if (!_db) {
+    return Promise.reject(new Error('SQLite not available in this environment. Use MongoDB instead.'));
+  }
   return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
+    _db!.all(sql, params, (err, rows) => {
       if (err) reject(err);
       else resolve(rows || []);
     });
@@ -138,8 +161,11 @@ export const dbAll = (sql: string, params: any[] = []): Promise<any[]> => {
 };
 
 export const dbRun = (sql: string, params: any[] = []): Promise<sqlite3.RunResult> => {
+  if (!_db) {
+    return Promise.reject(new Error('SQLite not available in this environment. Use MongoDB instead.'));
+  }
   return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
+    _db!.run(sql, params, function(err) {
       if (err) reject(err);
       else resolve(this);
     });
