@@ -19,23 +19,26 @@ async function initialize() {
   try {
     console.log('🔄 Initializing serverless function...');
 
-    // Only initialize MongoDB for Vercel (SQLite doesn't work on serverless)
+    // SQLite doesn't work on Vercel (read-only filesystem)
     if (process.env.VERCEL) {
-      console.log('☁️ Running on Vercel - skipping SQLite, using MongoDB only');
+      console.log('☁️ Running on Vercel - SQLite not available');
+      console.log('💡 ContentCraft features require local development or alternative deployment');
     } else {
       console.log('📦 Initializing SQLite database...');
       await initializeDatabase();
     }
 
-    console.log('🍃 Connecting to MongoDB...');
+    // MongoDB is optional - only needed for D&D Generator features
+    console.log('🍃 Attempting MongoDB connection...');
     await connectToMongo();
 
     isInitialized = true;
     console.log('✅ Serverless function initialized');
   } catch (error) {
-    console.error('❌ Failed to initialize serverless function:', error);
-    // Don't throw - allow app to start but log the error
-    // Some routes might work without DB
+    console.error('⚠️ Initialization completed with warnings:', error);
+    // Mark as initialized even if MongoDB failed
+    // App can still work for features that don't need MongoDB
+    isInitialized = true;
   }
 }
 

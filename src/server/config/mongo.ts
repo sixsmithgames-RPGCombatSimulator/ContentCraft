@@ -22,9 +22,16 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/dndgen
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
-export async function connectToMongo(): Promise<Db> {
+export async function connectToMongo(): Promise<Db | null> {
   if (db) {
     return db;
+  }
+
+  // Skip MongoDB if URI is not configured
+  if (!process.env.MONGODB_URI) {
+    console.log('⚠️ MongoDB URI not configured - D&D Generator features will be unavailable');
+    console.log('💡 Set MONGODB_URI environment variable to enable D&D features');
+    return null;
   }
 
   try {
@@ -39,8 +46,11 @@ export async function connectToMongo(): Promise<Db> {
 
     return db;
   } catch (error) {
-    console.error('MongoDB connection error:', error);
-    throw error;
+    console.error('⚠️ MongoDB connection failed:', error);
+    console.log('💡 D&D Generator features will be unavailable');
+    console.log('💡 ContentCraft features (copy/paste to AI) will still work');
+    // Don't throw - allow app to run without MongoDB
+    return null;
   }
 }
 
@@ -84,9 +94,13 @@ async function createIndexes(database: Db): Promise<void> {
 
 export function getDb(): Db {
   if (!db) {
-    throw new Error('Database not initialized. Call connectToMongo() first.');
+    throw new Error('MongoDB not available. This feature requires MongoDB. Set MONGODB_URI environment variable.');
   }
   return db;
+}
+
+export function isMongoAvailable(): boolean {
+  return db !== null;
 }
 
 export async function closeMongo(): Promise<void> {
