@@ -5,6 +5,15 @@
 - Vercel account connected to your GitHub repository
 - MongoDB Atlas database (or accessible MongoDB instance)
 
+## Architecture
+
+The app uses a **serverless architecture** for Vercel deployment:
+
+- **Express app** (`src/server/app.ts`) - Exported for serverless use
+- **Server startup** (`src/server/index.ts`) - Local development only
+- **Serverless wrapper** (`api/index.js`) - Vercel entry point
+- **Static files** (`dist/client/`) - Served by Express in production
+
 ## Build Configuration
 
 The project is configured to build automatically on Vercel using the `vercel.json` configuration.
@@ -12,6 +21,7 @@ The project is configured to build automatically on Vercel using the `vercel.jso
 **Build Command:** `npm run build`
 **Output Directory:** `dist`
 **Install Command:** `npm install`
+**Functions:** `api/index.js` (serverless function)
 
 ## Required Environment Variables
 
@@ -147,10 +157,19 @@ npm start
 The build process runs these steps:
 
 1. `npm run build:server` - Compiles TypeScript server code to `dist/server/`
+   - Creates `dist/server/app.js` (Express app export)
+   - Creates `dist/server/index.js` (local startup script)
 2. `npm run build:client` - Builds React client to `client/dist/`
 3. `npm run copy:client` - Copies `client/dist/` to `dist/client/`
 
 Result: Complete production build in `dist/` directory ready for Vercel.
+
+**Vercel Deployment Flow:**
+1. Vercel builds the project using `npm run build`
+2. Vercel creates a serverless function from `api/index.js`
+3. `api/index.js` imports and exports the Express app from `dist/server/app.js`
+4. All requests are routed to the serverless function via rewrites
+5. Express serves static files from `dist/client/` for the React app
 
 ## Custom Domain Setup
 
