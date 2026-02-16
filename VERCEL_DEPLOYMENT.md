@@ -14,6 +14,24 @@ The app uses a **serverless architecture** for Vercel deployment:
 - **Serverless wrapper** (`api/index.js`) - Vercel entry point
 - **Static files** (`dist/client/`) - Served by Express in production
 
+### Database Architecture on Vercel
+
+**Important:** SQLite is **disabled** on Vercel due to the read-only filesystem in serverless environments.
+
+- ✅ **MongoDB** - Fully functional (use MongoDB Atlas for cloud hosting)
+- ❌ **SQLite** - Automatically disabled on Vercel
+
+**What works on Vercel:**
+- D&D Generator (uses MongoDB)
+- Canon/Library features (uses MongoDB)
+- All MongoDB-based features
+
+**What requires local development:**
+- ContentCraft project features (uses SQLite)
+- Content blocks and fact-checking (uses SQLite)
+
+For production use of ContentCraft features, consider migrating to MongoDB or using a cloud SQLite alternative.
+
 ## Build Configuration
 
 The project is configured to build automatically on Vercel using the `vercel.json` configuration.
@@ -36,15 +54,17 @@ PORT=3001
 
 ### Database Configuration
 
-```
-DATABASE_PATH=./data/contentcraft.db
-MONGODB_URI=your-mongodb-connection-string
-```
-
-For production, use MongoDB Atlas:
+**MongoDB (Required for Vercel):**
 ```
 MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/dndgen?retryWrites=true&w=majority
 ```
+
+Use [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) for cloud-hosted MongoDB.
+
+**SQLite (Not available on Vercel):**
+- SQLite is automatically disabled in serverless environments
+- No DATABASE_PATH needed for Vercel deployment
+- ContentCraft project features won't work on Vercel (require SQLite migration)
 
 ### API Keys
 
@@ -122,6 +142,21 @@ npm start
 
 ## Troubleshooting
 
+### 500 Internal Server Error / Function Crash
+
+**Problem:** `FUNCTION_INVOCATION_FAILED` or serverless function crashes
+
+**Common Causes:**
+1. **SQLite filesystem errors** - SQLite doesn't work on Vercel (fixed in latest version)
+2. **Missing MongoDB connection** - Ensure `MONGODB_URI` is set correctly
+3. **Environment variables not set** - Check all required vars are configured
+
+**Solutions:**
+1. Check Vercel function logs for specific error messages
+2. Verify MongoDB Atlas allows connections from `0.0.0.0/0` (all IPs)
+3. Ensure `MONGODB_URI` includes `retryWrites=true&w=majority`
+4. Verify latest code is deployed (SQLite should be auto-disabled)
+
 ### 404 Errors on Vercel
 
 **Problem:** App shows 404 errors for index.html or static assets
@@ -130,7 +165,7 @@ npm start
 1. Verify `NODE_ENV=production` is set in Vercel environment variables
 2. Check that build completed successfully in Vercel deployment logs
 3. Ensure `dist/client/` directory exists after build
-4. Check `vercel.json` routes configuration
+4. Check `vercel.json` rewrite configuration
 
 ### Database Connection Issues
 
