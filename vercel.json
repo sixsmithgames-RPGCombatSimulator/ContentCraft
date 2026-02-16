@@ -2,24 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "package.json",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "dist/**",
-          "data/**"
-        ]
-      }
+      "src": "api/index.js",
+      "use": "@vercel/node"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/dist/server/index.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/dist/server/index.js"
+      "source": "/(.*)",
+      "destination": "/api"
     }
   ],
   "env": {
