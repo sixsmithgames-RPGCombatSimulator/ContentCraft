@@ -25,7 +25,15 @@ Set these in your Vercel project (Settings → Environment Variables):
 ```bash
 NODE_ENV=production
 CORS_ORIGIN=https://contentcraft.sixsmithgames.com
+SINGLE_USER_MODE=true
+DEFAULT_USER_ID=demo-user
 ```
+
+**Why these are needed:**
+- `NODE_ENV=production` - Enables production mode
+- `CORS_ORIGIN` - Your Vercel domain for CORS configuration
+- `SINGLE_USER_MODE=true` - Bypasses JWT authentication (allows app to work without login)
+- `DEFAULT_USER_ID` - User ID for single-user mode
 
 ### Authentication (if using multi-tenant mode)
 

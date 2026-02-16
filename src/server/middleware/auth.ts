@@ -80,32 +80,43 @@ async function ensureUser(payload: JWTPayload) {
 
 /**
  * Ensures the default local development user exists
+ * Returns a default user object if MongoDB is not available
  */
 async function ensureLocalUser(userId: string) {
-  const db = getDb();
-  const usersCollection = db.collection<UserDocument>('users');
+  try {
+    const db = getDb();
+    const usersCollection = db.collection<UserDocument>('users');
 
-  let user = await usersCollection.findOne({ _id: userId });
+    let user = await usersCollection.findOne({ _id: userId });
 
-  if (!user) {
-    user = {
-      _id: userId,
-      email: 'local@dev.local',
-      displayName: 'Local Development User',
-      createdAt: new Date(),
-      lastLogin: new Date(),
-      metadata: {}
+    if (!user) {
+      user = {
+        _id: userId,
+        email: 'local@dev.local',
+        displayName: 'Local Development User',
+        createdAt: new Date(),
+        lastLogin: new Date(),
+        metadata: {}
+      };
+
+      await usersCollection.insertOne(user);
+      console.log(`✓ Created local development user: ${userId}`);
+    }
+
+    return {
+      id: user._id,
+      email: user.email,
+      displayName: user.displayName
     };
-
-    await usersCollection.insertOne(user);
-    console.log(`✓ Created local development user: ${userId}`);
+  } catch (error) {
+    // MongoDB not available - return default user object
+    console.log(`⚠️ MongoDB not available, using in-memory user for: ${userId}`);
+    return {
+      id: userId,
+      email: 'local@dev.local',
+      displayName: 'Local Development User'
+    };
   }
-
-  return {
-    id: user._id,
-    email: user.email,
-    displayName: user.displayName
-  };
 }
 
 /**
