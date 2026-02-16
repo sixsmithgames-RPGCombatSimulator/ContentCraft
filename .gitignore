@@ -58,3 +58,6 @@ coverage/
 
 # Docker volumes (if accidentally created locally)
 volumes/
+
+# Vercel
+.vercel
