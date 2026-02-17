@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { PlusIcon, Search, Filter } from 'lucide-react';
+import { PlusIcon, Search, Filter, BookOpen, ArrowUpRight, Layers, ClipboardCopy } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
 import { Project, ProjectType } from '../types';
 import { projectApi } from '../services/api';
@@ -126,17 +126,40 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {filteredProjects.length === 0 ? (
-        <div className="text-center py-12">
+        <div className="py-12">
           {projects.length === 0 ? (
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
-              <p className="text-gray-600 mb-6">Get started by creating your first content project</p>
-              <Link to="/projects/new" className="btn-primary">
-                Create Your First Project
-              </Link>
+            <div className="max-w-2xl mx-auto">
+              <div className="text-center mb-10">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary-50 mb-5">
+                  <BookOpen className="w-8 h-8 text-primary-600" />
+                </div>
+                <h3 className="text-2xl font-semibold text-gray-900 mb-3">Welcome to ContentCraft</h3>
+                <p className="text-gray-500 text-base leading-relaxed">
+                  Organize your writing projects and generate AI-ready prompts. Use the{' '}
+                  <span className="font-medium text-gray-700">New Project</span> button above to get started.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
+                  <Layers className="w-5 h-5 text-primary-500 mb-3" />
+                  <h4 className="font-medium text-gray-900 mb-1 text-sm">Organize Content</h4>
+                  <p className="text-gray-500 text-xs leading-relaxed">Structure your project with content blocks — scenes, chapters, NPCs, locations, and more.</p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
+                  <ClipboardCopy className="w-5 h-5 text-primary-500 mb-3" />
+                  <h4 className="font-medium text-gray-900 mb-1 text-sm">Copy to AI</h4>
+                  <p className="text-gray-500 text-xs leading-relaxed">Generate prompts from your content and paste them directly into your preferred AI assistant.</p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
+                  <ArrowUpRight className="w-5 h-5 text-primary-500 mb-3" />
+                  <h4 className="font-medium text-gray-900 mb-1 text-sm">Iterate Fast</h4>
+                  <p className="text-gray-500 text-xs leading-relaxed">Refine AI responses, fact-check content, and build your world across multiple sessions.</p>
+                </div>
+              </div>
             </div>
           ) : (
-            <div>
+            <div className="text-center">
               <h3 className="text-lg font-medium text-gray-900 mb-2">No projects match your filters</h3>
               <p className="text-gray-600">Try adjusting your search or filter criteria</p>
             </div>
