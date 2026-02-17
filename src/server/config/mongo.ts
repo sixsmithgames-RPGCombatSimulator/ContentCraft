@@ -55,6 +55,14 @@ export async function connectToMongo(): Promise<Db | null> {
 }
 
 async function createIndexes(database: Db): Promise<void> {
+  // ContentCraft projects indexes
+  await database.collection('projects').createIndex({ userId: 1, updatedAt: -1 });
+  await database.collection('projects').createIndex({ userId: 1, type: 1 });
+
+  // ContentCraft content blocks indexes
+  await database.collection('content_blocks').createIndex({ userId: 1, projectId: 1, order: 1 });
+  await database.collection('content_blocks').createIndex({ userId: 1, parentId: 1 });
+
   // Canon entities indexes
   await database.collection('canon_entities').createIndex({ type: 1 });
   await database.collection('canon_entities').createIndex({ canonical_name: 1 });

@@ -3,9 +3,27 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { dbGet, dbAll, dbRun } from './database.js';
 import { v4 as uuidv4 } from 'uuid';
 import { ContentBlock, ContentType } from '../../shared/types/index.js';
+import { getDb } from '../config/mongo.js';
+
+interface ContentBlockDocument {
+  _id: string;
+  userId: string;
+  projectId: string;
+  parentId?: string;
+  title: string;
+  content: string;
+  type: string;
+  order: number;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function getCollection() {
+  return getDb().collection<ContentBlockDocument>('content_blocks');
+}
 
 export class ContentBlockModel {
   static async create(
@@ -15,36 +33,28 @@ export class ContentBlockModel {
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    await dbRun(`
-      INSERT INTO content_blocks (id, user_id, project_id, parent_id, title, content, type, order_num, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      id,
+    const doc: ContentBlockDocument = {
+      _id: id,
       userId,
-      data.projectId,
-      data.parentId || null,
-      data.title,
-      data.content || '',
-      data.type,
-      data.order || 0,
-      JSON.stringify(data.metadata || {}),
-      now,
-      now
-    ]);
+      projectId: data.projectId,
+      parentId: data.parentId,
+      title: data.title,
+      content: data.content || '',
+      type: data.type,
+      order: data.order || 0,
+      metadata: data.metadata || {},
+      createdAt: now,
+      updatedAt: now
+    };
 
-    const block = await this.findById(userId, id);
-    return block!;
+    await getCollection().insertOne(doc);
+    return this.mapDocToBlock(doc);
   }
 
   static async findById(userId: string, id: string): Promise<ContentBlock | null> {
-    const row = await dbGet(
-      'SELECT * FROM content_blocks WHERE id = ? AND user_id = ?',
-      [id, userId]
-    );
-
-    if (!row) return null;
-
-    return this.mapRowToContentBlock(row);
+    const doc = await getCollection().findOne({ _id: id, userId });
+    if (!doc) return null;
+    return this.mapDocToBlock(doc);
   }
 
   static async findByProjectId(
@@ -53,34 +63,27 @@ export class ContentBlockModel {
     options: { page?: number; limit?: number } = {}
   ): Promise<{ blocks: ContentBlock[]; total: number }> {
     const { page = 1, limit = 50 } = options;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const countRow = await dbGet(
-      'SELECT COUNT(*) as count FROM content_blocks WHERE project_id = ? AND user_id = ?',
-      [projectId, userId]
-    );
-    const total = countRow.count;
+    const [docs, total] = await Promise.all([
+      getCollection()
+        .find({ userId, projectId })
+        .sort({ order: 1, createdAt: 1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      getCollection().countDocuments({ userId, projectId })
+    ]);
 
-    const rows = await dbAll(`
-      SELECT * FROM content_blocks
-      WHERE project_id = ? AND user_id = ?
-      ORDER BY order_num ASC, created_at ASC
-      LIMIT ? OFFSET ?
-    `, [projectId, userId, limit, offset]);
-
-    const blocks = rows.map(row => this.mapRowToContentBlock(row));
-
-    return { blocks, total };
+    return { blocks: docs.map(d => this.mapDocToBlock(d)), total };
   }
 
   static async findByParentId(userId: string, parentId: string): Promise<ContentBlock[]> {
-    const rows = await dbAll(`
-      SELECT * FROM content_blocks
-      WHERE parent_id = ? AND user_id = ?
-      ORDER BY order_num ASC, created_at ASC
-    `, [parentId, userId]);
-
-    return rows.map(row => this.mapRowToContentBlock(row));
+    const docs = await getCollection()
+      .find({ userId, parentId })
+      .sort({ order: 1, createdAt: 1 })
+      .toArray();
+    return docs.map(d => this.mapDocToBlock(d));
   }
 
   static async update(
@@ -88,71 +91,41 @@ export class ContentBlockModel {
     id: string,
     data: Partial<Omit<ContentBlock, 'id' | 'projectId' | 'createdAt' | 'updatedAt'>>
   ): Promise<ContentBlock | null> {
-    const existing = await this.findById(userId, id);
-    if (!existing) return null;
-
     const now = new Date().toISOString();
-    const updates = [];
-    const values = [];
+    const $set: Partial<ContentBlockDocument> = { updatedAt: now };
 
-    if (data.parentId !== undefined) {
-      updates.push('parent_id = ?');
-      values.push(data.parentId);
-    }
-    if (data.title !== undefined) {
-      updates.push('title = ?');
-      values.push(data.title);
-    }
-    if (data.content !== undefined) {
-      updates.push('content = ?');
-      values.push(data.content);
-    }
-    if (data.type !== undefined) {
-      updates.push('type = ?');
-      values.push(data.type);
-    }
-    if (data.order !== undefined) {
-      updates.push('order_num = ?');
-      values.push(data.order);
-    }
-    if (data.metadata !== undefined) {
-      updates.push('metadata = ?');
-      values.push(JSON.stringify(data.metadata));
-    }
+    if (data.parentId !== undefined) $set.parentId = data.parentId;
+    if (data.title !== undefined) $set.title = data.title;
+    if (data.content !== undefined) $set.content = data.content;
+    if (data.type !== undefined) $set.type = data.type;
+    if (data.order !== undefined) $set.order = data.order;
+    if (data.metadata !== undefined) $set.metadata = data.metadata;
 
-    if (updates.length === 0) return existing;
+    const result = await getCollection().findOneAndUpdate(
+      { _id: id, userId },
+      { $set },
+      { returnDocument: 'after' }
+    );
 
-    updates.push('updated_at = ?');
-    values.push(now);
-    values.push(id);
-    values.push(userId);
-
-    await dbRun(`
-      UPDATE content_blocks
-      SET ${updates.join(', ')}
-      WHERE id = ? AND user_id = ?
-    `, values);
-
-    const block = await this.findById(userId, id);
-    return block!;
+    if (!result) return null;
+    return this.mapDocToBlock(result);
   }
 
   static async delete(userId: string, id: string): Promise<boolean> {
-    const result = await dbRun(
-      'DELETE FROM content_blocks WHERE id = ? AND user_id = ?',
-      [id, userId]
-    );
-    return result.changes! > 0;
+    const result = await getCollection().deleteOne({ _id: id, userId });
+    return result.deletedCount > 0;
   }
 
   static async reorder(userId: string, projectId: string, blockIds: string[]): Promise<boolean> {
     try {
-      for (let i = 0; i < blockIds.length; i++) {
-        await dbRun(
-          'UPDATE content_blocks SET order_num = ? WHERE id = ? AND project_id = ? AND user_id = ?',
-          [i, blockIds[i], projectId, userId]
-        );
-      }
+      await Promise.all(
+        blockIds.map((blockId, i) =>
+          getCollection().updateOne(
+            { _id: blockId, projectId, userId },
+            { $set: { order: i, updatedAt: new Date().toISOString() } }
+          )
+        )
+      );
       return true;
     } catch (error) {
       console.error('Error reordering blocks:', error);
@@ -160,18 +133,18 @@ export class ContentBlockModel {
     }
   }
 
-  private static mapRowToContentBlock(row: any): ContentBlock {
+  private static mapDocToBlock(doc: ContentBlockDocument): ContentBlock {
     return {
-      id: row.id,
-      projectId: row.project_id,
-      parentId: row.parent_id || undefined,
-      title: row.title,
-      content: row.content || '',
-      type: row.type as ContentType,
-      order: row.order_num || 0,
-      metadata: JSON.parse(row.metadata || '{}'),
-      createdAt: new Date(row.created_at),
-      updatedAt: new Date(row.updated_at)
+      id: doc._id,
+      projectId: doc.projectId,
+      parentId: doc.parentId,
+      title: doc.title,
+      content: doc.content || '',
+      type: doc.type as ContentType,
+      order: doc.order || 0,
+      metadata: doc.metadata || {},
+      createdAt: new Date(doc.createdAt),
+      updatedAt: new Date(doc.updatedAt)
     };
   }
 }
