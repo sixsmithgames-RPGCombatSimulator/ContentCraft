@@ -45,6 +45,7 @@ export const initializeDatabase = (): Promise<void> => {
       `
       CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local-dev',
         title TEXT NOT NULL,
         description TEXT,
         type TEXT NOT NULL,
@@ -56,6 +57,7 @@ export const initializeDatabase = (): Promise<void> => {
       `
       CREATE TABLE IF NOT EXISTS content_blocks (
         id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local-dev',
         project_id TEXT NOT NULL,
         parent_id TEXT,
         title TEXT NOT NULL,
