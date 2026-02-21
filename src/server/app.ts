@@ -29,6 +29,7 @@ if (isProduction) {
         connectSrc: ["'self'", "https://*.clerk.accounts.dev", "https://clerk.sixsmithgames.com"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+        workerSrc: ["'self'", "blob:"],
         imgSrc: ["'self'", "data:", "https:"],
       },
     },
