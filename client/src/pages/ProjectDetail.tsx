@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, FileText, BookOpen, Wand2, Eye, Search, Filter, Copy, GripVertical, ArrowUpDown, Check, X } from 'lucide-react';
 import { Project, ContentBlock, ProjectType, ContentType } from '../types';
-import { projectApi, contentApi } from '../services/api';
+import { projectApi, contentApi, API_BASE_URL } from '../services/api';
 import GeneratedContentModal, { type GeneratedContentDoc } from '../components/generator/GeneratedContentModal';
 import ContentRenderer from '../components/generator/ContentRenderer';
 import EditContentModal from '../components/generator/EditContentModal';
@@ -635,7 +635,7 @@ export const ProjectDetail: React.FC = () => {
     if (!id) return;
     try {
       console.log('[ProjectDetail] Loading generated content for project:', id);
-      const response = await fetch(`http://localhost:3001/api/content/generated/list/${id}`);
+      const response = await fetch(`${API_BASE_URL}/content/generated/list/${id}`);
       console.log('[ProjectDetail] API response status:', response.status);
 
       if (response.ok) {
@@ -928,7 +928,7 @@ export const ProjectDetail: React.FC = () => {
                       onClick={async () => {
                         if (confirm('Delete this generated content?')) {
                           try {
-                            await fetch(`http://localhost:3001/api/content/generated/${content._id}`, { method: 'DELETE' });
+                            await fetch(`${API_BASE_URL}/content/generated/${content._id}`, { method: 'DELETE' });
                             loadGeneratedContent();
                           } catch (err) {
                             console.error('Error deleting:', err);

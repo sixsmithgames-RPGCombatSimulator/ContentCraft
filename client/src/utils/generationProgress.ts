@@ -8,6 +8,7 @@
  */
 
 import type { LiveMapSpace } from '../types/liveMapTypes';
+import { API_BASE_URL } from '../services/api';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -232,7 +233,7 @@ export async function saveProgressToFile(
   const fn = filename || `generation-${session.sessionId}.json`;
 
   try {
-    const response = await fetch('http://localhost:3001/api/save-progress', {
+    const response = await fetch(`${API_BASE_URL}/save-progress`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -255,6 +256,8 @@ export async function saveProgressToFile(
   }
 }
 
+// ... (rest of the code remains the same)
+
 /**
  * Loads progress from a JSON file
  */
@@ -262,7 +265,7 @@ export async function loadProgressFromFile(
   filename: string
 ): Promise<GenerationProgress | null> {
   try {
-    const response = await fetch(`http://localhost:3001/api/load-progress?filename=${encodeURIComponent(filename)}`);
+    const response = await fetch(`${API_BASE_URL}/load-progress?filename=${encodeURIComponent(filename)}`);
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -279,6 +282,8 @@ export async function loadProgressFromFile(
   }
 }
 
+// ... (rest of the code remains the same)
+
 /**
  * Lists all available progress files
  */
@@ -291,7 +296,7 @@ export async function listProgressFiles(): Promise<Array<{
   config: GenerationConfig;
 }>> {
   try {
-    const response = await fetch('http://localhost:3001/api/list-progress');
+    const response = await fetch(`${API_BASE_URL}/list-progress`);
 
     if (!response.ok) {
       throw new Error(`Failed to list progress files: ${response.statusText}`);

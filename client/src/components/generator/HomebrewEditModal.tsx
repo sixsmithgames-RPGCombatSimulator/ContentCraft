@@ -284,12 +284,12 @@ export default function HomebrewEditModal({
     try {
       // Parse both pieces
       const [currentResponse, newResponse] = await Promise.all([
-        fetch('http://localhost:3001/api/homebrew/parse-text', {
+        fetch(`${API_BASE_URL}/homebrew/parse-text`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: remaining, contextType: entry.type }),
         }),
-        fetch('http://localhost:3001/api/homebrew/parse-text', {
+        fetch(`${API_BASE_URL}/homebrew/parse-text`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: selectedText, contextType: entry.type }),

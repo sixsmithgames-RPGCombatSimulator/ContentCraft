@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../services/api';
 import GeneratorPanel, { GenerationConfig } from '../components/generator/GeneratorPanel';
 import ResourcesPanel from '../components/generator/ResourcesPanel';
 import { AlertCircle, CheckCircle } from 'lucide-react';
@@ -21,7 +22,7 @@ export default function Generator() {
     setSuccess(null);
 
     try {
-      const response = await fetch('http://localhost:3001/api/runs', {
+      const response = await fetch(`${API_BASE_URL}/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),

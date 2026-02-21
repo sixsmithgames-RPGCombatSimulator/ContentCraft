@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { X, Search, Check, Tag, Filter, Eye, Edit, Plus, AlertTriangle } from 'lucide-react';
+import { API_BASE_URL } from '../../services/api';
 import CanonEntityEditor, { CanonBase } from './CanonEntityEditor';
 import FactCheckerModal from './FactCheckerModal';
 
@@ -62,7 +63,7 @@ export default function LibraryBrowserModal({
       if (filterType) params.set('type', filterType);
       if (filterTag) params.set('tags', filterTag);
 
-      const response = await fetch(`http://localhost:3001/api/canon/library?${params}`);
+      const response = await fetch(`${API_BASE_URL}/canon/library?${params}`);
 
       if (!response.ok) {
         throw new Error('Failed to load library entities');
@@ -93,7 +94,7 @@ export default function LibraryBrowserModal({
 
   const loadExistingLinks = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/canon/projects/${projectId}/links`);
+      const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`);
 
       if (!response.ok) {
         throw new Error('Failed to load existing links');
@@ -140,7 +141,7 @@ export default function LibraryBrowserModal({
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/canon/projects/${projectId}/links`, {
+      const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -211,7 +212,7 @@ export default function LibraryBrowserModal({
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/canon/entities/${payload._id}`, {
+      const response = await fetch(`${API_BASE_URL}/canon/entities/${payload._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -250,7 +251,7 @@ export default function LibraryBrowserModal({
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/canon/entities/${entityToEdit._id}`, {
+      const response = await fetch(`${API_BASE_URL}/canon/entities/${entityToEdit._id}`, {
         method: 'DELETE',
       });
 
@@ -309,7 +310,7 @@ export default function LibraryBrowserModal({
     const updatedTags = [...currentTags, normalizedTag];
 
     try {
-      const response = await fetch(`http://localhost:3001/api/canon/entities/${entityId}`, {
+      const response = await fetch(`${API_BASE_URL}/canon/entities/${entityId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -348,7 +349,7 @@ export default function LibraryBrowserModal({
     const updatedTags = (entity.tags || []).filter(tag => tag !== tagToRemove);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/canon/entities/${entityId}`, {
+      const response = await fetch(`${API_BASE_URL}/canon/entities/${entityId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -408,7 +409,7 @@ export default function LibraryBrowserModal({
         try {
           const updatedTags = [...(entity.tags || []), normalizedTag];
 
-          const response = await fetch(`http://localhost:3001/api/canon/entities/${entity._id}`, {
+          const response = await fetch(`${API_BASE_URL}/canon/entities/${entity._id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

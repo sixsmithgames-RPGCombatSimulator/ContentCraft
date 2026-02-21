@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { BookText, FileText, Plus, Library, FolderOpen, Link as LinkIcon, Package, Search } from 'lucide-react';
+import { API_BASE_URL } from '../../services/api';
 import UploadModal from './UploadModal';
 import LibraryBrowserModal from '../canon/LibraryBrowserModal';
 import CollectionsModal from '../canon/CollectionsModal';
@@ -53,10 +54,10 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
 
       if (scopeTab === 'project') {
         // Show only library entities linked to this project (expands collections)
-        url = `http://localhost:3001/api/canon/projects/${projectId}/entities`;
+        url = `${API_BASE_URL}/canon/projects/${projectId}/entities`;
       } else {
         // Show ALL library entities (for browsing and linking)
-        url = `http://localhost:3001/api/canon/entities?scope=lib`;
+        url = `${API_BASE_URL}/canon/entities?scope=lib`;
       }
 
       const response = await fetch(url);

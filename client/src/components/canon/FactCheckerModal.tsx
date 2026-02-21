@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { X, Search, AlertTriangle, CheckCircle, Download, Trash2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { API_BASE_URL } from '../../services/api';
 
 interface DuplicateGroup {
   text: string;
@@ -76,7 +77,7 @@ export default function FactCheckerModal({ isOpen, onClose, onSuccess }: FactChe
     setBackupCreated(false);
 
     try {
-      const response = await fetch('http://localhost:3001/api/canon/fact-check/scan', {
+      const response = await fetch(`${API_BASE_URL}/canon/fact-check/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scope }),
@@ -116,7 +117,7 @@ export default function FactCheckerModal({ isOpen, onClose, onSuccess }: FactChe
     try {
       const entityIds = scanResult.entities.map(e => e.entity_id);
 
-      const response = await fetch('http://localhost:3001/api/canon/fact-check/backup', {
+      const response = await fetch(`${API_BASE_URL}/canon/fact-check/backup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entity_ids: entityIds }),
@@ -175,7 +176,7 @@ export default function FactCheckerModal({ isOpen, onClose, onSuccess }: FactChe
     try {
       const deduplicationPlan = deduplicationPlans.get(entityId) || [];
 
-      const response = await fetch('http://localhost:3001/api/canon/fact-check/dedupe', {
+      const response = await fetch(`${API_BASE_URL}/canon/fact-check/dedupe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -228,7 +229,7 @@ export default function FactCheckerModal({ isOpen, onClose, onSuccess }: FactChe
         deduplication_plan,
       }));
 
-      const response = await fetch('http://localhost:3001/api/canon/fact-check/bulk-dedupe', {
+      const response = await fetch(`${API_BASE_URL}/canon/fact-check/bulk-dedupe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entity_plans: entityPlans }),

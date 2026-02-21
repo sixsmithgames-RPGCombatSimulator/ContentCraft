@@ -47,7 +47,7 @@ import { validateSpaceGeometry } from '../utils/locationGeometry';
 import { validateIncomingLocationSpace } from '../utils/locationSpaceValidation';
 import type { LiveMapSpace } from '../types/liveMapTypes';
 import { synchronizeReciprocalDoors } from '../utils/doorSync';
-import { projectApi } from '../services/api';
+import { projectApi, API_BASE_URL } from '../services/api';
 import type { Project } from '../types';
 import { useAiAssistant } from '../contexts/AiAssistantContext';
 import type { WorkflowType } from '../contexts/AiAssistantContext';
@@ -3396,7 +3396,7 @@ export default function ManualGenerator() {
   const searchCanonWithKeywords = async (keywords: string[]): Promise<Factpack> => {
     try {
       // Fetch all linked entities for this project (expands collections)
-      const response = await fetch(`http://localhost:3001/api/canon/projects/${projectId}/entities`);
+      const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/entities`);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch entities: ${response.status} ${response.statusText}`);
@@ -3791,7 +3791,7 @@ export default function ManualGenerator() {
         const formData = new FormData();
         formData.append('file', generationConfig.homebrewFile);
 
-        const response = await fetch('http://localhost:3001/api/homebrew/chunk', {
+        const response = await fetch(`${API_BASE_URL}/homebrew/chunk`, {
           method: 'POST',
           body: formData,
         });
@@ -4515,7 +4515,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       const currentChunkIndex = (stageResults.current_chunk as number) || 0;
       const currentChunk = homebrewChunks[currentChunkIndex];
 
-      const response = await fetch('http://localhost:3001/api/homebrew/parse', {
+      const response = await fetch(`${API_BASE_URL}/homebrew/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
