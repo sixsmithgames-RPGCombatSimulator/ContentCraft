@@ -43,7 +43,8 @@
       "Bash(node scripts/add-multi-tenancy-to-routes.js:*)",
       "Bash(node -e:*)",
       "Bash(echo:*)",
-      "Bash(unset:*)"
+      "Bash(unset:*)",
+      "Bash(node --input-type=module -e:*)"
     ],
     "deny": [],
     "ask": []

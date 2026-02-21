@@ -3,7 +3,7 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { X, Save, CheckCircle, AlertCircle, FileText, Database } from 'lucide-react';
 import { ContentType } from '../../types';
 import {
@@ -173,53 +173,46 @@ export default function SaveContentModal({
   const [extractionMode, setExtractionMode] = useState<'all' | 'selective'>('all');
   const [selectedEntities, setSelectedEntities] = useState<string[]>([]);
 
-  if (!isOpen || !generatedContent) return null;
-  const gc = generatedContent as GeneratedContent;
+  const gc = useMemo(
+    () => (isOpen && generatedContent ? (generatedContent as GeneratedContent) : null),
+    [isOpen, generatedContent]
+  );
 
-  const inferDomain = (): 'rpg' | 'writing' => {
+  const inferDomain = useMemo(() => {
+    if (!gc) return 'rpg';
     const deliverable = (gc.deliverable || '').toLowerCase();
     if (deliverable.includes('outline') || deliverable.includes('chapter') || deliverable.includes('memoir') || deliverable.includes('journal') || deliverable.includes('nonfiction') || deliverable.includes('diet')) {
       return 'writing';
     }
     return 'rpg';
-  };
+  }, [gc]);
 
-  console.log('[SaveContentModal] Received generatedContent:', {
-    contentKeys: Object.keys(gc),
-    deliverable: gc.deliverable,
-    sampleFields: {
-      title: gc.title,
-      canonical_name: gc.canonical_name,
-      description: gc.description,
-      ability_scores: gc.ability_scores,
-      actions: gc.actions,
-    },
-    fullContent: gc,
-  });
+  const deliverableLower = useMemo(() => (gc?.deliverable || '').toLowerCase(), [gc]);
 
-  const deliverableLower = (gc.deliverable || '').toLowerCase();
-  const isLikelyLocationDeliverable =
-    deliverableLower.includes('location') ||
-    deliverableLower.includes('place') ||
-    deliverableLower.includes('area') ||
-    deliverableLower.includes('castle') ||
-    deliverableLower.includes('fortress') ||
-    deliverableLower.includes('dungeon');
+  const isLikelyLocationDeliverable = useMemo(
+    () =>
+      deliverableLower.includes('location') ||
+      deliverableLower.includes('place') ||
+      deliverableLower.includes('area') ||
+      deliverableLower.includes('castle') ||
+      deliverableLower.includes('fortress') ||
+      deliverableLower.includes('dungeon'),
+    [deliverableLower]
+  );
 
-  const locationSoftWarnings = (() => {
-    if (!isLikelyLocationDeliverable) return [] as string[];
+  const locationSoftWarnings = useMemo(() => {
+    if (!gc || !isLikelyLocationDeliverable) return [] as string[];
     const warnings: string[] = [];
-
     const spaces = (gc as unknown as Record<string, unknown>).spaces;
     if (!Array.isArray(spaces)) {
       warnings.push('Missing `spaces` array. This usually means the Spaces stage data was not captured correctly.');
     }
-
     return warnings;
-  })();
+  }, [gc, isLikelyLocationDeliverable]);
 
   // Extract potential entities from generated content with FULL structured data
-  const extractEntities = () => {
+  const entities = useMemo(() => {
+    if (!gc) return [];
     const entities: Array<{
       id: string;
       name: string;
@@ -442,9 +435,9 @@ export default function SaveContentModal({
     }
 
     return entities;
-  };
+  }, [gc]);
 
-  const entities = extractEntities();
+  if (!isOpen || !gc) return null;
 
   const handleSave = async () => {
     setSaving(true);
@@ -589,7 +582,7 @@ export default function SaveContentModal({
         generated_content: cleanedGc,
         resolved_proposals: resolvedProposals || [],
         resolved_conflicts: resolvedConflicts || [],
-        domain: inferDomain(),
+        domain: inferDomain,
       };
 
       if (normalizedNpcPayload && persistedNpcPayload) {
