@@ -12,10 +12,15 @@ import type { AiAssistantWorkflowContext, WorkflowType } from '../contexts/AiAss
 
 // ─── Quick Action Templates ──────────────────────────────────────────────────
 
+/** A pre-built quick action the user can trigger with one click */
 export interface QuickAction {
+  /** Short button label */
   label: string;
+  /** Tooltip description of what this action does */
   description: string;
-  icon: string; // emoji for simplicity
+  /** Emoji icon displayed on the button */
+  icon: string;
+  /** Builds the full prompt string from the current workflow context */
   buildPrompt: (ctx: AiAssistantWorkflowContext) => string;
 }
 
@@ -189,7 +194,12 @@ const WRITING_ACTIONS: QuickAction[] = [
   },
 ];
 
-/** Get quick actions appropriate for the current workflow */
+/**
+ * Get quick actions appropriate for the current workflow type.
+ * Returns shared actions plus workflow-specific ones (NPC, location, etc.).
+ * @param workflowType - The active workflow type
+ * @returns Array of QuickAction objects
+ */
 export function getQuickActions(workflowType: WorkflowType): QuickAction[] {
   const actions = [...SHARED_ACTIONS];
 
@@ -229,6 +239,9 @@ export function getQuickActions(workflowType: WorkflowType): QuickAction[] {
 /**
  * Wraps a user's free-form message with workflow context so the AI
  * has enough information to give a useful response.
+ * @param userMessage - The user's typed message
+ * @param ctx - Current workflow context (data, stage, factpack, etc.)
+ * @returns Full prompt string with context injected
  */
 export function buildContextualPrompt(
   userMessage: string,
@@ -299,6 +312,9 @@ export function buildContextualPrompt(
 /**
  * Generates a "copy-ready" prompt for a quick action.
  * User can copy this and paste into any AI chat.
+ * @param action - The quick action template
+ * @param ctx - Current workflow context
+ * @returns Full prompt string
  */
 export function buildQuickActionPrompt(
   action: QuickAction,
@@ -311,7 +327,9 @@ export function buildQuickActionPrompt(
 
 /**
  * Attempts to extract a JSON object from an AI response.
- * Handles markdown code blocks, mixed prose+JSON, etc.
+ * Handles markdown code blocks, mixed prose+JSON, and raw JSON.
+ * @param text - Raw AI response text
+ * @returns Object with success flag and extracted data or error message
  */
 export function extractJsonFromResponse(text: string): {
   success: boolean;
@@ -370,7 +388,11 @@ export function extractJsonFromResponse(text: string): {
 
 /**
  * Computes a simple diff between old and new data for preview.
- * Returns an array of { path, oldValue, newValue } for changed fields.
+ * Compares top-level keys in newData against oldData.
+ * @param oldData - The current/existing data
+ * @param newData - The proposed changes
+ * @param prefix - Optional path prefix for nested keys
+ * @returns Array of changed fields with path, old value, and new value
  */
 export function computeFieldDiff(
   oldData: Record<string, unknown>,

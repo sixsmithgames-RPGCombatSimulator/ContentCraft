@@ -13,6 +13,7 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+/** Supported workflow types that the AI assistant can contextually assist with */
 export type WorkflowType =
   | 'npc'
   | 'monster'
@@ -31,6 +32,7 @@ export type WorkflowType =
   | 'other_writing'
   | 'unknown';
 
+/** Workflow context pushed by the active page/component into the AI assistant */
 export interface AiAssistantWorkflowContext {
   /** Which workflow type is currently active */
   workflowType: WorkflowType;
@@ -50,6 +52,7 @@ export interface AiAssistantWorkflowContext {
   generationConfig?: Record<string, unknown>;
 }
 
+/** A single message in the AI assistant chat history */
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -61,8 +64,10 @@ export interface ChatMessage {
   applied?: boolean;
 }
 
+/** Supported AI provider types for BYO key configuration */
 export type AiProviderType = 'none' | 'gemini' | 'openai' | 'ollama' | 'openrouter';
 
+/** Configuration for a BYO AI provider (stored in localStorage) */
 export interface AiProviderConfig {
   type: AiProviderType;
   apiKey?: string;
@@ -72,7 +77,12 @@ export interface AiProviderConfig {
   model?: string;
 }
 
-/** Callback for applying AI-suggested changes back into the active workflow */
+/**
+ * Callback for applying AI-suggested changes back into the active workflow.
+ * Registered by the active page component so the panel can push changes.
+ * @param changes - The JSON fields to merge or replace
+ * @param mergeMode - Whether to shallow-merge or fully replace
+ */
 export type ApplyChangesCallback = (
   changes: Record<string, unknown>,
   mergeMode: 'replace' | 'merge'
@@ -115,8 +125,8 @@ function loadProviderConfig(): AiProviderConfig {
   try {
     const stored = localStorage.getItem(PROVIDER_STORAGE_KEY);
     if (stored) return JSON.parse(stored);
-  } catch {
-    // ignore
+  } catch (err: unknown) {
+    console.error('[AiAssistant] Failed to load provider config from localStorage:', err);
   }
   return { type: 'none' };
 }
@@ -124,11 +134,16 @@ function loadProviderConfig(): AiProviderConfig {
 function saveProviderConfig(config: AiProviderConfig) {
   try {
     localStorage.setItem(PROVIDER_STORAGE_KEY, JSON.stringify(config));
-  } catch {
-    // ignore
+  } catch (err: unknown) {
+    console.error('[AiAssistant] Failed to save provider config to localStorage:', err);
   }
 }
 
+/**
+ * Provider component that wraps the app and makes AI assistant state available.
+ * Manages panel visibility, workflow context, chat messages, and provider config.
+ * Provider config is persisted to localStorage.
+ */
 export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [workflowContext, setWorkflowContext] = useState<AiAssistantWorkflowContext | null>(null);
@@ -189,6 +204,11 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
+/**
+ * Hook to access the AI assistant context.
+ * Must be used within an AiAssistantProvider.
+ * @throws Error if used outside of AiAssistantProvider
+ */
 export function useAiAssistant() {
   const ctx = useContext(AiAssistantContext);
   if (!ctx) throw new Error('useAiAssistant must be used within AiAssistantProvider');

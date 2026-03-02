@@ -256,10 +256,12 @@ export default function AiAssistantPanel() {
             content: `Error: ${result.error}`,
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('[AiAssistant] Send message failed:', message);
         addMessage({
           role: 'system',
-          content: `Error: ${err.message}`,
+          content: `Error: ${message}`,
         });
       } finally {
         setIsLoading(false);
@@ -312,8 +314,10 @@ export default function AiAssistantPanel() {
           } else {
             addMessage({ role: 'system', content: `Error: ${result.error}` });
           }
-        } catch (err: any) {
-          addMessage({ role: 'system', content: `Error: ${err.message}` });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error('[AiAssistant] Quick action failed:', message);
+          addMessage({ role: 'system', content: `Error: ${message}` });
         } finally {
           setIsLoading(false);
         }

@@ -11,15 +11,24 @@
 
 import type { AiProviderConfig } from '../contexts/AiAssistantContext';
 
+/** Response from an AI provider call */
 export interface AiProviderResponse {
+  /** Whether the API call succeeded */
   success: boolean;
+  /** The text response from the AI (present when success=true) */
   text?: string;
+  /** Error message (present when success=false) */
   error?: string;
 }
 
 /**
  * Send a message to the configured AI provider and get a response.
+ * All calls are made directly from the browser using the user's own API key.
  * Returns the raw text response from the AI.
+ * @param config - Provider configuration (type, apiKey, model, etc.)
+ * @param systemPrompt - System-level instructions for the AI
+ * @param userMessage - The user's message / prompt
+ * @returns Response object with success status and text or error
  */
 export async function sendToProvider(
   config: AiProviderConfig,
@@ -77,8 +86,10 @@ async function sendToGemini(
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) return { success: false, error: 'Empty response from Gemini.' };
     return { success: true, text };
-  } catch (err: any) {
-    return { success: false, error: `Gemini request failed: ${err.message}` };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[AiProvider][Gemini] Request failed:', message);
+    return { success: false, error: `Gemini request failed: ${message}` };
   }
 }
 
@@ -121,8 +132,10 @@ async function sendToOpenAI(
     const text = data?.choices?.[0]?.message?.content;
     if (!text) return { success: false, error: 'Empty response from OpenAI.' };
     return { success: true, text };
-  } catch (err: any) {
-    return { success: false, error: `OpenAI request failed: ${err.message}` };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[AiProvider][OpenAI] Request failed:', message);
+    return { success: false, error: `OpenAI request failed: ${message}` };
   }
 }
 
@@ -160,8 +173,10 @@ async function sendToOllama(
     const text = data?.message?.content;
     if (!text) return { success: false, error: 'Empty response from Ollama.' };
     return { success: true, text };
-  } catch (err: any) {
-    return { success: false, error: `Ollama request failed: ${err.message}. Is Ollama running?` };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[AiProvider][Ollama] Request failed:', message);
+    return { success: false, error: `Ollama request failed: ${message}. Is Ollama running?` };
   }
 }
 
@@ -206,12 +221,18 @@ async function sendToOpenRouter(
     const text = data?.choices?.[0]?.message?.content;
     if (!text) return { success: false, error: 'Empty response from OpenRouter.' };
     return { success: true, text };
-  } catch (err: any) {
-    return { success: false, error: `OpenRouter request failed: ${err.message}` };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[AiProvider][OpenRouter] Request failed:', message);
+    return { success: false, error: `OpenRouter request failed: ${message}` };
   }
 }
 
-/** Get default model suggestions for each provider */
+/**
+ * Get default model suggestions for each provider type.
+ * @param provider - The AI provider type
+ * @returns Array of suggested model name strings
+ */
 export function getDefaultModels(provider: AiProviderConfig['type']): string[] {
   switch (provider) {
     case 'gemini':
