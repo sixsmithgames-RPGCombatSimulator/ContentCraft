@@ -415,7 +415,7 @@ export default function AiAssistantPanel() {
   const toggleButton = (
     <button
       onClick={togglePanel}
-      className={`fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1 px-2 py-3 rounded-l-lg shadow-lg transition-all ${
+      className={`fixed right-0 top-1/2 -translate-y-1/2 z-[60] flex items-center gap-1 px-2 py-3 rounded-l-lg shadow-lg transition-all ${
         isPanelOpen
           ? 'bg-primary-600 text-white translate-x-0'
           : 'bg-white border border-r-0 border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-primary-600'
@@ -441,7 +441,7 @@ export default function AiAssistantPanel() {
       {toggleButton}
 
       {/* Panel */}
-      <div className="fixed right-0 top-0 h-full w-96 bg-gray-50 border-l border-gray-200 shadow-xl z-30 flex flex-col">
+      <div className="fixed right-0 top-0 h-full w-96 bg-gray-50 border-l border-gray-200 shadow-xl z-[55] flex flex-col">
         {/* Header */}
         <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
