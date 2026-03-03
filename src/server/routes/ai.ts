@@ -114,10 +114,12 @@ const idempotencyCache: Map<
   string,
   { status: number; payload: GeminiSuccessResponse | GeminiFailureResponse; expiresAt: number }
 > = new Map();
+const lastRequestByProject: Map<string, number> = new Map();
 
 type GeminiHttpResponse = {
   ok: boolean;
   status: number;
+  headers?: { get?: (name: string) => string | null };
   json: () => Promise<unknown>;
 };
 
@@ -287,8 +289,14 @@ function extractJsonPatch(rawText: string): { ok: true; patch?: Record<string, u
 }
 
 /** Map HTTP status / provider errors to structured error codes. */
-function mapError(status: number): { type: AiErrorType; retryable: boolean; retryAfterMs?: number } {
-  if (status === 429) return { type: 'RATE_LIMIT', retryable: true, retryAfterMs: RATE_LIMIT_COOLDOWN_MS };
+function mapError(status: number, retryAfterMsFromHeader?: number): { type: AiErrorType; retryable: boolean; retryAfterMs?: number } {
+  if (status === 429) {
+    return {
+      type: 'RATE_LIMIT',
+      retryable: true,
+      retryAfterMs: retryAfterMsFromHeader ?? RATE_LIMIT_COOLDOWN_MS,
+    };
+  }
   if (status === 408 || status === 504) return { type: 'TIMEOUT', retryable: true };
   if (status >= 500) return { type: 'PROVIDER_ERROR', retryable: true };
   return { type: 'PROVIDER_ERROR', retryable: false };
@@ -305,12 +313,6 @@ function markRateLimit(): void {
 
 function buildIdempotencyKey(body: GeminiRequestBody): string {
   return `${body.projectId}:${body.stageId}:${body.stageRunId}`;
-}
-
-async function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }
 
 /**
@@ -374,6 +376,27 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         retryAfterMs: RATE_LIMIT_COOLDOWN_MS,
       },
     } satisfies GeminiFailureResponse);
+  }
+
+  // Per-project throttle to prevent bursts (min 1500ms spacing)
+  {
+    const now = Date.now();
+    const lastProjectRequest = lastRequestByProject.get(body.projectId);
+    if (lastProjectRequest && now - lastProjectRequest < 1500) {
+      const retryAfterMs = 1500 - (now - lastProjectRequest) + 100; // small cushion
+      return res.status(429).json({
+        ok: false,
+        requestId,
+        stageRunId: body.stageRunId,
+        error: {
+          type: 'RATE_LIMIT',
+          message: 'Too many requests in a short window. Please retry shortly.',
+          retryable: true,
+          retryAfterMs,
+        },
+      } satisfies GeminiFailureResponse);
+    }
+    lastRequestByProject.set(body.projectId, now);
   }
 
   const idempotencyKey = buildIdempotencyKey(body);
@@ -442,7 +465,20 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         return res.status(502).json(payload);
       }
 
-      const { type, retryable, retryAfterMs } = mapError(geminiResponse.status);
+      const retryAfterHeader = geminiResponse.headers?.get?.('retry-after');
+      const retryAfterMsFromHeader = retryAfterHeader ? Number(retryAfterHeader) * 1000 : undefined;
+      const { type, retryable, retryAfterMs } = mapError(geminiResponse.status, retryAfterMsFromHeader);
+      if (geminiResponse.status === 429) {
+        // Do not cache rate-limit failures; log context for debugging
+        console.warn('[AI][Gemini] Rate limited', {
+          requestId,
+          stageRunId: body.stageRunId,
+          stageId: body.stageId,
+          generatorType,
+          retryAfterMs,
+        });
+        markRateLimit();
+      }
       const failurePayload: GeminiFailureResponse = {
         ok: false,
         requestId,
@@ -453,20 +489,11 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
           retryable,
           retryAfterMs,
         },
-      };
-
-      if (type === 'RATE_LIMIT') {
-        markRateLimit();
-      }
-
-      if (!retryable || attempt === MAX_RETRY_ATTEMPTS) {
+      } satisfies GeminiFailureResponse;
+      if (geminiResponse.status !== 429) {
         setCachedResponse(idempotencyKey, geminiResponse.status, failurePayload);
-        return res.status(geminiResponse.status).json(failurePayload);
       }
-
-      const backoff = 500 * 2 ** attempt;
-      await delay(backoff);
-      lastError = failurePayload;
+      return res.status(geminiResponse.status).json(failurePayload);
     }
 
     if (!geminiResponse || !geminiResponse.ok) {

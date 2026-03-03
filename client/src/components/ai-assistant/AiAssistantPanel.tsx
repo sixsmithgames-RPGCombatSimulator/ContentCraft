@@ -220,11 +220,17 @@ export default function AiAssistantPanel() {
   const [stageRunId, setStageRunId] = useState<string | null>(null);
   const [stageRunnerState, setStageRunnerState] = useState<StageRunnerState>('idle');
   const [stageRunnerError, setStageRunnerError] = useState<string | null>(null);
+  const [rateLimitCooldownMs, setRateLimitCooldownMs] = useState<number | null>(null);
+  const [rateLimitSecondsLeft, setRateLimitSecondsLeft] = useState<number | null>(null);
+  const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null);
   const [showModeDialog, setShowModeDialog] = useState(false);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inFlightRef = useRef<boolean>(false);
+  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoRetryScheduledRef = useRef<boolean>(false);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -554,6 +560,10 @@ ${contextBlocks.join('\n')}`;
   );
 
   const runStageWithGemini = useCallback(async () => {
+    if (inFlightRef.current || stageRunnerState !== 'idle') {
+      logStageRunnerGate(`skip: in-flight (${stageRunnerState})`);
+      return;
+    }
     if (!workflowContext || !workflowContext.stageRouterKey) {
       setStageRunnerError('No active stage to run.');
       setStageRunnerState('error');
@@ -576,6 +586,7 @@ ${contextBlocks.join('\n')}`;
     setStageRunId(runId);
     setStageRunnerState('sending');
     setStageRunnerError(null);
+    inFlightRef.current = true;
 
     try {
       const requestBody = {
@@ -614,7 +625,15 @@ ${contextBlocks.join('\n')}`;
           message,
           body,
         });
-        setStageRunnerError(message);
+        if (body?.error?.type === 'RATE_LIMIT') {
+          const cooldown = typeof body?.error?.retryAfterMs === 'number' ? Math.max(body.error.retryAfterMs, 5000) : 10_000;
+          setRateLimitCooldownMs(cooldown);
+          setCooldownEndsAt(Date.now() + cooldown);
+          setStageRunnerError(`Rate limited. Please retry in ${(cooldown / 1000).toFixed(0)}s.`);
+          setHasAutoStarted(false);
+        } else {
+          setStageRunnerError(message);
+        }
         setStageRunnerState('error');
         return;
       }
@@ -646,6 +665,7 @@ ${contextBlocks.join('\n')}`;
       setStageRunnerError(message);
       setStageRunnerState('error');
     }
+    inFlightRef.current = false;
   }, [
     workflowContext,
     providerConfig.type,
@@ -654,7 +674,75 @@ ${contextBlocks.join('\n')}`;
     validatePatch,
     applyStagePatch,
     addMessage,
+    logStageRunnerGate,
+    stageRunnerState,
   ]);
+
+  const handleRetryAfterRateLimit = useCallback(() => {
+    if (stageRunnerState !== 'error') return;
+    setRateLimitCooldownMs(null);
+    setCooldownEndsAt(null);
+    setRateLimitSecondsLeft(null);
+    setStageRunnerState('idle');
+    setStageRunnerError(null);
+    setHasAutoStarted(false);
+    runStageWithGemini();
+  }, [stageRunnerState, runStageWithGemini]);
+
+  // Manage cooldown countdown timer
+  useEffect(() => {
+    if (!cooldownEndsAt) {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current);
+        cooldownTimerRef.current = null;
+      }
+      setRateLimitSecondsLeft(null);
+      autoRetryScheduledRef.current = false;
+      return;
+    }
+
+    const updateCountdown = () => {
+      const remainingMs = cooldownEndsAt - Date.now();
+      const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+      setRateLimitSecondsLeft(remainingSeconds);
+
+      if (remainingMs <= 0) {
+        if (cooldownTimerRef.current) {
+          clearInterval(cooldownTimerRef.current);
+          cooldownTimerRef.current = null;
+        }
+      }
+    };
+
+    updateCountdown();
+    cooldownTimerRef.current = setInterval(updateCountdown, 500);
+
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current);
+        cooldownTimerRef.current = null;
+      }
+    };
+  }, [cooldownEndsAt]);
+
+  // Auto-retry once after cooldown expires, respecting in-flight guard
+  useEffect(() => {
+    if (!cooldownEndsAt || rateLimitSecondsLeft === null) return;
+    if (rateLimitSecondsLeft > 0) return;
+    if (stageRunnerState !== 'error') return;
+    if (autoRetryScheduledRef.current) return;
+
+    autoRetryScheduledRef.current = true;
+    setTimeout(() => {
+      setRateLimitCooldownMs(null);
+      setCooldownEndsAt(null);
+      setRateLimitSecondsLeft(null);
+      setStageRunnerState('idle');
+      setStageRunnerError(null);
+      setHasAutoStarted(false);
+      runStageWithGemini();
+    }, 300);
+  }, [cooldownEndsAt, rateLimitSecondsLeft, stageRunnerState, runStageWithGemini]);
 
   // Auto-start integrated AI when panel opens in provider mode
   useEffect(() => {
@@ -891,10 +979,13 @@ ${contextBlocks.join('\n')}`;
                 <p className="text-xs text-red-700 font-medium mb-1">Error occurred:</p>
                 <p className="text-xs text-red-600">{stageRunnerError}</p>
                 <button
-                  onClick={runStageWithGemini}
-                  className="mt-2 w-full px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium transition-colors"
+                  onClick={rateLimitSecondsLeft && rateLimitSecondsLeft > 0 ? undefined : handleRetryAfterRateLimit}
+                  disabled={Boolean(rateLimitSecondsLeft && rateLimitSecondsLeft > 0)}
+                  className="mt-2 w-full px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Retry
+                  {rateLimitSecondsLeft && rateLimitSecondsLeft > 0
+                    ? `Retry in ${rateLimitSecondsLeft}s`
+                    : 'Retry now'}
                 </button>
               </div>
             )}

@@ -4684,11 +4684,9 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     let updatedLiveMapSpaces = liveMapSpaces;
     if (spaceData) {
-      updatedLiveMapSpaces = [...liveMapSpaces, spaceData];
-      // Synchronize reciprocal doors when adding new space
-      const syncedSpaces = synchronizeReciprocalDoors(updatedLiveMapSpaces);
+      updatedLiveMapSpaces = mapAndSyncSpaces([...liveMapSpaces, spaceData]);
       console.log(`[Live Map] Synchronized reciprocal doors after adding: ${spaceData.name}`);
-      setLiveMapSpaces(syncedSpaces);
+      setLiveMapSpaces(updatedLiveMapSpaces);
       setShowLiveMap(true);
       console.log(`[Live Map] ✓ Added accepted space: ${spaceData.name}`);
     }
@@ -4906,18 +4904,17 @@ Output: Valid JSON only. No markdown, no prose.`;
         console.log(`[Space Edit] After update - new space at index ${reviewingSpaceIndex}:`, updatedLiveMap[reviewingSpaceIndex]);
         console.log(`[Space Edit] Setting live map with ${updatedLiveMap.length} spaces`);
 
-        // Synchronize reciprocal doors across all spaces (both live map and accumulated)
-        const syncedLiveMap = synchronizeReciprocalDoors(updatedLiveMap);
-        const syncedAccumulated = synchronizeReciprocalDoors(updatedAccumulated as any[]);
+        // Synchronize reciprocal doors across all spaces (live map only; accumulated remains raw records)
+        const syncedLiveMap = mapAndSyncSpaces(updatedLiveMap);
         console.log(`[Space Edit] Synchronized reciprocal doors for ${syncedLiveMap.length} spaces`);
 
         // Update both accumulated results and live map with synchronized doors
-        setAccumulatedChunkResults(syncedAccumulated);
+        setAccumulatedChunkResults(updatedAccumulated);
         setLiveMapSpaces(syncedLiveMap);
         setMapUpdateCounter(prev => prev + 1); // Increment to force React re-render
 
         // Update pendingSpace with synced version so form shows reciprocal doors
-        setPendingSpace(syncedAccumulated[reviewingSpaceIndex]);
+        setPendingSpace(updatedAccumulated[reviewingSpaceIndex]);
 
         console.log(`[Live Map] ✓ Map updated with new dimensions for space #${reviewingSpaceIndex + 1}: ${spaceData.name}`, spaceData.size_ft);
 
@@ -4927,7 +4924,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           stageChunkState: progressSession?.stageChunkState ? {
             ...progressSession.stageChunkState,
             liveMapSpaces: syncedLiveMap,
-            accumulatedChunkResults: syncedAccumulated,
+            accumulatedChunkResults: updatedAccumulated,
           } : undefined,
         });
         console.log(`[Auto-Save] Saved edited space #${reviewingSpaceIndex + 1}`);
@@ -5109,11 +5106,9 @@ Output: Valid JSON only. No markdown, no prose.`;
     const spaceData = extractSpaceForMap(customSpace);
     let updatedLiveMapSpaces = liveMapSpaces;
     if (spaceData) {
-      updatedLiveMapSpaces = [...liveMapSpaces, spaceData];
-      // Synchronize reciprocal doors when adding new space
-      const syncedSpaces = synchronizeReciprocalDoors(updatedLiveMapSpaces);
+      updatedLiveMapSpaces = mapAndSyncSpaces([...liveMapSpaces, spaceData]);
       console.log(`[Live Map] Synchronized reciprocal doors after adding edited: ${spaceData.name}`);
-      setLiveMapSpaces(syncedSpaces);
+      setLiveMapSpaces(updatedLiveMapSpaces);
       setShowLiveMap(true);
       console.log(`[Live Map] ✓ Added edited space: ${spaceData.name}`);
     }
@@ -5735,11 +5730,9 @@ Output: Valid JSON only. No markdown, no prose.`;
             const spaceData = extractSpaceForMap(parsed);
             let updatedLiveMapSpaces = liveMapSpaces;
             if (spaceData) {
-              updatedLiveMapSpaces = [...liveMapSpaces, spaceData];
-              // Synchronize reciprocal doors when adding new space
-              const syncedSpaces = synchronizeReciprocalDoors(updatedLiveMapSpaces);
+              updatedLiveMapSpaces = mapAndSyncSpaces([...liveMapSpaces, spaceData]);
               console.log(`[Batch Mode] Synchronized reciprocal doors after auto-adding: ${spaceData.name}`);
-              setLiveMapSpaces(syncedSpaces);
+              setLiveMapSpaces(updatedLiveMapSpaces);
               setShowLiveMap(true);
               console.log(`[Batch Mode] Auto-added space to map: ${spaceData.name}`);
             }
@@ -5832,11 +5825,9 @@ Output: Valid JSON only. No markdown, no prose.`;
           const spaceData = extractSpaceForMap(parsed);
           console.log(`[Live Map] Extracted space data:`, spaceData);
           if (spaceData) {
-            updatedLiveMapSpaces = [...liveMapSpaces, spaceData];
-            // Synchronize reciprocal doors when adding new space
-            const syncedSpaces = synchronizeReciprocalDoors(updatedLiveMapSpaces);
+            updatedLiveMapSpaces = mapAndSyncSpaces([...liveMapSpaces, spaceData]);
             console.log(`[Live Map] Synchronized reciprocal doors after adding: ${spaceData.name}`);
-            setLiveMapSpaces(syncedSpaces);
+            setLiveMapSpaces(updatedLiveMapSpaces);
             setShowLiveMap(true);
             console.log(`[Live Map] ✓ Added space: ${spaceData.name}`);
 
@@ -7704,13 +7695,11 @@ Output: Valid JSON only. No markdown, no prose.`;
                   <button
                     onClick={() => {
                       console.log('[Review Spaces] Opening space approval modal to review previous spaces');
-                      // Synchronize reciprocal doors before reviewing
-                      const syncedResults = synchronizeReciprocalDoors(accumulatedChunkResults as any[]);
-                      setAccumulatedChunkResults(syncedResults);
-                      setLiveMapSpaces(syncedResults); // Keep live map in sync
-                      console.log('[Review Spaces] Synchronized reciprocal doors for', syncedResults.length, 'spaces');
-                      setReviewingSpaceIndex(syncedResults.length - 1); // Start at last accepted space
-                      setPendingSpace(syncedResults[syncedResults.length - 1]);
+                      const syncedLiveMap = mapAndSyncSpaces(accumulatedChunkResults.map(r => extractSpaceForMap(r as JsonRecord)));
+                      setLiveMapSpaces(syncedLiveMap);
+                      console.log('[Review Spaces] Synchronized reciprocal doors for', syncedLiveMap.length, 'spaces');
+                      setReviewingSpaceIndex(accumulatedChunkResults.length - 1); // Start at last accepted space
+                      setPendingSpace(accumulatedChunkResults[accumulatedChunkResults.length - 1]);
                       setShowSpaceApprovalModal(true);
                     }}
                     className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm font-medium flex items-center gap-1"
