@@ -1,0 +1,26 @@
+{
+  "sessionId": "gen-1772502215329-zbkyy0syd",
+  "sessionName": "NPC: Create an 11th level paladin....",
+  "createdAt": "2026-03-03T01:43:35.329Z",
+  "lastUpdatedAt": "2026-03-03T01:43:35.329Z",
+  "config": {
+    "type": "npc",
+    "prompt": "Create an 11th level paladin. An aasismar named Thyra Odinson. She has a long sword of sharpness, a sentinal shield, some prayer beads and potions. No legendary actions. She is from the tears of Selune. Her attitude is stoic and purposeful.",
+    "max_canon_facts": 50,
+    "flags": {
+      "allow_invention": "cosmetic",
+      "tone": "epic",
+      "domain": "rpg",
+      "rule_base": "2024RAW"
+    }
+  },
+  "multiChunkState": {
+    "isMultiPartGeneration": false,
+    "currentGroupIndex": 0,
+    "totalGroups": 0
+  },
+  "progress": [],
+  "stageResults": {},
+  "currentStageIndex": 0,
+  "userId": "local-dev"
+}

@@ -3,7 +3,7 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { ChangeEvent, useEffect, useState } from 'react';
+import { ChangeEvent, useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import GeneratorPanel, { GenerationConfig } from '../components/generator/GeneratorPanel';
 import ResourcesPanel from '../components/generator/ResourcesPanel';
@@ -134,6 +134,7 @@ interface FactCheckOutput {
 
 interface Stage {
   name: string;
+  routerKey?: string;
   systemPrompt: string;
   buildUserPrompt: (context: StageContext) => string;
 }
@@ -2438,6 +2439,9 @@ export default function ManualGenerator() {
   // Get appropriate stages based on content type
   const STAGES = getStages(config, dynamicNpcStages);
 
+  // Track previous stageResults to prevent infinite loop
+  const prevStageResultsRef = useRef<StageResults>({});
+
   useEffect(() => {
     if (!projectId || projectId === 'default') {
       setProject(null);
@@ -2496,14 +2500,26 @@ export default function ManualGenerator() {
   useEffect(() => {
     if (!config) {
       setWorkflowContext(null);
+      prevStageResultsRef.current = {};
       return;
     }
 
+    // Only update if stageResults actually changed (prevent infinite loop)
+    const stageResultsChanged = JSON.stringify(prevStageResultsRef.current) !== JSON.stringify(stageResults);
+    if (!stageResultsChanged && prevStageResultsRef.current !== stageResults) {
+      // Reference changed but content is the same - skip update
+      return;
+    }
+    prevStageResultsRef.current = stageResults;
+
     const wfType = configTypeToWorkflow(config.type);
+    const currentStage = STAGES[currentStageIndex];
+    
     setWorkflowContext({
       workflowType: wfType,
       workflowLabel: workflowLabelMap[wfType] || 'Content Generator',
-      currentStage: STAGES[currentStageIndex]?.name,
+      currentStage: currentStage?.name,
+      stageRouterKey: currentStage?.routerKey,
       stageProgress: currentStageIndex >= 0
         ? { current: currentStageIndex + 1, total: STAGES.length }
         : undefined,
@@ -2516,8 +2532,11 @@ export default function ManualGenerator() {
         prompt: config.prompt,
         flags: config.flags,
       },
+      generatorType: config.type,
+      schemaVersion: 'v1.1-client',
+      projectId: projectId !== 'default' ? projectId : undefined,
     });
-  }, [config, currentStageIndex, stageResults, factpack, STAGES]);
+  }, [config, currentStageIndex, stageResults, factpack, STAGES, projectId, setWorkflowContext]);
 
   // Register applyChanges callback so the AI panel can merge changes back
   useEffect(() => {
