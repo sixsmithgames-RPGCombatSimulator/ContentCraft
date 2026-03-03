@@ -40,6 +40,8 @@ export interface AiAssistantWorkflowContext {
   workflowLabel: string;
   /** Current stage name if in a multi-stage pipeline */
   currentStage?: string;
+  /** Router key / identifier for the current stage (stable ID used in schemas) */
+  stageRouterKey?: string;
   /** Stage index / total for progress display */
   stageProgress?: { current: number; total: number };
   /** The current accumulated data from the workflow (stage results, partial NPC, etc.) */
@@ -50,6 +52,12 @@ export interface AiAssistantWorkflowContext {
   factpack?: { facts: Array<{ text: string; source?: string }> };
   /** The generation config (flags, prompt, etc.) */
   generationConfig?: Record<string, unknown>;
+  /** Generator type (npc, encounter, location, etc.) for schema selection */
+  generatorType?: string;
+  /** Schema version currently in use */
+  schemaVersion?: string;
+  /** Project identifier (if available) */
+  projectId?: string;
 }
 
 /** A single message in the AI assistant chat history */

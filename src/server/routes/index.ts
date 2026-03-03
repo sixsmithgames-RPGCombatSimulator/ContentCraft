@@ -13,7 +13,7 @@ import { uploadRouter } from './upload.js';
 import { homebrewRouter } from './homebrew.js';
 import factCheckRouter from './factCheck.js';
 import { progressRouter } from './progress.js';
-// import { aiRouter } from './ai.js';
+import { aiRouter } from './ai.js';
 
 export const apiRouter = Router();
 
@@ -26,8 +26,8 @@ apiRouter.use('/config', configRouter);
 apiRouter.use('/upload', uploadRouter);
 apiRouter.use('/homebrew', homebrewRouter);
 apiRouter.use('/', progressRouter);
-// apiRouter.use('/ai', aiRouter);
+apiRouter.use('/ai', aiRouter);
 
-apiRouter.get('/health', (req, res) => {
+apiRouter.get('/health', (_req, res) => {
   res.json({ success: true, message: 'ContentCraft API is running' });
 });

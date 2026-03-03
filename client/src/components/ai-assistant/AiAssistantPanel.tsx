@@ -37,6 +37,33 @@ import {
 import { sendToProvider } from '../../services/aiProvider';
 import AiProviderSettings from './AiProviderSettings';
 
+type StageRunnerState =
+  | 'idle'
+  | 'sending'
+  | 'awaiting'
+  | 'parsing'
+  | 'validating'
+  | 'applying'
+  | 'complete'
+  | 'error';
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function deepMergeObjects(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...target };
+  for (const [key, value] of Object.entries(source)) {
+    const existing = result[key];
+    if (isPlainObject(existing) && isPlainObject(value)) {
+      result[key] = deepMergeObjects(existing, value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 // ─── Sub-Components ──────────────────────────────────────────────────────────
 
 function ChatMessageBubble({
@@ -186,6 +213,9 @@ export default function AiAssistantPanel() {
     diffs: Array<{ path: string; oldValue: unknown; newValue: unknown }>;
   } | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [stageRunId, setStageRunId] = useState<string | null>(null);
+  const [stageRunnerState, setStageRunnerState] = useState<StageRunnerState>('idle');
+  const [stageRunnerError, setStageRunnerError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -201,6 +231,17 @@ export default function AiAssistantPanel() {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [isPanelOpen]);
+
+  // Reset stageRunId when workflow stage changes
+  useEffect(() => {
+    if (!workflowContext?.stageRouterKey) {
+      setStageRunId(null);
+      return;
+    }
+    setStageRunId(crypto.randomUUID());
+    setStageRunnerState('idle');
+    setStageRunnerError(null);
+  }, [workflowContext?.stageRouterKey]);
 
   const hasProvider = providerConfig.type !== 'none';
   const hasWorkflow = !!workflowContext;
@@ -395,6 +436,176 @@ export default function AiAssistantPanel() {
     [applyChanges, workflowContext, addMessage]
   );
 
+  // ─── Stage Runner (provider-first) ───────────────────────────────────────
+  const buildStagePrompt = useCallback(() => {
+    if (!workflowContext) return null;
+    const stageKey = workflowContext.stageRouterKey || workflowContext.currentStage || 'stage';
+    const allowedKeys = workflowContext.schema && isPlainObject(workflowContext.schema)
+      ? Object.keys((workflowContext.schema as { properties?: Record<string, unknown> }).properties || {})
+      : [];
+
+    const header = [
+      `You are updating stage "${stageKey}" for generator type "${workflowContext.generatorType || workflowContext.workflowType}".`,
+      'Return ONLY JSON, no markdown, shaped exactly as:',
+      `{
+  "${stageKey}": { /* fields to update only */ }
+}`,
+      'Do not include any other top-level keys. Do not include projectId, stageId, or stageRunId.',
+    ];
+
+    if (allowedKeys.length > 0) {
+      header.push(`Allowed fields: ${allowedKeys.join(', ')}. You may also include _meta.`);
+    } else {
+      header.push('Only include fields relevant to this stage; _meta is allowed.');
+    }
+
+    const contextBlocks = [
+      `Current stage data: ${JSON.stringify(workflowContext.currentData[stageKey] || {})}`,
+      `All stage results so far: ${JSON.stringify(workflowContext.currentData)}`,
+    ];
+
+    if (workflowContext.factpack) {
+      contextBlocks.push(`Factpack: ${JSON.stringify(workflowContext.factpack)}`);
+    }
+
+    if (workflowContext.generationConfig) {
+      contextBlocks.push(`Generation config: ${JSON.stringify(workflowContext.generationConfig)}`);
+    }
+
+    return `${header.join('\n')}
+
+Context:
+${contextBlocks.join('\n')}`;
+  }, [workflowContext]);
+
+  const validatePatch = useCallback(
+    (stageKey: string, patch: unknown): { ok: true; payload: Record<string, unknown> } | { ok: false; message: string } => {
+      if (!isPlainObject(patch)) return { ok: false, message: 'Patch must be an object.' };
+      const keys = Object.keys(patch);
+      if (keys.length !== 1 || keys[0] !== stageKey) {
+        return { ok: false, message: `Patch must contain only the current stage key (${stageKey}).` };
+      }
+      const inner = (patch as Record<string, unknown>)[stageKey];
+      if (!isPlainObject(inner)) return { ok: false, message: 'Stage payload must be an object.' };
+
+      const allowed = workflowContext?.schema && isPlainObject(workflowContext.schema)
+        ? Object.keys((workflowContext.schema as { properties?: Record<string, unknown> }).properties || {})
+        : null;
+
+      if (allowed) {
+        const invalid = Object.keys(inner).find((k) => k !== '_meta' && !allowed.includes(k));
+        if (invalid) {
+          return { ok: false, message: `Field ${invalid} is not allowed for this stage.` };
+        }
+      }
+
+      const size = JSON.stringify(patch).length;
+      if (size > 200_000) return { ok: false, message: 'Patch exceeds 200KB limit.' };
+
+      return { ok: true, payload: inner as Record<string, unknown> };
+    },
+    [workflowContext?.schema]
+  );
+
+  const applyStagePatch = useCallback(
+    (stageKey: string, payload: Record<string, unknown>) => {
+      if (!applyChanges || !workflowContext) return;
+      const existing = isPlainObject(workflowContext.currentData[stageKey])
+        ? (workflowContext.currentData[stageKey] as Record<string, unknown>)
+        : {};
+      const merged = deepMergeObjects(existing, payload);
+      applyChanges({ [stageKey]: merged }, 'merge');
+    },
+    [applyChanges, workflowContext]
+  );
+
+  const runStageWithGemini = useCallback(async () => {
+    if (!workflowContext || !workflowContext.stageRouterKey) {
+      setStageRunnerError('No active stage to run.');
+      setStageRunnerState('error');
+      return;
+    }
+    if (providerConfig.type !== 'gemini') {
+      setStageRunnerError('Gemini provider required for automated stage run.');
+      setStageRunnerState('error');
+      return;
+    }
+    const prompt = buildStagePrompt();
+    if (!prompt) {
+      setStageRunnerError('Unable to build stage prompt.');
+      setStageRunnerState('error');
+      return;
+    }
+
+    const stageKey = workflowContext.stageRouterKey;
+    const runId = stageRunId || crypto.randomUUID();
+    setStageRunId(runId);
+    setStageRunnerState('sending');
+    setStageRunnerError(null);
+
+    try {
+      const response = await fetch('/api/ai/gemini/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: workflowContext.projectId || 'default',
+          stageId: stageKey,
+          stageRunId: runId,
+          prompt,
+          schemaVersion: workflowContext.schemaVersion || 'v1.1-client',
+          clientContext: {
+            generatorType: workflowContext.generatorType || workflowContext.workflowType,
+            stageKey,
+            userSelectedMode: providerConfig.type,
+          },
+        }),
+      });
+
+      setStageRunnerState('awaiting');
+      const body = await response.json();
+
+      if (!response.ok || !body?.ok) {
+        const message = body?.error?.message || `Request failed (${response.status})`;
+        setStageRunnerError(message);
+        setStageRunnerState('error');
+        return;
+      }
+
+      setStageRunnerState('parsing');
+      const patch = body.jsonPatch as unknown;
+      const validated = validatePatch(stageKey, patch);
+
+      if (!validated.ok) {
+        const failure = validated as { ok: false; message: string };
+        setStageRunnerError(failure.message);
+        setStageRunnerState('error');
+        return;
+      }
+
+      const { payload } = validated as { ok: true; payload: Record<string, unknown> }; // narrowed to ok: true
+
+      setStageRunnerState('applying');
+      applyStagePatch(stageKey, payload);
+      setStageRunnerState('complete');
+      addMessage({
+        role: 'system',
+        content: `Stage ${stageKey} applied successfully via Gemini.`,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStageRunnerError(message);
+      setStageRunnerState('error');
+    }
+  }, [
+    workflowContext,
+    providerConfig.type,
+    buildStagePrompt,
+    stageRunId,
+    validatePatch,
+    applyStagePatch,
+    addMessage,
+  ]);
+
   const handleConfirmApply = useCallback(() => {
     if (!pendingDiff || !applyChanges) return;
 
@@ -505,6 +716,35 @@ export default function AiAssistantPanel() {
               <div className="text-xs text-primary-500 mt-0.5">
                 {workflowContext.factpack.facts.length} canon facts loaded
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Stage Runner */}
+        {workflowContext?.stageRouterKey && (
+          <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-2 flex-shrink-0">
+            <div className="flex items-center justify-between text-xs text-gray-700">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3 h-3 text-primary-600" />
+                <span>Stage Runner: {workflowContext.stageRouterKey}</span>
+              </div>
+              <span className="text-[10px] text-gray-400">Run ID: {stageRunId || 'n/a'}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <button
+                onClick={runStageWithGemini}
+                disabled={!hasProvider || stageRunnerState === 'sending' || stageRunnerState === 'awaiting'}
+                className="px-3 py-1 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+              >
+                {stageRunnerState === 'sending' || stageRunnerState === 'awaiting' ? 'Running…' : 'Run with Gemini'}
+              </button>
+              <span className="text-gray-500">
+                {hasProvider ? `Provider: ${providerConfig.type}` : 'No provider configured'}
+              </span>
+              <span className="text-gray-400">State: {stageRunnerState}</span>
+            </div>
+            {stageRunnerError && (
+              <div className="text-xs text-red-600">{stageRunnerError}</div>
             )}
           </div>
         )}
