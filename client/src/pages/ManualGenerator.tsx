@@ -555,6 +555,9 @@ const syncDoorsIntoLiveMapSpaces = (spaces: LiveMapSpace[]): LiveMapSpace[] => {
   });
 };
 
+const mapAndSyncSpaces = (spaces: Array<LiveMapSpace | null>): LiveMapSpace[] =>
+  syncDoorsIntoLiveMapSpaces(spaces.filter((s): s is LiveMapSpace => Boolean(s)));
+
 /**
  * Extracts space data from a stage chunk result for live map display
  */
@@ -2903,9 +2906,7 @@ export default function ManualGenerator() {
         accumulatedChunks = reconstructedSpaces;
 
         // Also rebuild live map spaces
-        const rebuiltMapSpaces = reconstructedSpaces
-          .map(space => extractSpaceForMap(space))
-          .filter(space => space !== null);
+        const rebuiltMapSpaces = mapAndSyncSpaces(reconstructedSpaces.map(space => extractSpaceForMap(space)));
         savedLiveMapSpaces = rebuiltMapSpaces;
 
         // Store chunking metadata for later use
@@ -2936,13 +2937,9 @@ export default function ManualGenerator() {
 
       // Rebuild live map from accumulated chunks if empty but chunks exist
       if (savedLiveMapSpaces.length === 0 && accumulatedChunks.length > 0) {
-        const rebuiltSpaces = accumulatedChunks
-          .map((chunk: any) => extractSpaceForMap(chunk))
-          .filter((space: any) => space !== null);
-        // Synchronize reciprocal doors before setting live map spaces
-        const syncedSpaces = synchronizeReciprocalDoors(rebuiltSpaces);
-        console.log('[Resume] Synchronized reciprocal doors for', syncedSpaces.length, 'rebuilt spaces');
-        setLiveMapSpaces(syncedSpaces);
+        const rebuiltSpaces = mapAndSyncSpaces(accumulatedChunks.map((chunk: any) => extractSpaceForMap(chunk)));
+        console.log('[Resume] Synchronized reciprocal doors for', rebuiltSpaces.length, 'rebuilt spaces');
+        setLiveMapSpaces(rebuiltSpaces);
         setShowLiveMap(true);
       } else {
         console.log('[Resume] Loading savedLiveMapSpaces - sample positions:',
@@ -2954,7 +2951,7 @@ export default function ManualGenerator() {
         );
         console.log('[Resume] FULL savedLiveMapSpaces:', savedLiveMapSpaces.map(s => `${s.name}: (${s.position?.x},${s.position?.y}) locked=${s.position_locked}`));
         // Synchronize reciprocal doors before setting live map spaces
-        const syncedSpaces = synchronizeReciprocalDoors(savedLiveMapSpaces);
+        const syncedSpaces = mapAndSyncSpaces(savedLiveMapSpaces as Array<LiveMapSpace | null>);
         console.log('[Resume] Synchronized reciprocal doors for', syncedSpaces.length, 'saved spaces');
         setLiveMapSpaces(syncedSpaces);
         setShowLiveMap(session.stageChunkState.showLiveMap || savedLiveMapSpaces.length > 0);
@@ -3026,21 +3023,17 @@ export default function ManualGenerator() {
         console.log('[Resume] Fallback - Loading', savedLiveMapSpaces.length, 'spaces into liveMapSpaces');
         console.log('[Resume] Fallback - First 3 spaces being loaded:', savedLiveMapSpaces.slice(0, 3).map(s => `${s.name}: pos=(${s.position?.x},${s.position?.y}) locked=${s.position_locked}`));
         // Synchronize reciprocal doors before setting live map spaces
-        const syncedSpaces = synchronizeReciprocalDoors(savedLiveMapSpaces);
+        const syncedSpaces = mapAndSyncSpaces(savedLiveMapSpaces as Array<LiveMapSpace | null>);
         console.log('[Resume] Fallback - Synchronized reciprocal doors for', syncedSpaces.length, 'spaces');
         setLiveMapSpaces(syncedSpaces);
         setShowLiveMap(true);
         console.log('[Resume] Fallback - ✓ setLiveMapSpaces called');
       } else if (accumulatedChunks.length > 0) {
         console.log('[Resume] Fallback - No savedLiveMapSpaces, rebuilding from accumulatedChunks');
-        const rebuiltSpaces = accumulatedChunks
-          .map((chunk: any) => extractSpaceForMap(chunk))
-          .filter((space: any) => space !== null);
+        const rebuiltSpaces = mapAndSyncSpaces(accumulatedChunks.map((chunk: any) => extractSpaceForMap(chunk)));
         console.log('[Resume] Fallback - Rebuilt', rebuiltSpaces.length, 'spaces');
-        // Synchronize reciprocal doors before setting live map spaces
-        const syncedSpaces = synchronizeReciprocalDoors(rebuiltSpaces);
-        console.log('[Resume] Fallback - Synchronized reciprocal doors for', syncedSpaces.length, 'rebuilt spaces');
-        setLiveMapSpaces(syncedSpaces);
+        console.log('[Resume] Fallback - Synchronized reciprocal doors for', rebuiltSpaces.length, 'rebuilt spaces');
+        setLiveMapSpaces(rebuiltSpaces);
         setShowLiveMap(true);
       }
     }

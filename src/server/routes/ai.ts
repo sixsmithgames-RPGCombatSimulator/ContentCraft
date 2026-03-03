@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import Ajv, { type ValidateFunction } from 'ajv';
+import addFormats from 'ajv-formats';
 
 /** Allowed error types for the AI proxy */
 type AiErrorType =
@@ -104,6 +105,7 @@ const RATE_LIMIT_COOLDOWN_MS = 60_000;
 const MAX_RETRY_ATTEMPTS = 2;
 const aiRouter = Router();
 const ajv = new Ajv({ allErrors: true, strict: true, allowUnionTypes: true });
+addFormats(ajv);
 
 /** Load and cache per-generator schema for allowlist and validation */
 const schemaCache: Record<string, StageRegistryEntry | undefined> = {};
