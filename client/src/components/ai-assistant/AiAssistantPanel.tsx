@@ -257,6 +257,21 @@ export default function AiAssistantPanel() {
   const hasWorkflow = !!workflowContext;
   const canApplyChanges = !!applyChanges && hasWorkflow;
 
+  const logStageRunnerGate = useCallback(
+    (reason: string) => {
+      console.info('[AI Runner][Gate]', reason, {
+        isPanelOpen,
+        assistMode,
+        providerType: providerConfig.type,
+        hasProvider,
+        stageRouterKey: workflowContext?.stageRouterKey,
+        stageRunnerState,
+        hasAutoStarted,
+      });
+    },
+    [assistMode, hasAutoStarted, hasProvider, isPanelOpen, providerConfig.type, stageRunnerState, workflowContext?.stageRouterKey]
+  );
+
   // ─── Handlers ────────────────────────────────────────────────────────────
 
   const handleModeSelection = useCallback((mode: 'integrated' | 'manual') => {
@@ -563,21 +578,30 @@ ${contextBlocks.join('\n')}`;
     setStageRunnerError(null);
 
     try {
+      const requestBody = {
+        projectId: workflowContext.projectId || 'default',
+        stageId: stageKey,
+        stageRunId: runId,
+        prompt,
+        schemaVersion: workflowContext.schemaVersion || 'v1.1-client',
+        clientContext: {
+          generatorType: workflowContext.generatorType || workflowContext.workflowType,
+          stageKey,
+          userSelectedMode: providerConfig.type,
+        },
+      };
+
+      console.info('[AI Runner][Request]', {
+        stageKey,
+        runId,
+        generatorType: requestBody.clientContext.generatorType,
+        schemaVersion: requestBody.schemaVersion,
+      });
+
       const response = await fetch('/api/ai/gemini/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: workflowContext.projectId || 'default',
-          stageId: stageKey,
-          stageRunId: runId,
-          prompt,
-          schemaVersion: workflowContext.schemaVersion || 'v1.1-client',
-          clientContext: {
-            generatorType: workflowContext.generatorType || workflowContext.workflowType,
-            stageKey,
-            userSelectedMode: providerConfig.type,
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       setStageRunnerState('awaiting');
@@ -585,6 +609,11 @@ ${contextBlocks.join('\n')}`;
 
       if (!response.ok || !body?.ok) {
         const message = body?.error?.message || `Request failed (${response.status})`;
+        console.warn('[AI Runner][Response][Error]', {
+          status: response.status,
+          message,
+          body,
+        });
         setStageRunnerError(message);
         setStageRunnerState('error');
         return;
@@ -610,8 +639,10 @@ ${contextBlocks.join('\n')}`;
         role: 'system',
         content: `Stage ${stageKey} applied successfully via Gemini.`,
       });
+      console.info('[AI Runner][Success]', { stageKey, runId });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      console.error('[AI Runner][Exception]', message);
       setStageRunnerError(message);
       setStageRunnerState('error');
     }
@@ -627,18 +658,35 @@ ${contextBlocks.join('\n')}`;
 
   // Auto-start integrated AI when panel opens in provider mode
   useEffect(() => {
-    if (
-      isPanelOpen &&
-      assistMode === 'integrated' &&
-      hasProvider &&
-      workflowContext?.stageRouterKey &&
-      stageRunnerState === 'idle' &&
-      !hasAutoStarted
-    ) {
-      setHasAutoStarted(true);
-      setTimeout(() => runStageWithGemini(), 500);
+    if (!isPanelOpen) {
+      logStageRunnerGate('skip: panel closed');
+      return;
     }
-  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, stageRunnerState, hasAutoStarted, runStageWithGemini]);
+    if (assistMode !== 'integrated') {
+      logStageRunnerGate('skip: mode not integrated');
+      return;
+    }
+    if (!hasProvider) {
+      logStageRunnerGate('skip: provider not configured');
+      return;
+    }
+    if (!workflowContext?.stageRouterKey) {
+      logStageRunnerGate('skip: missing stageRouterKey');
+      return;
+    }
+    if (stageRunnerState !== 'idle') {
+      logStageRunnerGate(`skip: runner not idle (${stageRunnerState})`);
+      return;
+    }
+    if (hasAutoStarted) {
+      logStageRunnerGate('skip: already auto-started');
+      return;
+    }
+
+    logStageRunnerGate('auto-start: scheduling run');
+    setHasAutoStarted(true);
+    setTimeout(() => runStageWithGemini(), 500);
+  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate]);
 
   const handleConfirmApply = useCallback(() => {
     if (!pendingDiff || !applyChanges) return;

@@ -46,7 +46,7 @@ import { getNpcSectionChunks, type NpcSectionChunk } from '../config/npcSectionC
 import { validateSpaceGeometry } from '../utils/locationGeometry';
 import { validateIncomingLocationSpace } from '../utils/locationSpaceValidation';
 import type { LiveMapSpace } from '../types/liveMapTypes';
-import { synchronizeReciprocalDoors } from '../utils/doorSync';
+import { synchronizeReciprocalDoors, type SpaceLike } from '../utils/doorSync';
 import { projectApi, API_BASE_URL } from '../services/api';
 import type { Project } from '../types';
 import { useAiAssistant } from '../contexts/AiAssistantContext';
