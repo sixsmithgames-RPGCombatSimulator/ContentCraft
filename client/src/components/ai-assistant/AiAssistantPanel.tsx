@@ -629,12 +629,13 @@ ${contextBlocks.join('\n')}`;
           const cooldown = typeof body?.error?.retryAfterMs === 'number' ? Math.max(body.error.retryAfterMs, 5000) : 10_000;
           setRateLimitCooldownMs(cooldown);
           setCooldownEndsAt(Date.now() + cooldown);
-          setStageRunnerError(`Rate limited. Please retry in ${(cooldown / 1000).toFixed(0)}s.`);
+          setStageRunnerError(`Rate limited. Auto-retry in ${(cooldown / 1000).toFixed(0)}s.`);
           setHasAutoStarted(false);
         } else {
           setStageRunnerError(message);
         }
         setStageRunnerState('error');
+        inFlightRef.current = false;
         return;
       }
 
@@ -646,6 +647,7 @@ ${contextBlocks.join('\n')}`;
         const failure = validated as { ok: false; message: string };
         setStageRunnerError(failure.message);
         setStageRunnerState('error');
+        inFlightRef.current = false;
         return;
       }
 
@@ -664,8 +666,10 @@ ${contextBlocks.join('\n')}`;
       console.error('[AI Runner][Exception]', message);
       setStageRunnerError(message);
       setStageRunnerState('error');
+      inFlightRef.current = false;
+    } finally {
+      inFlightRef.current = false;
     }
-    inFlightRef.current = false;
   }, [
     workflowContext,
     providerConfig.type,
