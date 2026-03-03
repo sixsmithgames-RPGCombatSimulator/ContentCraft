@@ -2440,8 +2440,11 @@ export default function ManualGenerator() {
   // Get appropriate stages based on content type
   const STAGES = getStages(config, dynamicNpcStages);
 
-  // Track previous stageResults to prevent infinite loop
-  const prevStageResultsRef = useRef<StageResults>({});
+  // Track previous values to avoid unnecessary context updates
+  const prevStageResultsRef = useRef<StageResults | null>(null);
+  const prevStageIndexRef = useRef<number>(-1);
+  const prevConfigKeyRef = useRef<string | null>(null);
+  const prevFactpackKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!projectId || projectId === 'default') {
@@ -2503,21 +2506,40 @@ export default function ManualGenerator() {
   useEffect(() => {
     if (!config) {
       setWorkflowContext(null);
-      prevStageResultsRef.current = {};
+      prevStageResultsRef.current = null;
+      prevStageIndexRef.current = -1;
+      prevConfigKeyRef.current = null;
+      prevFactpackKeyRef.current = null;
       return;
     }
 
-    // Only update if stageResults actually changed (prevent infinite loop)
-    const stageResultsChanged = JSON.stringify(prevStageResultsRef.current) !== JSON.stringify(stageResults);
-    if (!stageResultsChanged && prevStageResultsRef.current !== stageResults) {
-      // Reference changed but content is the same - skip update
-      return;
-    }
+    const stageResultsChanged =
+      !prevStageResultsRef.current ||
+      JSON.stringify(prevStageResultsRef.current) !== JSON.stringify(stageResults);
+
+    const configKey = JSON.stringify({ type: config.type, prompt: config.prompt, flags: config.flags });
+    const configChanged = prevConfigKeyRef.current !== configKey;
+
+    const stageIndexChanged = prevStageIndexRef.current !== currentStageIndex;
+
+    const factpackKey = factpack
+      ? JSON.stringify({
+          facts: factpack.facts.map(f => ({ text: f.text, source: f.entity_name })),
+        })
+      : null;
+    const factpackChanged = prevFactpackKeyRef.current !== factpackKey;
+
+    const shouldUpdate = stageResultsChanged || configChanged || stageIndexChanged || factpackChanged;
+    if (!shouldUpdate) return;
+
     prevStageResultsRef.current = stageResults;
+    prevStageIndexRef.current = currentStageIndex;
+    prevConfigKeyRef.current = configKey;
+    prevFactpackKeyRef.current = factpackKey;
 
     const wfType = configTypeToWorkflow(config.type);
     const currentStage = STAGES[currentStageIndex];
-    
+
     setWorkflowContext({
       workflowType: wfType,
       workflowLabel: workflowLabelMap[wfType] || 'Content Generator',
