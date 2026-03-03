@@ -18,7 +18,10 @@ export const progressRouter = Router();
 progressRouter.use(authMiddleware);
 
 // Directory to store progress files
-const PROGRESS_DIR = path.join(__dirname, '..', '..', '..', 'generation-progress');
+// Use /tmp on serverless platforms (Vercel), local dir otherwise
+const PROGRESS_DIR = process.env.VERCEL 
+  ? '/tmp/generation-progress'
+  : path.join(__dirname, '..', '..', '..', 'generation-progress');
 
 // Ensure progress directory exists
 async function ensureProgressDir() {
