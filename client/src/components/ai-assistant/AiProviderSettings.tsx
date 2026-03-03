@@ -57,6 +57,7 @@ export default function AiProviderSettings({ onClose }: AiProviderSettingsProps)
 
   const currentProvider = PROVIDERS.find((p) => p.type === localConfig.type) || PROVIDERS[0];
   const defaultModels = getDefaultModels(localConfig.type);
+  const geminiKeyManaged = localConfig.type === 'gemini';
 
   const handleSave = () => {
     setProviderConfig(localConfig);
@@ -125,8 +126,8 @@ export default function AiProviderSettings({ onClose }: AiProviderSettingsProps)
       {/* Provider-specific settings */}
       {localConfig.type !== 'none' && (
         <div className="space-y-2 border-t border-gray-100 pt-3">
-          {/* API Key (not needed for Ollama) */}
-          {localConfig.type !== 'ollama' && (
+          {/* API Key (not needed for Ollama; Gemini key managed by server) */}
+          {localConfig.type !== 'ollama' && !geminiKeyManaged && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">API Key</label>
               <div className="relative">
@@ -147,6 +148,13 @@ export default function AiProviderSettings({ onClose }: AiProviderSettingsProps)
               <p className="text-xs text-gray-400 mt-0.5">
                 Stored locally in your browser. Never sent to our servers.
               </p>
+            </div>
+          )}
+
+          {geminiKeyManaged && (
+            <div className="p-2 bg-primary-50 border border-primary-100 rounded text-xs text-primary-800">
+              <p className="font-medium mb-0.5">Gemini key managed by server</p>
+              <p>No API key is needed here. The server-side Gemini key from Vercel is used for automated runs.</p>
             </div>
           )}
 
