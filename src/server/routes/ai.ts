@@ -319,11 +319,12 @@ async function delay(ms: number): Promise<void> {
 aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => {
   const parsed = parseRequestBody(req.body);
   if (!parsed.valid) {
+    const failure = parsed as { valid: false; message: string };
     return res.status(400).json({
       ok: false,
       requestId: 'n/a',
       stageRunId: 'n/a',
-      error: { type: 'INVALID_RESPONSE', message: parsed.message, retryable: false },
+      error: { type: 'INVALID_RESPONSE', message: failure.message, retryable: false },
     } satisfies GeminiFailureResponse);
   }
 
@@ -494,22 +495,24 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
 
     const extraction = extractJsonPatch(rawText);
     if (!extraction.ok) {
+      const failure = extraction as { ok: false; message: string };
       return res.status(422).json({
         ok: false,
         requestId,
         stageRunId: body.stageRunId,
-        error: { type: 'INVALID_RESPONSE', message: extraction.message, retryable: false },
+        error: { type: 'INVALID_RESPONSE', message: failure.message, retryable: false },
       } satisfies GeminiFailureResponse);
     }
 
     if (extraction.patch) {
       const scopeResult = validateScope(body.stageId, extraction.patch);
       if (!scopeResult.ok) {
+        const failure = scopeResult as { ok: false; message: string };
         return res.status(422).json({
           ok: false,
           requestId,
           stageRunId: body.stageRunId,
-          error: { type: 'FORBIDDEN_PATH', message: scopeResult.message, retryable: false },
+          error: { type: 'FORBIDDEN_PATH', message: failure.message, retryable: false },
         } satisfies GeminiFailureResponse);
       }
 
