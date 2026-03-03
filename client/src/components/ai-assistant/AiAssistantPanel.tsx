@@ -36,6 +36,7 @@ import {
 } from '../../utils/aiPromptBuilder';
 import { sendToProvider } from '../../services/aiProvider';
 import AiProviderSettings from './AiProviderSettings';
+import ModeSelectionDialog from './ModeSelectionDialog';
 
 type StageRunnerState =
   | 'idle'
@@ -193,6 +194,7 @@ export default function AiAssistantPanel() {
   const {
     isPanelOpen,
     togglePanel,
+    openPanel,
     closePanel,
     workflowContext,
     applyChanges,
@@ -216,6 +218,9 @@ export default function AiAssistantPanel() {
   const [stageRunId, setStageRunId] = useState<string | null>(null);
   const [stageRunnerState, setStageRunnerState] = useState<StageRunnerState>('idle');
   const [stageRunnerError, setStageRunnerError] = useState<string | null>(null);
+  const [assistMode, setAssistMode] = useState<'integrated' | 'manual' | null>(null);
+  const [showModeDialog, setShowModeDialog] = useState(false);
+  const [hasAutoStarted, setHasAutoStarted] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -236,11 +241,13 @@ export default function AiAssistantPanel() {
   useEffect(() => {
     if (!workflowContext?.stageRouterKey) {
       setStageRunId(null);
+      setHasAutoStarted(false);
       return;
     }
     setStageRunId(crypto.randomUUID());
     setStageRunnerState('idle');
     setStageRunnerError(null);
+    setHasAutoStarted(false);
   }, [workflowContext?.stageRouterKey]);
 
   const hasProvider = providerConfig.type !== 'none';
@@ -248,6 +255,20 @@ export default function AiAssistantPanel() {
   const canApplyChanges = !!applyChanges && hasWorkflow;
 
   // ─── Handlers ────────────────────────────────────────────────────────────
+
+  const handleModeSelection = useCallback((mode: 'integrated' | 'manual') => {
+    setAssistMode(mode);
+    setShowModeDialog(false);
+    openPanel();
+  }, [openPanel]);
+
+  const handleTogglePanel = useCallback(() => {
+    if (!isPanelOpen && !assistMode) {
+      setShowModeDialog(true);
+    } else {
+      togglePanel();
+    }
+  }, [isPanelOpen, assistMode, togglePanel]);
 
   const handleCopyToClipboard = useCallback(async (text: string) => {
     try {
@@ -606,6 +627,21 @@ ${contextBlocks.join('\n')}`;
     addMessage,
   ]);
 
+  // Auto-start integrated AI when panel opens in provider mode
+  useEffect(() => {
+    if (
+      isPanelOpen &&
+      assistMode === 'integrated' &&
+      hasProvider &&
+      workflowContext?.stageRouterKey &&
+      stageRunnerState === 'idle' &&
+      !hasAutoStarted
+    ) {
+      setHasAutoStarted(true);
+      runStageWithGemini();
+    }
+  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, stageRunnerState, hasAutoStarted, runStageWithGemini]);
+
   const handleConfirmApply = useCallback(() => {
     if (!pendingDiff || !applyChanges) return;
 
@@ -629,7 +665,7 @@ ${contextBlocks.join('\n')}`;
   // Toggle button (always visible)
   const toggleButton = (
     <button
-      onClick={togglePanel}
+      onClick={handleTogglePanel}
       className={`fixed right-0 top-1/2 -translate-y-1/2 z-[60] flex items-center gap-1 px-2 py-3 rounded-l-lg shadow-lg transition-all ${
         isPanelOpen
           ? 'bg-primary-600 text-white translate-x-0'
@@ -653,6 +689,13 @@ ${contextBlocks.join('\n')}`;
 
   return (
     <>
+      <ModeSelectionDialog
+        isOpen={showModeDialog}
+        onClose={() => setShowModeDialog(false)}
+        onSelectMode={handleModeSelection}
+        hasProvider={hasProvider}
+      />
+
       {toggleButton}
 
       {/* Panel */}
@@ -662,9 +705,14 @@ ${contextBlocks.join('\n')}`;
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-primary-600" />
             <h2 className="font-semibold text-gray-900">AI Assistant</h2>
-            {!hasProvider && (
-              <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
-                Copy/Paste
+            {assistMode === 'integrated' && (
+              <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">
+                Integrated
+              </span>
+            )}
+            {assistMode === 'manual' && (
+              <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-medium">
+                Manual
               </span>
             )}
           </div>
@@ -721,30 +769,72 @@ ${contextBlocks.join('\n')}`;
         )}
 
         {/* Stage Runner */}
-        {workflowContext?.stageRouterKey && (
-          <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-2 flex-shrink-0">
-            <div className="flex items-center justify-between text-xs text-gray-700">
+        {workflowContext?.stageRouterKey && assistMode === 'integrated' && (
+          <div className="bg-gradient-to-r from-primary-50 to-primary-100 border-b border-primary-200 px-4 py-3 flex flex-col gap-3 flex-shrink-0">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-3 h-3 text-primary-600" />
-                <span>Stage Runner: {workflowContext.stageRouterKey}</span>
+                <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">Automated Stage Runner</div>
+                  <div className="text-xs text-gray-600">{workflowContext.stageRouterKey}</div>
+                </div>
               </div>
-              <span className="text-[10px] text-gray-400">Run ID: {stageRunId || 'n/a'}</span>
+              <div className="flex items-center gap-2">
+                {stageRunnerState === 'complete' && (
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+                    ✓ Complete
+                  </span>
+                )}
+                {(stageRunnerState === 'sending' || stageRunnerState === 'awaiting' || stageRunnerState === 'parsing' || stageRunnerState === 'validating' || stageRunnerState === 'applying') && (
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium flex items-center gap-1">
+                    <div className="animate-spin rounded-full h-2 w-2 border-b border-blue-700" />
+                    {stageRunnerState === 'sending' && 'Sending...'}
+                    {stageRunnerState === 'awaiting' && 'Awaiting AI...'}
+                    {stageRunnerState === 'parsing' && 'Parsing...'}
+                    {stageRunnerState === 'validating' && 'Validating...'}
+                    {stageRunnerState === 'applying' && 'Applying...'}
+                  </span>
+                )}
+                {stageRunnerState === 'error' && (
+                  <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">
+                    ✗ Error
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <button
-                onClick={runStageWithGemini}
-                disabled={!hasProvider || stageRunnerState === 'sending' || stageRunnerState === 'awaiting'}
-                className="px-3 py-1 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-              >
-                {stageRunnerState === 'sending' || stageRunnerState === 'awaiting' ? 'Running…' : 'Run with Gemini'}
-              </button>
-              <span className="text-gray-500">
-                {hasProvider ? `Provider: ${providerConfig.type}` : 'No provider configured'}
-              </span>
-              <span className="text-gray-400">State: {stageRunnerState}</span>
-            </div>
+            {stageRunnerState === 'idle' && (
+              <div className="bg-white rounded-lg p-3 border border-primary-200">
+                <p className="text-xs text-gray-600 mb-2">
+                  {hasAutoStarted ? 'Stage automation ready. Click to run again.' : 'Stage will run automatically when ready.'}
+                </p>
+                <button
+                  onClick={runStageWithGemini}
+                  disabled={!hasProvider}
+                  className="w-full px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+                >
+                  {hasProvider ? 'Run Stage Now' : 'Configure Provider First'}
+                </button>
+              </div>
+            )}
+            {stageRunnerState === 'complete' && (
+              <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                <p className="text-xs text-green-700 font-medium mb-1">Stage completed successfully!</p>
+                <p className="text-xs text-green-600">Changes have been applied. You can now advance to the next stage.</p>
+              </div>
+            )}
             {stageRunnerError && (
-              <div className="text-xs text-red-600">{stageRunnerError}</div>
+              <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                <p className="text-xs text-red-700 font-medium mb-1">Error occurred:</p>
+                <p className="text-xs text-red-600">{stageRunnerError}</p>
+                <button
+                  onClick={runStageWithGemini}
+                  className="mt-2 w-full px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
             )}
           </div>
         )}
