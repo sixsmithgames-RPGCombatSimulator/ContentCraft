@@ -775,9 +775,10 @@ ${contextBlocks.join('\n')}`;
       return;
     }
 
-    logStageRunnerGate('auto-start: scheduling run');
+    logStageRunnerGate('auto-start: scheduling run with initial delay');
     setHasAutoStarted(true);
-    setTimeout(() => runStageWithGemini(), 500);
+    // Add 2.5s initial delay to ensure server-side throttle window is clear
+    setTimeout(() => runStageWithGemini(), 2500);
   }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate]);
 
   const handleConfirmApply = useCallback(() => {

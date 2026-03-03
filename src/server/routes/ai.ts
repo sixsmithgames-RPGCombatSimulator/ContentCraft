@@ -98,11 +98,12 @@ interface GeminiFailureResponse {
 }
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash-8b';
 const MAX_PATCH_BYTES = 200_000;
 const IDEMPOTENCY_TTL_MS = 10 * 60_000;
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
 const MAX_RETRY_ATTEMPTS = 2;
+const MIN_REQUEST_SPACING_MS = 2000;
 const aiRouter = Router();
 const ajv = new Ajv({ allErrors: true, strict: true, allowUnionTypes: true });
 addFormats(ajv);
@@ -378,12 +379,12 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
     } satisfies GeminiFailureResponse);
   }
 
-  // Per-project throttle to prevent bursts (min 1500ms spacing)
+  // Per-project throttle to prevent bursts (configurable spacing)
   {
     const now = Date.now();
     const lastProjectRequest = lastRequestByProject.get(body.projectId);
-    if (lastProjectRequest && now - lastProjectRequest < 1500) {
-      const retryAfterMs = 1500 - (now - lastProjectRequest) + 100; // small cushion
+    if (lastProjectRequest && now - lastProjectRequest < MIN_REQUEST_SPACING_MS) {
+      const retryAfterMs = MIN_REQUEST_SPACING_MS - (now - lastProjectRequest) + 100; // small cushion
       return res.status(429).json({
         ok: false,
         requestId,
