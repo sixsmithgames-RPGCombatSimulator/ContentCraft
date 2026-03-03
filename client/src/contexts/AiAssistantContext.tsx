@@ -98,6 +98,9 @@ export type ApplyChangesCallback = (
 
 // ─── Context Shape ───────────────────────────────────────────────────────────
 
+/** AI assist mode: integrated (automated) or manual (copy/paste) */
+export type AssistMode = 'integrated' | 'manual' | null;
+
 interface AiAssistantContextValue {
   /** Whether the side panel is open */
   isPanelOpen: boolean;
@@ -121,6 +124,10 @@ interface AiAssistantContextValue {
   /** Provider configuration */
   providerConfig: AiProviderConfig;
   setProviderConfig: (config: AiProviderConfig) => void;
+
+  /** AI assist mode chosen by the user (integrated / manual / null = not yet chosen) */
+  assistMode: AssistMode;
+  setAssistMode: (mode: AssistMode) => void;
 }
 
 const AiAssistantContext = createContext<AiAssistantContextValue | null>(null);
@@ -158,6 +165,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const [applyChanges, setApplyChanges] = useState<ApplyChangesCallback | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [providerConfig, setProviderConfigState] = useState<AiProviderConfig>(loadProviderConfig);
+  const [assistMode, setAssistMode] = useState<AssistMode>(null);
 
   const togglePanel = useCallback(() => setIsPanelOpen((v) => !v), []);
   const openPanel = useCallback(() => setIsPanelOpen(true), []);
@@ -203,6 +211,8 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         clearMessages,
         providerConfig,
         setProviderConfig: handleSetProviderConfig,
+        assistMode,
+        setAssistMode,
       }}
     >
       {children}

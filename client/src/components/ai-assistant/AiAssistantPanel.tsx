@@ -202,6 +202,8 @@ export default function AiAssistantPanel() {
     addMessage,
     clearMessages,
     providerConfig,
+    assistMode,
+    setAssistMode,
   } = useAiAssistant();
 
   const [inputText, setInputText] = useState('');
@@ -218,7 +220,6 @@ export default function AiAssistantPanel() {
   const [stageRunId, setStageRunId] = useState<string | null>(null);
   const [stageRunnerState, setStageRunnerState] = useState<StageRunnerState>('idle');
   const [stageRunnerError, setStageRunnerError] = useState<string | null>(null);
-  const [assistMode, setAssistMode] = useState<'integrated' | 'manual' | null>(null);
   const [showModeDialog, setShowModeDialog] = useState(false);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
 
@@ -250,12 +251,7 @@ export default function AiAssistantPanel() {
     setHasAutoStarted(false);
   }, [workflowContext?.stageRouterKey]);
 
-  // Auto-open panel when workflow becomes active (generation starts)
-  useEffect(() => {
-    if (workflowContext && !isPanelOpen) {
-      openPanel();
-    }
-  }, [workflowContext, isPanelOpen, openPanel]);
+  // NOTE: Panel auto-open is now controlled by ManualGenerator after mode selection
 
   const hasProvider = providerConfig.type !== 'none';
   const hasWorkflow = !!workflowContext;
@@ -266,7 +262,7 @@ export default function AiAssistantPanel() {
   const handleModeSelection = useCallback((mode: 'integrated' | 'manual') => {
     setAssistMode(mode);
     setShowModeDialog(false);
-  }, []);
+  }, [setAssistMode]);
 
   const handleTogglePanel = useCallback(() => {
     togglePanel();
@@ -696,8 +692,8 @@ ${contextBlocks.join('\n')}`;
     };
   }, [isPanelOpen]);
 
-  // Only show toggle button if workflow is active
-  if (!workflowContext) return null;
+  // Only show toggle button if workflow is active and mode is selected
+  if (!workflowContext || !assistMode) return null;
 
   if (!isPanelOpen) return toggleButton;
 
@@ -857,40 +853,18 @@ ${contextBlocks.join('\n')}`;
           </div>
         )}
 
-        {/* Onboarding message when no mode selected */}
-        {!assistMode && workflowContext && (
-          <div className="bg-blue-50 border-b border-blue-100 px-4 py-3 flex-shrink-0">
-            <div className="flex items-start gap-2">
-              <Sparkles className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-blue-900 mb-1">Choose Your AI Workflow</p>
-                <p className="text-xs text-blue-700 mb-3">
-                  Select how you'd like to work with AI for this generation:
-                </p>
-                <div className="space-y-2">
-                  {hasProvider && (
-                    <button
-                      onClick={() => setShowModeDialog(true)}
-                      className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      Use Integrated AI (Recommended)
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setAssistMode('manual')}
-                    className="w-full px-3 py-2 bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 text-sm font-medium transition-colors"
-                  >
-                    Use Manual Copy/Paste
-                  </button>
-                  {!hasProvider && (
-                    <p className="text-xs text-blue-600 mt-2">
-                      💡 Configure an AI provider in settings to enable automated mode
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
+        {/* Mode switch button in panel */}
+        {assistMode && workflowContext && (
+          <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex items-center justify-between flex-shrink-0">
+            <span className="text-xs text-gray-500">
+              Mode: <span className="font-medium text-gray-700">{assistMode === 'integrated' ? 'Integrated AI' : 'Manual Copy/Paste'}</span>
+            </span>
+            <button
+              onClick={() => setAssistMode(assistMode === 'integrated' ? 'manual' : 'integrated')}
+              className="text-xs text-primary-600 hover:text-primary-800 font-medium transition-colors"
+            >
+              Switch to {assistMode === 'integrated' ? 'Manual' : 'Integrated'}
+            </button>
           </div>
         )}
 

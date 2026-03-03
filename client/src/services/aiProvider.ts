@@ -58,7 +58,10 @@ async function sendToGemini(
   systemPrompt: string,
   userMessage: string
 ): Promise<AiProviderResponse> {
-  if (!config.apiKey) return { success: false, error: 'Gemini API key not configured.' };
+  // If no client-side API key, route through the backend proxy (server-managed key)
+  if (!config.apiKey) {
+    return sendToGeminiBackendProxy(systemPrompt, userMessage);
+  }
 
   const model = config.model || 'gemini-2.0-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
@@ -90,6 +93,47 @@ async function sendToGemini(
     const message = err instanceof Error ? err.message : String(err);
     console.error('[AiProvider][Gemini] Request failed:', message);
     return { success: false, error: `Gemini request failed: ${message}` };
+  }
+}
+
+/**
+ * Send a Gemini request through the backend proxy using the server-managed API key.
+ * Used when no client-side API key is configured.
+ */
+async function sendToGeminiBackendProxy(
+  systemPrompt: string,
+  userMessage: string
+): Promise<AiProviderResponse> {
+  try {
+    const response = await fetch('/api/ai/gemini/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: `${systemPrompt}\n\n${userMessage}`,
+        projectId: 'chat',
+        stageId: 'assistant-chat',
+        stageRunId: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        schemaVersion: 'v1.1-client',
+        clientContext: { generatorType: 'chat', stageKey: 'assistant-chat' },
+      }),
+    });
+
+    const body = await response.json();
+
+    if (!response.ok || !body?.ok) {
+      const message = body?.error?.message || `Backend proxy error (${response.status})`;
+      return { success: false, error: message };
+    }
+
+    // The backend returns jsonPatch, but for chat we need the raw text
+    // If rawText is available use it, otherwise stringify the patch
+    const text = body.rawText || (body.jsonPatch ? JSON.stringify(body.jsonPatch, null, 2) : null);
+    if (!text) return { success: false, error: 'Empty response from Gemini backend proxy.' };
+    return { success: true, text };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[AiProvider][GeminiProxy] Request failed:', message);
+    return { success: false, error: `Gemini proxy request failed: ${message}` };
   }
 }
 

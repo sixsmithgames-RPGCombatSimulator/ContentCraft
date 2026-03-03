@@ -51,6 +51,7 @@ import { projectApi, API_BASE_URL } from '../services/api';
 import type { Project } from '../types';
 import { useAiAssistant } from '../contexts/AiAssistantContext';
 import type { WorkflowType } from '../contexts/AiAssistantContext';
+import ModeSelectionDialog from '../components/ai-assistant/ModeSelectionDialog';
 
 type JsonRecord = Record<string, unknown>;
 type StageResults = Record<string, JsonRecord>;
@@ -2473,7 +2474,9 @@ export default function ManualGenerator() {
   }, [projectId]);
 
   // ─── AI Assistant Integration ──────────────────────────────────────────────
-  const { setWorkflowContext, registerApplyChanges } = useAiAssistant();
+  const { setWorkflowContext, registerApplyChanges, assistMode, setAssistMode, openPanel, providerConfig } = useAiAssistant();
+  const [showModeSelection, setShowModeSelection] = useState(false);
+  const [pendingGenerationConfig, setPendingGenerationConfig] = useState<GenerationConfig | null>(null);
 
   // Map GenerationConfig type to WorkflowType
   const configTypeToWorkflow = (type: GenerationConfig['type'] | undefined): WorkflowType => {
@@ -3788,7 +3791,31 @@ export default function ManualGenerator() {
     }
   };
 
-  const handleGenerate = async (generationConfig: GenerationConfig) => {
+  /** Intercept Generate button: show mode selection dialog first */
+  const handleGenerate = (generationConfig: GenerationConfig) => {
+    setPendingGenerationConfig(generationConfig);
+    setShowModeSelection(true);
+  };
+
+  /** Called after user selects a mode from the dialog */
+  const handleModeSelected = async (mode: 'integrated' | 'manual') => {
+    setAssistMode(mode);
+    setShowModeSelection(false);
+
+    const generationConfig = pendingGenerationConfig;
+    if (!generationConfig) return;
+    setPendingGenerationConfig(null);
+
+    if (mode === 'integrated') {
+      // Open AI panel for integrated mode
+      openPanel();
+    }
+
+    await proceedWithGeneration(generationConfig);
+  };
+
+  /** Actual generation logic (after mode is selected) */
+  const proceedWithGeneration = async (generationConfig: GenerationConfig) => {
     setConfig(generationConfig);
     setStageResults({});
     setError(null);
@@ -7462,7 +7489,7 @@ Output: Valid JSON only. No markdown, no prose.`;
               <Zap className="w-8 h-8 text-yellow-500" />
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-3xl font-bold text-gray-900">Manual AI Generator</h1>
+                  <h1 className="text-3xl font-bold text-gray-900">AI Content Generator</h1>
                   {project?.title && (
                     <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">
                       {project.title}
@@ -7475,7 +7502,7 @@ Output: Valid JSON only. No markdown, no prose.`;
                   )}
                 </div>
                 <p className="text-gray-600 mt-1">
-                  Use any AI chat service - copy prompts, paste responses
+                  {assistMode === 'integrated' ? 'Automated AI-powered content generation' : assistMode === 'manual' ? 'Copy prompts to any AI chat, paste responses back' : 'Generate content with AI assistance'}
                 </p>
               </div>
             </div>
@@ -7934,9 +7961,9 @@ Output: Valid JSON only. No markdown, no prose.`;
         <ResourcesPanel projectId={projectId} />
       </div>
 
-      {/* Copy/Paste Modal */}
+      {/* Copy/Paste Modal - hidden in integrated AI mode */}
       <CopyPasteModal
-        isOpen={modalMode !== null && !showReviewModal}
+        isOpen={modalMode !== null && !showReviewModal && assistMode !== 'integrated'}
         mode={modalMode || 'output'}
         stageName={STAGES[currentStageIndex]?.name || ''}
         stageNumber={currentStageIndex + 1}
@@ -8554,6 +8581,17 @@ Output: Valid JSON only. No markdown, no prose.`;
         isOpen={showResumeModal}
         onClose={() => setShowResumeModal(false)}
         onResume={handleResumeSession}
+      />
+
+      {/* Mode Selection Dialog - shown before generation starts */}
+      <ModeSelectionDialog
+        isOpen={showModeSelection}
+        onClose={() => {
+          setShowModeSelection(false);
+          setPendingGenerationConfig(null);
+        }}
+        onSelectMode={handleModeSelected}
+        hasProvider={providerConfig.type !== 'none'}
       />
     </div>
   );
