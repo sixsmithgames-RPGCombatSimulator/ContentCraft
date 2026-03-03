@@ -259,16 +259,21 @@ export default function AiAssistantPanel() {
   const handleModeSelection = useCallback((mode: 'integrated' | 'manual') => {
     setAssistMode(mode);
     setShowModeDialog(false);
-    openPanel();
-  }, [openPanel]);
+  }, []);
 
   const handleTogglePanel = useCallback(() => {
-    if (!isPanelOpen && !assistMode) {
+    if (!isPanelOpen && !assistMode && hasProvider) {
+      // First time opening with a provider configured - show mode selection
       setShowModeDialog(true);
+      openPanel();
+    } else if (!isPanelOpen && !assistMode) {
+      // No provider - default to manual mode
+      setAssistMode('manual');
+      openPanel();
     } else {
       togglePanel();
     }
-  }, [isPanelOpen, assistMode, togglePanel]);
+  }, [isPanelOpen, assistMode, hasProvider, openPanel, togglePanel]);
 
   const handleCopyToClipboard = useCallback(async (text: string) => {
     try {
@@ -638,7 +643,7 @@ ${contextBlocks.join('\n')}`;
       !hasAutoStarted
     ) {
       setHasAutoStarted(true);
-      runStageWithGemini();
+      setTimeout(() => runStageWithGemini(), 500);
     }
   }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, stageRunnerState, hasAutoStarted, runStageWithGemini]);
 
@@ -714,6 +719,14 @@ ${contextBlocks.join('\n')}`;
               <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-medium">
                 Manual
               </span>
+            )}
+            {!assistMode && hasProvider && (
+              <button
+                onClick={() => setShowModeDialog(true)}
+                className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium hover:bg-amber-200 transition-colors"
+              >
+                Choose Mode
+              </button>
             )}
           </div>
           <div className="flex items-center gap-1">
