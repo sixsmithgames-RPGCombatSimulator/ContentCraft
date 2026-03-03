@@ -98,7 +98,7 @@ interface GeminiFailureResponse {
 }
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite-preview-02-05';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
 const MAX_PATCH_BYTES = 200_000;
 const IDEMPOTENCY_TTL_MS = 10 * 60_000;
 const RATE_LIMIT_COOLDOWN_MS = 60_000;

@@ -63,7 +63,7 @@ async function sendToGemini(
     return sendToGeminiBackendProxy(systemPrompt, userMessage);
   }
 
-  const model = config.model || 'gemini-2.0-flash-lite-preview-02-05';
+  const model = config.model || 'gemini-2.0-flash-lite';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
 
   try {
@@ -280,7 +280,7 @@ async function sendToOpenRouter(
 export function getDefaultModels(provider: AiProviderConfig['type']): string[] {
   switch (provider) {
     case 'gemini':
-      return ['gemini-2.0-flash-lite-preview-02-05', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+      return ['gemini-2.0-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
     case 'openai':
       return ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'];
     case 'ollama':
