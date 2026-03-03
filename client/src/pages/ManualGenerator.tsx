@@ -45,7 +45,7 @@ import { STORY_ARC_CREATOR_STAGES } from '../config/storyArcCreatorStages';
 import { getNpcSectionChunks, type NpcSectionChunk } from '../config/npcSectionChunks';
 import { validateSpaceGeometry } from '../utils/locationGeometry';
 import { validateIncomingLocationSpace } from '../utils/locationSpaceValidation';
-import type { LiveMapSpace } from '../types/liveMapTypes';
+import type { LiveMapSpace, LiveMapDimensions } from '../types/liveMapTypes';
 import { synchronizeReciprocalDoors, type SpaceLike } from '../utils/doorSync';
 import { projectApi, API_BASE_URL } from '../services/api';
 import type { Project } from '../types';
@@ -470,76 +470,111 @@ const stripStageOutput = (stageOutput: JsonRecord): JsonRecord => {
   return cleaned;
 };
 
+const toNumber = (value: unknown): number | null => (typeof value === 'number' ? value : null);
+
+const toLiveMapSpace = (space: JsonRecord): LiveMapSpace | null => {
+  if (!space || typeof space !== 'object') {
+    console.error('[extractSpaceForMap] Invalid space payload (not an object)');
+    return null;
+  }
+
+  const width = toNumber((space.size_ft as Record<string, unknown> | undefined)?.width)
+    ?? toNumber((space.dimensions as Record<string, unknown> | undefined)?.width);
+  const height = toNumber((space.size_ft as Record<string, unknown> | undefined)?.height)
+    ?? toNumber((space.dimensions as Record<string, unknown> | undefined)?.height);
+
+  if (width === null || height === null) {
+    console.error('[extractSpaceForMap] Missing size_ft/dimensions width/height for space:', space.name);
+    return null;
+  }
+
+  const pos = (space as Record<string, unknown>).position;
+  const position =
+    pos && typeof pos === 'object' &&
+    typeof (pos as Record<string, unknown>).x === 'number' &&
+    typeof (pos as Record<string, unknown>).y === 'number'
+      ? { x: (pos as Record<string, number>).x, y: (pos as Record<string, number>).y }
+      : undefined;
+
+  return {
+    name: String(space.name || 'Unnamed Space'),
+    code: typeof space.code === 'string' ? space.code : undefined,
+    id: typeof space.id === 'string' ? space.id : undefined,
+    position,
+    dimensions: space.dimensions as LiveMapDimensions | undefined,
+    size_ft: { width, height },
+    purpose: space.purpose ? String(space.purpose) : undefined,
+    function: space.function ? String(space.function) : undefined,
+    description: space.description ? String(space.description) : undefined,
+    floor: space.floor as unknown,
+    walls: space.walls as unknown,
+    doors: Array.isArray(space.doors) ? (space.doors as LiveMapSpace['doors']) : undefined,
+    features: space.features as unknown[] | undefined,
+    lighting: space.lighting as unknown,
+    ambient_color: space.ambient_color as unknown,
+    connections: Array.isArray(space.connections)
+      ? space.connections.filter((c): c is string => typeof c === 'string')
+      : undefined,
+    shape: space.shape as string | undefined,
+    space_type: space.space_type as string | undefined,
+    stair_type: space.stair_type as string | undefined,
+    z_direction: space.z_direction as string | undefined,
+    z_connects_to: space.z_connects_to as string | undefined,
+    l_cutout_corner: space.l_cutout_corner as string | undefined,
+    polygon_points: space.polygon_points as unknown,
+    wall_thickness_ft: toNumber(space.wall_thickness_ft) ?? undefined,
+    wall_material: space.wall_material as string | undefined,
+    floor_height: toNumber(space.floor_height) ?? undefined,
+    position_locked: (space as Record<string, unknown>).position_locked as boolean | undefined,
+  } satisfies LiveMapSpace;
+};
+
+const syncDoorsIntoLiveMapSpaces = (spaces: LiveMapSpace[]): LiveMapSpace[] => {
+  const spaceLikes = spaces
+    .map<SpaceLike | null>((space) => {
+      const width = toNumber(space.size_ft?.width);
+      const height = toNumber(space.size_ft?.height);
+      if (width === null || height === null) {
+        console.error('[syncDoors] Missing size_ft on space:', space.name);
+        return null;
+      }
+      return {
+        name: space.name,
+        code: space.code,
+        size_ft: { width, height },
+        doors: Array.isArray(space.doors) ? (space.doors as any) : [],
+      } satisfies SpaceLike;
+    })
+    .filter((s): s is SpaceLike => Boolean(s));
+
+  const synced = synchronizeReciprocalDoors(spaceLikes);
+
+  return spaces.map((space) => {
+    const match = synced.find((s) => s.name === space.name || (space.code && s.code === space.code));
+    return match ? { ...space, doors: match.doors } : space;
+  });
+};
+
 /**
  * Extracts space data from a stage chunk result for live map display
  */
-const extractSpaceForMap = (chunkResult: JsonRecord): any | null => {
-  // Helper to extract all space fields (including visual data)
-  const extractFields = (space: Record<string, unknown>) => {
-    // Ensure size_ft exists for map compatibility
-    let size_ft = space.size_ft;
-    if (!size_ft && space.dimensions && typeof space.dimensions === 'object') {
-      const dims = space.dimensions as Record<string, unknown>;
-      if (dims.width && dims.height) {
-        size_ft = { width: dims.width, height: dims.height };
-      }
-    }
-
-    const position = (
-      space.position &&
-      typeof space.position === 'object' &&
-      typeof (space.position as any).x === 'number' &&
-      typeof (space.position as any).y === 'number'
-    )
-      ? { x: (space.position as any).x, y: (space.position as any).y }
-      : undefined;
-
-    return {
-      name: String(space.name || 'Unnamed Space'),
-      code: typeof space.code === 'string' ? space.code : undefined,
-      id: typeof space.id === 'string' ? space.id : undefined,
-      position,
-      dimensions: space.dimensions, // Keep as-is (object or string)
-      size_ft, // Add for map compatibility
-      purpose: space.purpose ? String(space.purpose) : undefined,
-      function: space.function ? String(space.function) : undefined,
-      description: space.description ? String(space.description) : undefined,
-      floor: space.floor,
-      walls: space.walls,
-      doors: space.doors,
-      features: space.features,
-      lighting: space.lighting,
-      ambient_color: space.ambient_color,
-      connections: Array.isArray(space.connections)
-        ? space.connections.filter((c): c is string => typeof c === 'string')
-        : undefined,
-      // Shape and space type properties
-      shape: space.shape,
-      space_type: space.space_type,
-      // Stairs properties
-      stair_type: space.stair_type,
-      z_direction: space.z_direction,
-      z_connects_to: space.z_connects_to,
-      // L-shape properties
-      l_cutout_corner: space.l_cutout_corner,
-      // Polygon points (for future use)
-      polygon_points: space.polygon_points,
-    };
-  };
+const extractSpaceForMap = (chunkResult: JsonRecord): LiveMapSpace | null => {
+  const normalize = (space: Record<string, unknown>): LiveMapSpace | null => toLiveMapSpace(space as JsonRecord);
 
   // Check if there's a 'space' object (single space per chunk)
   if (chunkResult.space && typeof chunkResult.space === 'object') {
-    return extractFields(chunkResult.space as Record<string, unknown>);
+    return normalize(chunkResult.space as Record<string, unknown>);
   }
 
   // Check if there's a 'spaces' array with at least one space
   if (Array.isArray(chunkResult.spaces) && chunkResult.spaces.length > 0) {
-    return extractFields(chunkResult.spaces[0] as Record<string, unknown>);
+    const first = chunkResult.spaces.find((s) => s && typeof s === 'object') as Record<string, unknown> | undefined;
+    return first ? normalize(first) : null;
   }
 
   // Try to extract from top-level fields (space data directly in chunk result)
   if (chunkResult.name) {
-    return extractFields(chunkResult);
+    return normalize(chunkResult as Record<string, unknown>);
   }
 
   return null;
@@ -921,6 +956,7 @@ Output JSON matching the Draft stage structure, with final prose and formatting.
 const GENERIC_STAGES: Stage[] = [
   {
     name: 'Purpose',
+    routerKey: 'purpose',
     systemPrompt: `You are the Purpose Analyzer for content generation.
 
 ⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
@@ -948,6 +984,7 @@ Examples:
   },
   {
     name: 'Keyword Extractor',
+    routerKey: 'keyword_extractor',
     systemPrompt: `You are a Keyword Extraction specialist.
 Your ONLY job is to identify significant keywords from the user's prompt that should be used to search the canon database.
 
@@ -970,6 +1007,7 @@ Output ONLY valid JSON with this structure:
   },
   {
     name: 'Planner',
+    routerKey: 'planner',
     systemPrompt: `You are the Planner for game content generation.
 
 ⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
