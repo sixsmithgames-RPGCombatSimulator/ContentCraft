@@ -65,7 +65,7 @@ interface StageContext {
     currentChunk: number;
     totalChunks: number;
     chunkLabel: string;
-  };
+  }
   previousDecisions?: Record<string, string>; // Accumulated answers from previous chunks
   unansweredProposals?: unknown[]; // Proposals from previous chunks that need answering
   npcSectionContext?: {
@@ -5229,7 +5229,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     }
   };
 
-  const handleSubmit = async (aiResponse: string) => {
+  async function handleSubmit(aiResponse: string) {
     // Clear any previous errors
     setError(null);
 
