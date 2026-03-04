@@ -143,15 +143,19 @@ function setCachedResponse(key: string, status: number, payload: GeminiSuccessRe
 function loadSchemaForGenerator(generatorType: string): StageRegistryEntry | null {
   if (schemaCache[generatorType]) return schemaCache[generatorType] || null;
   try {
-    const schemaPath = path.resolve(process.cwd(), 'schema', generatorType, 'v1.1-client.json');
-    const raw = readFileSync(schemaPath, 'utf-8');
-    const schema = JSON.parse(raw) as { properties?: Record<string, unknown> };
+    const raw = readFileSync(path.join(process.cwd(), `schema/${generatorType}/v1.1-client.json`), 'utf-8');
+    const schema = JSON.parse(raw);
     const properties = schema.properties || {};
+    
+    // Inject generic workflow fields that are used during generation but stripped before final save
+    properties['keywords'] = { type: 'array', items: { type: 'string' } };
+    properties['retrieval_hints'] = { type: 'object' };
+
     const allowedPaths = Object.keys(properties);
     const entry: StageRegistryEntry = {
       allowedPaths,
       schemaVersion: 'v1.1-client',
-      schema,
+      schema: { ...schema, properties },
     };
     schemaCache[generatorType] = entry;
     return entry;
