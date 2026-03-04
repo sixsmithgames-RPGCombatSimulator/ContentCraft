@@ -194,13 +194,13 @@ export default function AiAssistantPanel() {
   const {
     isPanelOpen,
     togglePanel,
-    openPanel,
     closePanel,
-    workflowContext,
-    applyChanges,
     messages,
     addMessage,
     clearMessages,
+    workflowContext,
+    applyChanges,
+    submitPipelineResponse,
     providerConfig,
     assistMode,
     setAssistMode,
@@ -220,6 +220,7 @@ export default function AiAssistantPanel() {
   const [stageRunId, setStageRunId] = useState<string | null>(null);
   const [stageRunnerState, setStageRunnerState] = useState<StageRunnerState>('idle');
   const [stageRunnerError, setStageRunnerError] = useState<string | null>(null);
+  const [extractedPayload, setExtractedPayload] = useState<Record<string, unknown> | null>(null);
   const [rateLimitCooldownMs, setRateLimitCooldownMs] = useState<number | null>(null);
   const [rateLimitSecondsLeft, setRateLimitSecondsLeft] = useState<number | null>(null);
   const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null);
@@ -652,9 +653,15 @@ ${contextBlocks.join('\n')}`;
       }
 
       const { payload } = validated as { ok: true; payload: Record<string, unknown> }; // narrowed to ok: true
-
       setStageRunnerState('applying');
+      setExtractedPayload(payload);
       applyStagePatch(stageKey, payload);
+      
+      if (submitPipelineResponse) {
+        // Submit the actual payload to the generator pipeline
+        await submitPipelineResponse(JSON.stringify(payload), payload);
+      }
+      
       setStageRunnerState('complete');
       addMessage({
         role: 'system',
@@ -976,7 +983,17 @@ ${contextBlocks.join('\n')}`;
             {stageRunnerState === 'complete' && (
               <div className="bg-green-50 rounded-lg p-3 border border-green-200">
                 <p className="text-xs text-green-700 font-medium mb-1">Stage completed successfully!</p>
-                <p className="text-xs text-green-600">Changes have been applied. You can now advance to the next stage.</p>
+                <p className="text-xs text-green-600 mb-2">Changes have been applied. You can now advance to the next stage.</p>
+                {extractedPayload && (
+                  <div className="mt-2">
+                    <p className="text-xs text-green-800 font-medium mb-1">Extracted Data:</p>
+                    <div className="bg-white rounded border border-green-100 p-2 overflow-auto max-h-32">
+                      <pre className="text-[10px] text-gray-700 font-mono whitespace-pre-wrap">
+                        {JSON.stringify(extractedPayload, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {stageRunnerError && (

@@ -96,8 +96,15 @@ export type ApplyChangesCallback = (
   mergeMode: 'replace' | 'merge'
 ) => void;
 
-// ─── Context Shape ───────────────────────────────────────────────────────────
+/**
+ * Callback for submitting a raw AI response directly into the active workflow pipeline.
+ */
+export type SubmitPipelineResponseCallback = (
+  rawText: string,
+  parsedJson?: Record<string, unknown>
+) => Promise<void>;
 
+// ─── Context Shape ───────────────────────────────────────────────────────────
 /** AI assist mode: integrated (automated) or manual (copy/paste) */
 export type AssistMode = 'integrated' | 'manual' | null;
 
@@ -115,6 +122,10 @@ interface AiAssistantContextValue {
   /** Callback the active workflow registers so the panel can push changes back */
   applyChanges: ApplyChangesCallback | null;
   registerApplyChanges: (cb: ApplyChangesCallback | null) => void;
+
+  /** Callback the active workflow registers so the panel can trigger the pipeline */
+  submitPipelineResponse: SubmitPipelineResponseCallback | null;
+  registerSubmitPipelineResponse: (cb: SubmitPipelineResponseCallback | null) => void;
 
   /** Chat history */
   messages: ChatMessage[];
@@ -163,6 +174,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [workflowContext, setWorkflowContext] = useState<AiAssistantWorkflowContext | null>(null);
   const [applyChanges, setApplyChanges] = useState<ApplyChangesCallback | null>(null);
+  const [submitPipelineResponse, setSubmitPipelineResponse] = useState<SubmitPipelineResponseCallback | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [providerConfig, setProviderConfigState] = useState<AiProviderConfig>(loadProviderConfig);
   const [assistMode, setAssistMode] = useState<AssistMode>(null);
@@ -174,6 +186,10 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const registerApplyChanges = useCallback((cb: ApplyChangesCallback | null) => {
     // Wrap in a function to avoid React treating it as a state updater
     setApplyChanges(() => cb);
+  }, []);
+
+  const registerSubmitPipelineResponse = useCallback((cb: SubmitPipelineResponseCallback | null) => {
+    setSubmitPipelineResponse(() => cb);
   }, []);
 
   const addMessage = useCallback(
@@ -206,6 +222,8 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         setWorkflowContext,
         applyChanges,
         registerApplyChanges,
+        submitPipelineResponse,
+        registerSubmitPipelineResponse,
         messages,
         addMessage,
         clearMessages,

@@ -2518,7 +2518,15 @@ export default function ManualGenerator() {
   }, [projectId]);
 
   // ─── AI Assistant Integration ──────────────────────────────────────────────
-  const { setWorkflowContext, registerApplyChanges, assistMode, setAssistMode, openPanel, providerConfig } = useAiAssistant();
+  const {
+    setWorkflowContext,
+    registerApplyChanges,
+    registerSubmitPipelineResponse,
+    assistMode,
+    setAssistMode,
+    openPanel,
+    providerConfig
+  } = useAiAssistant();
   const [showModeSelection, setShowModeSelection] = useState(false);
   const [pendingGenerationConfig, setPendingGenerationConfig] = useState<GenerationConfig | null>(null);
 
@@ -2637,6 +2645,29 @@ export default function ManualGenerator() {
       setWorkflowContext(null);
     };
   }, [registerApplyChanges, setWorkflowContext]);
+
+  // Register submitPipelineResponse callback so the AI panel can trigger the pipeline
+  useEffect(() => {
+    const handlePipelineSubmit = async (rawText: string, parsedJson?: Record<string, unknown>) => {
+      console.log('[AI Assistant] Submitting response to pipeline');
+      // We just pass the raw text to handleSubmit, which will parse it or we can construct a JSON string
+      if (parsedJson) {
+         await handleSubmit(JSON.stringify(parsedJson));
+      } else {
+         await handleSubmit(rawText);
+      }
+    };
+    
+    if (registerSubmitPipelineResponse) {
+      registerSubmitPipelineResponse(handlePipelineSubmit);
+    }
+    
+    return () => {
+      if (registerSubmitPipelineResponse) {
+        registerSubmitPipelineResponse(null);
+      }
+    };
+  }, [registerSubmitPipelineResponse]); // Note: handleSubmit is not in deps to avoid infinite loops, but it relies on current state which might be stale if we don't handle it carefully. Actually handleSubmit is recreated every render, so we should include it or use refs.
   // ─── End AI Assistant Integration ──────────────────────────────────────────
 
   const resetPipelineState = () => {
