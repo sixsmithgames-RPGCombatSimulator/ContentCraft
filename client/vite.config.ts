@@ -9,6 +9,9 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    sourcemap: true, // aid post-deploy debugging to pinpoint runtime errors
+  },
   server: {
     proxy: {
       '/api': {
