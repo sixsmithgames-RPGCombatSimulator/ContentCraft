@@ -2646,29 +2646,34 @@ export default function ManualGenerator() {
     };
   }, [registerApplyChanges, setWorkflowContext]);
 
-  // Register submitPipelineResponse callback so the AI panel can trigger the pipeline
-  useEffect(() => {
-    const handlePipelineSubmit = async (rawText: string, parsedJson?: Record<string, unknown>) => {
-      console.log('[AI Assistant] Submitting response to pipeline');
-      // We just pass the raw text to handleSubmit, which will parse it or we can construct a JSON string
-      if (parsedJson) {
-         await handleSubmit(JSON.stringify(parsedJson));
-      } else {
-         await handleSubmit(rawText);
-      }
-    };
-    
-    if (registerSubmitPipelineResponse) {
-      registerSubmitPipelineResponse(handlePipelineSubmit);
-    }
-    
-    return () => {
+    // Register submitPipelineResponse callback so the AI panel can trigger the pipeline
+    const handleSubmitRef = useRef(handleSubmit);
+    useEffect(() => {
+      handleSubmitRef.current = handleSubmit;
+    }, [handleSubmit]);
+
+    useEffect(() => {
+      const handlePipelineSubmit = async (rawText: string, parsedJson?: Record<string, unknown>) => {
+        console.log('[AI Assistant] Submitting response to pipeline');
+        // We just pass the raw text to handleSubmit, which will parse it or we can construct a JSON string
+        if (parsedJson) {
+           await handleSubmitRef.current(JSON.stringify(parsedJson));
+        } else {
+           await handleSubmitRef.current(rawText);
+        }
+      };
+
       if (registerSubmitPipelineResponse) {
-        registerSubmitPipelineResponse(null);
+        registerSubmitPipelineResponse(handlePipelineSubmit);
       }
-    };
-  }, [registerSubmitPipelineResponse]); // Note: handleSubmit is not in deps to avoid infinite loops, but it relies on current state which might be stale if we don't handle it carefully. Actually handleSubmit is recreated every render, so we should include it or use refs.
-  // ─── End AI Assistant Integration ──────────────────────────────────────────
+
+      return () => {
+        if (registerSubmitPipelineResponse) {
+          registerSubmitPipelineResponse(null);
+        }
+      };
+    }, [registerSubmitPipelineResponse]); // Rely on ref to avoid infinite dependency loops
+    // ─── End AI Assistant Integration
 
   const resetPipelineState = () => {
     setCurrentStageIndex(-1);
