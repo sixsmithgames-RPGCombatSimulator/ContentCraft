@@ -560,6 +560,21 @@ ${contextBlocks.join('\n')}`;
     [applyChanges, workflowContext]
   );
 
+  const sanitizeStagePayload = useCallback(
+    (stageKey: string, payload: Record<string, unknown>) => {
+      const sanitized = { ...payload };
+
+      // Planner payload must not include character_profile (server rejects it)
+      if (stageKey === 'planner' && 'character_profile' in sanitized) {
+        delete (sanitized as Record<string, unknown>).character_profile;
+        console.warn('[AI Runner][Sanitize] Removed disallowed character_profile from planner payload');
+      }
+
+      return sanitized;
+    },
+    []
+  );
+
   const runStageWithGemini = useCallback(async () => {
     if (inFlightRef.current || stageRunnerState !== 'idle') {
       logStageRunnerGate(`skip: in-flight (${stageRunnerState})`);
@@ -653,13 +668,14 @@ ${contextBlocks.join('\n')}`;
       }
 
       const { payload } = validated as { ok: true; payload: Record<string, unknown> }; // narrowed to ok: true
+      const sanitizedPayload = sanitizeStagePayload(stageKey, payload);
       setStageRunnerState('applying');
-      setExtractedPayload(payload);
-      applyStagePatch(stageKey, payload);
+      setExtractedPayload(sanitizedPayload);
+      applyStagePatch(stageKey, sanitizedPayload);
       
       if (submitPipelineResponse) {
         // Submit the actual payload to the generator pipeline
-        await submitPipelineResponse(JSON.stringify(payload), payload);
+        await submitPipelineResponse(JSON.stringify(sanitizedPayload), sanitizedPayload);
       }
       
       setStageRunnerState('complete');
