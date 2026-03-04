@@ -150,6 +150,7 @@ function loadSchemaForGenerator(generatorType: string): StageRegistryEntry | nul
     // Inject generic workflow fields that are used during generation but stripped before final save
     properties['keywords'] = { type: 'array', items: { type: 'string' } };
     properties['retrieval_hints'] = { type: 'object' };
+    properties['_meta'] = { type: 'object' };
     schema.properties = properties; // Ensure they are on the actual schema object
 
     const allowedPaths = Object.keys(properties);
