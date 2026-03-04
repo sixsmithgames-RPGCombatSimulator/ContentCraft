@@ -4,7 +4,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "destination": "/api"
+    },
+    {
+      "source": "/((?!api|assets|favicon.ico|robots.txt|manifest.webmanifest).*)",
+      "destination": "/index.html"
     }
   ],
   "env": {
