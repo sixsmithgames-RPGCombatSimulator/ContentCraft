@@ -496,6 +496,9 @@ export default function AiAssistantPanel() {
 
     if (allowedKeys.length > 0) {
       header.push(`Allowed fields: ${allowedKeys.join(', ')}. You may also include _meta.`);
+      if (stageKey === 'planner' && !allowedKeys.includes('character_profile')) {
+        header.push('Do NOT include character_profile. That field is forbidden for planner and will be rejected.');
+      }
     } else {
       header.push('Only include fields relevant to this stage; _meta is allowed.');
     }
