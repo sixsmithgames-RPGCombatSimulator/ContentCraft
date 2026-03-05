@@ -325,33 +325,6 @@
       "items": { "type": "string" },
       "description": "Conditions immune to"
     },
-    "buffs_debuffs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["name", "description"],
-        "properties": {
-          "name": { "type": "string" },
-          "description": { "type": "string" }
-        }
-      },
-      "description": "Temporary or permanent modifiers affecting the NPC (e.g., magical buffs, curses)"
-    },
-    "additional_traits": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["name", "description"],
-        "properties": {
-          "name": { "type": "string" },
-          "description": { "type": "string" },
-          "uses": { "type": "string" },
-          "recharge": { "type": "string" },
-          "notes": { "type": "string" }
-        }
-      },
-      "description": "Additional traits not listed elsewhere"
-    },
     "abilities": {
       "type": "array",
       "items": {
@@ -376,12 +349,26 @@
         "properties": {
           "name": { "type": "string" },
           "description": { "type": "string" },
-          "source": { "type": "string", "description": "Class providing the style (e.g., 'Fighter')" }
+          "source": { "type": "string", "description": "Class or origin of the fighting style (e.g., 'Fighter', 'Paladin')" }
         }
       },
-      "description": "Chosen fighting styles (e.g., Dueling, Great Weapon Fighting)"
+      "description": "Class fighting styles or similar combat stances"
     },
-        },
+    "additional_traits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Additional traits not listed elsewhere"
+    },
     "vampire_traits": {
       "type": "object",
       "description": "Vampire-specific mechanics (if NPC has vampire template)",

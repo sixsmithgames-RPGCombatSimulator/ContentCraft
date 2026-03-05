@@ -564,12 +564,9 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       }
 
       const payload = extraction.patch[body.stageId] as Record<string, unknown>;
-      // Collect the keys of the payload for later processing (coercion and stripping).
       const payloadKeys = Object.keys(payload || {});
-      // Attempt to coerce any stringified JSON values into proper objects/arrays.
-      // This handles cases where the LLM returns a field as a JSON string (e.g., "{\"traits\":[]}")
-      // rather than the expected object/array. We only replace the value when parsing succeeds
-      // and yields a non‑primitive (object or array). Otherwise we leave the original value.
+
+      // Coerce stringified JSON fields into objects/arrays when possible.
       for (const key of payloadKeys) {
         const value = (payload as Record<string, unknown>)[key];
         if (typeof value === 'string') {
@@ -579,96 +576,77 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
               (payload as Record<string, unknown>)[key] = parsed;
             }
           } catch (_) {
-            // Not valid JSON – keep the original string value.
+            // leave as-is
           }
         }
       }
 
-      // NOTE: `payload` is typed as `Record<string, unknown>`; direct property access (`payload.personality`) is not allowed by TypeScript.
-      // We therefore use bracket notation with a cast to `any` to safely coerce and delete the field when needed.
-      // This resolves the lint error "Property 'personality' does not exist on type 'never'".
-      // Coerce personality field if it's a string (LLM may output as JSON string)
+      // Coerce personality if stringified JSON; drop if invalid.
       if (typeof (payload as any)['personality'] === 'string') {
         try {
           const parsed = JSON.parse((payload as any)['personality']);
           if (typeof parsed === 'object' && parsed !== null) {
             (payload as any)['personality'] = parsed;
           } else {
-            console.warn('[AI][Gemini] personality field is not an object after parsing, removing');
             delete (payload as any)['personality'];
           }
         } catch (e) {
-          console.warn('[AI][Gemini] Failed to parse personality string, removing field');
           delete (payload as any)['personality'];
         }
       }
+
+      // Strip disallowed top-level fields for this stage.
       for (const key of payloadKeys) {
         if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
           console.warn(`[AI][Gemini] Stripping disallowed field '${key}' from stage '${body.stageId}'`);
           delete payload[key];
-
-    // NOTE: `payload` is typed as `Record<string, unknown>`; direct property access (`payload.personality`) is not allowed by TypeScript.
-    // We therefore use bracket notation with a cast to `any` to safely coerce and delete the field when needed.
-    // This resolves the lint error "Property 'personality' does not exist on type 'never'".
-    // Coerce personality field if it's a string (LLM may output as JSON string)
-    if (typeof (payload as any)['personality'] === 'string') {
-      try {
-        const parsed = JSON.parse((payload as any)['personality']);
-        if (typeof parsed === 'object' && parsed !== null) {
-          (payload as any)['personality'] = parsed;
-        } else {
-          console.warn('[AI][Gemini] personality field is not an object after parsing, removing');
-          delete (payload as any)['personality'];
         }
-      } catch (e) {
-        console.warn('[AI][Gemini] Failed to parse personality string, removing field');
-        delete (payload as any)['personality'];
       }
-    }
 
-    const isValid = validate(payload);
-    if (!isValid) {
-      // If validation fails (including missing required fields), return error to force AI to provide required data.
-      const msgs = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
-      return res.status(422).json({
-        ok: false,
+      const isValid = validate(payload);
+      if (!isValid) {
+        const msgs = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
+        return res.status(422).json({
+          ok: false,
+          requestId,
+          stageRunId: body.stageRunId,
+          error: { type: 'INVALID_RESPONSE', message: msgs || 'Schema validation failed.', retryable: false },
+        } satisfies GeminiFailureResponse);
+      }
+
+      const successPayload: GeminiSuccessResponse = {
+        ok: true,
+        provider: 'gemini',
+        model: GEMINI_MODEL,
         requestId,
         stageRunId: body.stageRunId,
-        error: { type: 'INVALID_RESPONSE', message: msgs || 'Schema validation failed.', retryable: false },
-      } satisfies GeminiFailureResponse);
+        rawText,
+        jsonPatch: extraction.patch,
+        parse: {
+          foundJsonBlock: extraction.foundJsonBlock,
+          parseWarnings: extraction.warnings,
+        },
+        usage: {
+          inputTokens: Number(data.usageMetadata?.promptTokenCount ?? 0),
+          outputTokens: Number(data.usageMetadata?.candidatesTokenCount ?? 0),
+        },
+        safety: {
+          patchSizeBytes: extraction.patch ? JSON.stringify(extraction.patch).length : 0,
+          appliedPathsCandidateCount: extraction.patch ? Object.keys(extraction.patch).length : 0,
+        },
+      } satisfies GeminiSuccessResponse;
+
+      setCachedResponse(idempotencyKey, 200, successPayload);
+      return res.json(successPayload);
     }
 
-    for (const key of payloadKeys) {
-      if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
-        console.warn(`[AI][Gemini] Stripping disallowed field '${key}' from stage '${body.stageId}'`);
-        delete payload[key];
-      }
-    }
-
-    const successPayload: GeminiSuccessResponse = {
-      ok: true,
-      provider: 'gemini',
-      model: GEMINI_MODEL,
+    // If we get here, no patch was extracted for the requested stage.
+    return res.status(502).json({
+      ok: false,
       requestId,
       stageRunId: body.stageRunId,
-      rawText,
-      jsonPatch: extraction.patch,
-      parse: {
-        foundJsonBlock: extraction.foundJsonBlock,
-        parseWarnings: extraction.warnings,
-      },
-      usage: {
-        inputTokens: Number(data.usageMetadata?.promptTokenCount ?? 0),
-        outputTokens: Number(data.usageMetadata?.candidatesTokenCount ?? 0),
-      },
-      safety: {
-        patchSizeBytes: extraction.patch ? JSON.stringify(extraction.patch).length : 0,
-        appliedPathsCandidateCount: extraction.patch ? Object.keys(extraction.patch).length : 0,
-      },
-    } satisfies GeminiSuccessResponse;
-
-    setCachedResponse(idempotencyKey, 200, successPayload);
-    return res.json(successPayload);
+      error: { type: 'INVALID_RESPONSE', message: 'No JSON patch found in model response.', retryable: true },
+    } satisfies GeminiFailureResponse);
   } finally {
     clearTimeout(timeout);
   }
