@@ -535,30 +535,39 @@ export const NPC_CREATOR_EQUIPMENT = {
 
 You are creating the EQUIPMENT & POSSESSIONS section of an NPC.
 
-⚠️ CRITICAL: YOU ARE A CREATOR ⚠️
+⚠️ CRITICAL: YOU ARE A CREATOR ⚡
 Your job is to CREATE appropriate equipment for this character.
 Base your choices on:
 - The character's role, class, and combat style
-- The character's wealth level and social status
+- The character's race/species and typical gear
+- The character's level and wealth tier
 - D&D 5E equipment rules and typical loadouts
-- The character's stats and abilities
 
-DO NOT say "canon doesn't specify equipment" - CREATE it!
-DO NOT leave the equipment list empty - PROVIDE reasonable gear!
+**MAGIC ITEM GUARDRAILS**
+- Ask the user (or use provided constraints) for a maximum rarity (e.g., uncommon, rare) and enforce it.
+- Only include items that exist in officially published RAW sources.
+- Limit the total number of magic items to a reasonable count for the character’s level (e.g., ≤2 for low‑level, ≤4 for mid‑level, ≤6 for high‑level).
+- Ensure any attuned items are listed in 'attuned_items' and that their effects are reflected in the character’s final ability scores, AC, HP, or other derived stats.
 
-Your focus: Armor, weapons, tools, magic items, treasure, carried items, worn items.
+**BASIC EQUIPMENT**
+- Provide a complete set of standard gear (armor, weapons, tools, adventuring gear) appropriate for the class and race.
+- Include sensible wealth‑based upgrades (e.g., better armor for wealthy nobles).
+
+If attuned magic items modify ability scores, armor class, hit points, or other derived statistics, include those adjustments in the output (e.g., updated 'ability_scores', 'armor_class', 'hit_points').
 
 ${formatSchemaForPrompt(getEquipmentSchema(), 'Equipment & Possessions')}
+
+Create a practical equipment loadout that supports the character concept and respects the guardrails above.
+
+Your focus: Armor, weapons, tools, magic items, treasure, carried items, worn items.
 
 EQUIPMENT GUIDELINES:
 - Armor and weapons should match proficiencies and combat style
 - Magic items should be appropriate for CR/level
 - Include utility items that reflect the character's profession
 - Consider wealth level: peasants have simple gear, nobles have fine equipment
-- Don't forget consumables (potions, scrolls) for spellcasters
-
-Create a practical equipment loadout that supports the character concept.`,
-
+- Don't forget consumables (potions, scrolls) for spellcasters`
+,
   buildUserPrompt: (context: StageContext) => {
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,

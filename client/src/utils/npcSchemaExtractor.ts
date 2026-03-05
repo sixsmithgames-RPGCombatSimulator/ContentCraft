@@ -15,7 +15,7 @@ type SchemaObject = Record<string, unknown>;
 /**
  * Extract a subset of properties from the schema
  */
-function extractSchemaProperties(propertyKeys: string[]): SchemaObject {
+function extractSchemaProperties(propertyKeys: string[], requiredKeys?: string[]): SchemaObject {
   const fullProperties = (npcSchemaV1_1.properties || {}) as Record<string, unknown>;
   const extracted: Record<string, unknown> = {};
 
@@ -25,11 +25,15 @@ function extractSchemaProperties(propertyKeys: string[]): SchemaObject {
     }
   }
 
+  // Base required fields always needed for any NPC object
+  const baseRequired = ['name', 'schema_version'];
+  const required = requiredKeys && requiredKeys.length > 0 ? [...baseRequired, ...requiredKeys] : baseRequired;
+
   return {
     type: 'object',
     properties: extracted,
-    required: ['name', 'schema_version'], // Always require these
-  };
+    required,
+  } as const;
 }
 
 /**
@@ -100,6 +104,11 @@ export function getStatsSchema(): SchemaObject {
     'damage_immunities',
     'damage_vulnerabilities',
     'condition_immunities',
+  ], [
+    'ability_scores',
+    'armor_class',
+    'hit_points',
+    'proficiency_bonus',
   ]);
 }
 
@@ -109,6 +118,13 @@ export function getStatsSchema(): SchemaObject {
  */
 export function getCharacterBuildSchema(): SchemaObject {
   return extractSchemaProperties([
+    'class_features',
+    'subclass_features',
+    'racial_features',
+    'feats',
+    'asi_choices',
+    'background_feature',
+  ], [
     'class_features',
     'subclass_features',
     'racial_features',
@@ -130,6 +146,11 @@ export function getCombatSchema(): SchemaObject {
     'reactions',
     'tactics',
     'multiattack',
+  ], [
+    'abilities',
+    'actions',
+    'bonus_actions',
+    'reactions',
   ]);
 }
 
@@ -144,6 +165,10 @@ export function getSpellcastingSchema(): SchemaObject {
     'prepared_spells',
     'spell_slots',
     'innate_spellcasting',
+  ], [
+    'spellcasting',
+    'cantrips',
+    'spell_slots',
   ]);
 }
 
@@ -153,6 +178,11 @@ export function getSpellcastingSchema(): SchemaObject {
  */
 export function getLegendarySchema(): SchemaObject {
   return extractSchemaProperties([
+    'legendary_actions',
+    'mythic_actions',
+    'lair_actions',
+    'regional_effects',
+  ], [
     'legendary_actions',
     'mythic_actions',
     'lair_actions',
@@ -175,6 +205,12 @@ export function getRelationshipsSchema(): SchemaObject {
     'factions',
     'minions',
     'conflicts',
+  ], [
+    'allies_friends',
+    'foes',
+    'rivals',
+    'factions',
+    'minions',
   ]);
 }
 
@@ -190,6 +226,17 @@ export function getEquipmentSchema(): SchemaObject {
     'signature_items',
     'wealth',
     'resources',
+    // Optional adjustments that equipment (especially attuned items) may affect
+    'ability_scores',
+    'armor_class',
+    'hit_points',
+    'proficiency_bonus',
+    'speed',
+    'saving_throws',
+    'skill_proficiencies',
+  ], [
+    'equipment',
+    'attuned_items',
   ]);
 }
 
