@@ -284,7 +284,8 @@ function extractJsonPatch(rawText: string): { ok: true; patch?: Record<string, u
     const forbiddenKeys = ['projectId', 'stageId', 'stageRunId'];
     for (const key of forbiddenKeys) {
       if (Object.prototype.hasOwnProperty.call(parsed, key)) {
-        return { ok: false, message: `Forbidden field in patch: ${key}` };
+        console.warn(`[AI][Gemini] Stripping forbidden root field '${key}' from patch`);
+        delete (parsed as Record<string, unknown>)[key];
       }
     }
 
@@ -541,6 +542,16 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
     }
 
     if (extraction.patch) {
+      // Pre-validation cleanup: ensure only the requested stageId is present at the top level
+      if (extraction.patch[body.stageId]) {
+        for (const key of Object.keys(extraction.patch)) {
+          if (key !== body.stageId) {
+            console.warn(`[AI][Gemini] Stripping top-level disallowed field '${key}' (expected only '${body.stageId}')`);
+            delete extraction.patch[key];
+          }
+        }
+      }
+
       const scopeResult = validateScope(body.stageId, extraction.patch);
       if (!scopeResult.ok) {
         const failure = scopeResult as { ok: false; message: string };
@@ -554,14 +565,13 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
 
       const payload = extraction.patch[body.stageId] as Record<string, unknown>;
       const payloadKeys = Object.keys(payload || {});
-      const invalidKey = payloadKeys.find((k) => k !== '_meta' && !registry.allowedPaths.includes(k));
-      if (invalidKey) {
-        return res.status(422).json({
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: { type: 'FORBIDDEN_PATH', message: `Field ${invalidKey} is not allowed for this stage/type.`, retryable: false },
-        } satisfies GeminiFailureResponse);
+
+      // Filter out forbidden keys instead of hard failing to be resilient to LLM hallucinations
+      for (const key of payloadKeys) {
+        if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
+          console.warn(`[AI][Gemini] Stripping disallowed field '${key}' from stage '${body.stageId}'`);
+          delete payload[key];
+        }
       }
 
       const isValid = validate(payload);
