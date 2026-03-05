@@ -68,6 +68,14 @@ This is THE PRIMARY SOURCE OF TRUTH about what to create.
 Canon facts are PROVIDED FOR REFERENCE to inform design.
 DO NOT substitute or confuse the requested character with other characters mentioned in canon.
 
+⚠️ COMPLETENESS REQUIREMENT - NO LAZY RESPONSES ⚠️
+You MUST provide COMPLETE, THOROUGH data for ALL required fields.
+DO NOT provide minimal or abbreviated responses.
+DO NOT omit required fields.
+DO NOT use placeholder values or empty arrays when real data is expected.
+If a field is required by the schema, you MUST populate it with complete, accurate data.
+Incomplete responses will be REJECTED and you will be asked to retry.
+
 CRITICAL RULES FOR ACCURACY:
 1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any
 2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts

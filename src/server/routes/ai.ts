@@ -605,12 +605,118 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
 
       const isValid = validate(payload);
       if (!isValid) {
-        const msgs = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
+        const validationErrors = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
+        const requiredFields = (validate.schema as any)?.required || [];
+        
+        // Build correction prompt with schema errors and required fields
+        const correctionPrompt = `Your previous response failed schema validation with the following errors:
+${validationErrors}
+
+Required fields for this stage: ${JSON.stringify(requiredFields)}
+
+Please provide a complete response that includes ALL required fields with the correct data types. Do not omit any required fields.
+
+Original request:
+${body.prompt}`;
+
+        // Retry with correction prompt (max 2 validation retries)
+        for (let validationAttempt = 0; validationAttempt < 2; validationAttempt += 1) {
+          console.warn(`[AI][Gemini] Validation retry ${validationAttempt + 1}/2 for stage ${body.stageId}`);
+          
+          const retryResponse = (await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+            {
+              method: 'POST',
+              signal: controller.signal,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: correctionPrompt }] }],
+                generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+              }),
+            }
+          )) as unknown as GeminiHttpResponse;
+
+          if (!retryResponse || !retryResponse.ok) continue;
+
+          const retryData = (await retryResponse.json()) as GeminiApiResponse;
+          const retryRawText = retryData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+          if (!retryRawText) continue;
+
+          const retryExtraction = extractJsonPatch(retryRawText);
+          if (!retryExtraction.ok || !retryExtraction.patch || !retryExtraction.patch[body.stageId]) continue;
+
+          const retryPayload = retryExtraction.patch[body.stageId] as Record<string, unknown>;
+          const retryPayloadKeys = Object.keys(retryPayload || {});
+
+          // Coerce stringified fields
+          for (const key of retryPayloadKeys) {
+            const value = (retryPayload as Record<string, unknown>)[key];
+            if (typeof value === 'string') {
+              try {
+                const parsed = JSON.parse(value);
+                if (typeof parsed === 'object' && parsed !== null) {
+                  (retryPayload as Record<string, unknown>)[key] = parsed;
+                }
+              } catch (_) {}
+            }
+          }
+
+          // Coerce personality
+          if (typeof (retryPayload as any)['personality'] === 'string') {
+            try {
+              const parsed = JSON.parse((retryPayload as any)['personality']);
+              if (typeof parsed === 'object' && parsed !== null) {
+                (retryPayload as any)['personality'] = parsed;
+              } else {
+                delete (retryPayload as any)['personality'];
+              }
+            } catch (_) {
+              delete (retryPayload as any)['personality'];
+            }
+          }
+
+          // Strip disallowed fields
+          for (const key of retryPayloadKeys) {
+            if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
+              delete retryPayload[key];
+            }
+          }
+
+          const retryValid = validate(retryPayload);
+          if (retryValid) {
+            // Success! Use the corrected payload
+            const successPayload: GeminiSuccessResponse = {
+              ok: true,
+              provider: 'gemini',
+              model: GEMINI_MODEL,
+              requestId,
+              stageRunId: body.stageRunId,
+              rawText: retryRawText,
+              jsonPatch: retryExtraction.patch,
+              parse: {
+                foundJsonBlock: retryExtraction.foundJsonBlock,
+                parseWarnings: retryExtraction.warnings,
+              },
+              usage: {
+                inputTokens: Number(retryData.usageMetadata?.promptTokenCount ?? 0),
+                outputTokens: Number(retryData.usageMetadata?.candidatesTokenCount ?? 0),
+              },
+              safety: {
+                patchSizeBytes: JSON.stringify(retryExtraction.patch).length,
+                appliedPathsCandidateCount: Object.keys(retryExtraction.patch).length,
+              },
+            } satisfies GeminiSuccessResponse;
+            setCachedResponse(idempotencyKey, 200, successPayload);
+            return res.json(successPayload);
+          }
+        }
+
+        // All retries exhausted, return 422
         return res.status(422).json({
           ok: false,
           requestId,
           stageRunId: body.stageRunId,
-          error: { type: 'INVALID_RESPONSE', message: msgs || 'Schema validation failed.', retryable: false },
+          error: { type: 'INVALID_RESPONSE', message: validationErrors || 'Schema validation failed after retries.', retryable: false },
         } satisfies GeminiFailureResponse);
       }
 
