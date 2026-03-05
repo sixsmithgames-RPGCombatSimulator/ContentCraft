@@ -564,13 +564,23 @@ ${contextBlocks.join('\n')}`;
   );
 
   const sanitizeStagePayload = useCallback(
-    (stageKey: string, payload: Record<string, unknown>) => {
+    (stageKey: string, payload: Record<string, unknown>, allowedKeys?: string[] | null) => {
       const sanitized = { ...payload };
 
       // Planner payload must not include character_profile (server rejects it)
       if (stageKey === 'planner' && 'character_profile' in sanitized) {
         delete (sanitized as Record<string, unknown>).character_profile;
         console.warn('[AI Runner][Sanitize] Removed disallowed character_profile from planner payload');
+      }
+
+      // Strip any keys not allowed by schema (except _meta)
+      if (Array.isArray(allowedKeys) && allowedKeys.length > 0) {
+        Object.keys(sanitized).forEach((key) => {
+          if (key !== '_meta' && !allowedKeys.includes(key)) {
+            delete (sanitized as Record<string, unknown>)[key];
+            console.warn('[AI Runner][Sanitize] Removed disallowed field from payload', { stageKey, key });
+          }
+        });
       }
 
       return sanitized;
@@ -671,7 +681,10 @@ ${contextBlocks.join('\n')}`;
       }
 
       const { payload } = validated as { ok: true; payload: Record<string, unknown> }; // narrowed to ok: true
-      const sanitizedPayload = sanitizeStagePayload(stageKey, payload);
+      const allowedKeys = workflowContext?.schema && isPlainObject(workflowContext.schema)
+        ? Object.keys((workflowContext.schema as { properties?: Record<string, unknown> }).properties || {})
+        : null;
+      const sanitizedPayload = sanitizeStagePayload(stageKey, payload, allowedKeys);
       setStageRunnerState('applying');
       setExtractedPayload(sanitizedPayload);
       applyStagePatch(stageKey, sanitizedPayload);
