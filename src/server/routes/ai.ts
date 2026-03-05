@@ -564,9 +564,44 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       }
 
       const payload = extraction.patch[body.stageId] as Record<string, unknown>;
+      // Collect the keys of the payload for later processing (coercion and stripping).
       const payloadKeys = Object.keys(payload || {});
+      // Attempt to coerce any stringified JSON values into proper objects/arrays.
+      // This handles cases where the LLM returns a field as a JSON string (e.g., "{\"traits\":[]}")
+      // rather than the expected object/array. We only replace the value when parsing succeeds
+      // and yields a non‑primitive (object or array). Otherwise we leave the original value.
+      for (const key of payloadKeys) {
+        const value = (payload as Record<string, unknown>)[key];
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            if (typeof parsed === 'object' && parsed !== null) {
+              (payload as Record<string, unknown>)[key] = parsed;
+            }
+          } catch (_) {
+            // Not valid JSON – keep the original string value.
+          }
+        }
+      }
 
-      // Filter out forbidden keys instead of hard failing to be resilient to LLM hallucinations
+      // NOTE: `payload` is typed as `Record<string, unknown>`; direct property access (`payload.personality`) is not allowed by TypeScript.
+      // We therefore use bracket notation with a cast to `any` to safely coerce and delete the field when needed.
+      // This resolves the lint error "Property 'personality' does not exist on type 'never'".
+      // Coerce personality field if it's a string (LLM may output as JSON string)
+      if (typeof (payload as any)['personality'] === 'string') {
+        try {
+          const parsed = JSON.parse((payload as any)['personality']);
+          if (typeof parsed === 'object' && parsed !== null) {
+            (payload as any)['personality'] = parsed;
+          } else {
+            console.warn('[AI][Gemini] personality field is not an object after parsing, removing');
+            delete (payload as any)['personality'];
+          }
+        } catch (e) {
+          console.warn('[AI][Gemini] Failed to parse personality string, removing field');
+          delete (payload as any)['personality'];
+        }
+      }
       for (const key of payloadKeys) {
         if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
           console.warn(`[AI][Gemini] Stripping disallowed field '${key}' from stage '${body.stageId}'`);
@@ -576,17 +611,55 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
 
       const isValid = validate(payload);
       if (!isValid) {
-        const messages = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message ?? ''}`.trim());
-        return res.status(422).json({
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: {
-            type: 'INVALID_RESPONSE',
-            message: messages.join('; ') || 'Schema validation failed.',
-            retryable: false,
-          },
-        } satisfies GeminiFailureResponse);
+        // If validation errors involve the 'personality' field, drop it entirely and retry
+        const errors = validate.errors || [];
+        const hasPersonalityError = errors.some((e) => e.instancePath.startsWith('/personality'));
+        if (hasPersonalityError && 'personality' in payload) {
+          console.warn('[AI][Gemini] Removing invalid personality field due to schema errors');
+          delete (payload as any)['personality'];
+          // Re-validate after removal
+          const reValid = validate(payload);
+          if (reValid) {
+            // continue processing
+          } else {
+            // fall through to further stripping logic
+          }
+        }
+        // Attempt to strip fields that caused validation errors (type mismatches, etc.)
+        const keysToRemove = new Set<string>();
+        for (const err of errors) {
+          const path = err.instancePath;
+          if (path.startsWith('/')) {
+            const key = path.slice(1).split('/')[0];
+            if (key && key !== '_meta') {
+              keysToRemove.add(key);
+            }
+          }
+        }
+        if (keysToRemove.size > 0) {
+          console.warn('[AI][Gemini] Stripping invalid fields after schema validation:', Array.from(keysToRemove));
+          for (const key of keysToRemove) {
+            delete payload[key];
+          }
+          const reValid2 = validate(payload);
+          if (!reValid2) {
+            const msgs = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
+            return res.status(422).json({
+              ok: false,
+              requestId,
+              stageRunId: body.stageRunId,
+              error: { type: 'INVALID_RESPONSE', message: msgs || 'Schema validation failed after stripping.', retryable: false },
+            } satisfies GeminiFailureResponse);
+          }
+        } else {
+          const msgs = errors.map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
+          return res.status(422).json({
+            ok: false,
+            requestId,
+            stageRunId: body.stageRunId,
+            error: { type: 'INVALID_RESPONSE', message: msgs || 'Schema validation failed.', retryable: false },
+          } satisfies GeminiFailureResponse);
+        }
       }
     }
 
