@@ -581,7 +581,7 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         }
       }
 
-      // Coerce personality if stringified JSON; drop if invalid.
+      // Coerce personality if stringified JSON; drop only if invalid
       if (typeof (payload as any)['personality'] === 'string') {
         try {
           const parsed = JSON.parse((payload as any)['personality']);
@@ -590,7 +590,7 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
           } else {
             delete (payload as any)['personality'];
           }
-        } catch (e) {
+        } catch (_) {
           delete (payload as any)['personality'];
         }
       }
