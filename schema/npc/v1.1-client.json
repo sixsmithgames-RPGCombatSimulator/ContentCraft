@@ -325,21 +325,17 @@
       "items": { "type": "string" },
       "description": "Conditions immune to"
     },
-    "abilities": {
+    "buffs_debuffs": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["name", "description"],
         "properties": {
           "name": { "type": "string" },
-          "description": { "type": "string" },
-          "uses": { "type": "string" },
-          "recharge": { "type": "string" },
-          "notes": { "type": "string" },
-          "source": { "type": "string", "description": "Where this ability comes from (e.g., 'Vampire', 'Artificer')" }
+          "description": { "type": "string" }
         }
       },
-      "description": "Special abilities and traits (also accepts 'traits' as alias)"
+      "description": "Temporary or permanent modifiers affecting the NPC (e.g., magical buffs, curses)"
     },
     "additional_traits": {
       "type": "array",
@@ -356,6 +352,36 @@
       },
       "description": "Additional traits not listed elsewhere"
     },
+    "abilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "uses": { "type": "string" },
+          "recharge": { "type": "string" },
+          "notes": { "type": "string" },
+          "source": { "type": "string", "description": "Where this ability comes from (e.g., 'Vampire', 'Artificer')" }
+        }
+      },
+      "description": "Special abilities and traits (also accepts 'traits' as alias)"
+    },
+    "fighting_styles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "source": { "type": "string", "description": "Class providing the style (e.g., 'Fighter')" }
+        }
+      },
+      "description": "Chosen fighting styles (e.g., Dueling, Great Weapon Fighting)"
+    },
+        },
     "vampire_traits": {
       "type": "object",
       "description": "Vampire-specific mechanics (if NPC has vampire template)",

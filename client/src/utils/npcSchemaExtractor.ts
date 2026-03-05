@@ -124,6 +124,11 @@ export function getCharacterBuildSchema(): SchemaObject {
     'feats',
     'asi_choices',
     'background_feature',
+    'abilities',
+    'ability_scores',
+    'skill_proficiencies',
+    'saving_throws',
+    'fighting_styles',
   ], [
     'class_features',
     'subclass_features',
@@ -131,6 +136,11 @@ export function getCharacterBuildSchema(): SchemaObject {
     'feats',
     'asi_choices',
     'background_feature',
+    'abilities',
+    'ability_scores',
+    'skill_proficiencies',
+    'saving_throws',
+    'fighting_styles',
   ]);
 }
 

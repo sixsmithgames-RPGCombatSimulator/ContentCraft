@@ -281,32 +281,49 @@ You are creating the CHARACTER BUILD section of an NPC.
 
 ⚠️ CRITICAL: YOU ARE A CREATOR ⚠️
 Your job is to CREATE the COMPLETE list of character features based on class levels, race, and background.
-This is one of the most important sections — it defines what the character CAN DO.
 
-Your focus:
-- ALL base class features for EVERY class level (e.g., Wizard: Arcane Recovery at 1, Spell Mastery at 18, Signature Spells at 20)
-- ALL subclass/archetype features (e.g., Divination Wizard: Portent at 2, Expert Divination at 6, The Third Eye at 10, Greater Portent at 14)
-- ALL racial features/traits (e.g., Human: Resourceful, Skillful, Versatile; Elf: Darkvision, Fey Ancestry, Trance)
-- ALL feats (from ASI choices, background origin feat, racial bonus feat)
-- ASI choices at each ASI level (what was taken: +2 to one ability or a feat)
-- Background feature and origin feat (2024 rules)
+Your output MUST include the following categories (all are required):
+- **class_features** – all base class features for every class level.
+- **subclass_features** – all subclass/archetype features.
+- **racial_features** – species/heritage traits.
+- **feats** – any feats taken (including ASI‑derived feats).
+- **asi_choices** – ability‑score‑improvement selections.
+- **background_feature** – the background’s special feature.
+- **abilities** – magical item abilities or other special powers (e.g., item‑granted effects, buffs, debuffs).
+- **buffs_debuffs** – any temporary or permanent modifiers affecting the NPC (list as objects with name and description).
+- **ability_scores** – the six core scores (STR, DEX, CON, INT, WIS, CHA).
+- **skill_proficiencies** – skill bonuses with values.
+- **saving_throws** – saving throw bonuses with values.
+- **fighting_styles** – chosen fighting styles (e.g., Dueling, Great Weapon Fighting).
 
 ${formatSchemaForPrompt(getCharacterBuildSchema(), 'Character Build')}
 
+Create mechanically sound character build data that supports the concept and respects D&D 5E rules.
+
 CRITICAL D&D 5E CHARACTER BUILD RULES:
-- Wizards get ASIs at levels 4, 8, 12, 16, 19
-- Fighters get ASIs at levels 4, 6, 8, 12, 14, 16, 19
-- Rogues get ASIs at levels 4, 8, 10, 12, 16, 19
-- All other classes get ASIs at levels 4, 8, 12, 16, 19
-- At each ASI, the character can choose +2 to one ability score, +1 to two scores, OR take a feat
+- Wizards get ASIs at levels 4, 8, 12, 16, 19.
+- Fighters get ASIs at levels 4, 6, 8, 12, 14, 16, 19.
+- Rogues get ASIs at levels 4, 8, 10, 12, 16, 19.
+- All other classes get ASIs at levels 4, 8, 12, 16, 19.
+- At each ASI, the character can choose +2 to one ability score, +1 to two scores, OR take a feat.
 - Background grants an Origin Feat (2024 rules) such as Alert, Magic Initiate, Skilled, etc.
 
 COMPLETENESS IS CRITICAL:
-- List EVERY class feature from level 1 through the character's level
-- List EVERY subclass feature from the subclass selection level through the character's level
-- Do NOT skip or summarize features — include FULL mechanical descriptions
-- For a Level 20 Wizard (Divination), expect ~10+ class features and ~4+ subclass features
-- For each ASI level, specify whether an ASI or feat was taken`,
+- List EVERY class feature from level 1 through the character’s level.
+- List EVERY subclass feature from the subclass selection level through the character’s level.
+- Do NOT skip or summarize features — include FULL mechanical descriptions.
+- For a Level 20 Wizard (Divination), expect ~10+ class features and ~4+ subclass features.
+- For each ASI level, specify whether an ASI or feat was taken.
+
+${formatSchemaForPrompt(getCharacterBuildSchema(), 'Character Build')}
+
+Build a rich, memorable character build that aligns with the basic information from the previous stage.
+
+VALIDATION CHECKLIST:
+✓ All 8 fields are present in your JSON output
+✓ Each field has its correct label (class_features, subclass_features, racial_features, feats, asi_choices, background_feature, abilities, buffs_debuffs)
+✓ Each field contains relevant, appropriate content
+✓ You did NOT skip any fields or combine them into "abilities"`,
 
   buildUserPrompt: (context: StageContext) => {
     const userPrompt: Record<string, unknown> = {
