@@ -270,6 +270,32 @@ function normalizeArrays(container: Record<string, unknown>, fields: string[]): 
   }
 }
 
+/**
+ * Normalize arrays that must contain objects with name/value to satisfy schema requirements.
+ */
+function normalizeNameValueArray(container: Record<string, unknown>, field: string, defaultValue = '+0'): void {
+  const raw = (container as Record<string, unknown>)[field];
+  const items = Array.isArray(raw) ? raw : [];
+  const normalized = items
+    .map((entry) => {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+        const obj = entry as Record<string, unknown>;
+        const name = typeof obj.name === 'string' ? obj.name : 'Unknown';
+        const value = typeof obj.value === 'string' ? obj.value : defaultValue;
+        const result: Record<string, unknown> = { name, value };
+        if (typeof obj.notes === 'string') result.notes = obj.notes;
+        return result;
+      }
+      if (typeof entry === 'string' || typeof entry === 'number') {
+        return { name: String(entry), value: defaultValue } as Record<string, unknown>;
+      }
+      return null;
+    })
+    .filter((v): v is Record<string, unknown> => v !== null);
+
+  (container as Record<string, unknown>)[field] = normalized;
+}
+
 function getValidatorForGenerator(generatorType: string, entry: StageRegistryEntry): ValidateFunction | null {
   if (validatorCache[generatorType]) return validatorCache[generatorType] || null;
 
@@ -771,6 +797,8 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         'factions',
         'minions',
       ]);
+      normalizeNameValueArray(payload, 'saving_throws');
+      normalizeNameValueArray(payload, 'skill_proficiencies');
 
       // Strip disallowed top-level fields for this stage.
       for (const key of payloadKeys) {
@@ -874,6 +902,8 @@ ${JSON.stringify(payload)}`;
             'factions',
             'minions',
           ]);
+          normalizeNameValueArray(retryPayload, 'saving_throws');
+          normalizeNameValueArray(retryPayload, 'skill_proficiencies');
 
           // Strip disallowed fields
           for (const key of retryPayloadKeys) {
