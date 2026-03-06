@@ -193,6 +193,52 @@ function normalizePersonality(container: Record<string, unknown>): void {
   (container as any).personality = personality;
 }
 
+/**
+ * Normalize stats payload to ensure required shapes exist.
+ * Adds defaults for ability_scores, speed, and saving_throws when missing.
+ */
+function normalizeStats(container: Record<string, unknown>): void {
+  const ensureAbilityScores = () => {
+    const defaultScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+    const current = container.ability_scores as Record<string, unknown> | undefined;
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      container.ability_scores = { ...defaultScores };
+      return;
+    }
+    const abilityScores = { ...defaultScores, ...current } as Record<string, unknown>;
+    for (const key of Object.keys(defaultScores)) {
+      const value = abilityScores[key];
+      if (typeof value !== 'number') {
+        abilityScores[key] = defaultScores[key];
+      }
+    }
+    container.ability_scores = abilityScores;
+  };
+
+  const ensureSpeed = () => {
+    const defaultSpeed = { walk: 30 };
+    const current = container.speed as Record<string, unknown> | undefined;
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      container.speed = { ...defaultSpeed };
+      return;
+    }
+    const speed = { ...defaultSpeed, ...current } as Record<string, unknown>;
+    if (typeof speed.walk !== 'number') speed.walk = defaultSpeed.walk;
+    container.speed = speed;
+  };
+
+  const ensureSavingThrows = () => {
+    const current = container.saving_throws;
+    if (!Array.isArray(current)) {
+      container.saving_throws = [];
+    }
+  };
+
+  ensureAbilityScores();
+  ensureSpeed();
+  ensureSavingThrows();
+}
+
 function getValidatorForGenerator(generatorType: string, entry: StageRegistryEntry): ValidateFunction | null {
   if (validatorCache[generatorType]) return validatorCache[generatorType] || null;
 
