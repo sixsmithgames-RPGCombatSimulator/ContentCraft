@@ -223,14 +223,24 @@ function normalizeStats(container: Record<string, unknown>): void {
   };
 
   const ensureSpeed = () => {
-    const defaultSpeed = { walk: 30 };
+    const defaultSpeed = { walk: '30 ft.' };
     const current = container.speed as Record<string, unknown> | undefined;
     if (!current || typeof current !== 'object' || Array.isArray(current)) {
       container.speed = { ...defaultSpeed };
       return;
     }
-    const speed = { ...defaultSpeed, ...current } as Record<string, unknown>;
-    if (typeof speed.walk !== 'number') speed.walk = defaultSpeed.walk;
+    const speed: Record<string, unknown> = { ...defaultSpeed, ...current };
+    const speedKeys = ['walk', 'fly', 'swim', 'climb', 'burrow', 'hover'];
+    for (const key of speedKeys) {
+      const value = speed[key];
+      if (value === undefined) continue;
+      if (typeof value === 'number') {
+        speed[key] = `${value} ft.`;
+      } else if (typeof value !== 'string') {
+        delete speed[key];
+      }
+    }
+    if (typeof speed.walk !== 'string') speed.walk = defaultSpeed.walk;
     container.speed = speed;
   };
 
