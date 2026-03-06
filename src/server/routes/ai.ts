@@ -296,6 +296,38 @@ function normalizeNameValueArray(container: Record<string, unknown>, field: stri
   (container as Record<string, unknown>)[field] = normalized;
 }
 
+/**
+ * Ensure legendary_actions is an object with arrays inside; coerce strings/numbers to object with description.
+ */
+function normalizeLegendaryActions(container: Record<string, unknown>): void {
+  const current = (container as Record<string, unknown>).legendary_actions;
+  if (!current || typeof current !== 'object' || Array.isArray(current)) {
+    (container as Record<string, unknown>).legendary_actions = {
+      actions: [],
+      lair_actions: [],
+      regional_effects: [],
+    };
+    return;
+  }
+
+  const normalizeList = (value: unknown): Array<Record<string, unknown>> => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((entry) => {
+        if (entry && typeof entry === 'object' && !Array.isArray(entry)) return entry as Record<string, unknown>;
+        if (typeof entry === 'string' || typeof entry === 'number') return { name: String(entry), description: String(entry) };
+        return null;
+      })
+      .filter((v): v is Record<string, unknown> => v !== null);
+  };
+
+  const obj = current as Record<string, unknown>;
+  obj.actions = normalizeList(obj.actions);
+  obj.lair_actions = normalizeList(obj.lair_actions);
+  obj.regional_effects = normalizeList(obj.regional_effects);
+  (container as Record<string, unknown>).legendary_actions = obj;
+}
+
 function getValidatorForGenerator(generatorType: string, entry: StageRegistryEntry): ValidateFunction | null {
   if (validatorCache[generatorType]) return validatorCache[generatorType] || null;
 
@@ -799,6 +831,7 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       ]);
       normalizeNameValueArray(payload, 'saving_throws');
       normalizeNameValueArray(payload, 'skill_proficiencies');
+      normalizeLegendaryActions(payload);
 
       // Strip disallowed top-level fields for this stage.
       for (const key of payloadKeys) {
@@ -904,6 +937,7 @@ ${JSON.stringify(payload)}`;
           ]);
           normalizeNameValueArray(retryPayload, 'saving_throws');
           normalizeNameValueArray(retryPayload, 'skill_proficiencies');
+          normalizeLegendaryActions(retryPayload);
 
           // Strip disallowed fields
           for (const key of retryPayloadKeys) {
