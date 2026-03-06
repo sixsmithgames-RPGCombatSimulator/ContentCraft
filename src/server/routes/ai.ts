@@ -588,6 +588,34 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         } satisfies GeminiFailureResponse);
       }
 
+      // Planner stage produces a Brief (no equipment field). Skip NPC validation and return as-is.
+      if (body.stageId === 'planner') {
+        const successPayload: GeminiSuccessResponse = {
+          ok: true,
+          provider: 'gemini',
+          model: GEMINI_MODEL,
+          requestId,
+          stageRunId: body.stageRunId,
+          rawText,
+          jsonPatch: extraction.patch,
+          parse: {
+            foundJsonBlock: extraction.foundJsonBlock,
+            parseWarnings: extraction.warnings,
+          },
+          usage: {
+            inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
+            outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+          },
+          safety: {
+            patchSizeBytes: Buffer.byteLength(JSON.stringify(extraction.patch)),
+            appliedPathsCandidateCount: Object.keys(extraction.patch || {}).length,
+          },
+        } satisfies GeminiSuccessResponse;
+
+        setCachedResponse(idempotencyKey, 200, successPayload);
+        return res.status(200).json(successPayload);
+      }
+
       const payload = extraction.patch[body.stageId] as Record<string, unknown>;
       const payloadKeys = Object.keys(payload || {});
 
