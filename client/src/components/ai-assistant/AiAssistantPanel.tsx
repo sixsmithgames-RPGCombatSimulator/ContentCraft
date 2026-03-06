@@ -220,6 +220,7 @@ export default function AiAssistantPanel() {
   const [stageRunId, setStageRunId] = useState<string | null>(null);
   const [stageRunnerState, setStageRunnerState] = useState<StageRunnerState>('idle');
   const [stageRunnerError, setStageRunnerError] = useState<string | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
   const [extractedPayload, setExtractedPayload] = useState<Record<string, unknown> | null>(null);
   const [rateLimitCooldownMs, setRateLimitCooldownMs] = useState<number | null>(null);
   const [rateLimitSecondsLeft, setRateLimitSecondsLeft] = useState<number | null>(null);
@@ -231,6 +232,7 @@ export default function AiAssistantPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const inFlightRef = useRef<boolean>(false);
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoRetryScheduledRef = useRef<boolean>(false);
 
   // Auto-scroll to bottom on new messages
@@ -257,6 +259,16 @@ export default function AiAssistantPanel() {
     setStageRunnerError(null);
     setHasAutoStarted(false);
   }, [workflowContext?.stageRouterKey]);
+
+  // Hard error if stageRouterKey is missing while integrated runner is active
+  useEffect(() => {
+    if (assistMode !== 'integrated') return;
+    if (!isPanelOpen) return;
+    if (!workflowContext?.stageRouterKey) {
+      setStageRunnerError('Workflow stalled: missing stageRouterKey. Please resume or restart the run.');
+      setStageRunnerState('error');
+    }
+  }, [assistMode, isPanelOpen, workflowContext?.stageRouterKey]);
 
   // NOTE: Panel auto-open is now controlled by ManualGenerator after mode selection
 
@@ -793,16 +805,19 @@ ${contextBlocks.join('\n')}`;
       logStageRunnerGate('skip: panel closed');
       return;
     }
-    if (assistMode !== 'integrated') {
-      logStageRunnerGate('skip: mode not integrated');
+    if (!isPanelOpen || assistMode !== 'integrated') {
+      logStageRunnerGate('skip: panel closed');
       return;
     }
     if (!hasProvider) {
-      logStageRunnerGate('skip: provider not configured');
+      logStageRunnerGate('skip: no provider');
       return;
     }
     if (!workflowContext?.stageRouterKey) {
+      const message = 'Workflow stalled: missing stageRouterKey. Please resume or restart the run.';
       logStageRunnerGate('skip: missing stageRouterKey');
+      setStageRunnerError(message);
+      setStageRunnerState('error');
       return;
     }
     if (stageRunnerState !== 'idle') {
@@ -819,6 +834,50 @@ ${contextBlocks.join('\n')}`;
     // Add 2.5s initial delay to ensure server-side throttle window is clear
     setTimeout(() => runStageWithGemini(), 2500);
   }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate]);
+
+  // Auto-retry on error with countdown (skip if missing stageRouterKey)
+  useEffect(() => {
+    if (stageRunnerState !== 'error' || !workflowContext?.stageRouterKey) {
+      setRetryCountdown(null);
+      if (retryTimerRef.current) {
+        clearInterval(retryTimerRef.current as unknown as number);
+        retryTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (stageRunnerError && stageRunnerError.toLowerCase().includes('stageRouterKey'.toLowerCase())) {
+      return; // Do not auto-retry when router key is missing
+    }
+
+    setRetryCountdown(5);
+    setStageRunnerError((prev) => prev || 'Stage failed. Auto-retrying shortly.');
+
+    const interval = setInterval(() => {
+      setRetryCountdown((current) => {
+        if (current === null) return current;
+        const next = current - 1;
+        if (next <= 0) {
+          clearInterval(interval);
+          retryTimerRef.current = null;
+          setRetryCountdown(null);
+          setStageRunnerError(null);
+          setStageRunnerState('idle');
+          // Allow state to settle before retrying
+          setTimeout(() => runStageWithGemini(), 0);
+          return null;
+        }
+        return next;
+      });
+    }, 1000);
+
+    retryTimerRef.current = interval as unknown as NodeJS.Timeout;
+
+    return () => {
+      clearInterval(interval);
+      retryTimerRef.current = null;
+    };
+  }, [stageRunnerState, stageRunnerError, workflowContext?.stageRouterKey, runStageWithGemini]);
 
   const handleConfirmApply = useCallback(() => {
     if (!pendingDiff || !applyChanges) return;
