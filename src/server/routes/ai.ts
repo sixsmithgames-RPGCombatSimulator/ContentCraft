@@ -199,19 +199,26 @@ function normalizePersonality(container: Record<string, unknown>): void {
  */
 function normalizeStats(container: Record<string, unknown>): void {
   const ensureAbilityScores = () => {
-    const defaultScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+    const defaultScores: Record<'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha', number> = {
+      str: 10,
+      dex: 10,
+      con: 10,
+      int: 10,
+      wis: 10,
+      cha: 10,
+    };
     const current = container.ability_scores as Record<string, unknown> | undefined;
     if (!current || typeof current !== 'object' || Array.isArray(current)) {
       container.ability_scores = { ...defaultScores };
       return;
     }
-    const abilityScores = { ...defaultScores, ...current } as Record<string, unknown>;
-    for (const key of Object.keys(defaultScores)) {
-      const value = abilityScores[key];
+    const abilityScores: Record<string, unknown> = { ...defaultScores, ...current };
+    (Object.keys(defaultScores) as Array<keyof typeof defaultScores>).forEach((key) => {
+      const value = abilityScores[key as string];
       if (typeof value !== 'number') {
-        abilityScores[key] = defaultScores[key];
+        abilityScores[key as string] = defaultScores[key];
       }
-    }
+    });
     container.ability_scores = abilityScores;
   };
 
@@ -237,6 +244,20 @@ function normalizeStats(container: Record<string, unknown>): void {
   ensureAbilityScores();
   ensureSpeed();
   ensureSavingThrows();
+}
+
+/**
+ * For known fields that must be arrays, coerce to [] when present but malformed.
+ */
+function normalizeArrays(container: Record<string, unknown>, fields: string[]): void {
+  for (const field of fields) {
+    if (Object.prototype.hasOwnProperty.call(container, field)) {
+      const current = (container as Record<string, unknown>)[field];
+      if (!Array.isArray(current)) {
+        (container as Record<string, unknown>)[field] = [];
+      }
+    }
+  }
 }
 
 function getValidatorForGenerator(generatorType: string, entry: StageRegistryEntry): ValidateFunction | null {
@@ -729,6 +750,18 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       // Normalize personality to ensure object/arrays shape
       normalizePersonality(payload);
 
+      // Normalize stats and required arrays (equipment, items, relationships)
+      normalizeStats(payload);
+      normalizeArrays(payload, [
+        'equipment',
+        'attuned_items',
+        'magic_items',
+        'relationships',
+        'allies_friends',
+        'factions',
+        'minions',
+      ]);
+
       // Strip disallowed top-level fields for this stage.
       for (const key of payloadKeys) {
         if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
@@ -819,6 +852,18 @@ ${JSON.stringify(payload)}`;
           }
 
           normalizePersonality(retryPayload);
+
+          // Normalize stats and arrays on retry as well
+          normalizeStats(retryPayload);
+          normalizeArrays(retryPayload, [
+            'equipment',
+            'attuned_items',
+            'magic_items',
+            'relationships',
+            'allies_friends',
+            'factions',
+            'minions',
+          ]);
 
           // Strip disallowed fields
           for (const key of retryPayloadKeys) {
