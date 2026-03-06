@@ -35,6 +35,10 @@ import {
   calculateAvailableFactSpace,
   PROMPT_LIMITS,
 } from '../utils/promptLimits';
+import { buildPackedPrompt, formatSizeBreakdown, PROMPT_SAFETY_CEILING, type PromptPackConfig } from '../utils/promptPacker';
+import { generateCompactSchemaSpec } from '../utils/compactSchemaSpec';
+import { reduceStageInputs } from '../utils/stageInputReducer';
+import { getStageContract } from '../config/npcStageContracts';
 import { NPC_CREATOR_STAGES, STAGE_ROUTER_MAP } from '../config/npcCreatorStages';
 import { determineRequiredStages, getRoutingSummary, type StageRoutingDecision } from '../config/npcStageRouter';
 import { MONSTER_CREATOR_STAGES } from '../config/monsterCreatorStages';
@@ -3979,6 +3983,13 @@ export default function ManualGenerator() {
     showStageOutput(0, generationConfig, {} as StageResults, null);
   };
 
+  /**
+   * Helper function to format canon facts for prompt.
+   */
+  const formatCanonFacts = (factpack: Factpack): string => {
+    return factpack.facts.map(f => `[${f.entity_name}] ${f.text}`).join('\n\n');
+  };
+
   const showStageOutput = async (
     stageIndex: number,
     cfg: GenerationConfig,
@@ -4435,6 +4446,80 @@ Output: Valid JSON only. No markdown, no prose.`;
       console.log(`📦 Chunk ${chunkInfo!.currentChunk}/${chunkInfo!.totalChunks}: Using full prompt (Spaces stage requires it)`);
     }
 
+    // Check if this stage has a minimal contract (new prompt packer system)
+    const stageContract = getStageContract(stage.name);
+    const usePackedPrompt = !!stageContract && cfg.type === 'npc' && !isSubsequentChunk;
+
+    if (usePackedPrompt) {
+      console.log(`[Prompt Packer] Using packed prompt for stage: ${stage.name}`);
+
+      // Get stage schema from the stage's schema property (if available)
+      // For NPC stages, schemas are defined in npcSchemaExtractor
+      const stageSchema = {}; // Schema will be embedded in compact form via requiredKeys
+      const requiredFields: string[] = [];
+
+      // Build packed prompt config
+      const packConfig: PromptPackConfig = {
+        mustHave: {
+          stageContract: stageContract!,
+          outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
+          requiredKeys: generateCompactSchemaSpec(stageSchema as any, requiredFields),
+          stageInputs: reduceStageInputs(stage.name, results),
+        },
+        shouldHave: {
+          canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
+          previousDecisionsSummary: limitedDecisions ? JSON.stringify(limitedDecisions, null, 2) : undefined,
+        },
+        niceToHave: {
+          verboseFlags: cfg.flags,
+        },
+        safetyCeiling: PROMPT_SAFETY_CEILING,
+      };
+
+      const packed = buildPackedPrompt(packConfig);
+
+      if (!packed.success) {
+        console.error('[Prompt Packer] Failed to pack prompt:', packed.error);
+        console.error(formatSizeBreakdown(packed.analysis.breakdown));
+        setError(`Prompt too large: ${packed.error!.overflow} chars over limit. ${packed.error!.message}`);
+        return;
+      }
+
+      console.log('[Prompt Packer] Successfully packed prompt');
+      console.log(formatSizeBreakdown(packed.analysis.breakdown));
+      if (packed.analysis.droppedSections.length > 0) {
+        console.warn('[Prompt Packer] Dropped sections:', packed.analysis.droppedSections);
+      }
+      if (packed.analysis.compressionApplied) {
+        console.warn('[Prompt Packer] Compression applied to should-have components');
+      }
+
+      const packedPrompt = `${packed.systemPrompt}\n\n---\n\n${packed.userPrompt}`;
+      setCurrentPrompt(packedPrompt);
+      setModalMode('output');
+
+      // Auto-save the prompt
+      if (autoSaveEnabled && progressSession) {
+        const chunkIndex = chunkInfo ? chunkInfo.currentChunk : null;
+        let updatedSession = addProgressEntry(
+          progressSession,
+          stage.name,
+          chunkIndex,
+          packedPrompt
+        );
+        updatedSession = {
+          ...updatedSession,
+          currentStageIndex: stageIndex,
+        };
+        setProgressSession(updatedSession);
+        await saveProgress(updatedSession);
+        console.log(`[Auto-Save] Saved packed prompt for ${stage.name}`);
+      }
+
+      return;
+    }
+
+    // Fall back to existing buildSafePrompt for non-NPC stages or stages without contracts
     const { prompt: fullPrompt, analysis, warnings } = buildSafePrompt(
       systemPromptToUse,
       userPromptToUse,

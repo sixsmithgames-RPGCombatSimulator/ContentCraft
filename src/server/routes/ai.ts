@@ -435,6 +435,31 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
 
+  // Measure prompt size and log breakdown
+  const SAFETY_CEILING = 7200;
+  const promptSize = body.prompt.length;
+  const sizeBreakdown = {
+    total_chars: promptSize,
+    safety_ceiling: SAFETY_CEILING,
+    overflow: Math.max(0, promptSize - SAFETY_CEILING),
+  };
+
+  console.log('[AI][Gemini] Request size breakdown:', sizeBreakdown);
+
+  // Fail-fast if prompt exceeds safety ceiling
+  if (sizeBreakdown.overflow > 0) {
+    return res.status(400).json({
+      ok: false,
+      requestId,
+      stageRunId: body.stageRunId,
+      error: {
+        type: 'PAYLOAD_TOO_LARGE',
+        message: `Prompt exceeds safety ceiling by ${sizeBreakdown.overflow} chars. Total: ${promptSize}, Limit: ${SAFETY_CEILING}`,
+        retryable: false,
+      },
+    } satisfies GeminiFailureResponse);
+  }
+
   try {
     let geminiResponse: GeminiHttpResponse | null = null;
     let lastError: GeminiFailureResponse | null = null;
@@ -608,16 +633,18 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         const validationErrors = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
         const requiredFields = (validate.schema as any)?.required || [];
         
-        // Build correction prompt with schema errors and required fields
-        const correctionPrompt = `Your previous response failed schema validation with the following errors:
+        // Build minimal patch prompt (much smaller than full regeneration)
+        const correctionPrompt = `Output ONLY valid JSON. NO markdown. NO prose.
+
+Your previous response was incomplete. Fix ONLY these missing/invalid fields:
 ${validationErrors}
 
-Required fields for this stage: ${JSON.stringify(requiredFields)}
+Required fields: ${JSON.stringify(requiredFields)}
 
-Please provide a complete response that includes ALL required fields with the correct data types. Do not omit any required fields.
+Return the COMPLETE corrected JSON with all fields from your previous response, plus the missing fields.
 
-Original request:
-${body.prompt}`;
+Previous JSON (minified):
+${JSON.stringify(payload)}`;
 
         // Retry with correction prompt (max 2 validation retries)
         for (let validationAttempt = 0; validationAttempt < 2; validationAttempt += 1) {
