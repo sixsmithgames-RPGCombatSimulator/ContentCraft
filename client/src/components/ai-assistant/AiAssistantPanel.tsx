@@ -221,6 +221,7 @@ export default function AiAssistantPanel() {
   const [stageRunnerState, setStageRunnerState] = useState<StageRunnerState>('idle');
   const [stageRunnerError, setStageRunnerError] = useState<string | null>(null);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
+  const [stallCountdown, setStallCountdown] = useState<number | null>(null);
   const [extractedPayload, setExtractedPayload] = useState<Record<string, unknown> | null>(null);
   const [rateLimitCooldownMs, setRateLimitCooldownMs] = useState<number | null>(null);
   const [rateLimitSecondsLeft, setRateLimitSecondsLeft] = useState<number | null>(null);
@@ -233,6 +234,7 @@ export default function AiAssistantPanel() {
   const inFlightRef = useRef<boolean>(false);
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const stallTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoRetryScheduledRef = useRef<boolean>(false);
 
   // Auto-scroll to bottom on new messages
@@ -269,6 +271,54 @@ export default function AiAssistantPanel() {
       setStageRunnerState('error');
     }
   }, [assistMode, isPanelOpen, workflowContext?.stageRouterKey]);
+
+  // Stall watchdog: if runner is complete but stageRouterKey doesn't advance, raise error and retry
+  useEffect(() => {
+    if (assistMode !== 'integrated') return;
+    if (!isPanelOpen) return;
+
+    // Clear any existing stall timer when routerKey changes
+    if (stallTimerRef.current) {
+      clearInterval(stallTimerRef.current as unknown as number);
+      stallTimerRef.current = null;
+      setStallCountdown(null);
+    }
+
+    // If complete and routerKey is missing, surface error (no retry here)
+    if (stageRunnerState === 'complete' && !workflowContext?.stageRouterKey) {
+      setStageRunnerError('Workflow stalled: missing stageRouterKey after stage completion. Please resume or restart.');
+      setStageRunnerState('error');
+      return;
+    }
+
+    if (stageRunnerState === 'complete' && workflowContext?.stageRouterKey) {
+      // Start a short countdown to detect no-advance
+      setStallCountdown(3);
+      const interval = setInterval(() => {
+        setStallCountdown((current) => {
+          if (current === null) return current;
+          const next = current - 1;
+          if (next <= 0) {
+            clearInterval(interval);
+            stallTimerRef.current = null;
+            setStallCountdown(null);
+            setStageRunnerError('Workflow stalled: next stage did not start. Auto-retrying current stage.');
+            setStageRunnerState('idle');
+            setTimeout(() => runStageWithGemini(), 0);
+            return null;
+          }
+          return next;
+        });
+      }, 1000);
+
+      stallTimerRef.current = interval as unknown as NodeJS.Timeout;
+
+      return () => {
+        clearInterval(interval);
+        stallTimerRef.current = null;
+      };
+    }
+  }, [assistMode, isPanelOpen, stageRunnerState, workflowContext?.stageRouterKey, runStageWithGemini]);
 
   // NOTE: Panel auto-open is now controlled by ManualGenerator after mode selection
 
