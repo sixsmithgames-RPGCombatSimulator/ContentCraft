@@ -328,6 +328,54 @@ function normalizeLegendaryActions(container: Record<string, unknown>): void {
   (container as Record<string, unknown>).legendary_actions = obj;
 }
 
+/**
+ * Normalize lair_actions and regional_effects (oneOf arrays of strings OR objects with required fields).
+ */
+function normalizeLairAndRegional(container: Record<string, unknown>): void {
+  const coerceOneOfArray = (
+    value: unknown,
+    objectShape: { required: string[] },
+  ): { strings: string[]; objects: Array<Record<string, unknown>> } => {
+    const result = { strings: [] as string[], objects: [] as Array<Record<string, unknown>> };
+    if (!Array.isArray(value)) return result;
+
+    for (const entry of value) {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+        const obj = entry as Record<string, unknown>;
+        const hasRequired = objectShape.required.every((k) => typeof obj[k] === 'string');
+        if (hasRequired) {
+          result.objects.push(obj);
+          continue;
+        }
+      }
+      if (typeof entry === 'string' || typeof entry === 'number') {
+        result.strings.push(String(entry));
+      }
+    }
+    return result;
+  };
+
+  const lair = (container as Record<string, unknown>).lair_actions;
+  if (lair !== undefined) {
+    const coerced = coerceOneOfArray(lair, { required: ['action', 'description'] });
+    if (coerced.objects.length > 0) {
+      (container as Record<string, unknown>).lair_actions = coerced.objects;
+    } else {
+      (container as Record<string, unknown>).lair_actions = coerced.strings;
+    }
+  }
+
+  const regional = (container as Record<string, unknown>).regional_effects;
+  if (regional !== undefined) {
+    const coerced = coerceOneOfArray(regional, { required: ['name', 'description'] });
+    if (coerced.objects.length > 0) {
+      (container as Record<string, unknown>).regional_effects = coerced.objects;
+    } else {
+      (container as Record<string, unknown>).regional_effects = coerced.strings;
+    }
+  }
+}
+
 function getValidatorForGenerator(generatorType: string, entry: StageRegistryEntry): ValidateFunction | null {
   if (validatorCache[generatorType]) return validatorCache[generatorType] || null;
 
@@ -832,6 +880,7 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       normalizeNameValueArray(payload, 'saving_throws');
       normalizeNameValueArray(payload, 'skill_proficiencies');
       normalizeLegendaryActions(payload);
+      normalizeLairAndRegional(payload);
 
       // Strip disallowed top-level fields for this stage.
       for (const key of payloadKeys) {
@@ -938,6 +987,7 @@ ${JSON.stringify(payload)}`;
           normalizeNameValueArray(retryPayload, 'saving_throws');
           normalizeNameValueArray(retryPayload, 'skill_proficiencies');
           normalizeLegendaryActions(retryPayload);
+          normalizeLairAndRegional(retryPayload);
 
           // Strip disallowed fields
           for (const key of retryPayloadKeys) {
