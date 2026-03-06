@@ -168,6 +168,31 @@ function loadSchemaForGenerator(generatorType: string): StageRegistryEntry | nul
   }
 }
 
+/**
+ * Normalize personality to an object with array fields. Coerces string to single-item arrays.
+ * Ensures schema compliance to avoid '/personality must be object' errors.
+ */
+function normalizePersonality(container: Record<string, unknown>): void {
+  const current = (container as any).personality;
+  const toArray = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.filter((v) => typeof v === 'string');
+    if (typeof value === 'string') return [value];
+    return [];
+  };
+
+  if (!current || typeof current !== 'object' || Array.isArray(current)) {
+    (container as any).personality = { traits: [], ideals: [], bonds: [], flaws: [] };
+    return;
+  }
+
+  const personality = current as Record<string, unknown>;
+  personality.traits = toArray(personality.traits);
+  personality.ideals = toArray(personality.ideals);
+  personality.bonds = toArray(personality.bonds);
+  personality.flaws = toArray(personality.flaws);
+  (container as any).personality = personality;
+}
+
 function getValidatorForGenerator(generatorType: string, entry: StageRegistryEntry): ValidateFunction | null {
   if (validatorCache[generatorType]) return validatorCache[generatorType] || null;
 
@@ -634,7 +659,7 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         }
       }
 
-      // Coerce personality if stringified JSON; drop only if invalid
+      // Coerce personality if stringified JSON; drop if invalid or wrong type
       if (typeof (payload as any)['personality'] === 'string') {
         try {
           const parsed = JSON.parse((payload as any)['personality']);
@@ -647,6 +672,16 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
           delete (payload as any)['personality'];
         }
       }
+
+      if (
+        (payload as any).hasOwnProperty('personality') &&
+        (typeof (payload as any)['personality'] !== 'object' || (payload as any)['personality'] === null)
+      ) {
+        delete (payload as any)['personality'];
+      }
+
+      // Normalize personality to ensure object/arrays shape
+      normalizePersonality(payload);
 
       // Strip disallowed top-level fields for this stage.
       for (const key of payloadKeys) {
@@ -729,6 +764,15 @@ ${JSON.stringify(payload)}`;
               delete (retryPayload as any)['personality'];
             }
           }
+
+          if (
+            (retryPayload as any).hasOwnProperty('personality') &&
+            (typeof (retryPayload as any)['personality'] !== 'object' || (retryPayload as any)['personality'] === null)
+          ) {
+            delete (retryPayload as any)['personality'];
+          }
+
+          normalizePersonality(retryPayload);
 
           // Strip disallowed fields
           for (const key of retryPayloadKeys) {
