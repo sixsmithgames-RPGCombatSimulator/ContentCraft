@@ -297,6 +297,90 @@ function normalizeNameValueArray(container: Record<string, unknown>, field: stri
 }
 
 /**
+ * Normalize simple arrays that should contain strings. Coerce scalars to single-element arrays.
+ */
+function normalizeStringList(container: Record<string, unknown>, field: string): void {
+  if (!Object.prototype.hasOwnProperty.call(container, field)) return;
+  const value = (container as Record<string, unknown>)[field];
+  if (Array.isArray(value)) {
+    (container as Record<string, unknown>)[field] = value
+      .map((v) => (typeof v === 'string' || typeof v === 'number' ? String(v) : null))
+      .filter((v): v is string => v !== null);
+    return;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    (container as Record<string, unknown>)[field] = [String(value)];
+    return;
+  }
+  (container as Record<string, unknown>)[field] = [];
+}
+
+/**
+ * Coerce hit_points and proficiency_bonus oneOf shapes into schema-compliant values.
+ */
+function normalizeHitPointsAndProficiency(container: Record<string, unknown>): void {
+  const hp = (container as Record<string, unknown>).hit_points as unknown;
+  if (hp !== undefined) {
+    if (typeof hp === 'string') {
+      (container as Record<string, unknown>).hit_points = { formula: hp };
+    } else if (typeof hp === 'number') {
+      // number is already allowed
+      (container as Record<string, unknown>).hit_points = hp;
+    } else if (hp && typeof hp === 'object' && !Array.isArray(hp)) {
+      const obj = hp as Record<string, unknown>;
+      const normalized: Record<string, unknown> = {};
+      if (typeof obj.average === 'number') normalized.average = obj.average;
+      if (typeof obj.formula === 'string') normalized.formula = obj.formula;
+      if (typeof obj.notes === 'string') normalized.notes = obj.notes;
+      (container as Record<string, unknown>).hit_points = Object.keys(normalized).length ? normalized : undefined;
+    } else {
+      delete (container as Record<string, unknown>).hit_points;
+    }
+  }
+
+  const prof = (container as Record<string, unknown>).proficiency_bonus as unknown;
+  if (prof !== undefined) {
+    if (typeof prof === 'number') {
+      (container as Record<string, unknown>).proficiency_bonus = prof;
+    } else if (typeof prof === 'string') {
+      (container as Record<string, unknown>).proficiency_bonus = prof;
+    } else {
+      (container as Record<string, unknown>).proficiency_bonus = String(prof);
+    }
+  }
+}
+
+/**
+ * Normalize arrays of objects requiring name/description (with optional notes/recharge/uses/source).
+ */
+function normalizeNameDescriptionArray(container: Record<string, unknown>, field: string): void {
+  const raw = (container as Record<string, unknown>)[field];
+  const items = Array.isArray(raw) ? raw : [];
+  const normalized = items
+    .map((entry) => {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+        const obj = entry as Record<string, unknown>;
+        const name = typeof obj.name === 'string' ? obj.name : 'Unknown';
+        const description = typeof obj.description === 'string' ? obj.description : name;
+        const result: Record<string, unknown> = { name, description };
+        if (typeof obj.uses === 'string') result.uses = obj.uses;
+        if (typeof obj.recharge === 'string') result.recharge = obj.recharge;
+        if (typeof obj.notes === 'string') result.notes = obj.notes;
+        if (typeof obj.source === 'string') result.source = obj.source;
+        return result;
+      }
+      if (typeof entry === 'string' || typeof entry === 'number') {
+        const value = String(entry);
+        return { name: value, description: value } as Record<string, unknown>;
+      }
+      return null;
+    })
+    .filter((v): v is Record<string, unknown> => v !== null);
+
+  (container as Record<string, unknown>)[field] = normalized;
+}
+
+/**
  * Ensure legendary_actions is an object with arrays inside; coerce strings/numbers to object with description.
  */
 function normalizeLegendaryActions(container: Record<string, unknown>): void {
@@ -876,9 +960,19 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         'allies_friends',
         'factions',
         'minions',
+        'senses',
       ]);
+      normalizeStringList(payload, 'languages');
+      normalizeStringList(payload, 'damage_resistances');
+      normalizeStringList(payload, 'damage_immunities');
+      normalizeStringList(payload, 'damage_vulnerabilities');
+      normalizeStringList(payload, 'condition_immunities');
       normalizeNameValueArray(payload, 'saving_throws');
       normalizeNameValueArray(payload, 'skill_proficiencies');
+      normalizeNameDescriptionArray(payload, 'abilities');
+      normalizeNameDescriptionArray(payload, 'fighting_styles');
+      normalizeNameDescriptionArray(payload, 'additional_traits');
+      normalizeHitPointsAndProficiency(payload);
       normalizeLegendaryActions(payload);
       normalizeLairAndRegional(payload);
 
@@ -983,9 +1077,19 @@ ${JSON.stringify(payload)}`;
             'allies_friends',
             'factions',
             'minions',
+            'senses',
           ]);
+          normalizeStringList(retryPayload, 'languages');
+          normalizeStringList(retryPayload, 'damage_resistances');
+          normalizeStringList(retryPayload, 'damage_immunities');
+          normalizeStringList(retryPayload, 'damage_vulnerabilities');
+          normalizeStringList(retryPayload, 'condition_immunities');
           normalizeNameValueArray(retryPayload, 'saving_throws');
           normalizeNameValueArray(retryPayload, 'skill_proficiencies');
+          normalizeNameDescriptionArray(retryPayload, 'abilities');
+          normalizeNameDescriptionArray(retryPayload, 'fighting_styles');
+          normalizeNameDescriptionArray(retryPayload, 'additional_traits');
+          normalizeHitPointsAndProficiency(retryPayload);
           normalizeLegendaryActions(retryPayload);
           normalizeLairAndRegional(retryPayload);
 
