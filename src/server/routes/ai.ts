@@ -442,21 +442,13 @@ function normalizeLairAndRegional(container: Record<string, unknown>): void {
   const lair = (container as Record<string, unknown>).lair_actions;
   if (lair !== undefined) {
     const coerced = coerceOneOfArray(lair, { required: ['action', 'description'] });
-    if (coerced.objects.length > 0) {
-      (container as Record<string, unknown>).lair_actions = coerced.objects;
-    } else {
-      (container as Record<string, unknown>).lair_actions = coerced.strings;
-    }
+    (container as Record<string, unknown>).lair_actions = coerced.objects.length > 0 ? coerced.objects : coerced.strings;
   }
 
   const regional = (container as Record<string, unknown>).regional_effects;
   if (regional !== undefined) {
     const coerced = coerceOneOfArray(regional, { required: ['name', 'description'] });
-    if (coerced.objects.length > 0) {
-      (container as Record<string, unknown>).regional_effects = coerced.objects;
-    } else {
-      (container as Record<string, unknown>).regional_effects = coerced.strings;
-    }
+    (container as Record<string, unknown>).regional_effects = coerced.objects.length > 0 ? coerced.objects : coerced.strings;
   }
 }
 
