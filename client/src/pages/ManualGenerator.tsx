@@ -4447,7 +4447,11 @@ Output: Valid JSON only. No markdown, no prose.`;
     }
 
     // Check if this stage has a minimal contract (new prompt packer system)
-    const stageContract = getStageContract(stage.name);
+    const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
+    const stageContract =
+      getStageContract(stage.id ?? stage.name) ||
+      getStageContract(normalizedStageName) ||
+      null;
     const usePackedPrompt = !!stageContract && cfg.type === 'npc' && !isSubsequentChunk;
 
     if (usePackedPrompt) {
@@ -4464,7 +4468,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           stageContract: stageContract!,
           outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
           requiredKeys: generateCompactSchemaSpec(stageSchema as any, requiredFields),
-          stageInputs: reduceStageInputs(stage.name, results),
+          stageInputs: reduceStageInputs(stage.id ?? normalizedStageName, results),
         },
         shouldHave: {
           canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
