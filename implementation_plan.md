@@ -1,66 +1,79 @@
-# Implementation Plan – NPC Legendary Actions Prompt
+# Implementation Plan – NPC App-as-Memory Stage Execution Refactor
 
 ## Intent
-Add an explicit user decision gate for NPC legendary actions that:
-- Reminds creators they can generate legendary actions now and discard them later.
-- Automatically opts strong characters (CR ≥ 11, legendary keywords, or explicit requests) into generating legendary actions even if the user doesn’t opt in manually.
-- Propagates the decision through `previous_decisions`, dynamic stage routing, and review/discard flows.
+Refactor NPC multi-stage generation so the app, not the AI chat session, is the authoritative memory. The integrated AI runner must execute only precompiled, budgeted stage requests produced by `ManualGenerator`, and every retry or stage continuation must flow through the same deterministic prompt compiler.
 
 ## Current Behavior
-- `determineRequiredStages()` sets `legendary.required` based solely on CR/keywords/request.
-- `ManualGenerator` builds `dynamicNpcStages` immediately after Basic Info without additional user input.
-- If `legendary.required` is true, the “Creator: Legendary” stage always runs; otherwise it’s skipped with no prompt.
-- Users cannot explicitly request or decline legendary actions mid-flow, nor discard generated legendary content separately.
+- `ManualGenerator` builds carefully budgeted stage prompts, but integrated execution can drift if the runner rebuilds context separately.
+- Prompt budgeting and actual provider requests can diverge, producing safety-ceiling failures that are not visible in the page-level analysis.
+- Some transitions and retries can bypass the normal stage compiler by mutating `currentPrompt` directly.
+- Stage continuity partially depends on prompt text and chat/session flow instead of a formal app-owned memory model.
 
 ## Target Behavior
-1. After Basic Info routing completes, surface a modal explaining the benefits of legendary actions. Options: `Generate them` vs `Skip for now`. Include reminder about discarding later.
-2. Default selection:
-   - Strong character (CR ≥ 11 or routing reason indicates legendary) → default to `Generate` and auto-confirm if user closes modal without choosing.
-   - Otherwise default to `Skip` but allow opting in.
-3. Persist choice in new `legendary_actions_choice` field within `accumulatedAnswers`/`previousDecisions`.
-4. Respect choice when constructing `dynamicNpcStages`:
-   - If choice is `skip`, remove Legendary stage even if router marked required, unless strong auto-enforcement demands it.
-   - If choice is `generate`, ensure stage stays included even if router marked optional.
-5. During review/save, expose a “Discard legendary actions” toggle (only when legendary data exists) that clears the corresponding stage output before final merge.
+1. `ManualGenerator` produces an authoritative `compiledStageRequest` for each stage prompt shown to the user.
+2. `AiAssistantPanel` integrated mode executes only that compiled request; it does not rebuild prompts from `workflowContext.currentData`.
+3. Workflow context includes a distilled stage memory summary so stage execution is stateless and traceable.
+4. Retries and accept-with-issues transitions are routed back through `showStageOutput`, ensuring the same compilation, budgeting, and memory rules apply.
+5. Stage keys remain stable even when stage metadata is missing an explicit router key.
 
 ## Scope & Files
-- `client/src/pages/ManualGenerator.tsx`: state, modal UI, stage routing adjustments, decision persistence, discard toggle in Review modal.
-- `client/src/config/npcStageRouter.ts`: expose helper to classify “strong character” metadata (e.g., `legendary.reason`).
-- `client/src/config/npcCreatorStages.ts`: ensure stage metadata keyed for gating (likely no changes unless additional helper needed).
-- Potential shared UI components for modals (reuse `ReviewAdjustModal` styling or create inline modal block inside `ManualGenerator`).
+- `client/src/pages/ManualGenerator.tsx`
+  - add compiled stage request state
+  - publish app-owned stage memory summaries
+  - unify prompt generation across normal, retry, and acceptance flows
+- `client/src/components/ai-assistant/AiAssistantPanel.tsx`
+  - consume only authoritative compiled stage requests
+  - gate auto-start until a compiled request exists
+- `client/src/contexts/AiAssistantContext.tsx`
+  - add typed compiled stage request + stage memory summary contracts
+- `src/server/routes/ai.ts`
+  - optional observability alignment for prompt budget metadata
+- `NPC_architecture.md`
+  - document the architecture shift
+
+## Impact Analysis
+- **Consumers**
+  - Integrated AI stage automation
+  - workflow context consumers in the AI panel
+  - autosave/resume prompt handoff behavior
+- **Dependent Events / State**
+  - stage router key changes now also depend on compiled request readiness
+  - stage retries and accept-with-issues now re-enter the stage compiler path
+- **Visual / UX Impacts**
+  - integrated mode may wait briefly for compiled request publication before auto-starting
+  - over-budget stages should fail earlier and more consistently
 
 ## Approach
-1. **State & Types**
-   - Extend `StageRoutingDecision` or add helper to mark `legendary.autoRecommended` bool (derived from CR/reason).
-   - In `ManualGenerator`, add `legendaryPromptState` (e.g., `{ shown: boolean; decision?: 'generate' | 'skip'; auto: boolean }`).
-   - Track `legendaryDecisionReason` (router reason string) for modal messaging.
-
-2. **Prompt Trigger**
-   - After `determineRequiredStages` resolves (post Basic Info accept), evaluate `routingDecision.legendary` and stored prior decision.
-   - If `legendaryDecision` absent, show modal with message + two CTA buttons.
-   - Auto-confirm to `generate` if `legendary.required` true AND reason indicates strong character; otherwise wait for user selection.
-
-3. **Stage List Filtering**
-   - When building `dynamicNpcStages`, filter `NPC_CREATOR_STAGES` based on `legendaryDecision` (skip stage if user declined and not forced).
-   - Persist decision into `accumulatedAnswers.legendary_actions_choice` for downstream prompts.
-
-4. **Review/Discard Support**
-   - When `currentStageOutput` or review data includes `creator:_legendary`, add checkbox/action to drop this block before merging final results.
-   - Ensure `stageResults` cleanup occurs (delete stage key) when discarding.
-
-5. **AI Prompt Context**
-   - Include `legendary_actions_choice` inside `previousDecisions` sent to subsequent stages (existing plumbing should pick it up once stored in `accumulatedAnswers`).
-
-6. **Testing / Verification**
-   - Manual flows: low CR skip, high CR auto-include, user opt-in/out toggles, discard path.
-   - Verify stage routing summary reflects final inclusion/exclusion, and final JSON lacks legendary block when discarded.
+1. **Types & Context**
+   - Add `AiCompiledStageRequest` and `AiStageMemorySummary` to AI assistant context.
+2. **Authoritative Prompt Publication**
+   - In `ManualGenerator`, publish a compiled request whenever a stage prompt is built.
+   - Use exact outbound prompt length for the published budget measurement.
+3. **Runner Lockdown**
+   - In `AiAssistantPanel`, remove prompt rebuilding from integrated stage execution.
+   - Require `compiledStageRequest` before auto-start.
+4. **Unified Stage Re-entry**
+   - Route retry/acceptance flows back through `showStageOutput`.
+   - Clear stale compiled requests for manual/homebrew prompt paths.
+5. **Observability**
+   - Log stage key, prompt mode, and measured chars from the compiled request.
 
 ## Risks & Mitigations
-- **Stage ordering disruption**: Ensure `dynamicNpcStages` rebuild maintains original order except optional removal of legendary stage.
-- **State desync after resume**: Save the decision into progress sessions (already persists via `accumulatedAnswers`). Validate resume path uses stored decision to avoid re-prompting.
-- **User confusion**: Provide clear copy referencing discard ability and highlight auto-recommended rationale.
+- **Prompt mismatch persists**
+  - Mitigation: use the exact outbound prompt string as the authoritative request payload and budget metric.
+- **Stage stalls when compiled request is not ready**
+  - Mitigation: explicit runner gate `skip: awaiting compiled stage request` instead of silent rebuilds.
+- **Resume/manual prompt paths carry stale automation state**
+  - Mitigation: clear `compiledStageRequest` for manual resume/homebrew flows.
 
-## Acceptance & Tests
-- Manual smoke test for each scenario listed above.
-- Confirm `legendary_actions_choice` surfaces in prompts (log or console).
-- Checklist recorded in final summary per coding standards section 8/9.
+## Verification
+- Filtered TypeScript check for:
+  - `ManualGenerator.tsx`
+  - `AiAssistantPanel.tsx`
+  - `AiAssistantContext.tsx`
+- Manual verification checklist:
+  - integrated runner waits for compiled request
+  - stage request logs show the same stage key/prompt mode as the page
+  - retry path rebuilds via `showStageOutput`
+  - accept-with-issues advances to next stage through compiled request path
+  - over-budget stages fail before send with consistent counts

@@ -22,7 +22,6 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowDownToLine,
-  AlertCircle,
   Sparkles,
 } from 'lucide-react';
 import { useAiAssistant } from '../../contexts/AiAssistantContext';
@@ -220,10 +219,10 @@ export default function AiAssistantPanel() {
   const [stageRunId, setStageRunId] = useState<string | null>(null);
   const [stageRunnerState, setStageRunnerState] = useState<StageRunnerState>('idle');
   const [stageRunnerError, setStageRunnerError] = useState<string | null>(null);
-  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
-  const [stallCountdown, setStallCountdown] = useState<number | null>(null);
+  const [_retryCountdown, setRetryCountdown] = useState<number | null>(null);
+  const [_stallCountdown, setStallCountdown] = useState<number | null>(null);
   const [extractedPayload, setExtractedPayload] = useState<Record<string, unknown> | null>(null);
-  const [rateLimitCooldownMs, setRateLimitCooldownMs] = useState<number | null>(null);
+  const [_rateLimitCooldownMs, setRateLimitCooldownMs] = useState<number | null>(null);
   const [rateLimitSecondsLeft, setRateLimitSecondsLeft] = useState<number | null>(null);
   const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null);
   const [showModeDialog, setShowModeDialog] = useState(false);
@@ -260,7 +259,7 @@ export default function AiAssistantPanel() {
     setStageRunnerState('idle');
     setStageRunnerError(null);
     setHasAutoStarted(false);
-  }, [workflowContext?.stageRouterKey]);
+  }, [workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest?.prompt]);
 
   // Hard error if stageRouterKey is missing while integrated runner is active
   useEffect(() => {
@@ -492,48 +491,20 @@ export default function AiAssistantPanel() {
   );
 
   // ─── Stage Runner (provider-first) ───────────────────────────────────────
-  const buildStagePrompt = useCallback(() => {
-    if (!workflowContext) return null;
-    const stageKey = workflowContext.stageRouterKey || workflowContext.currentStage || 'stage';
-    const allowedKeys = workflowContext.schema && isPlainObject(workflowContext.schema)
-      ? Object.keys((workflowContext.schema as { properties?: Record<string, unknown> }).properties || {})
-      : [];
-
-    const header = [
-      `You are updating stage "${stageKey}" for generator type "${workflowContext.generatorType || workflowContext.workflowType}".`,
-      'Return ONLY JSON, no markdown, shaped exactly as:',
-      `{
-  "${stageKey}": { /* fields to update only */ }
-}`,
-      'Do not include any other top-level keys. Do not include projectId, stageId, or stageRunId.',
-    ];
-
-    if (allowedKeys.length > 0) {
-      header.push(`Allowed fields: ${allowedKeys.join(', ')}. You may also include _meta.`);
-      if (stageKey === 'planner' && !allowedKeys.includes('character_profile')) {
-        header.push('Do NOT include character_profile. That field is forbidden for planner and will be rejected.');
-      }
-    } else {
-      header.push('Only include fields relevant to this stage; _meta is allowed.');
+  const getCompiledStageRequest = useCallback(() => {
+    if (!workflowContext?.compiledStageRequest) {
+      return null;
     }
 
-    const contextBlocks = [
-      `Current stage data: ${JSON.stringify(workflowContext.currentData[stageKey] || {})}`,
-      `All stage results so far: ${JSON.stringify(workflowContext.currentData)}`,
-    ];
-
-    if (workflowContext.factpack) {
-      contextBlocks.push(`Factpack: ${JSON.stringify(workflowContext.factpack)}`);
+    const compiled = workflowContext.compiledStageRequest;
+    if (workflowContext.stageRouterKey && compiled.stageKey !== workflowContext.stageRouterKey) {
+      console.warn('[AI Runner][Compiled Request] Stage key mismatch between workflow context and compiled request', {
+        workflowStageKey: workflowContext.stageRouterKey,
+        compiledStageKey: compiled.stageKey,
+      });
     }
 
-    if (workflowContext.generationConfig) {
-      contextBlocks.push(`Generation config: ${JSON.stringify(workflowContext.generationConfig)}`);
-    }
-
-    return `${header.join('\n')}
-
-Context:
-${contextBlocks.join('\n')}`;
+    return compiled;
   }, [workflowContext]);
 
   const validatePatch = useCallback(
@@ -617,14 +588,23 @@ ${contextBlocks.join('\n')}`;
       setStageRunnerState('error');
       return;
     }
-    const prompt = buildStagePrompt();
-    if (!prompt) {
-      setStageRunnerError('Unable to build stage prompt.');
+    const compiledStageRequest = getCompiledStageRequest();
+    if (!compiledStageRequest) {
+      setStageRunnerError('No compiled stage request is available for the active stage yet.');
       setStageRunnerState('error');
       return;
     }
 
-    const stageKey = workflowContext.stageRouterKey;
+    if (compiledStageRequest.promptBudget.measuredChars > compiledStageRequest.promptBudget.safetyCeiling) {
+      setStageRunnerError(
+        `Stage request exceeds safety ceiling (${compiledStageRequest.promptBudget.measuredChars}/${compiledStageRequest.promptBudget.safetyCeiling}). Rebuild or trim the request before automated send.`
+      );
+      setStageRunnerState('error');
+      return;
+    }
+
+    const prompt = compiledStageRequest.prompt;
+    const stageKey = compiledStageRequest.stageKey;
     const runId = stageRunId || crypto.randomUUID();
     setStageRunId(runId);
     setStageRunnerState('sending');
@@ -642,6 +622,8 @@ ${contextBlocks.join('\n')}`;
           generatorType: workflowContext.generatorType || workflowContext.workflowType,
           stageKey,
           userSelectedMode: providerConfig.type,
+          promptMode: compiledStageRequest.promptBudget.mode,
+          measuredChars: compiledStageRequest.promptBudget.measuredChars,
         },
       };
 
@@ -650,6 +632,8 @@ ${contextBlocks.join('\n')}`;
         runId,
         generatorType: requestBody.clientContext.generatorType,
         schemaVersion: requestBody.schemaVersion,
+        promptChars: compiledStageRequest.promptBudget.measuredChars,
+        promptMode: compiledStageRequest.promptBudget.mode,
       });
 
       const response = await fetch('/api/ai/gemini/generate', {
@@ -726,7 +710,7 @@ ${contextBlocks.join('\n')}`;
   }, [
     workflowContext,
     providerConfig.type,
-    buildStagePrompt,
+    getCompiledStageRequest,
     stageRunId,
     validatePatch,
     applyStagePatch,
@@ -815,6 +799,10 @@ ${contextBlocks.join('\n')}`;
       logStageRunnerGate('skip: no provider');
       return;
     }
+    if (!workflowContext?.compiledStageRequest) {
+      logStageRunnerGate('skip: awaiting compiled stage request');
+      return;
+    }
     if (!workflowContext?.stageRouterKey) {
       const message = 'Workflow stalled: missing stageRouterKey. Please resume or restart the run.';
       logStageRunnerGate('skip: missing stageRouterKey');
@@ -835,7 +823,7 @@ ${contextBlocks.join('\n')}`;
     setHasAutoStarted(true);
     // Add 2.5s initial delay to ensure server-side throttle window is clear
     setTimeout(() => runStageWithGemini(), 2500);
-  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate]);
+  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate]);
 
   // Auto-retry on error with countdown (skip if missing stageRouterKey)
   useEffect(() => {

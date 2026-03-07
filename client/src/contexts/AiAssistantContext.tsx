@@ -32,6 +32,41 @@ export type WorkflowType =
   | 'other_writing'
   | 'unknown';
 
+export interface AiStageMemorySummary {
+  request: {
+    prompt: string;
+    type?: string;
+    stageKey?: string;
+    stageLabel?: string;
+  };
+  completedStages: string[];
+  currentStageData: unknown;
+  priorStageSummaries: Record<string, unknown>;
+  previousDecisions: Record<string, string>;
+  factpack: {
+    factCount: number;
+    entityNames: string[];
+  };
+}
+
+export interface AiCompiledStageRequest {
+  stageKey: string;
+  stageLabel: string;
+  prompt: string;
+  systemPrompt: string;
+  userPrompt: string;
+  promptBudget: {
+    measuredChars: number;
+    safetyCeiling: number;
+    hardLimit: number;
+    mode: 'packed' | 'safe' | 'continuation' | 'manual';
+    droppedSections: string[];
+    warnings: string[];
+    compressionApplied: boolean;
+  };
+  memory: AiStageMemorySummary;
+}
+
 /** Workflow context pushed by the active page/component into the AI assistant */
 export interface AiAssistantWorkflowContext {
   /** Which workflow type is currently active */
@@ -52,6 +87,8 @@ export interface AiAssistantWorkflowContext {
   factpack?: { facts: Array<{ text: string; source?: string }> };
   /** The generation config (flags, prompt, etc.) */
   generationConfig?: Record<string, unknown>;
+  /** Authoritative, precompiled request for the active stage */
+  compiledStageRequest?: AiCompiledStageRequest;
   /** Generator type (npc, encounter, location, etc.) for schema selection */
   generatorType?: string;
   /** Schema version currently in use */

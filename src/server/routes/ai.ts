@@ -34,6 +34,8 @@ interface GeminiRequestBody {
     stageKey?: string;
     generatorType?: string;
     userSelectedMode?: string;
+    promptMode?: string;
+    measuredChars?: number;
   };
 }
 
@@ -734,13 +736,28 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
   // Measure prompt size and log breakdown
   const SAFETY_CEILING = 7200;
   const promptSize = body.prompt.length;
+  const clientMeasuredChars = typeof body.clientContext?.measuredChars === 'number'
+    ? body.clientContext.measuredChars
+    : null;
   const sizeBreakdown = {
     total_chars: promptSize,
     safety_ceiling: SAFETY_CEILING,
     overflow: Math.max(0, promptSize - SAFETY_CEILING),
+    client_measured_chars: clientMeasuredChars,
+    client_server_delta: clientMeasuredChars === null ? null : clientMeasuredChars - promptSize,
+    prompt_mode: body.clientContext?.promptMode || null,
   };
 
   console.log('[AI][Gemini] Request size breakdown:', sizeBreakdown);
+  if (clientMeasuredChars !== null && clientMeasuredChars !== promptSize) {
+    console.warn('[AI][Gemini] Client/server prompt size mismatch detected', {
+      stageId: body.stageId,
+      clientMeasuredChars,
+      serverPromptChars: promptSize,
+      delta: clientMeasuredChars - promptSize,
+      promptMode: body.clientContext?.promptMode || 'unknown',
+    });
+  }
 
   // Fail-fast if prompt exceeds safety ceiling
   if (sizeBreakdown.overflow > 0) {

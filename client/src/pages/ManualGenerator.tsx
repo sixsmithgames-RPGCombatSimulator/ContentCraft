@@ -53,7 +53,7 @@ import { synchronizeReciprocalDoors, type SpaceLike } from '../utils/doorSync';
 import { projectApi, API_BASE_URL } from '../services/api';
 import type { Project } from '../types';
 import { useAiAssistant } from '../contexts/AiAssistantContext';
-import type { WorkflowType } from '../contexts/AiAssistantContext';
+import type { AiCompiledStageRequest, AiStageMemorySummary, WorkflowType } from '../contexts/AiAssistantContext';
 import ModeSelectionDialog from '../components/ai-assistant/ModeSelectionDialog';
 
 type JsonRecord = Record<string, unknown>;
@@ -310,6 +310,90 @@ const getDimensionObject = (value: LiveMapDimensions | undefined): { width: numb
     };
   }
   return undefined;
+};
+
+const summarizeForAiMemory = (value: unknown, depth = 0): unknown => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    return value.length > 180 ? `${value.slice(0, 177)}...` : value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (depth >= 2) {
+      return { itemCount: value.length };
+    }
+    return {
+      itemCount: value.length,
+      preview: value.slice(0, 3).map((item) => summarizeForAiMemory(item, depth + 1)),
+    };
+  }
+  if (isRecord(value)) {
+    if (depth >= 2) {
+      return { keys: Object.keys(value).slice(0, 8) };
+    }
+    const summary: Record<string, unknown> = {};
+    const entries = Object.entries(value);
+    entries.slice(0, 8).forEach(([key, entryValue]) => {
+      summary[key] = summarizeForAiMemory(entryValue, depth + 1);
+    });
+    if (entries.length > 8) {
+      summary._truncatedKeyCount = entries.length - 8;
+    }
+    return summary;
+  }
+  return String(value);
+};
+
+const getStageMemoryValue = (stage: Stage, results: StageResults): unknown => {
+  const storageKey = getStageStorageKey(stage);
+  if (storageKey in results) {
+    return results[storageKey];
+  }
+
+  const lookupKey = getStageLookupKey(stage);
+  if (lookupKey in results) {
+    return results[lookupKey];
+  }
+
+  return undefined;
+};
+
+const buildAiStageMemorySummary = (
+  stage: Stage,
+  config: GenerationConfig,
+  results: StageResults,
+  activeFactpack: Factpack | null,
+  previousDecisions?: Record<string, string>
+): AiStageMemorySummary => {
+  const currentStageKey = getStageStorageKey(stage);
+  const currentLookupKey = getStageLookupKey(stage);
+  const priorStageSummaries: Record<string, unknown> = {};
+
+  Object.entries(results).forEach(([key, value]) => {
+    if (key === currentStageKey || key === currentLookupKey) {
+      return;
+    }
+    priorStageSummaries[key] = summarizeForAiMemory(value);
+  });
+
+  return {
+    request: {
+      prompt: config.prompt,
+      type: config.type,
+      stageKey: currentLookupKey,
+      stageLabel: stage.name,
+    },
+    completedStages: Object.keys(results),
+    currentStageData: summarizeForAiMemory(getStageMemoryValue(stage, results)),
+    priorStageSummaries,
+    previousDecisions: previousDecisions || {},
+    factpack: {
+      factCount: activeFactpack?.facts.length || 0,
+      entityNames: Array.from(new Set((activeFactpack?.facts || []).map((fact) => fact.entity_name))).slice(0, 12),
+    },
+  };
 };
 
 const logLiveMapSpacePosition = (space: LiveMapSpace): string => {
@@ -2513,6 +2597,7 @@ export default function ManualGenerator() {
   const [currentStageIndex, setCurrentStageIndex] = useState(-1);
   const [modalMode, setModalMode] = useState<'output' | 'input' | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
+  const [compiledStageRequest, setCompiledStageRequest] = useState<AiCompiledStageRequest | null>(null);
   const [stageResults, setStageResults] = useState<StageResults>({});
   const [factpack, setFactpack] = useState<Factpack | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -2590,6 +2675,11 @@ export default function ManualGenerator() {
   const prevStageIndexRef = useRef<number>(-1);
   const prevConfigKeyRef = useRef<string | null>(null);
   const prevFactpackKeyRef = useRef<string | null>(null);
+  const prevCompiledStageRequestKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setCompiledStageRequest(null);
+  }, [currentStageIndex, config?.type, config?.prompt]);
 
   useEffect(() => {
     if (!projectId || projectId === 'default') {
@@ -2663,6 +2753,7 @@ export default function ManualGenerator() {
       prevStageIndexRef.current = -1;
       prevConfigKeyRef.current = null;
       prevFactpackKeyRef.current = null;
+      prevCompiledStageRequestKeyRef.current = null;
       return;
     }
 
@@ -2681,14 +2772,23 @@ export default function ManualGenerator() {
       })
       : null;
     const factpackChanged = prevFactpackKeyRef.current !== factpackKey;
+    const compiledStageRequestKey = compiledStageRequest
+      ? JSON.stringify({
+        stageKey: compiledStageRequest.stageKey,
+        measuredChars: compiledStageRequest.promptBudget.measuredChars,
+        prompt: compiledStageRequest.prompt,
+      })
+      : null;
+    const compiledStageRequestChanged = prevCompiledStageRequestKeyRef.current !== compiledStageRequestKey;
 
-    const shouldUpdate = stageResultsChanged || configChanged || stageIndexChanged || factpackChanged;
+    const shouldUpdate = stageResultsChanged || configChanged || stageIndexChanged || factpackChanged || compiledStageRequestChanged;
     if (!shouldUpdate) return;
 
     prevStageResultsRef.current = stageResults;
     prevStageIndexRef.current = currentStageIndex;
     prevConfigKeyRef.current = configKey;
     prevFactpackKeyRef.current = factpackKey;
+    prevCompiledStageRequestKeyRef.current = compiledStageRequestKey;
 
     const wfType = configTypeToWorkflow(config.type);
     const currentStage = STAGES[currentStageIndex];
@@ -2697,7 +2797,7 @@ export default function ManualGenerator() {
       workflowType: wfType,
       workflowLabel: workflowLabelMap[wfType] || 'Content Generator',
       currentStage: currentStage?.name,
-      stageRouterKey: currentStage?.routerKey,
+      stageRouterKey: currentStage ? getStageLookupKey(currentStage) : undefined,
       stageProgress: currentStageIndex >= 0
         ? { current: currentStageIndex + 1, total: STAGES.length }
         : undefined,
@@ -2710,11 +2810,12 @@ export default function ManualGenerator() {
         prompt: config.prompt,
         flags: config.flags,
       },
+      compiledStageRequest: compiledStageRequest || undefined,
       generatorType: config.type,
       schemaVersion: 'v1.1-client',
       projectId: projectId !== 'default' ? projectId : undefined,
     });
-  }, [config, currentStageIndex, stageResults, factpack, STAGES, projectId, setWorkflowContext]);
+  }, [compiledStageRequest, config, currentStageIndex, stageResults, factpack, STAGES, projectId, setWorkflowContext]);
 
   // Register applyChanges callback so the AI panel can merge changes back
   useEffect(() => {
@@ -3274,6 +3375,7 @@ export default function ManualGenerator() {
       }
 
       // Show the prompt that was waiting for a response
+      setCompiledStageRequest(null);
       setCurrentPrompt(incompleteEntry.prompt);
       setModalMode('input');
       console.log('[Resume] Resuming at pending prompt for stage:', incompleteEntry.stage);
@@ -4096,6 +4198,7 @@ export default function ManualGenerator() {
         });
 
         // Show the first chunk prompt
+        setCompiledStageRequest(null);
         setCurrentPrompt(homebrewChunks[0].prompt);
         setModalMode('output');
       } catch (error) {
@@ -4132,7 +4235,9 @@ export default function ManualGenerator() {
     results: StageResults,
     fp: Factpack | null,
     chunkInfo?: { isChunked: boolean; currentChunk: number; totalChunks: number; chunkLabel: string },
-    unansweredProposals?: unknown[]
+    unansweredProposals?: unknown[],
+    overrideDecisions?: Record<string, string>,
+    additionalGuidance?: string
   ) => {
     // Compute stages dynamically from cfg parameter to avoid React state timing issues
     const stages = getStages(cfg, dynamicNpcStages);
@@ -4143,9 +4248,14 @@ export default function ManualGenerator() {
       setCurrentChunkInfo(chunkInfo);
     }
 
+    setCompiledStageRequest(null);
+
     // Limit accumulated answers to prevent exceeding character limits in the JSON prompt
-    const limitedDecisions = Object.keys(accumulatedAnswers).length > 0
-      ? limitAccumulatedAnswers(accumulatedAnswers, 4000)
+    const effectiveDecisions = overrideDecisions && Object.keys(overrideDecisions).length > 0
+      ? overrideDecisions
+      : accumulatedAnswers;
+    const limitedDecisions = Object.keys(effectiveDecisions).length > 0
+      ? limitAccumulatedAnswers(effectiveDecisions, 4000)
       : undefined;
 
     // Check if this is an NPC or Monster generation stage that needs schema guidance
@@ -4515,6 +4625,9 @@ Validation will reject incorrect field names or missing required fields.`;
 
     // Build user prompt and log its size
     let userPromptContent = stage.buildUserPrompt(context);
+    if (additionalGuidance && additionalGuidance.trim().length > 0) {
+      userPromptContent = `${userPromptContent}\n\n---\n\n${additionalGuidance.trim()}`;
+    }
     console.log(`[Prompt Building] ${stage.name} user prompt: ${userPromptContent.length.toLocaleString()} chars`);
 
     // If user prompt is unusually large for early stages, investigate and trim
@@ -4547,6 +4660,7 @@ Validation will reject incorrect field names or missing required fields.`;
     const isSubsequentChunk = chunkInfo && chunkInfo.currentChunk > 1;
     const isLastChunk = chunkInfo && chunkInfo.currentChunk === chunkInfo.totalChunks;
     const isFirstChunk = chunkInfo && chunkInfo.currentChunk === 1;
+    const promptMode: AiCompiledStageRequest['promptBudget']['mode'] = isSubsequentChunk ? 'continuation' : 'safe';
 
     let systemPromptToUse = actualSystemPrompt;  // Use condensed prompt if stage needed it
     let userPromptToUse = userPromptContent;
@@ -4596,7 +4710,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       getStageContract(normalizedStageName) ||
       null;
     // Use packed prompt for ANY stage that has a contract (not just NPC), except subsequent chunks
-    const usePackedPrompt = !!stageContract && !isSubsequentChunk;
+    const usePackedPrompt = !!stageContract && !isSubsequentChunk && !additionalGuidance;
 
     if (usePackedPrompt) {
       console.log(`[Prompt Packer] Using packed prompt for stage: ${stage.name}`);
@@ -4636,6 +4750,24 @@ Output: Valid JSON only. No markdown, no prose.`;
       }
 
       const packedPrompt = `${packed.systemPrompt}\n\n---\n\n${packed.userPrompt}`;
+      const packedRequest: AiCompiledStageRequest = {
+        stageKey: stageLookupKey,
+        stageLabel: stage.name,
+        prompt: packedPrompt,
+        systemPrompt: packed.systemPrompt || '',
+        userPrompt: packed.userPrompt || '',
+        promptBudget: {
+          measuredChars: packedPrompt.length,
+          safetyCeiling: PROMPT_SAFETY_CEILING,
+          hardLimit: PROMPT_LIMITS.AI_HARD_LIMIT,
+          mode: 'packed',
+          droppedSections: packed.analysis.droppedSections,
+          warnings: [],
+          compressionApplied: packed.analysis.compressionApplied,
+        },
+        memory: buildAiStageMemorySummary(stage, cfg, results, limitedFactpack, limitedDecisions),
+      };
+      setCompiledStageRequest(packedRequest);
       setCurrentPrompt(packedPrompt);
       setModalMode('output');
 
@@ -4821,7 +4953,24 @@ Output: Valid JSON only. No markdown, no prose.`;
           }
         );
 
-        // ...
+        const rebuiltRequest: AiCompiledStageRequest = {
+          stageKey: stageLookupKey,
+          stageLabel: stage.name,
+          prompt: rebuiltPrompt,
+          systemPrompt: systemPromptToUse,
+          userPrompt: userPromptContent,
+          promptBudget: {
+            measuredChars: rebuiltPrompt.length,
+            safetyCeiling: PROMPT_SAFETY_CEILING,
+            hardLimit: PROMPT_LIMITS.AI_HARD_LIMIT,
+            mode: promptMode,
+            droppedSections: [],
+            warnings: [],
+            compressionApplied: false,
+          },
+          memory: buildAiStageMemorySummary(stage, cfg, results, limitedFactpack, limitedDecisions),
+        };
+        setCompiledStageRequest(rebuiltRequest);
         setCurrentPrompt(rebuiltPrompt);
         console.log(`📊 Rebuilt prompt after trimming: ${rebuiltAnalysis.totalChars} chars`);
         setModalMode('output');
@@ -4833,6 +4982,24 @@ Output: Valid JSON only. No markdown, no prose.`;
       console.warn(`⚠️ ${hasCanonFacts ? 'Not enough facts to chunk - reduce your request complexity.' : 'This stage has no canon facts to chunk - reduce your generation prompt length.'}`);
 
       // Continue to show the prompt instead of blocking - user can proceed with caution
+      const overflowRequest: AiCompiledStageRequest = {
+        stageKey: stageLookupKey,
+        stageLabel: stage.name,
+        prompt: fullPrompt,
+        systemPrompt: systemPromptToUse,
+        userPrompt: userPromptToUse,
+        promptBudget: {
+          measuredChars: fullPrompt.length,
+          safetyCeiling: PROMPT_SAFETY_CEILING,
+          hardLimit: PROMPT_LIMITS.AI_HARD_LIMIT,
+          mode: promptMode,
+          droppedSections: [],
+          warnings,
+          compressionApplied: false,
+        },
+        memory: buildAiStageMemorySummary(stage, cfg, results, limitedFactpack, limitedDecisions),
+      };
+      setCompiledStageRequest(overflowRequest);
       setCurrentPrompt(fullPrompt);
       setModalMode('output');
       return;
@@ -4843,6 +5010,24 @@ Output: Valid JSON only. No markdown, no prose.`;
       console.warn(`⚠️ Prompt is ${((analysis.totalChars / PROMPT_LIMITS.AI_HARD_LIMIT) * 100).toFixed(1)}% of AI hard limit`);
     }
 
+    const safeRequest: AiCompiledStageRequest = {
+      stageKey: stageLookupKey,
+      stageLabel: stage.name,
+      prompt: fullPrompt,
+      systemPrompt: systemPromptToUse,
+      userPrompt: userPromptToUse,
+      promptBudget: {
+        measuredChars: fullPrompt.length,
+        safetyCeiling: PROMPT_SAFETY_CEILING,
+        hardLimit: PROMPT_LIMITS.AI_HARD_LIMIT,
+        mode: promptMode,
+        droppedSections: [],
+        warnings,
+        compressionApplied: false,
+      },
+      memory: buildAiStageMemorySummary(stage, cfg, results, limitedFactpack, limitedDecisions),
+    };
+    setCompiledStageRequest(safeRequest);
     setCurrentPrompt(fullPrompt);
     setModalMode('output');
 
@@ -5552,6 +5737,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           };
           setStageResults(updatedResults);
 
+          setCompiledStageRequest(null);
           setCurrentPrompt(nextChunk.prompt);
           setModalMode('output');
           return;
@@ -7054,53 +7240,36 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     console.log('[ManualGenerator] Accumulated answers after retry:', updatedAnswers);
 
-    // CRITICAL FIX: Rebuild prompt from scratch instead of appending to avoid prompt bloat
-    // The showStageOutput function will include the updatedAnswers automatically
-    // Rebuild the stage output with updated answers
+    let additionalInstructions = 'ADDITIONAL GUIDANCE FROM USER (RETRY):\n\n';
+
+    if (Object.keys(answers).length > 0) {
+      additionalInstructions += 'NEW ANSWERS TO PROPOSALS:\n';
+      Object.entries(answers).forEach(([question, answer]) => {
+        additionalInstructions += `Q: ${question}\nA: ${answer}\n\n`;
+      });
+    }
+
+    if (issuesToAddress.length > 0) {
+      additionalInstructions += 'CRITICAL ISSUES TO ADDRESS:\n';
+      issuesToAddress.forEach((issue, i) => {
+        additionalInstructions += `${i + 1}. ${issue}\n`;
+      });
+      additionalInstructions += '\nPlease revise your output to address these critical issues.\n';
+    }
+
+    additionalInstructions += '\n⚠️ IMPORTANT: This is a retry. Please regenerate your response with these clarifications, ensuring NO proposals or critical issues remain.';
+
     setTimeout(() => {
       showStageOutput(
         currentStageIndex,
         config!,
         stageResults,
         factpack,
-        currentChunkInfo || undefined
+        currentChunkInfo || undefined,
+        undefined,
+        updatedAnswers,
+        additionalInstructions
       );
-
-      // After prompt is generated, add retry-specific instructions
-      setTimeout(() => {
-        let additionalInstructions = '\n\n---\n\nADDITIONAL GUIDANCE FROM USER (RETRY):\n\n';
-
-        if (Object.keys(answers).length > 0) {
-          additionalInstructions += 'NEW ANSWERS TO PROPOSALS:\n';
-          Object.entries(answers).forEach(([question, answer]) => {
-            additionalInstructions += `Q: ${question}\nA: ${answer}\n\n`;
-          });
-        }
-
-        if (issuesToAddress.length > 0) {
-          additionalInstructions += 'CRITICAL ISSUES TO ADDRESS:\n';
-          issuesToAddress.forEach((issue, i) => {
-            additionalInstructions += `${i + 1}. ${issue}\n`;
-          });
-          additionalInstructions += '\nPlease revise your output to address these critical issues.\n';
-        }
-
-        additionalInstructions += '\n⚠️ IMPORTANT: This is a retry. Please regenerate your response with these clarifications, ensuring NO proposals or critical issues remain.';
-
-        // Append retry instructions to the freshly generated prompt
-        setCurrentPrompt(prev => {
-          // Limit the final prompt size by checking length
-          const combined = prev + additionalInstructions;
-          if (combined.length > 20000) {
-            console.warn(`[Retry] Prompt exceeds 20k chars (${combined.length}). Consider reducing canon facts or answers.`);
-          }
-          return combined;
-        });
-
-        // Show the modal with updated prompt
-        _setSkipMode(false);
-        setModalMode('output');
-      }, 100);
     }, 100);
   };
 
@@ -7206,53 +7375,24 @@ Output: Valid JSON only. No markdown, no prose.`;
         console.log(`[Smart Routing] Skipped ${NPC_CREATOR_STAGES.length - (dynamicStages.length - prefixStages.length)} stages`);
       }
 
-      // CRITICAL FIX: Pass updated answers directly to showStageOutput since state update is async
-      // We need to ensure the next stage gets the accumulated answers
       setTimeout(() => {
-        // Build context with updated answers for the next stage
         const nextStageConfig = STAGES[nextIndex];
         if (!nextStageConfig) {
-          // If skipping beyond last stage, finalize pipeline
           setIsComplete(true);
           setFinalOutput(newResults as unknown as JsonRecord);
           setModalMode(null);
           return;
         }
 
-        const context: StageContext = {
-          config: config!,
-          stageResults: newResults,
-          factpack: factpack || null,
-          previousDecisions: Object.keys(updatedAnswers).length > 0 ? updatedAnswers : undefined,
-        };
-
-        const isLegendaryStageNext = nextStageConfig.routerKey === 'legendary';
-        const userPrompt = isLegendaryStageNext
-          ? '{}'
-          : nextStageConfig.buildUserPrompt(context);
-        const systemPrompt = isLegendaryStageNext
-          ? 'Return JSON only. If legendary/mythic: include legendary_actions (object), lair_actions (array), regional_effects (array). Otherwise return {}.'
-          : nextStageConfig.systemPrompt || '';
-
-        if (isLegendaryStageNext) {
-          setCurrentPrompt(systemPrompt);
-        } else {
-          const fullPrompt = `${systemPrompt}\n\n---\n\nUSER INPUT:\n${userPrompt}`;
-
-          // If there are previous decisions, add them to the prompt
-          if (Object.keys(updatedAnswers).length > 0) {
-            const decisionsText = '\n\n---\n\nPREVIOUSLY ANSWERED QUESTIONS:\n\n' +
-              'The following questions were already answered in earlier stages or chunks. Do NOT ask these questions again:\n\n' +
-              Object.entries(updatedAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join('\n\n') +
-              '\n\nCRITICAL: Do NOT include any of the above questions in your proposals[] array. These decisions are final and must not be re-asked.';
-
-            setCurrentPrompt(fullPrompt + decisionsText);
-          } else {
-            setCurrentPrompt(fullPrompt);
-          }
-        }
-
-        setModalMode('output');
+        showStageOutput(
+          nextIndex,
+          config!,
+          newResults,
+          factpack || null,
+          undefined,
+          undefined,
+          updatedAnswers
+        );
       }, 100);
     } else {
       // Pipeline complete - Build complete final output

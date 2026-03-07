@@ -5,6 +5,8 @@
 - **Prevent Silent Data Loss**
 - **Support Schema Evolution**
 - **Enable Reliable Editing & Rendering**
+- **Make the App the Authoritative Memory for AI Generation**
+- **Guarantee Stateless, Deterministic Stage Execution**
 
 ## Domain Model Layer
 - **[Source Schema]** Maintain a versioned JSON Schema at `schema/npc/v1.json` capturing the full canonical payload, including nested sections such as `personality`, `equipment`, `magicItems`, `factCheckReport`, `speed`, `tactics`, and provenance metadata. Required vs optional fields must be explicit.
@@ -23,6 +25,43 @@
 - **[Field Adapters]** For complex structures (e.g., equipment, magic items, allies vs foes, spellcasting, fact-check reports), register adapters in `client/src/components/generator/fieldAdapters/` so new fields can be composed without editing monolithic code.
 - **[Round-Trip Guarantee]** Add integration tests ensuring `mapNormalizedToRaw(mapRawToNormalized(raw))` matches the original (modulo deterministic formatting) to prevent data loss.
 
+## Generation Memory & Orchestration Layer
+- **[App-Owned Memory]** Treat the application as the sole authoritative memory for multi-stage NPC generation. The model must not be relied upon to remember previous prompts, previous chunks, or prior stage outputs.
+- **[Generation Memory Model]** Maintain a typed generation-memory object containing:
+  - request memory (original prompt, generator type, flags, schema version)
+  - decision memory (confirmed answers, inferred choices, unresolved questions)
+  - stage memory (authoritative stage outputs and compact stage summaries)
+  - canon memory (retrieved facts, entities, provenance)
+  - execution memory (current stage, chunk state, retries, autosave checkpoints)
+- **[Stage Summary Memory]** Every stage must produce both:
+  - an authoritative full stage output for persistence/merging
+  - a compact summary used for later stage context budgeting
+- **[No Hidden Continuity]** AI chat/session history must never be required for correctness. If a later stage needs information, that information must be present in app-owned memory and explicitly supplied in the stage request.
+- **[Deterministic Stage Advancement]** Stage progression, retries, resume, chunk continuation, and user-answer incorporation must flow through the same orchestration path. Do not hand-build one-off prompts outside the stage compiler.
+
+## Prompt Compilation & Budgeting Layer
+- **[Single Authoritative Prompt Compiler]** Compile the final outbound stage prompt in exactly one place before execution. The compiled prompt sent to the provider must be byte-for-byte the same prompt that was budgeted and shown to the user.
+- **[Budget by Policy]** Stage prompts must be assembled from declarative categories:
+  - must-have: stage contract, output format, required stage inputs, explicit user decisions
+  - should-have: canon summaries, prior decision summaries
+  - nice-to-have: verbose flags, examples, expanded prior outputs
+- **[Dependency-Based Context Selection]** Each NPC stage must declare or imply which prior stages it depends on. Do not forward the entire prior stage history by default.
+- **[Distilled Context Only]** Use compact stage memory summaries instead of raw prior outputs whenever possible. Full prior outputs are reserved for debugging or explicitly required migrations.
+- **[Exact Outbound Measurement]** Prompt budgeting must be computed from the exact final outbound prompt string that the provider adapter sends. Any server-side ceiling checks should be comparable against the same string representation.
+- **[Fail Fast on Budget Violations]** If the authoritative compiled prompt exceeds the configured safety ceiling, abort the automated stage run with a clear error instead of silently trimming or relying on provider truncation.
+
+## Stage Execution Contract
+- **[Stateless Requests]** Each stage request must be self-contained and include:
+  - stable stage key
+  - stage contract
+  - explicit output shape
+  - minimal relevant generation memory
+  - minimal canon memory
+  - explicit previous decisions and unresolved ambiguities
+- **[AI as Pure Transform]** The model should only transform explicit input into structured output for the current stage. It must not own workflow continuity.
+- **[Patch Scope Enforcement]** Responses must be constrained to the active stage key and validated against schema-allowed fields before merge.
+- **[Retry Semantics]** Retries are new stateless executions with updated app-owned memory and explicit additional guidance. Retries must not append ad hoc prompt text outside the compiled stage request path.
+
 ## UI Composition Layer
 - **[Section Components]** Break `NpcContentForm.tsx` into focused sections (`NpcBasicsSection`, `NpcStatsSection`, `NpcSpellcastingSection`, `NpcLoreSection`, `NpcEquipmentSection`, etc.). Each section takes typed props (slices of `NormalizedNpc`) and emits explicit update payloads to avoid fragile string keys.
 - **[Dynamic Editors]** Implement reusable editors for lists and objects (e.g., equipment tables, magic item cards, relationship matrices) that accept schema-aware descriptors. Provide JSON fallback editors only when the schema explicitly allows arbitrary properties.
@@ -40,6 +79,9 @@
 
 ## Cross-Cutting Concerns
 - **[Testing Requirements]**
+  - Prompt compiler tests to verify the compiled outbound prompt matches what the integrated runner sends.
+  - Stage memory summary tests to ensure summaries are compact, deterministic, and stable across resumes.
+  - Integration tests for stateless stage retries and chunk continuations.
   - Unit tests for schema validation success/failure cases.
   - Round-trip mapper tests with real-world fixtures (e.g., `Goran Varus`).
   - Section-level snapshot tests to ensure UI renders all mapped fields.
@@ -56,6 +98,8 @@
 - **Code Review Checklist**
   - Schema alignment confirmed (no missing fields).
   - Validation paths covered by tests; no fallback/normalizer shortcuts added.
+  - Multi-stage generation uses app-owned memory, not chat continuity.
+  - Compiled prompt shown in UI matches the actual provider request.
   - UI sections updated to surface new data.
   - Round-trip tests passing.
 - **Release Protocol**
