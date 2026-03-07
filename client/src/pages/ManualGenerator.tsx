@@ -101,6 +101,7 @@ interface CanonFact {
   entity_id: string;
   entity_name: string;
   entity_type?: string;
+  type?: string;
   region?: string;
   era?: string;
   tags?: string[];
@@ -158,10 +159,19 @@ interface Proposal {
 }
 
 interface Conflict {
-  new_claim: string;
-  existing_claim: string;
-  entity_id: string;
-  entity_name: string;
+  new_claim?: string;
+  existing_claim?: string;
+  entity_id?: string;
+  entity_name?: string;
+  field_path?: string;
+  location?: string;
+  conflict_type?: string;
+  severity?: string;
+  summary?: string;
+  details?: string;
+  reason?: string;
+  suggested_fix?: string;
+  recommended_action?: string;
   resolution?: 'keep_old' | 'use_new' | 'merge' | 'skip';
 }
 
@@ -215,6 +225,99 @@ const getString = (source: JsonRecord | null | undefined, key: string): string |
   if (!source) return undefined;
   const value = source[key];
   return typeof value === 'string' ? value : undefined;
+};
+
+const getNumber = (source: JsonRecord | null | undefined, key: string): number | undefined => {
+  if (!source) return undefined;
+  const value = source[key];
+  if (typeof value === 'number') return value;
+  if (isRecord(value) && typeof value.value === 'number') return value.value;
+  return undefined;
+};
+
+const getStageObject = (source: StageResults | null | undefined, key: string): JsonRecord | undefined => {
+  if (!source) return undefined;
+  const value = source[key];
+  return isRecord(value) ? value : undefined;
+};
+
+const getEmbeddedObject = (source: JsonRecord | null | undefined, key: string, nestedKey: string): JsonRecord | undefined => {
+  const parent = getObject(source, key);
+  if (!parent) return undefined;
+  return getObject(parent, nestedKey);
+};
+
+const getJsonRecordList = (value: unknown): JsonRecord[] => {
+  if (Array.isArray(value)) {
+    return value.filter(isRecord);
+  }
+  if (isRecord(value) && Array.isArray(value.items)) {
+    return value.items.filter(isRecord);
+  }
+  return [];
+};
+
+const getHomebrewChunks = (value: unknown): HomebrewChunk[] => {
+  if (isRecord(value) && Array.isArray(value.items)) {
+    return asHomebrewChunks(value.items);
+  }
+  return asHomebrewChunks(value);
+};
+
+const setStageArrayValue = <T extends JsonRecord>(items: T[]): JsonRecord => ({ items });
+
+type HomebrewChunk = { index: number; title: string; content: string; prompt: string };
+
+const asHomebrewChunks = (value: unknown): HomebrewChunk[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is HomebrewChunk =>
+        isRecord(item)
+        && typeof item.index === 'number'
+        && typeof item.title === 'string'
+        && typeof item.content === 'string'
+        && typeof item.prompt === 'string'
+      )
+    : [];
+
+const getObject = (source: JsonRecord | null | undefined, key: string): JsonRecord | undefined => {
+  if (!source) return undefined;
+  const value = source[key];
+  return isRecord(value) ? value : undefined;
+};
+
+const asJsonRecordArray = (value: unknown): JsonRecord[] =>
+  Array.isArray(value) ? value.filter(isRecord) : [];
+
+const getStageStorageKey = (stage: Stage): string => stage.name.toLowerCase().replace(/\s+/g, '_');
+
+const getStageLookupKey = (stage: Stage): string => {
+  if (typeof stage.routerKey === 'string' && stage.routerKey.trim().length > 0) {
+    return stage.routerKey;
+  }
+  return stage.name;
+};
+
+const isPositionRecord = (value: unknown): value is { x?: number; y?: number } => isRecord(value);
+
+const getDimensionObject = (value: LiveMapDimensions | undefined): { width: number; height: number; unit?: string } | undefined => {
+  if (!value || typeof value === 'string') {
+    return undefined;
+  }
+  if (typeof value.width === 'number' && typeof value.height === 'number') {
+    return {
+      width: value.width,
+      height: value.height,
+      unit: value.unit,
+    };
+  }
+  return undefined;
+};
+
+const logLiveMapSpacePosition = (space: LiveMapSpace): string => {
+  const position = isPositionRecord(space.position) ? space.position : undefined;
+  const x = typeof position?.x === 'number' ? position.x : 'n/a';
+  const y = typeof position?.y === 'number' ? position.y : 'n/a';
+  return `${space.name}: (${x},${y}) locked=${String(space.position_locked)}`;
 };
 
 /**
@@ -2341,8 +2444,6 @@ function deduplicateProposals(
     const question = typeof prop.question === 'string' ? prop.question : null;
     const fieldPath = typeof prop.field_path === 'string' ? prop.field_path :
                      (typeof prop.field === 'string' ? prop.field : null);
-    const _currentValue = typeof prop.current_value === 'string' ? prop.current_value : null;
-
     // Filter out proposals with topics that were already answered
     if (topic && answeredTopics.has(topic)) {
       console.log(`[Proposal Dedup] Filtered out already-answered topic: ${topic}`);
@@ -2702,12 +2803,6 @@ export default function ManualGenerator() {
     setStageRoutingDecision(null);
   };
 
-  const LIVE_MAP_DEFAULT_HEIGHT = 720;
-  const LIVE_MAP_DEFAULT_WIDTH = 1280;
-  const LIVE_MAP_GRID_SIZE = 10;
-  const LIVE_MAP_MIN_SIZE = 5;
-  const LIVE_MAP_DEFAULT_UNIT = 'ft';
-
   function inferLegendaryPreference(prompt: string): 'yes' | 'no' | 'unknown' {
     const lower = prompt.toLowerCase();
     const negativePatterns = [
@@ -2929,19 +3024,23 @@ export default function ManualGenerator() {
     // PRIMARY: Load from stageChunkState (single source of truth)
     // FALLBACK: Load from top-level fields for old sessions, then migrate
     let accumulatedChunks: JsonRecord[] = [];
-    let savedLiveMapSpaces: JsonRecord[] = [];
+    let savedLiveMapSpaces: LiveMapSpace[] = [];
     let needsMigration = false;
 
     if (session.stageChunkState?.liveMapSpaces || session.stageChunkState?.accumulatedChunkResults) {
       // Modern format: Load from stageChunkState
       console.log('[Resume] Loading from stageChunkState (modern format)');
-      accumulatedChunks = session.stageChunkState.accumulatedChunkResults || [];
-      savedLiveMapSpaces = session.stageChunkState.liveMapSpaces || [];
+      accumulatedChunks = asJsonRecordArray(session.stageChunkState.accumulatedChunkResults);
+      savedLiveMapSpaces = Array.isArray(session.stageChunkState.liveMapSpaces)
+        ? session.stageChunkState.liveMapSpaces.filter((space): space is LiveMapSpace => Boolean(space && typeof space.name === 'string'))
+        : [];
     } else if (session.liveMapSpaces || session.accumulatedChunkResults) {
       // Legacy format: Load from top-level, mark for migration
       console.log('[Resume] Loading from top-level fields (legacy format) - will migrate to stageChunkState');
-      accumulatedChunks = session.accumulatedChunkResults || [];
-      savedLiveMapSpaces = session.liveMapSpaces || [];
+      accumulatedChunks = asJsonRecordArray(session.accumulatedChunkResults);
+      savedLiveMapSpaces = Array.isArray(session.liveMapSpaces)
+        ? session.liveMapSpaces.filter((space): space is LiveMapSpace => Boolean(space && typeof space.name === 'string'))
+        : [];
       needsMigration = true;
     }
 
@@ -3021,9 +3120,9 @@ export default function ManualGenerator() {
             position_locked: s.position_locked
           }))
         );
-        console.log('[Resume] FULL savedLiveMapSpaces:', savedLiveMapSpaces.map(s => `${s.name}: (${s.position?.x},${s.position?.y}) locked=${s.position_locked}`));
+        console.log('[Resume] FULL savedLiveMapSpaces:', savedLiveMapSpaces.map(logLiveMapSpacePosition));
         // Synchronize reciprocal doors before setting live map spaces
-        const syncedSpaces = mapAndSyncSpaces(savedLiveMapSpaces as Array<LiveMapSpace | null>);
+        const syncedSpaces = mapAndSyncSpaces(savedLiveMapSpaces);
         console.log('[Resume] Synchronized reciprocal doors for', syncedSpaces.length, 'saved spaces');
         setLiveMapSpaces(syncedSpaces);
         setShowLiveMap(session.stageChunkState.showLiveMap || savedLiveMapSpaces.length > 0);
@@ -3033,7 +3132,7 @@ export default function ManualGenerator() {
       // Fallback: restore from top-level fields or reconstructed data if stageChunkState doesn't exist
       console.log('[Resume] Using fallback restoration (no stageChunkState)');
       console.log('[Resume] Fallback - savedLiveMapSpaces count:', savedLiveMapSpaces.length);
-      console.log('[Resume] Fallback - sample positions:', savedLiveMapSpaces.slice(0, 3).map(s => `${s.name}: (${s.position?.x},${s.position?.y}) locked=${s.position_locked}`));
+      console.log('[Resume] Fallback - sample positions:', savedLiveMapSpaces.slice(0, 3).map(logLiveMapSpacePosition));
       setAccumulatedChunkResults(accumulatedChunks);
 
       // If we reconstructed chunking metadata, apply it
@@ -3093,9 +3192,9 @@ export default function ManualGenerator() {
 
       if (savedLiveMapSpaces.length > 0) {
         console.log('[Resume] Fallback - Loading', savedLiveMapSpaces.length, 'spaces into liveMapSpaces');
-        console.log('[Resume] Fallback - First 3 spaces being loaded:', savedLiveMapSpaces.slice(0, 3).map(s => `${s.name}: pos=(${s.position?.x},${s.position?.y}) locked=${s.position_locked}`));
+        console.log('[Resume] Fallback - First 3 spaces being loaded:', savedLiveMapSpaces.slice(0, 3).map(logLiveMapSpacePosition));
         // Synchronize reciprocal doors before setting live map spaces
-        const syncedSpaces = mapAndSyncSpaces(savedLiveMapSpaces as Array<LiveMapSpace | null>);
+        const syncedSpaces = mapAndSyncSpaces(savedLiveMapSpaces);
         console.log('[Resume] Fallback - Synchronized reciprocal doors for', syncedSpaces.length, 'spaces');
         setLiveMapSpaces(syncedSpaces);
         setShowLiveMap(true);
@@ -3221,13 +3320,13 @@ export default function ManualGenerator() {
 
       // Check if we have final output in stageResults
       const finalStageResults = session.stageResults as StageResults;
-      const hasPhysicsValidator = finalStageResults.physics_validator;
+      const physicsValidator = getStageObject(finalStageResults, 'physics_validator');
+      const hasPhysicsValidator = getEmbeddedObject(physicsValidator, 'content', 'content') || physicsValidator;
 
       if (hasPhysicsValidator) {
         // Session was fully complete - restore the final output
         setIsComplete(true);
-        const finalContent = hasPhysicsValidator;
-        setFinalOutput(finalContent as JsonRecord);
+        setFinalOutput(isRecord(hasPhysicsValidator) ? hasPhysicsValidator : {});
         alert(`⚠️ Session Was Already Complete!\n\nThis generation finished all ${STAGES.length} stages.\n\nThe completed content is shown below. You cannot resume a completed session, but you can view and save the results.`);
       } else {
         // At final stage but not complete - show the stage
@@ -3768,11 +3867,14 @@ export default function ManualGenerator() {
         }
       }
       // If the uploaded JSON has _pipeline_stages with physics_validator.content.content, extract it
-      else if (parsed._pipeline_stages &&
-          typeof parsed._pipeline_stages === 'object' &&
-          (parsed._pipeline_stages as any).physics_validator?.content?.content) {
+      else if (isRecord(parsed._pipeline_stages)) {
+        const pipelineStages = parsed._pipeline_stages as JsonRecord;
+        const physicsValidatorStage = getObject(pipelineStages, 'physics_validator');
+        const physicsContent = getEmbeddedObject(physicsValidatorStage, 'content', 'content');
+
+        if (physicsContent) {
         console.log('[Upload] Detected saved generation output, extracting content from physics_validator');
-        contentToUse = (parsed._pipeline_stages as any).physics_validator.content.content as JsonRecord;
+        contentToUse = physicsContent;
 
         // Merge in the top-level metadata if present
         if (parsed.deliverable) contentToUse.deliverable = parsed.deliverable;
@@ -3784,6 +3886,7 @@ export default function ManualGenerator() {
         if (parsed.canon_alignment_score) contentToUse.canon_alignment_score = parsed.canon_alignment_score;
         if (parsed.validation_notes) contentToUse.validation_notes = parsed.validation_notes;
         if (parsed.proposals) contentToUse.proposals = parsed.proposals;
+        }
       }
 
       // Check if this is a monster with stage structure (basic_info, stats_&_defenses, etc.)
@@ -3981,7 +4084,10 @@ export default function ManualGenerator() {
 
         // Start processing first chunk
         setCurrentStageIndex(0);
-        setStageResults({ homebrew_chunks: homebrewChunks, current_chunk: 0 });
+        setStageResults({
+          homebrew_chunks: setStageArrayValue(homebrewChunks),
+          current_chunk: { value: 0 },
+        });
 
         // Initialize empty factpack (not used for homebrew)
         setFactpack({
@@ -4131,7 +4237,7 @@ Validation will reject incorrect field names or missing required fields.`;
       const isLocationStage = ['Foundation', 'Spaces', 'Details', 'Accuracy Refinement'].includes(stage.name);
       if (isLocationStage && limitedFactpack && limitedFactpack.facts) {
         const filteredFacts = limitedFactpack.facts.filter(fact => {
-          const type = fact.type?.toLowerCase();
+          const type = (fact.type ?? fact.entity_type)?.toLowerCase();
           return type === 'world' || type === 'setting' || type === 'location';
         });
         console.log(`[Canon Filter] Location stage "${stage.name}": Filtered ${limitedFactpack.facts.length} facts to ${filteredFacts.length} (World/Setting/Location only)`);
@@ -4211,15 +4317,20 @@ Validation will reject incorrect field names or missing required fields.`;
       console.log(`├─ Total Overhead: ${spaceCalculation.overhead.toLocaleString()} chars`);
       console.log(`└─ Available for Facts: ${spaceCalculation.availableForFacts.toLocaleString()} chars\n`);
 
-      const totalFactChars = limitedFactpack.facts.reduce((sum, f) => sum + f.text.length, 0);
+      const factpackForChunking = limitedFactpack;
+      if (!factpackForChunking) {
+        setError(`[${stage.name}] Fact chunking failed: canon factpack was unexpectedly unavailable.`);
+        return;
+      }
+      const totalFactChars = factpackForChunking.facts.reduce((sum, f) => sum + f.text.length, 0);
 
       if (totalFactChars > spaceCalculation.availableForFacts) {
         console.warn(`⚠️ Facts (${totalFactChars.toLocaleString()} chars) exceed available space (${spaceCalculation.availableForFacts.toLocaleString()} chars).`);
 
         // If we have enough facts to chunk, trigger chunking instead of trimming
         // BUT: don't re-trigger if we're already in multi-part mode (prevents infinite loops)
-        if (limitedFactpack.facts.length > 10 && !isMultiPartGeneration) {
-          console.log(`📦 Triggering chunking for ${stage.name} stage (${limitedFactpack.facts.length} facts, ${totalFactChars.toLocaleString()} chars)`);
+        if (factpackForChunking.facts.length > 10 && !isMultiPartGeneration) {
+          console.log(`📦 Triggering chunking for ${stage.name} stage (${factpackForChunking.facts.length} facts, ${totalFactChars.toLocaleString()} chars)`);
 
           // IMPORTANT: Chunk 1 uses full prompt (limited space), but chunks 2+ use minimal prompts (much more space)
           // Estimate minimal prompt overhead: ~500 chars system + ~200 chars user base + ~200 formatting = ~900 chars
@@ -4235,7 +4346,7 @@ Validation will reject incorrect field names or missing required fields.`;
           console.log(`   Chunks 2+ space: ${availableForSubsequentChunks.toLocaleString()} chars each (with minimal prompts)`);
 
           // Group facts intelligently - use the larger limit for subsequent chunks
-          const groups = groupFactsIntelligently(limitedFactpack, availableForSubsequentChunks);
+          const groups = groupFactsIntelligently(factpackForChunking, availableForSubsequentChunks);
 
           // If chunk 1 has very little space (<500 chars), give it ZERO facts and put everything in chunks 2+
           if (availableForChunk1 < 500) {
@@ -4304,7 +4415,7 @@ Validation will reject incorrect field names or missing required fields.`;
           }
 
           setShowChunkingModal(true);
-          setPendingFactpack(limitedFactpack);
+          setPendingFactpack(factpackForChunking);
 
           const estimatedChunks = Math.max(2, Math.ceil((totalFactChars - spaceCalculation.availableForFacts) / availableForSubsequentChunks) + 1);
           setError(`The ${stage.name} stage has too much canon data (${totalFactChars.toLocaleString()} chars) to fit in one prompt (only ${spaceCalculation.availableForFacts.toLocaleString()} chars available for facts after prompt overhead). Estimated ${estimatedChunks} chunks needed. Please approve chunking.`);
@@ -4312,11 +4423,11 @@ Validation will reject incorrect field names or missing required fields.`;
         }
 
         // If too few facts to chunk, trim them
-        console.warn(`⚠️ Too few facts to chunk (${limitedFactpack.facts.length}). Trimming instead...`);
-        const trimmedFacts: typeof limitedFactpack.facts = [];
+        console.warn(`⚠️ Too few facts to chunk (${factpackForChunking.facts.length}). Trimming instead...`);
+        const trimmedFacts: typeof factpackForChunking.facts = [];
         let currentChars = 0;
 
-        for (const fact of limitedFactpack.facts) {
+        for (const fact of factpackForChunking.facts) {
           if (currentChars + fact.text.length <= spaceCalculation.availableForFacts) {
             trimmedFacts.push(fact);
             currentChars += fact.text.length;
@@ -4326,8 +4437,9 @@ Validation will reject incorrect field names or missing required fields.`;
         }
 
         limitedFactpack = {
-          ...limitedFactpack,
           facts: trimmedFacts,
+          entities: factpackForChunking.entities || [],
+          gaps: factpackForChunking.gaps || [],
         };
 
         const trimmedCount = (fp || factpack)!.facts.length - trimmedFacts.length;
@@ -4450,13 +4562,14 @@ Validation will reject incorrect field names or missing required fields.`;
 - More canon facts will follow in subsequent messages
 - ⚠️ CRITICAL: Use the SAME AI chat session for ALL ${chunkInfo.totalChunks} chunks
 - Do NOT start a new session or you will lose context
-- After receiving all chunks, generate the complete ${config.type}`;
+- After receiving all chunks, generate the complete ${cfg.type}`;
 
       console.log(`📦 Chunk 1/${chunkInfo.totalChunks}: Added multi-part instructions`);
     }
 
     // Use minimal prompts for chunks 2+ (but NOT for Spaces stage - it needs full prompt each time)
-    const isLocationSpacesStage = stage.id === 'location_spaces' || stage.name === 'Spaces';
+    const stageLookupKey = getStageLookupKey(stage);
+    const isLocationSpacesStage = stageLookupKey === 'location_spaces' || stage.name === 'Spaces';
 
     if (isSubsequentChunk && !isLocationSpacesStage) {
       systemPromptToUse = `Continuing ${stage.name} generation. Chunk ${chunkInfo!.currentChunk} of ${chunkInfo!.totalChunks}.
@@ -4479,9 +4592,11 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     // Check if this stage has a minimal contract (new prompt packer system)
     const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
-    const isLegendaryStage = normalizedStageName.toLowerCase() === 'legendary';
+    const lowerStageName = normalizedStageName.toLowerCase();
+    const isLegendaryStage = lowerStageName === 'legendary';
+    const isSpellcastingStage = lowerStageName === 'spellcasting';
     const stageContract =
-      getStageContract((stage as any).routerKey ?? stage.id ?? stage.name) ||
+      getStageContract(stageLookupKey) ||
       getStageContract(normalizedStageName) ||
       null;
     const usePackedPrompt = !!stageContract && cfg.type === 'npc' && !isSubsequentChunk;
@@ -4499,20 +4614,24 @@ Output: Valid JSON only. No markdown, no prose.`;
         mustHave: {
           stageContract: isLegendaryStage
             ? 'Output ONLY valid JSON. If this creature is legendary/mythic, include legendary_actions (object), lair_actions (array), and regional_effects (array). If not legendary, return an empty JSON object {}.'
-            : stageContract!,
+            : isSpellcastingStage
+              ? 'Return JSON only. Provide spellcasting per schema: spells_known (object) and spell_slots (object). Keep descriptions concise.'
+              : stageContract!,
           outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
-          requiredKeys: isLegendaryStage ? [] : generateCompactSchemaSpec(stageSchema as any, requiredFields),
-          stageInputs: isLegendaryStage
+          requiredKeys: (isLegendaryStage || isSpellcastingStage)
+            ? ''
+            : generateCompactSchemaSpec(stageSchema as any, requiredFields),
+          stageInputs: (isLegendaryStage || isSpellcastingStage)
             ? {}
-            : reduceStageInputs(((stage as any).routerKey as string | undefined) ?? normalizedStageName, results),
+            : reduceStageInputs(stageLookupKey, results),
         },
-        shouldHave: isLegendaryStage
+        shouldHave: (isLegendaryStage || isSpellcastingStage)
           ? {}
           : {
               canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
               previousDecisionsSummary: limitedDecisions ? JSON.stringify(limitedDecisions, null, 2) : undefined,
             },
-        niceToHave: isLegendaryStage ? {} : { verboseFlags: cfg.flags },
+        niceToHave: (isLegendaryStage || isSpellcastingStage) ? {} : { verboseFlags: cfg.flags },
         safetyCeiling: PROMPT_SAFETY_CEILING,
       };
 
@@ -4584,7 +4703,8 @@ Output: Valid JSON only. No markdown, no prose.`;
 
       // Check if this is a stage that can be chunked (has facts)
       // Don't re-trigger if already in multi-part mode (prevents infinite loops)
-      if (hasCanonFacts && limitedFactpack.facts.length > 10 && spaceCalculation && !isMultiPartGeneration) {
+      if (hasCanonFacts && limitedFactpack && spaceCalculation && limitedFactpack.facts.length > 10 && !isMultiPartGeneration) {
+        const factpackForOverflowChunking = limitedFactpack;
         console.warn(`⚠️ Prompt exceeds AI hard limit by ${overflow.toLocaleString()} chars. Triggering chunking...`);
 
         // Use multi-chunk strategy: chunk 1 has limited space, chunks 2+ have much more
@@ -4598,7 +4718,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         console.log(`   Chunks 2+ space: ${availableForSubsequentChunks.toLocaleString()} chars`);
 
         // Trigger chunking modal
-        const groups = groupFactsIntelligently(limitedFactpack, availableForSubsequentChunks);
+        const groups = groupFactsIntelligently(factpackForOverflowChunking, availableForSubsequentChunks);
 
         // If chunk 1 has very little space (<500 chars), give it ZERO facts
         if (availableForChunk1 < 500) {
@@ -4660,14 +4780,15 @@ Output: Valid JSON only. No markdown, no prose.`;
         }
 
         setShowChunkingModal(true);
-        setPendingFactpack(limitedFactpack);
+        setPendingFactpack(factpackForOverflowChunking);
 
         setError(`This stage has too much canon data to fit in one prompt (${analysis.totalChars.toLocaleString()} chars). Please approve chunking.`);
         return;
       }
 
       // If can't chunk but already in multi-part mode, we need to trim this chunk's facts
-      if (isMultiPartGeneration && hasCanonFacts) {
+      if (isMultiPartGeneration && hasCanonFacts && limitedFactpack && spaceCalculation) {
+        const factpackForTrim = limitedFactpack;
         console.warn(`⚠️ Already in multi-part mode, but chunk exceeds limit. Trimming facts for this chunk...`);
 
         // Calculate how many chars we can use
@@ -4677,7 +4798,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         const trimmedFacts: CanonFact[] = [];
         let currentChars = 0;
 
-        for (const fact of limitedFactpack.facts) {
+        for (const fact of factpackForTrim.facts) {
           if (currentChars + fact.text.length <= availableForFacts) {
             trimmedFacts.push(fact);
             currentChars += fact.text.length;
@@ -4687,11 +4808,12 @@ Output: Valid JSON only. No markdown, no prose.`;
         }
 
         limitedFactpack = {
-          ...limitedFactpack,
           facts: trimmedFacts,
+          entities: factpackForTrim.entities || [],
+          gaps: factpackForTrim.gaps || [],
         };
 
-        const trimmedCount = (limitedFactpack?.facts?.length || 0) - trimmedFacts.length;
+        const trimmedCount = factpackForTrim.facts.length - trimmedFacts.length;
         console.warn(`⚠️ Trimmed ${trimmedCount} facts from this chunk to fit within limit`);
 
         // Rebuild prompt with trimmed facts
@@ -4717,6 +4839,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           }
         );
 
+// ...
         setCurrentPrompt(rebuiltPrompt);
         console.log(`📊 Rebuilt prompt after trimming: ${rebuiltAnalysis.totalChars} chars`);
         setModalMode('output');
@@ -4772,9 +4895,14 @@ Output: Valid JSON only. No markdown, no prose.`;
     setError(null);
 
     try {
-      const homebrewChunks = stageResults.homebrew_chunks as Array<{ index: number; title: string; content: string }>;
-      const currentChunkIndex = (stageResults.current_chunk as number) || 0;
+      const homebrewChunks = getHomebrewChunks(stageResults.homebrew_chunks);
+      const currentChunkIndex = getNumber(stageResults, 'current_chunk') ?? 0;
       const currentChunk = homebrewChunks[currentChunkIndex];
+
+      if (!currentChunk) {
+        setError('Auto-parse failed: current homebrew chunk was missing or invalid.');
+        return;
+      }
 
       const response = await fetch(`${API_BASE_URL}/homebrew/parse`, {
         method: 'POST',
@@ -5417,16 +5545,15 @@ Output: Valid JSON only. No markdown, no prose.`;
       // Special handling for Homebrew Extraction - chunked processing
       // Check if we're processing homebrew chunks (not by stage name, but by presence of chunks)
       if (config?.type === 'homebrew' && stageResults.homebrew_chunks) {
-        const homebrewChunks = stageResults.homebrew_chunks as unknown[];
-        const currentChunkIndex = (stageResults.current_chunk as number) || 0;
+        const homebrewChunks = getHomebrewChunks(stageResults.homebrew_chunks);
+        const currentChunkIndex = getNumber(stageResults, 'current_chunk') ?? 0;
 
         // Store this chunk's result
-        const chunkResults = (stageResults.chunk_results as JsonRecord[]) || [];
-        chunkResults.push(parsed);
+        const chunkResults = [...getJsonRecordList(stageResults.chunk_results), parsed];
 
         const newResults: StageResults = {
           ...stageResults,
-          chunk_results: chunkResults as unknown as JsonRecord,
+          chunk_results: setStageArrayValue(chunkResults),
         };
         setStageResults(newResults);
 
@@ -5434,12 +5561,12 @@ Output: Valid JSON only. No markdown, no prose.`;
         const nextChunkIndex = currentChunkIndex + 1;
         if (nextChunkIndex < homebrewChunks.length) {
           // Show next chunk prompt
-          const nextChunk = homebrewChunks[nextChunkIndex] as { prompt: string; title: string; index: number };
+          const nextChunk = homebrewChunks[nextChunkIndex];
           console.log(`[Homebrew] Moving to chunk ${nextChunkIndex + 1}/${homebrewChunks.length}: ${nextChunk.title}`);
 
           const updatedResults: StageResults = {
             ...newResults,
-            current_chunk: nextChunkIndex as unknown as JsonRecord,
+            current_chunk: { value: nextChunkIndex },
           };
           setStageResults(updatedResults);
 
@@ -5995,14 +6122,26 @@ Output: Valid JSON only. No markdown, no prose.`;
 
             // Validate geometry and generate proposals
             // NOTE: Stage results stored by stage.name, not stage.id (e.g., "foundation" not "location_foundation")
-            const foundation = stageResults.foundation as Record<string, unknown> | undefined;
+            const foundation = getStageObject(stageResults, 'foundation');
             const parentStructure = foundation ? {
               total_floors: typeof foundation.total_floors === 'number' ? foundation.total_floors : undefined,
               total_area: typeof foundation.total_area === 'number' ? foundation.total_area : undefined,
               layout: typeof foundation.layout === 'string' ? foundation.layout : undefined,
             } : undefined;
 
-            const validation = validateSpaceGeometry(spaceData, liveMapSpaces, parentStructure);
+            const geometrySpace = {
+              name: spaceData.name,
+              dimensions: getDimensionObject(spaceData.dimensions),
+              floor: typeof spaceData.floor === 'number' || typeof spaceData.floor === 'string' ? spaceData.floor : undefined,
+              connections: Array.isArray(spaceData.connections) ? spaceData.connections : undefined,
+            };
+            const existingGeometrySpaces = liveMapSpaces.map((space) => ({
+              name: space.name,
+              dimensions: getDimensionObject(space.dimensions),
+              floor: typeof space.floor === 'number' || typeof space.floor === 'string' ? space.floor : undefined,
+              connections: Array.isArray(space.connections) ? space.connections : undefined,
+            }));
+            const validation = validateSpaceGeometry(geometrySpace, existingGeometrySpaces, parentStructure);
 
             if (!validation.isValid && validation.proposals.length > 0) {
               console.log(`[Geometry Validation] Found ${validation.proposals.length} issues for "${spaceData.name}"`);
@@ -6223,16 +6362,15 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         // CRITICAL FIX: Update the stage output with the LATEST AI response
         // This ensures the next chunk sees the updated/corrected version, not the original
-        const stageKey = currentStage.name.toLowerCase().replace(/\s+/g, '_');
-        const chunkResults = (newResults[`${stageKey}_chunks`] as JsonRecord[]) || [];
-        chunkResults.push(parsed);
+        const stageKey = getStageStorageKey(currentStage);
+        const chunkResults = [...getJsonRecordList(newResults[`${stageKey}_chunks`]), parsed];
 
         // Update the main stage output with the latest response
         // This way the next chunk will reference the UPDATED data
-        const updatedResults = {
+        const updatedResults: StageResults = {
           ...newResults,
           [stageKey]: parsed, // Use latest chunk's output as the "current" output
-          [`${stageKey}_chunks`]: chunkResults, // Also keep chunk history for merging later
+          [`${stageKey}_chunks`]: setStageArrayValue(chunkResults), // Also keep chunk history for merging later
         };
         setStageResults(updatedResults);
 
@@ -6277,9 +6415,8 @@ Output: Valid JSON only. No markdown, no prose.`;
       if (isMultiPartGeneration && currentGroupIndex === factGroups.length - 1) {
         console.log(`[Multi-Chunk] All ${factGroups.length} chunks complete for stage ${currentStage.name}. Merging results...`);
 
-        const stageKey = currentStage.name.toLowerCase().replace(/\s+/g, '_');
-        const chunkResults = (newResults[`${stageKey}_chunks`] as JsonRecord[]) || [];
-        chunkResults.push(parsed); // Add the last chunk
+        const stageKey = getStageStorageKey(currentStage);
+        const chunkResults = [...asJsonRecordArray(newResults[`${stageKey}_chunks`]), parsed];
 
         // Merge all chunk results for this stage
         const mergedStageOutput = mergeChunkOutputs(chunkResults, currentStage.name);
@@ -6576,23 +6713,29 @@ Output: Valid JSON only. No markdown, no prose.`;
 
           console.log('[Pipeline Complete] Monster: Merged all 5 stage results');
         } else if (config?.type === 'location') {
+          const purpose = getStageObject(newResults, 'purpose') || {};
+          const foundation = getStageObject(newResults, 'foundation') || {};
+          const details = getStageObject(newResults, 'details') || {};
+          const accuracyRefinement = getStageObject(newResults, 'accuracy_refinement') || {};
+          const spaces = getStageObject(newResults, 'spaces');
+
           // Location uses multi-stage approach: Purpose -> Foundation -> Spaces -> Details -> Accuracy Refinement
           baseContent = {
-            ...newResults.purpose,
-            ...newResults.foundation,
-            spaces: newResults.spaces, // Don't spread spaces - keep as array
-            ...newResults.details,
-            ...newResults.accuracy_refinement,
+            ...purpose,
+            ...foundation,
+            spaces,
+            ...details,
+            ...accuracyRefinement,
             deliverable: 'location', // Set AFTER spread to ensure it's not overwritten
           };
 
           console.log('[Pipeline Complete] Location: Merged all location stage results', {
-            hasPurpose: !!newResults.purpose,
-            hasFoundation: !!newResults.foundation,
-            hasSpaces: !!newResults.spaces,
-            spacesCount: Array.isArray(newResults.spaces) ? newResults.spaces.length : 0,
-            hasDetails: !!newResults.details,
-            hasAccuracyRefinement: !!newResults.accuracy_refinement,
+            hasPurpose: !!getStageObject(newResults, 'purpose'),
+            hasFoundation: !!getStageObject(newResults, 'foundation'),
+            hasSpaces: !!spaces,
+            spacesCount: Array.isArray(spaces?.spaces) ? spaces.spaces.length : 0,
+            hasDetails: !!getStageObject(newResults, 'details'),
+            hasAccuracyRefinement: !!getStageObject(newResults, 'accuracy_refinement'),
             totalFields: Object.keys(baseContent).length,
           });
         } else if (config?.type === 'npc') {
@@ -6620,30 +6763,40 @@ Output: Valid JSON only. No markdown, no prose.`;
             }
           }
         } else if (config?.type === 'nonfiction') {
-          if (newResults.finalizer) {
-            baseContent = newResults.finalizer as JsonRecord;
+          const finalizer = getStageObject(newResults, 'finalizer');
+          const editorStyle = getStageObject(newResults, 'editor_&_style');
+          const draft = getStageObject(newResults, 'draft');
+          if (finalizer) {
+            baseContent = finalizer;
             console.log('[Pipeline Complete] Using content from finalizer');
-          } else if (newResults['editor_&_style']) {
-            baseContent = newResults['editor_&_style'] as JsonRecord;
+          } else if (editorStyle) {
+            baseContent = editorStyle;
             console.log('[Pipeline Complete] Using content from editor_&_style');
-          } else if (newResults.draft) {
-            baseContent = newResults.draft as JsonRecord;
+          } else if (draft) {
+            baseContent = draft;
             console.log('[Pipeline Complete] Using content from draft');
           }
-        } else if (newResults.physics_validator?.content?.content) {
-          // Content from Physics Validator (wrapped structure)
-          baseContent = newResults.physics_validator.content.content as JsonRecord;
-          console.log('[Pipeline Complete] Using content from physics_validator.content.content');
-        } else if (newResults.stylist) {
-          // Content from Stylist (normal structure)
-          baseContent = newResults.stylist as JsonRecord;
-          console.log('[Pipeline Complete] Using content from stylist');
-        } else if (newResults.creator) {
-          // Content from Creator (fallback)
-          baseContent = newResults.creator as JsonRecord;
-          console.log('[Pipeline Complete] Using content from creator');
         } else {
-          console.error('[Pipeline Complete] No content found in stage results!', newResults);
+          const physicsValidator = getStageObject(newResults, 'physics_validator');
+          const physicsContent = getEmbeddedObject(physicsValidator, 'content', 'content');
+          const stylist = getStageObject(newResults, 'stylist');
+          const creator = getStageObject(newResults, 'creator');
+
+          if (physicsContent) {
+          // Content from Physics Validator (wrapped structure)
+            baseContent = physicsContent;
+            console.log('[Pipeline Complete] Using content from physics_validator.content.content');
+          } else if (stylist) {
+          // Content from Stylist (normal structure)
+            baseContent = stylist;
+            console.log('[Pipeline Complete] Using content from stylist');
+          } else if (creator) {
+          // Content from Creator (fallback)
+            baseContent = creator;
+            console.log('[Pipeline Complete] Using content from creator');
+          } else {
+            console.error('[Pipeline Complete] No content found in stage results!', newResults);
+          }
         }
 
         // Sanitize and deduplicate proposals to prevent asking the same question multiple times
@@ -6732,16 +6885,18 @@ Output: Valid JSON only. No markdown, no prose.`;
           // Critical for correct mapping when saving to project
           deliverable: inferredDeliverable,
 
-          fact_check_report: config!.type === 'nonfiction' ? (newResults['editor_&_style'] || {}) : (newResults.fact_checker || {}),
+          fact_check_report: config!.type === 'nonfiction'
+            ? (getStageObject(newResults, 'editor_&_style') || {})
+            : (getStageObject(newResults, 'fact_checker') || {}),
           // Add Canon Validator metadata (these are NEW fields, not overwrites)
-          conflicts: newResults.canon_validator?.conflicts || [],
-          canon_alignment_score: newResults.canon_validator?.canon_alignment_score,
-          validation_notes: newResults.canon_validator?.validation_notes,
+          conflicts: getJsonRecordList(getStageObject(newResults, 'canon_validator')?.conflicts),
+          canon_alignment_score: getStageObject(newResults, 'canon_validator')?.canon_alignment_score,
+          validation_notes: getStageObject(newResults, 'canon_validator')?.validation_notes,
 
           // Add Physics Validator metadata (these are NEW fields, not overwrites)
-          physics_issues: newResults.physics_validator?.physics_issues || [],
-          logic_score: newResults.physics_validator?.logic_score,
-          balance_notes: newResults.physics_validator?.balance_notes,
+          physics_issues: getJsonRecordList(getStageObject(newResults, 'physics_validator')?.physics_issues),
+          logic_score: getStageObject(newResults, 'physics_validator')?.logic_score,
+          balance_notes: getStageObject(newResults, 'physics_validator')?.balance_notes,
 
           // Include the full stage results for debugging/audit trail
           _pipeline_stages: newResults,
@@ -7214,30 +7369,40 @@ Output: Valid JSON only. No markdown, no prose.`;
         baseContent = mergedNpc;
         console.log('[handleAcceptWithIssues] NPC: Merged all creator stage results');
       } else if (config?.type === 'nonfiction') {
-        if (newResults.finalizer) {
-          baseContent = newResults.finalizer as JsonRecord;
+        const finalizer = getStageObject(newResults, 'finalizer');
+        const editorStyle = getStageObject(newResults, 'editor_&_style');
+        const draft = getStageObject(newResults, 'draft');
+        if (finalizer) {
+          baseContent = finalizer;
           console.log('[handleAcceptWithIssues] Using content from finalizer');
-        } else if (newResults['editor_&_style']) {
-          baseContent = newResults['editor_&_style'] as JsonRecord;
+        } else if (editorStyle) {
+          baseContent = editorStyle;
           console.log('[handleAcceptWithIssues] Using content from editor_&_style');
-        } else if (newResults.draft) {
-          baseContent = newResults.draft as JsonRecord;
+        } else if (draft) {
+          baseContent = draft;
           console.log('[handleAcceptWithIssues] Using content from draft');
         }
-      } else if (newResults.physics_validator?.content?.content) {
-        // Content from Physics Validator (wrapped structure)
-        baseContent = newResults.physics_validator.content.content as JsonRecord;
-        console.log('[handleAcceptWithIssues] Using content from physics_validator.content.content');
-      } else if (newResults.stylist) {
-        // Content from Stylist (normal structure)
-        baseContent = newResults.stylist as JsonRecord;
-        console.log('[handleAcceptWithIssues] Using content from stylist');
-      } else if (newResults.creator) {
-        // Content from Creator (fallback)
-        baseContent = newResults.creator as JsonRecord;
-        console.log('[handleAcceptWithIssues] Using content from creator');
       } else {
-        console.error('[handleAcceptWithIssues] No content found in stage results!', newResults);
+        const physicsValidator = getStageObject(newResults, 'physics_validator');
+        const physicsContent = getEmbeddedObject(physicsValidator, 'content', 'content');
+        const stylist = getStageObject(newResults, 'stylist');
+        const creator = getStageObject(newResults, 'creator');
+
+        if (physicsContent) {
+        // Content from Physics Validator (wrapped structure)
+          baseContent = physicsContent;
+          console.log('[handleAcceptWithIssues] Using content from physics_validator.content.content');
+        } else if (stylist) {
+        // Content from Stylist (normal structure)
+          baseContent = stylist;
+          console.log('[handleAcceptWithIssues] Using content from stylist');
+        } else if (creator) {
+        // Content from Creator (fallback)
+          baseContent = creator;
+          console.log('[handleAcceptWithIssues] Using content from creator');
+        } else {
+          console.error('[handleAcceptWithIssues] No content found in stage results!', newResults);
+        }
       }
 
       // Deduplicate proposals before including in final output
@@ -7289,17 +7454,19 @@ Output: Valid JSON only. No markdown, no prose.`;
         // Critical for correct mapping when saving to project
         deliverable: inferredDeliverable,
 
-        fact_check_report: config!.type === 'nonfiction' ? (newResults['editor_&_style'] || {}) : (newResults.fact_checker || {}),
+        fact_check_report: config!.type === 'nonfiction'
+          ? (getStageObject(newResults, 'editor_&_style') || {})
+          : (getStageObject(newResults, 'fact_checker') || {}),
 
         // Add Canon Validator metadata (these are NEW fields, not overwrites)
-        conflicts: newResults.canon_validator?.conflicts || [],
-        canon_alignment_score: newResults.canon_validator?.canon_alignment_score,
-        validation_notes: newResults.canon_validator?.validation_notes,
+        conflicts: getJsonRecordList(getStageObject(newResults, 'canon_validator')?.conflicts),
+        canon_alignment_score: getStageObject(newResults, 'canon_validator')?.canon_alignment_score,
+        validation_notes: getStageObject(newResults, 'canon_validator')?.validation_notes,
 
         // Add Physics Validator metadata (these are NEW fields, not overwrites)
-        physics_issues: newResults.physics_validator?.physics_issues || [],
-        logic_score: newResults.physics_validator?.logic_score,
-        balance_notes: newResults.physics_validator?.balance_notes,
+        physics_issues: getJsonRecordList(getStageObject(newResults, 'physics_validator')?.physics_issues),
+        logic_score: getStageObject(newResults, 'physics_validator')?.logic_score,
+        balance_notes: getStageObject(newResults, 'physics_validator')?.balance_notes,
 
         // Include the full stage results for debugging/audit trail
         _pipeline_stages: newResults,
@@ -8220,14 +8387,20 @@ Output: Valid JSON only. No markdown, no prose.`;
         skipMode={skipMode}
         chunkProgress={
           // Show chunk progress for homebrew chunks
-          Array.isArray(stageResults.homebrew_chunks) && typeof stageResults.current_chunk === 'number'
-            ? {
-              current: stageResults.current_chunk as number,
-              total: stageResults.homebrew_chunks.length,
-              title: (stageResults.homebrew_chunks[stageResults.current_chunk as number] as { title?: string } | undefined)?.title,
+          (() => {
+            const homebrewChunks = getHomebrewChunks(stageResults.homebrew_chunks);
+            const currentChunk = getNumber(stageResults, 'current_chunk');
+
+            if (homebrewChunks.length > 0 && typeof currentChunk === 'number') {
+              return {
+                current: currentChunk,
+                total: homebrewChunks.length,
+                title: homebrewChunks[currentChunk]?.title,
+              };
             }
+
+            return isStageChunking && totalStageChunks > 0
             // Or show chunk progress for stage chunking (location spaces)
-            : isStageChunking && totalStageChunks > 0
             ? {
               current: currentStageChunk,
               total: totalStageChunks,
@@ -8240,9 +8413,10 @@ Output: Valid JSON only. No markdown, no prose.`;
               total: factGroups.length,
               title: factGroups[currentGroupIndex]?.label || `Chunk ${currentGroupIndex + 1}`,
             }
-            : undefined
+            : undefined;
+          })()
         }
-        canAutoParse={Array.isArray(stageResults.homebrew_chunks) && config?.type === 'homebrew'}
+        canAutoParse={getHomebrewChunks(stageResults.homebrew_chunks).length > 0 && config?.type === 'homebrew'}
         structuredContent={
           (() => {
             const stages = getStages(config, dynamicNpcStages);
@@ -8419,7 +8593,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
                   console.log('[ManualGenerator] Saving to stageChunkState:', updatedResults.length, 'spaces');
                   updatedResults.slice(0, 3).forEach(s => {
-                    console.log(`  - ${s.name}: pos=(${s.position?.x},${s.position?.y}) locked=${s.position_locked}`);
+                    console.log(`  - ${logLiveMapSpacePosition(s)}`);
                   });
 
                   setProgressSession(updatedSession);

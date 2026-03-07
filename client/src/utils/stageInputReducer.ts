@@ -217,7 +217,10 @@ const STAGE_REDUCERS: Record<string, (results: StageResults) => Record<string, u
  */
 export function reduceStageInputs(stageName: string, priorResults: StageResults): Record<string, unknown> {
   // Normalize stage name to lowercase with underscores
-  const normalizedStageName = stageName.toLowerCase().replace(/\s+/g, '_');
+  const normalizedStageName = stageName
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/\s+/g, '_');
 
   // Try exact match first
   const reducer = STAGE_REDUCERS[normalizedStageName];
