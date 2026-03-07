@@ -2702,7 +2702,38 @@ export default function ManualGenerator() {
     setStageRoutingDecision(null);
   };
 
-  // Helper function to deduplicate a factpack (removes duplicates based on chunk_id AND text content)
+  const LIVE_MAP_DEFAULT_HEIGHT = 720;
+  const LIVE_MAP_DEFAULT_WIDTH = 1280;
+  const LIVE_MAP_GRID_SIZE = 10;
+  const LIVE_MAP_MIN_SIZE = 5;
+  const LIVE_MAP_DEFAULT_UNIT = 'ft';
+
+  function inferLegendaryPreference(prompt: string): 'yes' | 'no' | 'unknown' {
+    const lower = prompt.toLowerCase();
+    const negativePatterns = [
+      /no\s+legendary/i,
+      /not\s+legendary/i,
+      /without\s+legendary/i,
+      /skip\s+legendary/i,
+      /non-legendary/i,
+      /no\s+mythic/i,
+    ];
+    if (negativePatterns.some((re) => re.test(prompt))) return 'no';
+
+    const positivePatterns = [
+      /legendary\s+actions?/i,
+      /mythic\s+actions?/i,
+      /has\s+legendary/i,
+      /is\s+legendary/i,
+      /legendary\s+creature/i,
+    ];
+    if (positivePatterns.some((re) => re.test(prompt))) return 'yes';
+
+    if (lower.includes('cr 0') || lower.includes('cr 1/') || lower.includes('cr 1 ')) return 'unknown';
+
+    return 'unknown';
+  }
+
   const deduplicateFactpack = (factpack: Factpack): Factpack => {
     const seenChunkIds = new Set<string>();
     const seenTexts = new Set<string>();
@@ -4469,15 +4500,15 @@ Output: Valid JSON only. No markdown, no prose.`;
           stageContract: stageContract!,
           outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
           requiredKeys: generateCompactSchemaSpec(stageSchema as any, requiredFields),
-          stageInputs: isLegendaryStage ? undefined : reduceStageInputs(stage.id ?? normalizedStageName, results),
+          stageInputs: isLegendaryStage ? '{}' : reduceStageInputs(stage.id ?? normalizedStageName, results),
         },
-        shouldHave: {
-          canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
-          previousDecisionsSummary: limitedDecisions ? JSON.stringify(limitedDecisions, null, 2) : undefined,
-        },
-        niceToHave: {
-          verboseFlags: isLegendaryStage ? undefined : cfg.flags,
-        },
+        shouldHave: isLegendaryStage
+          ? {}
+          : {
+              canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
+              previousDecisionsSummary: limitedDecisions ? JSON.stringify(limitedDecisions, null, 2) : undefined,
+            },
+        niceToHave: isLegendaryStage ? {} : { verboseFlags: cfg.flags },
         safetyCeiling: PROMPT_SAFETY_CEILING,
       };
 
@@ -6977,7 +7008,23 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     // Continue to next stage
     if (currentStageIndex < STAGES.length - 1) {
-      const nextIndex = currentStageIndex + 1;
+      let nextIndex = currentStageIndex + 1;
+
+      // Legendary UX: infer from prompt; if unknown, ask user; skip stage if negative.
+      const nextStage = STAGES[nextIndex];
+      if (nextStage?.routerKey === 'legendary') {
+        const pref = inferLegendaryPreference(config!.prompt || '');
+        let shouldRunLegendary = true;
+        if (pref === 'no') {
+          shouldRunLegendary = false;
+        } else if (pref === 'unknown') {
+          shouldRunLegendary = window.confirm('Should this character have legendary/mythic or lair/regional actions?');
+        }
+
+        if (!shouldRunLegendary) {
+          nextIndex = nextIndex + 1; // skip legendary stage
+        }
+      }
 
       // Reset multi-part generation state when moving to new stage
       setIsMultiPartGeneration(false);
@@ -7022,7 +7069,15 @@ Output: Valid JSON only. No markdown, no prose.`;
       // We need to ensure the next stage gets the accumulated answers
       setTimeout(() => {
         // Build context with updated answers for the next stage
-        const nextStage = STAGES[nextIndex];
+        const nextStageConfig = STAGES[nextIndex];
+        if (!nextStageConfig) {
+          // If skipping beyond last stage, finalize pipeline
+          setIsComplete(true);
+          setFinalOutput(newResults as unknown as JsonRecord);
+          setModalMode(null);
+          return;
+        }
+
         const context: StageContext = {
           config: config!,
           stageResults: newResults,
@@ -7030,8 +7085,8 @@ Output: Valid JSON only. No markdown, no prose.`;
           previousDecisions: Object.keys(updatedAnswers).length > 0 ? updatedAnswers : undefined,
         };
 
-        const userPrompt = nextStage.buildUserPrompt(context);
-        const systemPrompt = nextStage.systemPrompt || '';
+        const userPrompt = nextStageConfig.buildUserPrompt(context);
+        const systemPrompt = nextStageConfig.systemPrompt || '';
 
         const fullPrompt = `${systemPrompt}\n\n---\n\nUSER INPUT:\n${userPrompt}`;
 
