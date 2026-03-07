@@ -4481,7 +4481,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
     const isLegendaryStage = normalizedStageName.toLowerCase() === 'legendary';
     const stageContract =
-      getStageContract(stage.id ?? stage.name) ||
+      getStageContract((stage as any).routerKey ?? stage.id ?? stage.name) ||
       getStageContract(normalizedStageName) ||
       null;
     const usePackedPrompt = !!stageContract && cfg.type === 'npc' && !isSubsequentChunk;
@@ -4497,10 +4497,14 @@ Output: Valid JSON only. No markdown, no prose.`;
       // Build packed prompt config
       const packConfig: PromptPackConfig = {
         mustHave: {
-          stageContract: stageContract!,
+          stageContract: isLegendaryStage
+            ? 'Output ONLY valid JSON. If this creature is legendary/mythic, include legendary_actions (object), lair_actions (array), and regional_effects (array). If not legendary, return an empty JSON object {}.'
+            : stageContract!,
           outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
-          requiredKeys: generateCompactSchemaSpec(stageSchema as any, requiredFields),
-          stageInputs: isLegendaryStage ? '{}' : reduceStageInputs(stage.id ?? normalizedStageName, results),
+          requiredKeys: isLegendaryStage ? [] : generateCompactSchemaSpec(stageSchema as any, requiredFields),
+          stageInputs: isLegendaryStage
+            ? {}
+            : reduceStageInputs(((stage as any).routerKey as string | undefined) ?? normalizedStageName, results),
         },
         shouldHave: isLegendaryStage
           ? {}
@@ -7085,21 +7089,30 @@ Output: Valid JSON only. No markdown, no prose.`;
           previousDecisions: Object.keys(updatedAnswers).length > 0 ? updatedAnswers : undefined,
         };
 
-        const userPrompt = nextStageConfig.buildUserPrompt(context);
-        const systemPrompt = nextStageConfig.systemPrompt || '';
+        const isLegendaryStageNext = nextStageConfig.routerKey === 'legendary';
+        const userPrompt = isLegendaryStageNext
+          ? '{}'
+          : nextStageConfig.buildUserPrompt(context);
+        const systemPrompt = isLegendaryStageNext
+          ? 'Return JSON only. If legendary/mythic: include legendary_actions (object), lair_actions (array), regional_effects (array). Otherwise return {}.'
+          : nextStageConfig.systemPrompt || '';
 
-        const fullPrompt = `${systemPrompt}\n\n---\n\nUSER INPUT:\n${userPrompt}`;
-
-        // If there are previous decisions, add them to the prompt
-        if (Object.keys(updatedAnswers).length > 0) {
-          const decisionsText = '\n\n---\n\nPREVIOUSLY ANSWERED QUESTIONS:\n\n' +
-            'The following questions were already answered in earlier stages or chunks. Do NOT ask these questions again:\n\n' +
-            Object.entries(updatedAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join('\n\n') +
-            '\n\nCRITICAL: Do NOT include any of the above questions in your proposals[] array. These decisions are final and must not be re-asked.';
-
-          setCurrentPrompt(fullPrompt + decisionsText);
+        if (isLegendaryStageNext) {
+          setCurrentPrompt(systemPrompt);
         } else {
-          setCurrentPrompt(fullPrompt);
+          const fullPrompt = `${systemPrompt}\n\n---\n\nUSER INPUT:\n${userPrompt}`;
+
+          // If there are previous decisions, add them to the prompt
+          if (Object.keys(updatedAnswers).length > 0) {
+            const decisionsText = '\n\n---\n\nPREVIOUSLY ANSWERED QUESTIONS:\n\n' +
+              'The following questions were already answered in earlier stages or chunks. Do NOT ask these questions again:\n\n' +
+              Object.entries(updatedAnswers).map(([q, a]) => `Q: ${q}\nA: ${a}`).join('\n\n') +
+              '\n\nCRITICAL: Do NOT include any of the above questions in your proposals[] array. These decisions are final and must not be re-asked.';
+
+            setCurrentPrompt(fullPrompt + decisionsText);
+          } else {
+            setCurrentPrompt(fullPrompt);
+          }
         }
 
         setModalMode('output');
