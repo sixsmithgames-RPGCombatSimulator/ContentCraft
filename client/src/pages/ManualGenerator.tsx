@@ -36,7 +36,6 @@ import {
   PROMPT_LIMITS,
 } from '../utils/promptLimits';
 import { buildPackedPrompt, formatSizeBreakdown, PROMPT_SAFETY_CEILING, type PromptPackConfig } from '../utils/promptPacker';
-import { generateCompactSchemaSpec } from '../utils/compactSchemaSpec';
 import { reduceStageInputs } from '../utils/stageInputReducer';
 import { getStageContract } from '../config/npcStageContracts';
 import { NPC_CREATOR_STAGES, STAGE_ROUTER_MAP } from '../config/npcCreatorStages';
@@ -271,12 +270,12 @@ type HomebrewChunk = { index: number; title: string; content: string; prompt: st
 const asHomebrewChunks = (value: unknown): HomebrewChunk[] =>
   Array.isArray(value)
     ? value.filter((item): item is HomebrewChunk =>
-        isRecord(item)
-        && typeof item.index === 'number'
-        && typeof item.title === 'string'
-        && typeof item.content === 'string'
-        && typeof item.prompt === 'string'
-      )
+      isRecord(item)
+      && typeof item.index === 'number'
+      && typeof item.title === 'string'
+      && typeof item.content === 'string'
+      && typeof item.prompt === 'string'
+    )
     : [];
 
 const getObject = (source: JsonRecord | null | undefined, key: string): JsonRecord | undefined => {
@@ -598,8 +597,8 @@ const toLiveMapSpace = (space: JsonRecord): LiveMapSpace | null => {
   const pos = (space as Record<string, unknown>).position;
   const position =
     pos && typeof pos === 'object' &&
-    typeof (pos as Record<string, unknown>).x === 'number' &&
-    typeof (pos as Record<string, unknown>).y === 'number'
+      typeof (pos as Record<string, unknown>).x === 'number' &&
+      typeof (pos as Record<string, unknown>).y === 'number'
       ? { x: (pos as Record<string, number>).x, y: (pos as Record<string, number>).y }
       : undefined;
 
@@ -2330,8 +2329,8 @@ function shouldShowMapForStage(
 
   // Show map for Spaces (Stage 3), Details (Stage 4), Accuracy Refinement (Stage 5)
   return stageName === 'Spaces' ||
-         stageName === 'Details' ||
-         stageName === 'Accuracy Refinement';
+    stageName === 'Details' ||
+    stageName === 'Accuracy Refinement';
 }
 
 /**
@@ -2443,7 +2442,7 @@ function deduplicateProposals(
     const topic = typeof prop.topic === 'string' ? prop.topic : null;
     const question = typeof prop.question === 'string' ? prop.question : null;
     const fieldPath = typeof prop.field_path === 'string' ? prop.field_path :
-                     (typeof prop.field === 'string' ? prop.field : null);
+      (typeof prop.field === 'string' ? prop.field : null);
     // Filter out proposals with topics that were already answered
     if (topic && answeredTopics.has(topic)) {
       console.log(`[Proposal Dedup] Filtered out already-answered topic: ${topic}`);
@@ -2678,8 +2677,8 @@ export default function ManualGenerator() {
 
     const factpackKey = factpack
       ? JSON.stringify({
-          facts: factpack.facts.map(f => ({ text: f.text, source: f.entity_name })),
-        })
+        facts: factpack.facts.map(f => ({ text: f.text, source: f.entity_name })),
+      })
       : null;
     const factpackChanged = prevFactpackKeyRef.current !== factpackKey;
 
@@ -2751,9 +2750,9 @@ export default function ManualGenerator() {
     };
   }, [registerApplyChanges, setWorkflowContext]);
 
-    // Register submitPipelineResponse callback so the AI panel can trigger the pipeline
+  // Register submitPipelineResponse callback so the AI panel can trigger the pipeline
   // Initialize with a no-op to avoid TDZ issues before handleSubmit is defined
-  const handleSubmitRef = useRef< (aiResponse: string) => Promise<void> >(async () => {});
+  const handleSubmitRef = useRef<(aiResponse: string) => Promise<void>>(async () => { });
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
@@ -2763,9 +2762,9 @@ export default function ManualGenerator() {
       console.log('[AI Assistant] Submitting response to pipeline');
       // We just pass the raw text to handleSubmit, which will parse it or we can construct a JSON string
       if (parsedJson) {
-         await handleSubmitRef.current(JSON.stringify(parsedJson));
+        await handleSubmitRef.current(JSON.stringify(parsedJson));
       } else {
-         await handleSubmitRef.current(rawText);
+        await handleSubmitRef.current(rawText);
       }
     };
 
@@ -2779,7 +2778,7 @@ export default function ManualGenerator() {
       }
     };
   }, [registerSubmitPipelineResponse]); // Rely on ref to avoid infinite dependency loops
-    // ─── End AI Assistant Integration
+  // ─── End AI Assistant Integration
 
   const resetPipelineState = () => {
     setCurrentStageIndex(-1);
@@ -3148,11 +3147,11 @@ export default function ManualGenerator() {
         // This ensures the chunking workflow continues properly after resume.
         // ============================================================================
         console.log('[Resume] Deriving chunking state from accumulated spaces + purpose data');
-        
+
         // Try to get estimated_spaces from purpose stage result
         const purposeData = session.stageResults?.purpose as Record<string, unknown> | undefined;
         let estimatedSpaces: number = accumulatedChunks.length + 1; // Default: assume at least one more space
-        
+
         if (purposeData?.estimated_spaces) {
           if (typeof purposeData.estimated_spaces === 'number') {
             estimatedSpaces = purposeData.estimated_spaces;
@@ -3169,14 +3168,14 @@ export default function ManualGenerator() {
           else if (scale.includes('massive')) estimatedSpaces = Math.max(50, accumulatedChunks.length + 1);
           console.log(`[Resume] Inferred estimated_spaces from scale "${scale}": ${estimatedSpaces}`);
         }
-        
+
         // Only set chunking state if we have spaces to generate beyond what's accumulated
         if (accumulatedChunks.length < estimatedSpaces) {
           console.log(`[Resume] ✓ Setting chunking state: ${accumulatedChunks.length}/${estimatedSpaces} spaces complete`);
           setIsStageChunking(true);
           setCurrentStageChunk(accumulatedChunks.length); // 0-indexed, so length = next chunk index
           setTotalStageChunks(estimatedSpaces);
-          
+
           // Also create the reconstructedChunkingMetadata for later use
           reconstructedChunkingMetadata = {
             isStageChunking: true,
@@ -3650,156 +3649,156 @@ export default function ManualGenerator() {
 
       const data = await response.json();
 
-    const relevantEntities: CanonEntity[] = Array.isArray(data)
-      ? data.filter((entity): entity is CanonEntity => Boolean(entity && typeof entity === 'object' && '_id' in entity))
-      : [];
+      const relevantEntities: CanonEntity[] = Array.isArray(data)
+        ? data.filter((entity): entity is CanonEntity => Boolean(entity && typeof entity === 'object' && '_id' in entity))
+        : [];
 
-    const slugify = (s: string) => s
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
+      const slugify = (s: string) => s
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
 
-    const keywordSlugs = keywords
-      .map((k) => (typeof k === 'string' ? slugify(k) : ''))
-      .filter((k) => k.length > 0);
+      const keywordSlugs = keywords
+        .map((k) => (typeof k === 'string' ? slugify(k) : ''))
+        .filter((k) => k.length > 0);
 
-    const keywordSet = new Set(keywordSlugs);
-    const regionAnchors = new Set(['snowdown', 'westphal']);
+      const keywordSet = new Set(keywordSlugs);
+      const regionAnchors = new Set(['snowdown', 'westphal']);
 
-    // Score entities based on match quality
-    // Priority: Tags (1000) > Canonical Name/Title (500) > ID/Aliases (300) > Type/Region (100) > Claims (10)
-    const scoredEntities = relevantEntities.map((entity) => {
-      let score = 0;
-      const matchReasons: string[] = [];
+      // Score entities based on match quality
+      // Priority: Tags (1000) > Canonical Name/Title (500) > ID/Aliases (300) > Type/Region (100) > Claims (10)
+      const scoredEntities = relevantEntities.map((entity) => {
+        let score = 0;
+        const matchReasons: string[] = [];
 
-      const id = entity._id || '';
-      const leafId = id.includes('.') ? id.split('.').pop() || id : id;
-      const nameSlug = entity.canonical_name ? slugify(entity.canonical_name) : '';
-      const aliasSlugs = toStringArray(entity.aliases).map(slugify);
-      const regionSlug = entity.region ? slugify(entity.region) : '';
-      const typeSlug = entity.type ? slugify(entity.type) : '';
-      const tags = toStringArray(entity.tags || []).map(slugify);
+        const id = entity._id || '';
+        const leafId = id.includes('.') ? id.split('.').pop() || id : id;
+        const nameSlug = entity.canonical_name ? slugify(entity.canonical_name) : '';
+        const aliasSlugs = toStringArray(entity.aliases).map(slugify);
+        const regionSlug = entity.region ? slugify(entity.region) : '';
+        const typeSlug = entity.type ? slugify(entity.type) : '';
+        const tags = toStringArray(entity.tags || []).map(slugify);
 
-      // PRIORITY 1: Tags (HIGHEST - 1000 points per match)
-      for (const keyword of keywordSet) {
-        if (tags.includes(keyword)) {
-          score += 1000;
-          matchReasons.push(`tag:${keyword}`);
-        }
-      }
-
-      // PRIORITY 2: Canonical Name/Title (HIGH - 500 points)
-      if (nameSlug && keywordSet.has(nameSlug)) {
-        score += 500;
-        matchReasons.push(`name:${nameSlug}`);
-      }
-
-      // Check for partial name matches (250 points)
-      for (const keyword of keywordSet) {
-        if (nameSlug && nameSlug.includes(keyword) && keyword.length > 3) {
-          score += 250;
-          matchReasons.push(`name_partial:${keyword}`);
-        }
-      }
-
-      // PRIORITY 3: ID and Aliases (MEDIUM-HIGH - 300 points)
-      if (keywordSet.has(leafId)) {
-        score += 300;
-        matchReasons.push(`id:${leafId}`);
-      }
-
-      if (aliasSlugs.some((a) => keywordSet.has(a))) {
-        score += 300;
-        const matchedAlias = aliasSlugs.find((a) => keywordSet.has(a));
-        matchReasons.push(`alias:${matchedAlias}`);
-      }
-
-      // PRIORITY 4: Type and Region (MEDIUM - 100 points)
-      if (typeSlug && keywordSet.has(typeSlug)) {
-        score += 100;
-        matchReasons.push(`type:${typeSlug}`);
-      }
-
-      if (regionSlug) {
+        // PRIORITY 1: Tags (HIGHEST - 1000 points per match)
         for (const keyword of keywordSet) {
-          if (regionSlug.includes(keyword)) {
-            score += 100;
-            matchReasons.push(`region:${keyword}`);
+          if (tags.includes(keyword)) {
+            score += 1000;
+            matchReasons.push(`tag:${keyword}`);
           }
         }
-      }
 
-      // Region anchors (special boost)
-      if (regionAnchors.has(leafId) && keywordSet.has(leafId)) {
-        score += 200;
-        matchReasons.push('region_anchor');
-      }
+        // PRIORITY 2: Canonical Name/Title (HIGH - 500 points)
+        if (nameSlug && keywordSet.has(nameSlug)) {
+          score += 500;
+          matchReasons.push(`name:${nameSlug}`);
+        }
 
-      // PRIORITY 5: Claims/Description (LOW - 10 points per match)
-      // Only search claims for multi-word keywords or when we have no better matches
-      const multiWordKeywords = keywords.filter(k =>
-        typeof k === 'string' && k.trim().split(/\s+/).length >= 2
-      ).map(slugify);
+        // Check for partial name matches (250 points)
+        for (const keyword of keywordSet) {
+          if (nameSlug && nameSlug.includes(keyword) && keyword.length > 3) {
+            score += 250;
+            matchReasons.push(`name_partial:${keyword}`);
+          }
+        }
 
-      const searchInClaims = multiWordKeywords.length > 0 || score === 0;
+        // PRIORITY 3: ID and Aliases (MEDIUM-HIGH - 300 points)
+        if (keywordSet.has(leafId)) {
+          score += 300;
+          matchReasons.push(`id:${leafId}`);
+        }
 
-      if (searchInClaims) {
-        const claims = toObjectArray(entity.claims);
-        for (const claim of claims) {
-          const claimText = getString(claim, 'text') || '';
-          const claimSlug = slugify(claimText);
+        if (aliasSlugs.some((a) => keywordSet.has(a))) {
+          score += 300;
+          const matchedAlias = aliasSlugs.find((a) => keywordSet.has(a));
+          matchReasons.push(`alias:${matchedAlias}`);
+        }
 
-          for (const keyword of (multiWordKeywords.length > 0 ? multiWordKeywords : Array.from(keywordSet))) {
-            if (claimSlug.includes(keyword) && keyword.length > 3) {
-              score += 10;
-              matchReasons.push(`claim:${keyword}`);
+        // PRIORITY 4: Type and Region (MEDIUM - 100 points)
+        if (typeSlug && keywordSet.has(typeSlug)) {
+          score += 100;
+          matchReasons.push(`type:${typeSlug}`);
+        }
+
+        if (regionSlug) {
+          for (const keyword of keywordSet) {
+            if (regionSlug.includes(keyword)) {
+              score += 100;
+              matchReasons.push(`region:${keyword}`);
             }
           }
         }
-      }
 
-      return {
-        entity,
-        score,
-        matchReasons,
-      };
-    });
+        // Region anchors (special boost)
+        if (regionAnchors.has(leafId) && keywordSet.has(leafId)) {
+          score += 200;
+          matchReasons.push('region_anchor');
+        }
 
-    // Filter to only entities with matches (score > 0) and sort by score
-    const keywordMatches = scoredEntities
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .map((item) => {
-        console.log(`[Canon Match] ${item.entity.canonical_name} (score: ${item.score}, reasons: ${item.matchReasons.join(', ')})`);
-        return item.entity;
+        // PRIORITY 5: Claims/Description (LOW - 10 points per match)
+        // Only search claims for multi-word keywords or when we have no better matches
+        const multiWordKeywords = keywords.filter(k =>
+          typeof k === 'string' && k.trim().split(/\s+/).length >= 2
+        ).map(slugify);
+
+        const searchInClaims = multiWordKeywords.length > 0 || score === 0;
+
+        if (searchInClaims) {
+          const claims = toObjectArray(entity.claims);
+          for (const claim of claims) {
+            const claimText = getString(claim, 'text') || '';
+            const claimSlug = slugify(claimText);
+
+            for (const keyword of (multiWordKeywords.length > 0 ? multiWordKeywords : Array.from(keywordSet))) {
+              if (claimSlug.includes(keyword) && keyword.length > 3) {
+                score += 10;
+                matchReasons.push(`claim:${keyword}`);
+              }
+            }
+          }
+        }
+
+        return {
+          entity,
+          score,
+          matchReasons,
+        };
       });
 
-    console.log(`[ManualGenerator] Filtered to ${keywordMatches.length} relevant entities from ${relevantEntities.length} total`);
-    console.log(`[ManualGenerator] Keywords searched: ${keywords.join(', ')}`);
+      // Filter to only entities with matches (score > 0) and sort by score
+      const keywordMatches = scoredEntities
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((item) => {
+          console.log(`[Canon Match] ${item.entity.canonical_name} (score: ${item.score}, reasons: ${item.matchReasons.join(', ')})`);
+          return item.entity;
+        });
 
-    // Build factpack with prioritized entities
-    const facts: CanonFact[] = [];
-    keywordMatches.forEach((entity) => {
-      toObjectArray(entity.claims).forEach((claim, index) => {
-        facts.push({
-          chunk_id: `${entity._id}#c${index + 1}`,
-          text: getString(claim, 'text') || 'No description available',
-          entity_id: entity._id,
-          entity_name: entity.canonical_name || 'Unknown',
-          entity_type: entity.type,
-          region: entity.region,
-          era: entity.era,
-          tags: toStringArray(entity.tags || []),
+      console.log(`[ManualGenerator] Filtered to ${keywordMatches.length} relevant entities from ${relevantEntities.length} total`);
+      console.log(`[ManualGenerator] Keywords searched: ${keywords.join(', ')}`);
+
+      // Build factpack with prioritized entities
+      const facts: CanonFact[] = [];
+      keywordMatches.forEach((entity) => {
+        toObjectArray(entity.claims).forEach((claim, index) => {
+          facts.push({
+            chunk_id: `${entity._id}#c${index + 1}`,
+            text: getString(claim, 'text') || 'No description available',
+            entity_id: entity._id,
+            entity_name: entity.canonical_name || 'Unknown',
+            entity_type: entity.type,
+            region: entity.region,
+            era: entity.era,
+            tags: toStringArray(entity.tags || []),
+          });
         });
       });
-    });
 
-    return {
-      facts,
-      entities: keywordMatches.map((e) => e._id),
-      gaps: facts.length === 0 ? ['No relevant canon found for these keywords'] : [],
-    };
+      return {
+        facts,
+        entities: keywordMatches.map((e) => e._id),
+        gaps: facts.length === 0 ? ['No relevant canon found for these keywords'] : [],
+      };
     } catch (error) {
       console.error('[searchCanonWithKeywords] Error fetching canon:', error);
       // Return empty factpack on error rather than breaking the workflow
@@ -3838,8 +3837,8 @@ export default function ManualGenerator() {
 
       // Check if this is NPC with multi-stage Creator structure
       if (parsed._pipeline_stages &&
-          typeof parsed._pipeline_stages === 'object' &&
-          (parsed.deliverable === 'npc' || parsed.type === 'npc')) {
+        typeof parsed._pipeline_stages === 'object' &&
+        (parsed.deliverable === 'npc' || parsed.type === 'npc')) {
         console.log('[Upload] Detected NPC with multi-stage Creator structure, using intelligent merger');
 
         const { mergeNpcStages } = await import('../utils/npcStageMerger');
@@ -3873,27 +3872,27 @@ export default function ManualGenerator() {
         const physicsContent = getEmbeddedObject(physicsValidatorStage, 'content', 'content');
 
         if (physicsContent) {
-        console.log('[Upload] Detected saved generation output, extracting content from physics_validator');
-        contentToUse = physicsContent;
+          console.log('[Upload] Detected saved generation output, extracting content from physics_validator');
+          contentToUse = physicsContent;
 
-        // Merge in the top-level metadata if present
-        if (parsed.deliverable) contentToUse.deliverable = parsed.deliverable;
-        if (parsed.fact_check_report) contentToUse.fact_check_report = parsed.fact_check_report;
-        if (parsed.conflicts) contentToUse.conflicts = parsed.conflicts;
-        if (parsed.physics_issues) contentToUse.physics_issues = parsed.physics_issues;
-        if (parsed.logic_score) contentToUse.logic_score = parsed.logic_score;
-        if (parsed.balance_notes) contentToUse.balance_notes = parsed.balance_notes;
-        if (parsed.canon_alignment_score) contentToUse.canon_alignment_score = parsed.canon_alignment_score;
-        if (parsed.validation_notes) contentToUse.validation_notes = parsed.validation_notes;
-        if (parsed.proposals) contentToUse.proposals = parsed.proposals;
+          // Merge in the top-level metadata if present
+          if (parsed.deliverable) contentToUse.deliverable = parsed.deliverable;
+          if (parsed.fact_check_report) contentToUse.fact_check_report = parsed.fact_check_report;
+          if (parsed.conflicts) contentToUse.conflicts = parsed.conflicts;
+          if (parsed.physics_issues) contentToUse.physics_issues = parsed.physics_issues;
+          if (parsed.logic_score) contentToUse.logic_score = parsed.logic_score;
+          if (parsed.balance_notes) contentToUse.balance_notes = parsed.balance_notes;
+          if (parsed.canon_alignment_score) contentToUse.canon_alignment_score = parsed.canon_alignment_score;
+          if (parsed.validation_notes) contentToUse.validation_notes = parsed.validation_notes;
+          if (parsed.proposals) contentToUse.proposals = parsed.proposals;
         }
       }
 
       // Check if this is a monster with stage structure (basic_info, stats_&_defenses, etc.)
       // If so, flatten the stages into a single object
       if (uploadedContentType === 'monster' &&
-          (contentToUse['stats_&_defenses'] || contentToUse['combat_&_abilities'] ||
-           contentToUse['legendary_&_lair'] || contentToUse['ecology_&_lore'])) {
+        (contentToUse['stats_&_defenses'] || contentToUse['combat_&_abilities'] ||
+          contentToUse['legendary_&_lair'] || contentToUse['ecology_&_lore'])) {
         console.log('[Upload] Detected monster with stage structure, flattening...');
 
         // Extract stage data
@@ -3978,27 +3977,27 @@ export default function ManualGenerator() {
       const rawProposals = (normalized as Record<string, unknown>)['proposals'] as unknown;
       const proposals: Proposal[] = Array.isArray(rawProposals)
         ? (rawProposals as unknown[])
-            .map((p) => (isRecord(p) ? p : null))
-            .filter((p): p is JsonRecord => p !== null)
-            .map((p: JsonRecord) => ({
-              question: getString(p, 'question') || 'Unspecified',
-              options: toStringArray((p as Record<string, unknown>)['options']),
-              rule_impact: getString(p, 'rule_impact') || '',
-            }))
+          .map((p) => (isRecord(p) ? p : null))
+          .filter((p): p is JsonRecord => p !== null)
+          .map((p: JsonRecord) => ({
+            question: getString(p, 'question') || 'Unspecified',
+            options: toStringArray((p as Record<string, unknown>)['options']),
+            rule_impact: getString(p, 'rule_impact') || '',
+          }))
         : [];
 
       const rawConflicts = (normalized as Record<string, unknown>)['conflicts'] as unknown;
       const conflicts: Conflict[] = Array.isArray(rawConflicts)
         ? (rawConflicts as unknown[])
-            .map((c) => (isRecord(c) ? c : null))
-            .filter((c): c is JsonRecord => c !== null)
-            .map((c: JsonRecord) => ({
-              new_claim: getString(c, 'new_claim') || '',
-              existing_claim: getString(c, 'existing_claim') || '',
-              entity_id: getString(c, 'entity_id') || '',
-              entity_name: getString(c, 'entity_name') || '',
-              resolution: (getString(c, 'resolution') as Conflict['resolution']) || undefined,
-            }))
+          .map((c) => (isRecord(c) ? c : null))
+          .filter((c): c is JsonRecord => c !== null)
+          .map((c: JsonRecord) => ({
+            new_claim: getString(c, 'new_claim') || '',
+            existing_claim: getString(c, 'existing_claim') || '',
+            entity_id: getString(c, 'entity_id') || '',
+            entity_name: getString(c, 'entity_name') || '',
+            resolution: (getString(c, 'resolution') as Conflict['resolution']) || undefined,
+          }))
         : [];
 
       setResolvedProposals(proposals);
@@ -4308,147 +4307,147 @@ Validation will reject incorrect field names or missing required fields.`;
           }
         );
 
-      console.log(`\n📐 Available Fact Space Calculation for ${stage.name}:`);
-      console.log(`├─ System Prompt: ${spaceCalculation.breakdown.systemPrompt.toLocaleString()} chars`);
-      console.log(`├─ User Prompt Base: ${spaceCalculation.breakdown.userPromptBase.toLocaleString()} chars`);
-      console.log(`├─ Formatting: ${spaceCalculation.breakdown.formatting.toLocaleString()} chars`);
-      console.log(`├─ Accumulated Answers: ${spaceCalculation.breakdown.accumulatedAnswers.toLocaleString()} chars`);
-      console.log(`├─ NPC Schema: ${spaceCalculation.breakdown.npcSchema.toLocaleString()} chars`);
-      console.log(`├─ Total Overhead: ${spaceCalculation.overhead.toLocaleString()} chars`);
-      console.log(`└─ Available for Facts: ${spaceCalculation.availableForFacts.toLocaleString()} chars\n`);
+        console.log(`\n📐 Available Fact Space Calculation for ${stage.name}:`);
+        console.log(`├─ System Prompt: ${spaceCalculation.breakdown.systemPrompt.toLocaleString()} chars`);
+        console.log(`├─ User Prompt Base: ${spaceCalculation.breakdown.userPromptBase.toLocaleString()} chars`);
+        console.log(`├─ Formatting: ${spaceCalculation.breakdown.formatting.toLocaleString()} chars`);
+        console.log(`├─ Accumulated Answers: ${spaceCalculation.breakdown.accumulatedAnswers.toLocaleString()} chars`);
+        console.log(`├─ NPC Schema: ${spaceCalculation.breakdown.npcSchema.toLocaleString()} chars`);
+        console.log(`├─ Total Overhead: ${spaceCalculation.overhead.toLocaleString()} chars`);
+        console.log(`└─ Available for Facts: ${spaceCalculation.availableForFacts.toLocaleString()} chars\n`);
 
-      const factpackForChunking = limitedFactpack;
-      if (!factpackForChunking) {
-        setError(`[${stage.name}] Fact chunking failed: canon factpack was unexpectedly unavailable.`);
-        return;
-      }
-      const totalFactChars = factpackForChunking.facts.reduce((sum, f) => sum + f.text.length, 0);
+        const factpackForChunking = limitedFactpack;
+        if (!factpackForChunking) {
+          setError(`[${stage.name}] Fact chunking failed: canon factpack was unexpectedly unavailable.`);
+          return;
+        }
+        const totalFactChars = factpackForChunking.facts.reduce((sum, f) => sum + f.text.length, 0);
 
-      if (totalFactChars > spaceCalculation.availableForFacts) {
-        console.warn(`⚠️ Facts (${totalFactChars.toLocaleString()} chars) exceed available space (${spaceCalculation.availableForFacts.toLocaleString()} chars).`);
+        if (totalFactChars > spaceCalculation.availableForFacts) {
+          console.warn(`⚠️ Facts (${totalFactChars.toLocaleString()} chars) exceed available space (${spaceCalculation.availableForFacts.toLocaleString()} chars).`);
 
-        // If we have enough facts to chunk, trigger chunking instead of trimming
-        // BUT: don't re-trigger if we're already in multi-part mode (prevents infinite loops)
-        if (factpackForChunking.facts.length > 10 && !isMultiPartGeneration) {
-          console.log(`📦 Triggering chunking for ${stage.name} stage (${factpackForChunking.facts.length} facts, ${totalFactChars.toLocaleString()} chars)`);
+          // If we have enough facts to chunk, trigger chunking instead of trimming
+          // BUT: don't re-trigger if we're already in multi-part mode (prevents infinite loops)
+          if (factpackForChunking.facts.length > 10 && !isMultiPartGeneration) {
+            console.log(`📦 Triggering chunking for ${stage.name} stage (${factpackForChunking.facts.length} facts, ${totalFactChars.toLocaleString()} chars)`);
 
-          // IMPORTANT: Chunk 1 uses full prompt (limited space), but chunks 2+ use minimal prompts (much more space)
-          // Estimate minimal prompt overhead: ~500 chars system + ~200 chars user base + ~200 formatting = ~900 chars
-          const minimalPromptOverhead = 900;
-          const availableForSubsequentChunks = PROMPT_LIMITS.AI_HARD_LIMIT - minimalPromptOverhead;
+            // IMPORTANT: Chunk 1 uses full prompt (limited space), but chunks 2+ use minimal prompts (much more space)
+            // Estimate minimal prompt overhead: ~500 chars system + ~200 chars user base + ~200 formatting = ~900 chars
+            const minimalPromptOverhead = 900;
+            const availableForSubsequentChunks = PROMPT_LIMITS.AI_HARD_LIMIT - minimalPromptOverhead;
 
-          // CRITICAL: Chunk 1 needs LESS space because we add multi-part instructions (~300 chars) to system prompt
-          const multiPartInstructionsOverhead = 300;
-          const availableForChunk1 = Math.max(0, spaceCalculation.availableForFacts - multiPartInstructionsOverhead);
+            // CRITICAL: Chunk 1 needs LESS space because we add multi-part instructions (~300 chars) to system prompt
+            const multiPartInstructionsOverhead = 300;
+            const availableForChunk1 = Math.max(0, spaceCalculation.availableForFacts - multiPartInstructionsOverhead);
 
-          console.log(`📊 Chunking Strategy:`);
-          console.log(`   Chunk 1 space: ${availableForChunk1.toLocaleString()} chars (full prompt + multi-part instructions)`);
-          console.log(`   Chunks 2+ space: ${availableForSubsequentChunks.toLocaleString()} chars each (with minimal prompts)`);
+            console.log(`📊 Chunking Strategy:`);
+            console.log(`   Chunk 1 space: ${availableForChunk1.toLocaleString()} chars (full prompt + multi-part instructions)`);
+            console.log(`   Chunks 2+ space: ${availableForSubsequentChunks.toLocaleString()} chars each (with minimal prompts)`);
 
-          // Group facts intelligently - use the larger limit for subsequent chunks
-          const groups = groupFactsIntelligently(factpackForChunking, availableForSubsequentChunks);
+            // Group facts intelligently - use the larger limit for subsequent chunks
+            const groups = groupFactsIntelligently(factpackForChunking, availableForSubsequentChunks);
 
-          // If chunk 1 has very little space (<500 chars), give it ZERO facts and put everything in chunks 2+
-          if (availableForChunk1 < 500) {
-            console.log(`⚠️ Chunk 1 has minimal space (${availableForChunk1} chars). Putting ALL facts in chunks 2+.`);
+            // If chunk 1 has very little space (<500 chars), give it ZERO facts and put everything in chunks 2+
+            if (availableForChunk1 < 500) {
+              console.log(`⚠️ Chunk 1 has minimal space (${availableForChunk1} chars). Putting ALL facts in chunks 2+.`);
 
-            // Create empty chunk 1 + all fact groups
-            const newGroups: FactGroup[] = [
-              {
-                id: 'chunk1-intro',
-                label: 'Introduction (No Facts)',
-                facts: [],
-                characterCount: 0,
-                entityTypes: [],
-                regions: [],
-              },
-              ...groups,
-            ];
+              // Create empty chunk 1 + all fact groups
+              const newGroups: FactGroup[] = [
+                {
+                  id: 'chunk1-intro',
+                  label: 'Introduction (No Facts)',
+                  facts: [],
+                  characterCount: 0,
+                  entityTypes: [],
+                  regions: [],
+                },
+                ...groups,
+              ];
 
-            setFactGroups(newGroups);
-            console.log(`📦 Created ${newGroups.length} groups: 1 intro + ${groups.length} fact groups`);
-          }
-          // Otherwise, try to fit some facts in chunk 1
-          else if (groups.length > 0 && groups[0].characterCount > availableForChunk1) {
-            console.log(`⚠️ First group (${groups[0].characterCount} chars) exceeds chunk 1 space (${availableForChunk1} chars). Splitting...`);
+              setFactGroups(newGroups);
+              console.log(`📦 Created ${newGroups.length} groups: 1 intro + ${groups.length} fact groups`);
+            }
+            // Otherwise, try to fit some facts in chunk 1
+            else if (groups.length > 0 && groups[0].characterCount > availableForChunk1) {
+              console.log(`⚠️ First group (${groups[0].characterCount} chars) exceeds chunk 1 space (${availableForChunk1} chars). Splitting...`);
 
-            // Split first group into two: some for chunk 1, rest goes into chunk 2
-            const firstGroupFacts = groups[0].facts;
-            const chunk1Facts: CanonFact[] = [];
-            let chunk1Chars = 0;
-            let remainingFactsIndex = 0;
+              // Split first group into two: some for chunk 1, rest goes into chunk 2
+              const firstGroupFacts = groups[0].facts;
+              const chunk1Facts: CanonFact[] = [];
+              let chunk1Chars = 0;
+              let remainingFactsIndex = 0;
 
-            for (let i = 0; i < firstGroupFacts.length; i++) {
-              if (chunk1Chars + firstGroupFacts[i].text.length <= availableForChunk1) {
-                chunk1Facts.push(firstGroupFacts[i]);
-                chunk1Chars += firstGroupFacts[i].text.length;
-                remainingFactsIndex = i + 1;
-              } else {
-                break;
+              for (let i = 0; i < firstGroupFacts.length; i++) {
+                if (chunk1Chars + firstGroupFacts[i].text.length <= availableForChunk1) {
+                  chunk1Facts.push(firstGroupFacts[i]);
+                  chunk1Chars += firstGroupFacts[i].text.length;
+                  remainingFactsIndex = i + 1;
+                } else {
+                  break;
+                }
               }
+
+              // Create new groups array with split first group
+              const remainingFacts = firstGroupFacts.slice(remainingFactsIndex);
+              const newGroups: FactGroup[] = [
+                {
+                  ...groups[0],
+                  id: 'chunk1',
+                  label: `${groups[0].label} (Chunk 1 - ${chunk1Facts.length} facts)`,
+                  facts: chunk1Facts,
+                  characterCount: chunk1Chars,
+                },
+                {
+                  ...groups[0],
+                  id: 'chunk2-part1',
+                  label: `${groups[0].label} (Continued)`,
+                  facts: remainingFacts,
+                  characterCount: remainingFacts.reduce((sum, f) => sum + f.text.length, 0),
+                },
+                ...groups.slice(1), // Rest of the groups
+              ];
+
+              setFactGroups(newGroups);
+              console.log(`📦 Split into ${newGroups.length} groups for efficient chunking`);
+            } else {
+              setFactGroups(groups);
             }
 
-            // Create new groups array with split first group
-            const remainingFacts = firstGroupFacts.slice(remainingFactsIndex);
-            const newGroups: FactGroup[] = [
-              {
-                ...groups[0],
-                id: 'chunk1',
-                label: `${groups[0].label} (Chunk 1 - ${chunk1Facts.length} facts)`,
-                facts: chunk1Facts,
-                characterCount: chunk1Chars,
-              },
-              {
-                ...groups[0],
-                id: 'chunk2-part1',
-                label: `${groups[0].label} (Continued)`,
-                facts: remainingFacts,
-                characterCount: remainingFacts.reduce((sum, f) => sum + f.text.length, 0),
-              },
-              ...groups.slice(1), // Rest of the groups
-            ];
+            setShowChunkingModal(true);
+            setPendingFactpack(factpackForChunking);
 
-            setFactGroups(newGroups);
-            console.log(`📦 Split into ${newGroups.length} groups for efficient chunking`);
-          } else {
-            setFactGroups(groups);
+            const estimatedChunks = Math.max(2, Math.ceil((totalFactChars - spaceCalculation.availableForFacts) / availableForSubsequentChunks) + 1);
+            setError(`The ${stage.name} stage has too much canon data (${totalFactChars.toLocaleString()} chars) to fit in one prompt (only ${spaceCalculation.availableForFacts.toLocaleString()} chars available for facts after prompt overhead). Estimated ${estimatedChunks} chunks needed. Please approve chunking.`);
+            return; // Stop here and wait for user to approve chunking
           }
 
-          setShowChunkingModal(true);
-          setPendingFactpack(factpackForChunking);
+          // If too few facts to chunk, trim them
+          console.warn(`⚠️ Too few facts to chunk (${factpackForChunking.facts.length}). Trimming instead...`);
+          const trimmedFacts: typeof factpackForChunking.facts = [];
+          let currentChars = 0;
 
-          const estimatedChunks = Math.max(2, Math.ceil((totalFactChars - spaceCalculation.availableForFacts) / availableForSubsequentChunks) + 1);
-          setError(`The ${stage.name} stage has too much canon data (${totalFactChars.toLocaleString()} chars) to fit in one prompt (only ${spaceCalculation.availableForFacts.toLocaleString()} chars available for facts after prompt overhead). Estimated ${estimatedChunks} chunks needed. Please approve chunking.`);
-          return; // Stop here and wait for user to approve chunking
-        }
-
-        // If too few facts to chunk, trim them
-        console.warn(`⚠️ Too few facts to chunk (${factpackForChunking.facts.length}). Trimming instead...`);
-        const trimmedFacts: typeof factpackForChunking.facts = [];
-        let currentChars = 0;
-
-        for (const fact of factpackForChunking.facts) {
-          if (currentChars + fact.text.length <= spaceCalculation.availableForFacts) {
-            trimmedFacts.push(fact);
-            currentChars += fact.text.length;
-          } else {
-            break;
+          for (const fact of factpackForChunking.facts) {
+            if (currentChars + fact.text.length <= spaceCalculation.availableForFacts) {
+              trimmedFacts.push(fact);
+              currentChars += fact.text.length;
+            } else {
+              break;
+            }
           }
-        }
 
-        limitedFactpack = {
-          facts: trimmedFacts,
-          entities: factpackForChunking.entities || [],
-          gaps: factpackForChunking.gaps || [],
-        };
+          limitedFactpack = {
+            facts: trimmedFacts,
+            entities: factpackForChunking.entities || [],
+            gaps: factpackForChunking.gaps || [],
+          };
 
-        const trimmedCount = (fp || factpack)!.facts.length - trimmedFacts.length;
-        if (trimmedCount > 0) {
-          console.warn(`⚠️ Trimmed ${trimmedCount} facts to fit within AI character limit`);
-          setError(`${trimmedCount} facts were omitted to stay within the ${PROMPT_LIMITS.AI_HARD_LIMIT.toLocaleString()} character AI limit.`);
+          const trimmedCount = (fp || factpack)!.facts.length - trimmedFacts.length;
+          if (trimmedCount > 0) {
+            console.warn(`⚠️ Trimmed ${trimmedCount} facts to fit within AI character limit`);
+            setError(`${trimmedCount} facts were omitted to stay within the ${PROMPT_LIMITS.AI_HARD_LIMIT.toLocaleString()} character AI limit.`);
+          }
         }
       }
-    }
     }
 
     // Build NPC section context if in NPC section chunking mode
@@ -4575,8 +4574,8 @@ Validation will reject incorrect field names or missing required fields.`;
       systemPromptToUse = `Continuing ${stage.name} generation. Chunk ${chunkInfo!.currentChunk} of ${chunkInfo!.totalChunks}.
 
 ${isLastChunk
-  ? '🎯 FINAL CHUNK: After receiving this data, generate the complete JSON output based on ALL canon facts from all chunks.'
-  : '📦 More canon facts coming in next chunk. Acknowledge receipt and wait for next chunk.'}
+          ? '🎯 FINAL CHUNK: After receiving this data, generate the complete JSON output based on ALL canon facts from all chunks.'
+          : '📦 More canon facts coming in next chunk. Acknowledge receipt and wait for next chunk.'}
 
 ⚠️ CRITICAL: Use the SAME chat session. Do not start a new session.
 Output: Valid JSON only. No markdown, no prose.`;
@@ -4592,46 +4591,29 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     // Check if this stage has a minimal contract (new prompt packer system)
     const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
-    const lowerStageName = normalizedStageName.toLowerCase();
-    const isLegendaryStage = lowerStageName === 'legendary';
-    const isSpellcastingStage = lowerStageName === 'spellcasting';
     const stageContract =
       getStageContract(stageLookupKey) ||
       getStageContract(normalizedStageName) ||
       null;
-    const usePackedPrompt = !!stageContract && cfg.type === 'npc' && !isSubsequentChunk;
+    // Use packed prompt for ANY stage that has a contract (not just NPC), except subsequent chunks
+    const usePackedPrompt = !!stageContract && !isSubsequentChunk;
 
     if (usePackedPrompt) {
       console.log(`[Prompt Packer] Using packed prompt for stage: ${stage.name}`);
 
-      // Get stage schema from the stage's schema property (if available)
-      // For NPC stages, schemas are defined in npcSchemaExtractor
-      const stageSchema = {}; // Schema will be embedded in compact form via requiredKeys
-      const requiredFields: string[] = [];
-
-      // Build packed prompt config
+      // Build packed prompt config - stage contracts already contain required keys
       const packConfig: PromptPackConfig = {
         mustHave: {
-          stageContract: isLegendaryStage
-            ? 'Output ONLY valid JSON. If this creature is legendary/mythic, include legendary_actions (object), lair_actions (array), and regional_effects (array). If not legendary, return an empty JSON object {}.'
-            : isSpellcastingStage
-              ? 'Return JSON only. Provide spellcasting per schema: spells_known (object) and spell_slots (object). Keep descriptions concise.'
-              : stageContract!,
+          stageContract: stageContract!,
           outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
-          requiredKeys: (isLegendaryStage || isSpellcastingStage)
-            ? ''
-            : generateCompactSchemaSpec(stageSchema as any, requiredFields),
-          stageInputs: (isLegendaryStage || isSpellcastingStage)
-            ? {}
-            : reduceStageInputs(stageLookupKey, results),
+          requiredKeys: '', // Contracts already embed required keys
+          stageInputs: reduceStageInputs(stageLookupKey, results),
         },
-        shouldHave: (isLegendaryStage || isSpellcastingStage)
-          ? {}
-          : {
-              canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
-              previousDecisionsSummary: limitedDecisions ? JSON.stringify(limitedDecisions, null, 2) : undefined,
-            },
-        niceToHave: (isLegendaryStage || isSpellcastingStage) ? {} : { verboseFlags: cfg.flags },
+        shouldHave: {
+          canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
+          previousDecisionsSummary: limitedDecisions ? JSON.stringify(limitedDecisions, null, 2) : undefined,
+        },
+        niceToHave: { verboseFlags: cfg.flags },
         safetyCeiling: PROMPT_SAFETY_CEILING,
       };
 
@@ -4839,7 +4821,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           }
         );
 
-// ...
+        // ...
         setCurrentPrompt(rebuiltPrompt);
         console.log(`📊 Rebuilt prompt after trimming: ${rebuiltAnalysis.totalChars} chars`);
         setModalMode('output');
@@ -5283,7 +5265,7 @@ Output: Valid JSON only. No markdown, no prose.`;
    */
   const handleAddSpace = () => {
     console.log('[Add Space] Creating new blank space');
-    
+
     // Create a new space with default values
     const newSpace: JsonRecord = {
       name: `New Space ${accumulatedChunkResults.length + 1}`,
@@ -5298,15 +5280,15 @@ Output: Valid JSON only. No markdown, no prose.`;
       doors: [],
       features: [],
     };
-    
+
     // Set as pending space (reviewingSpaceIndex = -1 means new space)
     setPendingSpace(newSpace);
     setReviewingSpaceIndex(-1);
     setSavedNewSpace(null);
-    
+
     // Open the modal (it will show in edit mode)
     setShowSpaceApprovalModal(true);
-    
+
     console.log('[Add Space] Opened SpaceApprovalModal for new space');
   };
 
@@ -5923,16 +5905,16 @@ Output: Valid JSON only. No markdown, no prose.`;
       let effectiveIsStageChunking = isStageChunking;
       let effectiveTotalChunks = totalStageChunks;
       let effectiveCurrentChunk = currentStageChunk;
-      
+
       if (!isStageChunking && currentStage.name === 'Spaces' && config!.type === 'location') {
         // Check if we have accumulated chunks, indicating we're mid-workflow
         if (accumulatedChunkResults.length > 0) {
           console.warn('[Stage Chunking] ⚠️ Detected accumulated spaces but isStageChunking=false. Re-deriving...');
-          
+
           // Get estimated_spaces from purpose stage
           const purposeData = stageResults.purpose as Record<string, unknown> | undefined;
           let estimatedSpaces = accumulatedChunkResults.length + 1; // Assume at least one more
-          
+
           if (purposeData?.estimated_spaces) {
             if (typeof purposeData.estimated_spaces === 'number') {
               estimatedSpaces = purposeData.estimated_spaces;
@@ -5940,23 +5922,23 @@ Output: Valid JSON only. No markdown, no prose.`;
               estimatedSpaces = parseInt(purposeData.estimated_spaces, 10) || estimatedSpaces;
             }
           }
-          
+
           // Correct the state for this submission
           effectiveIsStageChunking = true;
           effectiveTotalChunks = estimatedSpaces;
           effectiveCurrentChunk = accumulatedChunkResults.length; // Next chunk to generate
-          
+
           // Also update the React state to fix future submissions
           setIsStageChunking(true);
           setTotalStageChunks(estimatedSpaces);
           setCurrentStageChunk(accumulatedChunkResults.length);
-          
+
           console.log(`[Stage Chunking] ✓ Re-derived: chunk ${effectiveCurrentChunk + 1}/${effectiveTotalChunks}`);
         } else {
           // No accumulated chunks - this might be the first space, check if we should chunk
           const purposeData = stageResults.purpose as Record<string, unknown> | undefined;
           let estimatedSpaces = 1;
-          
+
           if (purposeData?.estimated_spaces) {
             if (typeof purposeData.estimated_spaces === 'number') {
               estimatedSpaces = purposeData.estimated_spaces;
@@ -5964,17 +5946,17 @@ Output: Valid JSON only. No markdown, no prose.`;
               estimatedSpaces = parseInt(purposeData.estimated_spaces, 10) || 1;
             }
           }
-          
+
           if (estimatedSpaces > 1) {
             console.warn('[Stage Chunking] ⚠️ First space submitted but isStageChunking=false. Setting up chunking...');
             effectiveIsStageChunking = true;
             effectiveTotalChunks = estimatedSpaces;
             effectiveCurrentChunk = 0;
-            
+
             setIsStageChunking(true);
             setTotalStageChunks(estimatedSpaces);
             setCurrentStageChunk(0);
-            
+
             console.log(`[Stage Chunking] ✓ Set up chunking: ${estimatedSpaces} total spaces`);
           }
         }
@@ -6014,7 +5996,7 @@ Output: Valid JSON only. No markdown, no prose.`;
             // Add the approved space to accumulated chunk results
             const newAccumulated = [...accumulatedChunkResults, parsed];
             setAccumulatedChunkResults(newAccumulated);
-            
+
             // Update live visual map
             const spaceData = extractSpaceForMap(parsed);
             let updatedLiveMapSpaces = liveMapSpaces;
@@ -6632,14 +6614,14 @@ Output: Valid JSON only. No markdown, no prose.`;
               console.log('[Multi-Chunk Complete] Using content from finalizer');
             } else if (physicsContent) {
               baseContent = physicsContent;
-            console.log('[Multi-Chunk Complete] Using content from physics_validator.content.content');
+              console.log('[Multi-Chunk Complete] Using content from physics_validator.content.content');
             } else if (mergedResults.stylist) {
-            baseContent = mergedResults.stylist as JsonRecord;
-            console.log('[Multi-Chunk Complete] Using content from stylist');
-          } else if (mergedResults.creator) {
-            baseContent = mergedResults.creator as JsonRecord;
-            console.log('[Multi-Chunk Complete] Using content from creator');
-          }
+              baseContent = mergedResults.stylist as JsonRecord;
+              console.log('[Multi-Chunk Complete] Using content from stylist');
+            } else if (mergedResults.creator) {
+              baseContent = mergedResults.creator as JsonRecord;
+              console.log('[Multi-Chunk Complete] Using content from creator');
+            }
           }
 
           const finalContent = normalizeOutput(baseContent as JsonRecord, config!.type);
@@ -6783,15 +6765,15 @@ Output: Valid JSON only. No markdown, no prose.`;
           const creator = getStageObject(newResults, 'creator');
 
           if (physicsContent) {
-          // Content from Physics Validator (wrapped structure)
+            // Content from Physics Validator (wrapped structure)
             baseContent = physicsContent;
             console.log('[Pipeline Complete] Using content from physics_validator.content.content');
           } else if (stylist) {
-          // Content from Stylist (normal structure)
+            // Content from Stylist (normal structure)
             baseContent = stylist;
             console.log('[Pipeline Complete] Using content from stylist');
           } else if (creator) {
-          // Content from Creator (fallback)
+            // Content from Creator (fallback)
             baseContent = creator;
             console.log('[Pipeline Complete] Using content from creator');
           } else {
@@ -7389,15 +7371,15 @@ Output: Valid JSON only. No markdown, no prose.`;
         const creator = getStageObject(newResults, 'creator');
 
         if (physicsContent) {
-        // Content from Physics Validator (wrapped structure)
+          // Content from Physics Validator (wrapped structure)
           baseContent = physicsContent;
           console.log('[handleAcceptWithIssues] Using content from physics_validator.content.content');
         } else if (stylist) {
-        // Content from Stylist (normal structure)
+          // Content from Stylist (normal structure)
           baseContent = stylist;
           console.log('[handleAcceptWithIssues] Using content from stylist');
         } else if (creator) {
-        // Content from Creator (fallback)
+          // Content from Creator (fallback)
           baseContent = creator;
           console.log('[handleAcceptWithIssues] Using content from creator');
         } else {
@@ -8190,7 +8172,7 @@ Output: Valid JSON only. No markdown, no prose.`;
                       <div className="border-t pt-4">
                         <h4 className="font-medium text-gray-700 mb-3">Extracted Entries ({finalOutput.entries.length})</h4>
                         <div className="space-y-2 max-h-96 overflow-auto">
-                          {(finalOutput.entries as Array<{type: string; title: string; short_summary?: string; tags?: string[]}>).map((entry, idx) => (
+                          {(finalOutput.entries as Array<{ type: string; title: string; short_summary?: string; tags?: string[] }>).map((entry, idx) => (
                             <div key={idx} className="bg-white border border-gray-200 rounded p-3">
                               <div className="flex items-start justify-between gap-2 mb-1">
                                 <div className="font-medium text-gray-900">{entry.title}</div>
@@ -8378,8 +8360,8 @@ Output: Valid JSON only. No markdown, no prose.`;
         onFixNow={
           locationSoftWarning
             ? () => {
-                jumpToStage(locationSoftWarning.fixStageName);
-              }
+              jumpToStage(locationSoftWarning.fixStageName);
+            }
             : undefined
         }
         canGoBack={currentStageIndex > 0}
@@ -8400,20 +8382,20 @@ Output: Valid JSON only. No markdown, no prose.`;
             }
 
             return isStageChunking && totalStageChunks > 0
-            // Or show chunk progress for stage chunking (location spaces)
-            ? {
-              current: currentStageChunk,
-              total: totalStageChunks,
-              title: `Space ${currentStageChunk + 1} of ${totalStageChunks}`,
-            }
-            // Or show chunk progress for multi-part generation
-            : isMultiPartGeneration && factGroups.length > 0
-            ? {
-              current: currentGroupIndex,
-              total: factGroups.length,
-              title: factGroups[currentGroupIndex]?.label || `Chunk ${currentGroupIndex + 1}`,
-            }
-            : undefined;
+              // Or show chunk progress for stage chunking (location spaces)
+              ? {
+                current: currentStageChunk,
+                total: totalStageChunks,
+                title: `Space ${currentStageChunk + 1} of ${totalStageChunks}`,
+              }
+              // Or show chunk progress for multi-part generation
+              : isMultiPartGeneration && factGroups.length > 0
+                ? {
+                  current: currentGroupIndex,
+                  total: factGroups.length,
+                  title: factGroups[currentGroupIndex]?.label || `Chunk ${currentGroupIndex + 1}`,
+                }
+                : undefined;
           })()
         }
         canAutoParse={getHomebrewChunks(stageResults.homebrew_chunks).length > 0 && config?.type === 'homebrew'}
@@ -8440,231 +8422,231 @@ Output: Valid JSON only. No markdown, no prose.`;
             return undefined;
           })()
         }
-    liveMapPanel={
-      // Show Live Map Panel inside modal during Location Spaces, Details, and Accuracy Refinement stages
-      (() => {
-        const shouldShow = !!config && shouldShowMapForStage(config, currentStageIndex) && showLiveMap;
-        return shouldShow ? (
-          <LiveVisualMapPanel
-            updateToken={mapUpdateCounter}
-            locationName={String(stageResults.purpose?.name || (config ? config.prompt : '')).slice(0, 50)}
-            totalSpaces={totalStageChunks}
-            currentSpace={currentStageChunk + 1}
-            spaces={liveMapSpaces}
-            isGenerating={modalMode === 'input'}
-            onAddSpace={handleAddSpace}
-            onUpdateSpaces={async (updatedSpaces) => {
-              console.log('[ManualGenerator] Received updated spaces from editor:', updatedSpaces.length);
-              console.log('[ManualGenerator] Sample updated space:', updatedSpaces[0]?.name, updatedSpaces[0]?.size_ft);
+        liveMapPanel={
+          // Show Live Map Panel inside modal during Location Spaces, Details, and Accuracy Refinement stages
+          (() => {
+            const shouldShow = !!config && shouldShowMapForStage(config, currentStageIndex) && showLiveMap;
+            return shouldShow ? (
+              <LiveVisualMapPanel
+                updateToken={mapUpdateCounter}
+                locationName={String(stageResults.purpose?.name || (config ? config.prompt : '')).slice(0, 50)}
+                totalSpaces={totalStageChunks}
+                currentSpace={currentStageChunk + 1}
+                spaces={liveMapSpaces}
+                isGenerating={modalMode === 'input'}
+                onAddSpace={handleAddSpace}
+                onUpdateSpaces={async (updatedSpaces) => {
+                  console.log('[ManualGenerator] Received updated spaces from editor:', updatedSpaces.length);
+                  console.log('[ManualGenerator] Sample updated space:', updatedSpaces[0]?.name, updatedSpaces[0]?.size_ft);
 
-              // Update the accumulated chunk results to persist the changes
-              // CRITICAL: Match by name, NOT by index (order can change when rooms are repositioned)
-              const resultsMap = new Map(
-                accumulatedChunkResults.map(r => [(r.name || r.id), r])
-              );
+                  // Update the accumulated chunk results to persist the changes
+                  // CRITICAL: Match by name, NOT by index (order can change when rooms are repositioned)
+                  const resultsMap = new Map(
+                    accumulatedChunkResults.map(r => [(r.name || r.id), r])
+                  );
 
-              const updatedResults = updatedSpaces.map((space) => {
-                // Find matching original by name
-                const original = resultsMap.get(space.name || space.id);
-                if (!original) {
-                  console.log('[onUpdateSpaces] New space detected:', space.name);
-                  return space;
-                }
+                  const updatedResults = updatedSpaces.map((space) => {
+                    // Find matching original by name
+                    const original = resultsMap.get(space.name || space.id);
+                    if (!original) {
+                      console.log('[onUpdateSpaces] New space detected:', space.name);
+                      return space;
+                    }
 
-                // ✓ CRITICAL: Remove old dimensions before merging to prevent conflicts
-                const cleanedOriginal = { ...original };
-                delete cleanedOriginal.dimensions;
-                delete cleanedOriginal.size_ft;
+                    // ✓ CRITICAL: Remove old dimensions before merging to prevent conflicts
+                    const cleanedOriginal = { ...original };
+                    delete cleanedOriginal.dimensions;
+                    delete cleanedOriginal.size_ft;
 
-                const merged = {
-                  ...cleanedOriginal,
-                  ...space,
-                };
-
-                // ✓ CRITICAL: Explicitly preserve position and position_locked from editor
-                if (space.position) {
-                  merged.position = {
-                    x: space.position.x,
-                    y: space.position.y,
-                  };
-                }
-                if (typeof space.position_locked === 'boolean') {
-                  merged.position_locked = space.position_locked;
-                }
-
-                // ✓ CRITICAL: Explicitly preserve doors from editor (including manually-adjusted child door positions)
-                if (Array.isArray(space.doors)) {
-                  merged.doors = space.doors;
-                }
-
-                // ✓ CRITICAL: Sync dimensions and size_ft to prevent reversion
-                // ALWAYS use size_ft as source of truth (visual editor uses this)
-                if (space.size_ft && typeof space.size_ft === 'object') {
-                  merged.size_ft = {
-                    width: space.size_ft.width,
-                    height: space.size_ft.height,
-                  };
-                  merged.dimensions = {
-                    width: space.size_ft.width,
-                    height: space.size_ft.height,
-                  };
-                }
-                // Fallback: if only dimensions provided, sync to size_ft
-                else if (space.dimensions && typeof space.dimensions === 'object') {
-                  const dims = space.dimensions as any;
-                  merged.dimensions = {
-                    width: dims.width,
-                    height: dims.height,
-                  };
-                  merged.size_ft = {
-                    width: dims.width,
-                    height: dims.height,
-                  };
-                }
-                // Last resort: preserve original if nothing provided
-                else if (original.size_ft) {
-                  const originalSize = original.size_ft;
-                  if (originalSize && typeof originalSize === 'object') {
-                    const w = (originalSize as Record<string, unknown>).width;
-                    const h = (originalSize as Record<string, unknown>).height;
-                    merged.size_ft = {
-                      width: typeof w === 'number' ? w : undefined,
-                      height: typeof h === 'number' ? h : undefined,
+                    const merged = {
+                      ...cleanedOriginal,
+                      ...space,
                     };
-                  }
 
-                  const originalDims = original.dimensions;
-                  if (typeof originalDims === 'string') {
-                    merged.dimensions = originalDims;
-                  } else if (originalDims && typeof originalDims === 'object') {
-                    const w = (originalDims as Record<string, unknown>).width;
-                    const h = (originalDims as Record<string, unknown>).height;
-                    const unit = (originalDims as Record<string, unknown>).unit;
-                    merged.dimensions = {
-                      width: typeof w === 'number' ? w : undefined,
-                      height: typeof h === 'number' ? h : undefined,
-                      unit: typeof unit === 'string' ? unit : undefined,
-                    };
-                  }
-                }
+                    // ✓ CRITICAL: Explicitly preserve position and position_locked from editor
+                    if (space.position) {
+                      merged.position = {
+                        x: space.position.x,
+                        y: space.position.y,
+                      };
+                    }
+                    if (typeof space.position_locked === 'boolean') {
+                      merged.position_locked = space.position_locked;
+                    }
 
-                console.log(`[Save Debug] ${space.name}:`, {
-                  position: merged.position,
-                  position_locked: merged.position_locked,
-                  size_ft: merged.size_ft
-                });
+                    // ✓ CRITICAL: Explicitly preserve doors from editor (including manually-adjusted child door positions)
+                    if (Array.isArray(space.doors)) {
+                      merged.doors = space.doors;
+                    }
 
-                return merged;
-              });
-              setAccumulatedChunkResults(updatedResults);
-              setLiveMapSpaces(updatedResults); // Use merged results to include door changes from form
+                    // ✓ CRITICAL: Sync dimensions and size_ft to prevent reversion
+                    // ALWAYS use size_ft as source of truth (visual editor uses this)
+                    if (space.size_ft && typeof space.size_ft === 'object') {
+                      merged.size_ft = {
+                        width: space.size_ft.width,
+                        height: space.size_ft.height,
+                      };
+                      merged.dimensions = {
+                        width: space.size_ft.width,
+                        height: space.size_ft.height,
+                      };
+                    }
+                    // Fallback: if only dimensions provided, sync to size_ft
+                    else if (space.dimensions && typeof space.dimensions === 'object') {
+                      const dims = space.dimensions as any;
+                      merged.dimensions = {
+                        width: dims.width,
+                        height: dims.height,
+                      };
+                      merged.size_ft = {
+                        width: dims.width,
+                        height: dims.height,
+                      };
+                    }
+                    // Last resort: preserve original if nothing provided
+                    else if (original.size_ft) {
+                      const originalSize = original.size_ft;
+                      if (originalSize && typeof originalSize === 'object') {
+                        const w = (originalSize as Record<string, unknown>).width;
+                        const h = (originalSize as Record<string, unknown>).height;
+                        merged.size_ft = {
+                          width: typeof w === 'number' ? w : undefined,
+                          height: typeof h === 'number' ? h : undefined,
+                        };
+                      }
 
-              // Force map re-render
-              setMapUpdateCounter(prev => prev + 1);
+                      const originalDims = original.dimensions;
+                      if (typeof originalDims === 'string') {
+                        merged.dimensions = originalDims;
+                      } else if (originalDims && typeof originalDims === 'object') {
+                        const w = (originalDims as Record<string, unknown>).width;
+                        const h = (originalDims as Record<string, unknown>).height;
+                        const unit = (originalDims as Record<string, unknown>).unit;
+                        merged.dimensions = {
+                          width: typeof w === 'number' ? w : undefined,
+                          height: typeof h === 'number' ? h : undefined,
+                          unit: typeof unit === 'string' ? unit : undefined,
+                        };
+                      }
+                    }
 
-              // CRITICAL: Also update stageResults so the AI context includes these manual edits
-              // This ensures that when the next prompt is generated, it has the latest user edits
-              const mergedChunks = mergeStageChunks(updatedResults, 'Spaces');
-              const updatedStageResults = {
-                ...stageResults,
-                spaces: mergedChunks,
-              };
-              setStageResults(updatedStageResults);
+                    console.log(`[Save Debug] ${space.name}:`, {
+                      position: merged.position,
+                      position_locked: merged.position_locked,
+                      size_ft: merged.size_ft
+                    });
 
-              console.log('[ManualGenerator] ✓ Updated spaces saved to accumulatedChunkResults AND stageResults');
-              console.log('[ManualGenerator] ✓ Next AI prompt will include these manual edits');
-
-              // Save to progress session if auto-save is enabled
-              if (autoSaveEnabled && progressSession) {
-                try {
-                  // SINGLE SOURCE OF TRUTH: Always save to stageChunkState only
-                  const updatedSession: GenerationProgress = {
-                    ...progressSession,
-                    lastUpdatedAt: new Date().toISOString(),
-                    stageChunkState: {
-                      isStageChunking: progressSession.stageChunkState?.isStageChunking ?? isStageChunking,
-                      currentStageChunk: progressSession.stageChunkState?.currentStageChunk ?? currentStageChunk,
-                      totalStageChunks: progressSession.stageChunkState?.totalStageChunks ?? totalStageChunks,
-                      showLiveMap: progressSession.stageChunkState?.showLiveMap ?? showLiveMap,
-                      liveMapSpaces: updatedResults, // Use merged results to preserve all data
-                      accumulatedChunkResults: updatedResults,
-                    },
-                  };
-
-                  console.log('[ManualGenerator] Saving to stageChunkState:', updatedResults.length, 'spaces');
-                  updatedResults.slice(0, 3).forEach(s => {
-                    console.log(`  - ${logLiveMapSpacePosition(s)}`);
+                    return merged;
                   });
+                  setAccumulatedChunkResults(updatedResults);
+                  setLiveMapSpaces(updatedResults); // Use merged results to include door changes from form
 
-                  setProgressSession(updatedSession);
-                  await saveProgressToFile(updatedSession);
-                  setLastSaveTime(new Date().toISOString());
-                  console.log('[ManualGenerator] ✓ Saved to stageChunkState (single source of truth)');
-                } catch (error) {
-                  console.error('[ManualGenerator] Failed to save updated spaces to session:', error);
-                }
-              }
-            }}
-          />
-        ) : undefined;
-      })()
-    }
-    onAutoParse={handleAutoParse}
-    onCopied={handleCopied}
-    onSubmit={handleSubmit}
-    onSkip={handleSkip}
-    onBack={handleBack}
-    acceptedSpacesCount={accumulatedChunkResults.length}
-    totalSpacesCount={totalStageChunks}
-    batchModeEnabled={batchModeEnabled}
-    onReviewSpaces={() => {
-      console.log('[Review Spaces] Opening space approval modal from CopyPasteModal');
-      // Synchronize reciprocal doors before reviewing
-      const syncedResults = synchronizeReciprocalDoors(accumulatedChunkResults as any[]);
-      setAccumulatedChunkResults(syncedResults);
-      setLiveMapSpaces(syncedResults); // Keep live map in sync
-      console.log('[Review Spaces] Synchronized reciprocal doors for', syncedResults.length, 'spaces');
-      setReviewingSpaceIndex(syncedResults.length - 1); // Start at last accepted space
-      setPendingSpace(syncedResults[syncedResults.length - 1]);
-      setShowSpaceApprovalModal(true);
-    }}
-    onToggleBatchMode={() => {
-      const newValue = !batchModeEnabled;
-      setBatchModeEnabled(newValue);
-      console.log(`[Batch Mode] ${newValue ? 'Enabled' : 'Disabled'} - spaces will ${newValue ? 'auto-accept' : 'require approval'}`);
-      if (newValue) {
-        alert('⚡ Batch Mode Enabled\n\nRemaining spaces will be auto-accepted as they are generated.\n\nYou can still review all spaces at the end before proceeding to the next stage.');
-      }
-    }}
-    onFinishSkip={handleFinishSkip}
-    lastSaveTime={lastSaveTime}
-    onSaveDraft={() => {
-      if (progressSession && autoSaveEnabled) {
-        const savedSession = {
-          ...progressSession,
-          lastUpdatedAt: new Date().toISOString(),
-          stageResults: { ...stageResults } as unknown as Record<string, unknown>,
-          currentStageIndex,
-          stageChunkState: isStageChunking ? {
-            isStageChunking,
-            currentStageChunk,
-            totalStageChunks,
-            accumulatedChunkResults,
-            liveMapSpaces,
-            showLiveMap,
-          } : undefined,
-        };
-        setProgressSession(savedSession);
-        saveProgress(savedSession);
-        const now = new Date();
-        setLastSaveTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        console.log('[Manual Save] Draft saved at', now.toISOString());
-      } else {
-        alert('Auto-save is disabled or no session exists. Enable auto-save to use this feature.');
-      }
-    }}
-    onClose={handleClose}
-  />
+                  // Force map re-render
+                  setMapUpdateCounter(prev => prev + 1);
+
+                  // CRITICAL: Also update stageResults so the AI context includes these manual edits
+                  // This ensures that when the next prompt is generated, it has the latest user edits
+                  const mergedChunks = mergeStageChunks(updatedResults, 'Spaces');
+                  const updatedStageResults = {
+                    ...stageResults,
+                    spaces: mergedChunks,
+                  };
+                  setStageResults(updatedStageResults);
+
+                  console.log('[ManualGenerator] ✓ Updated spaces saved to accumulatedChunkResults AND stageResults');
+                  console.log('[ManualGenerator] ✓ Next AI prompt will include these manual edits');
+
+                  // Save to progress session if auto-save is enabled
+                  if (autoSaveEnabled && progressSession) {
+                    try {
+                      // SINGLE SOURCE OF TRUTH: Always save to stageChunkState only
+                      const updatedSession: GenerationProgress = {
+                        ...progressSession,
+                        lastUpdatedAt: new Date().toISOString(),
+                        stageChunkState: {
+                          isStageChunking: progressSession.stageChunkState?.isStageChunking ?? isStageChunking,
+                          currentStageChunk: progressSession.stageChunkState?.currentStageChunk ?? currentStageChunk,
+                          totalStageChunks: progressSession.stageChunkState?.totalStageChunks ?? totalStageChunks,
+                          showLiveMap: progressSession.stageChunkState?.showLiveMap ?? showLiveMap,
+                          liveMapSpaces: updatedResults, // Use merged results to preserve all data
+                          accumulatedChunkResults: updatedResults,
+                        },
+                      };
+
+                      console.log('[ManualGenerator] Saving to stageChunkState:', updatedResults.length, 'spaces');
+                      updatedResults.slice(0, 3).forEach(s => {
+                        console.log(`  - ${logLiveMapSpacePosition(s)}`);
+                      });
+
+                      setProgressSession(updatedSession);
+                      await saveProgressToFile(updatedSession);
+                      setLastSaveTime(new Date().toISOString());
+                      console.log('[ManualGenerator] ✓ Saved to stageChunkState (single source of truth)');
+                    } catch (error) {
+                      console.error('[ManualGenerator] Failed to save updated spaces to session:', error);
+                    }
+                  }
+                }}
+              />
+            ) : undefined;
+          })()
+        }
+        onAutoParse={handleAutoParse}
+        onCopied={handleCopied}
+        onSubmit={handleSubmit}
+        onSkip={handleSkip}
+        onBack={handleBack}
+        acceptedSpacesCount={accumulatedChunkResults.length}
+        totalSpacesCount={totalStageChunks}
+        batchModeEnabled={batchModeEnabled}
+        onReviewSpaces={() => {
+          console.log('[Review Spaces] Opening space approval modal from CopyPasteModal');
+          // Synchronize reciprocal doors before reviewing
+          const syncedResults = synchronizeReciprocalDoors(accumulatedChunkResults as any[]);
+          setAccumulatedChunkResults(syncedResults);
+          setLiveMapSpaces(syncedResults); // Keep live map in sync
+          console.log('[Review Spaces] Synchronized reciprocal doors for', syncedResults.length, 'spaces');
+          setReviewingSpaceIndex(syncedResults.length - 1); // Start at last accepted space
+          setPendingSpace(syncedResults[syncedResults.length - 1]);
+          setShowSpaceApprovalModal(true);
+        }}
+        onToggleBatchMode={() => {
+          const newValue = !batchModeEnabled;
+          setBatchModeEnabled(newValue);
+          console.log(`[Batch Mode] ${newValue ? 'Enabled' : 'Disabled'} - spaces will ${newValue ? 'auto-accept' : 'require approval'}`);
+          if (newValue) {
+            alert('⚡ Batch Mode Enabled\n\nRemaining spaces will be auto-accepted as they are generated.\n\nYou can still review all spaces at the end before proceeding to the next stage.');
+          }
+        }}
+        onFinishSkip={handleFinishSkip}
+        lastSaveTime={lastSaveTime}
+        onSaveDraft={() => {
+          if (progressSession && autoSaveEnabled) {
+            const savedSession = {
+              ...progressSession,
+              lastUpdatedAt: new Date().toISOString(),
+              stageResults: { ...stageResults } as unknown as Record<string, unknown>,
+              currentStageIndex,
+              stageChunkState: isStageChunking ? {
+                isStageChunking,
+                currentStageChunk,
+                totalStageChunks,
+                accumulatedChunkResults,
+                liveMapSpaces,
+                showLiveMap,
+              } : undefined,
+            };
+            setProgressSession(savedSession);
+            saveProgress(savedSession);
+            const now = new Date();
+            setLastSaveTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            console.log('[Manual Save] Draft saved at', now.toISOString());
+          } else {
+            alert('Auto-save is disabled or no session exists. Enable auto-save to use this feature.');
+          }
+        }}
+        onClose={handleClose}
+      />
 
       {/* Review & Adjust Modal */}
       <ReviewAdjustModal
@@ -8712,13 +8694,13 @@ Output: Valid JSON only. No markdown, no prose.`;
               selectedSpaceId={
                 pendingSpace
                   ? (() => {
-                      const code = typeof (pendingSpace as any).code === 'string' ? String((pendingSpace as any).code) : '';
-                      const name = typeof (pendingSpace as any).name === 'string' ? String((pendingSpace as any).name) : '';
+                    const code = typeof (pendingSpace as any).code === 'string' ? String((pendingSpace as any).code) : '';
+                    const name = typeof (pendingSpace as any).name === 'string' ? String((pendingSpace as any).name) : '';
 
-                      if (code && liveMapSpaces.some((s: any) => s && s.code === code)) return code;
-                      if (name) return name;
-                      return null;
-                    })()
+                    if (code && liveMapSpaces.some((s: any) => s && s.code === code)) return code;
+                    if (name) return name;
+                    return null;
+                  })()
                   : null
               }
               onSelectSpace={(spaceId) => {

@@ -49,6 +49,34 @@ function getFields(results: StageResults, stageName: string, fieldNames: string[
 }
 
 /**
+ * Reduces stage inputs for the Basic Info stage.
+ * Basic Info is the first creator stage — needs only planner brief.
+ *
+ * @param results - Prior stage results
+ * @returns Reduced inputs for Basic Info stage
+ */
+function reduceBasicInfoInputs(results: StageResults): Record<string, unknown> {
+  return {
+    ...getFields(results, 'planner', ['concept', 'race', 'class', 'level', 'background', 'alignment', 'challenge_rating']),
+    ...getFields(results, 'purpose', ['deliverable', 'type']),
+  };
+}
+
+/**
+ * Reduces stage inputs for the Core Details stage.
+ * Core Details needs: name, race, alignment, background from basic_info.
+ *
+ * @param results - Prior stage results
+ * @returns Reduced inputs for Core Details stage
+ */
+function reduceCoreDetailsInputs(results: StageResults): Record<string, unknown> {
+  return {
+    ...getFields(results, 'basic_info', ['name', 'race', 'alignment', 'background', 'class_levels', 'challenge_rating']),
+    ...getFields(results, 'creator:_basic_info', ['name', 'race', 'alignment', 'background', 'class_levels', 'challenge_rating']),
+  };
+}
+
+/**
  * Reduces stage inputs for the Stats stage.
  * Stats needs: concept, race, class levels, CR, role.
  *
@@ -178,6 +206,12 @@ function reduceRelationshipsInputs(results: StageResults): Record<string, unknow
  */
 const STAGE_REDUCERS: Record<string, (results: StageResults) => Record<string, unknown>> = {
   // NPC Creator stages
+  'basic_info': reduceBasicInfoInputs,
+  'creator:_basic_info': reduceBasicInfoInputs,
+  'basicInfo': reduceBasicInfoInputs,
+  'core_details': reduceCoreDetailsInputs,
+  'creator:_core_details': reduceCoreDetailsInputs,
+  'coreDetails': reduceCoreDetailsInputs,
   'stats': reduceStatsInputs,
   'creator:_stats': reduceStatsInputs,
   'character_build': reduceCharacterBuildInputs,

@@ -27,6 +27,53 @@ DO NOT use placeholder values or empty arrays when real data is expected.
 Incomplete responses will be REJECTED and you will be asked to retry.`;
 
 /**
+ * Basic Info stage contract.
+ * Target: ~600 chars
+ */
+export const BASIC_INFO_CONTRACT = `${BASE_OUTPUT_FORMAT}
+
+${BASE_COMPLETENESS}
+
+⚠️ IDENTITY: The original_user_request is THE PRIMARY SOURCE OF TRUTH about what to create.
+Canon facts are reference material — do NOT substitute the requested character with other canon characters.
+
+**Required Keys:**
+- name: string
+- description: string (rich, detailed — 2-4 sentences minimum)
+- appearance: string (physical appearance description)
+- background: string (character's backstory)
+- race: string (D&D race/species)
+- alignment: string (e.g., "Lawful Good", "Chaotic Neutral")
+- challenge_rating: number or string (e.g., 5, "1/2")
+- class_levels: array of {class, level} (if applicable)
+
+**Optional but Recommended:**
+- title, aliases, size, creature_type, subtype, affiliation, location, era, experience_points
+
+**Creator Role:** You are CREATING a character, not reporting canon. If canon doesn't specify details, invent them based on the concept, D&D 5e conventions, and the user request.`;
+
+/**
+ * Core Details stage contract.
+ * Target: ~600 chars
+ */
+export const CORE_DETAILS_CONTRACT = `${BASE_OUTPUT_FORMAT}
+
+${BASE_COMPLETENESS}
+
+**Required Keys — ALL 9 must be present:**
+1. personality_traits: array of strings (distinct characteristics)
+2. ideals: array of strings (values and beliefs)
+3. bonds: array of strings (personal connections and loyalties)
+4. flaws: array of strings (weaknesses and vices)
+5. goals: array of strings (what they want to achieve)
+6. fears: array of strings (what they avoid or dread)
+7. quirks: array of strings (unusual habits or mannerisms)
+8. voice_mannerisms: array of strings (speech patterns, physical gestures)
+9. hooks: array of strings (story hooks and adventure opportunities)
+
+**Validation:** Do NOT skip any of the 9 fields. Do NOT combine fields. Each must be separate and labeled.`;
+
+/**
  * Stats stage contract.
  * Target: ~600 chars
  */
@@ -228,6 +275,10 @@ export const RELATIONSHIPS_CONTRACT = `${BASE_OUTPUT_FORMAT}
  * Maps stage IDs to their contracts.
  */
 export const STAGE_CONTRACTS: Record<string, string> = {
+  'basic_info': BASIC_INFO_CONTRACT,
+  'creator:_basic_info': BASIC_INFO_CONTRACT,
+  'core_details': CORE_DETAILS_CONTRACT,
+  'creator:_core_details': CORE_DETAILS_CONTRACT,
   'stats': STATS_CONTRACT,
   'creator:_stats': STATS_CONTRACT,
   'character_build': CHARACTER_BUILD_CONTRACT,

@@ -3,24 +3,25 @@
  *
  * Breaks down NPC creation into focused sub-stages, each with its own schema section.
  * This allows the AI to have a clear "map" of the final result and work incrementally.
- 
+ *
+ * Uses compact stage contracts (from npcStageContracts.ts) instead of verbose inline
+ * schemas to stay well within the 7200-char prompt safety ceiling.
  *
  * © 2025 Sixsmith Games. All rights reserved.
  * This software and associated documentation files are proprietary and confidential.
  */
 
 import {
-  getBasicInfoSchema,
-  getCoreDetailsSchema,
-  getStatsSchema,
-  getCharacterBuildSchema,
-  getCombatSchema,
-  getSpellcastingSchema,
-  getLegendarySchema,
-  getRelationshipsSchema,
-  getEquipmentSchema,
-  formatSchemaForPrompt,
-} from '../utils/npcSchemaExtractor';
+  BASIC_INFO_CONTRACT,
+  CORE_DETAILS_CONTRACT,
+  STATS_CONTRACT,
+  CHARACTER_BUILD_CONTRACT,
+  COMBAT_CONTRACT,
+  SPELLCASTING_CONTRACT,
+  LEGENDARY_CONTRACT,
+  RELATIONSHIPS_CONTRACT,
+  EQUIPMENT_CONTRACT,
+} from './npcStageContracts';
 
 interface StageContext {
   config: { prompt: string; type: string; flags: Record<string, unknown> };
@@ -46,7 +47,8 @@ function createMinimalFactpack(factpack: unknown): unknown {
 }
 
 /**
- * Helper to strip internal pipeline fields from stage output
+ * Helper to strip internal pipeline fields from stage output.
+ * Produces a compact summary of prior-stage output for context.
  */
 function stripStageOutput(result: Record<string, unknown>): Record<string, unknown> {
   if (!result) return {};
@@ -55,86 +57,34 @@ function stripStageOutput(result: Record<string, unknown>): Record<string, unkno
 }
 
 /**
- * Base system prompt shared by all NPC creator stages
- */
-const BASE_NPC_SYSTEM_PROMPT = `⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.
-Start your response with { and end with }. Nothing before or after.
-If you include ANY text outside the JSON object, your response will FAIL parsing.
-
-⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️
-The original_user_request field contains the EXACT character to create.
-This is THE PRIMARY SOURCE OF TRUTH about what to create.
-Canon facts are PROVIDED FOR REFERENCE to inform design.
-DO NOT substitute or confuse the requested character with other characters mentioned in canon.
-
-⚠️ COMPLETENESS REQUIREMENT - NO LAZY RESPONSES ⚠️
-You MUST provide COMPLETE, THOROUGH data for ALL required fields.
-DO NOT provide minimal or abbreviated responses.
-DO NOT omit required fields.
-DO NOT use placeholder values or empty arrays when real data is expected.
-If a field is required by the schema, you MUST populate it with complete, accurate data.
-Incomplete responses will be REJECTED and you will be asked to retry.
-
-CRITICAL RULES FOR ACCURACY:
-1. READ EVERY SINGLE FACT in the Relevant Canon - do NOT skip any
-2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts
-3. Be 100% ACCURATE - verify each fact against the Relevant Canon
-4. If canon explicitly provides values, USE them in the output
-5. DO NOT ask about information canon provides - just use it
-
-INCREMENTAL BUILD APPROACH:
-- You are building ONE SECTION of the NPC at a time
-- Previous sections are provided for context and consistency
-- Focus ONLY on the current section - don't modify previous sections
-- Build upon the foundation from previous sections
-
-Required fields in ALL outputs:
-- sources_used: array of chunk_ids from canon you used
-- assumptions: array of reasonable assumptions made
-- proposals: array of questions for unknowns (only if genuinely needed)
-- canon_update: one-line summary of changes (can be "No canon changes needed")`;
-
-/**
  * Stage 1: NPC Basic Information
  */
 export const NPC_CREATOR_BASIC_INFO = {
   name: 'Creator: Basic Info',
   routerKey: 'basicInfo',
-  systemPrompt: `${BASE_NPC_SYSTEM_PROMPT}
-
-You are creating the BASIC INFORMATION section of an NPC.
-
-⚠️ CRITICAL: YOU ARE A CREATOR ⚠️
-Your job is to CREATE a fully-formed character concept, NOT just report canon facts.
-Canon facts are provided as REFERENCE and CONTEXT.
-If canon doesn't specify exact details, you MUST create them using:
-- The original user request as your primary guide
-- Canon facts to ensure consistency with the world
-- D&D 5E conventions and typical character archetypes
-- Reasonable creative choices that fit the character concept
-
-DO NOT refuse to create details because canon doesn't specify them!
-DO NOT return minimal information - provide RICH, DETAILED descriptions!
-
-Your focus: Name, description, appearance, background, race, alignment, challenge rating, etc.
-
-${formatSchemaForPrompt(getBasicInfoSchema(), 'Basic Information')}
-
-Create a solid foundation for this NPC that the next stages will build upon.`,
+  systemPrompt: BASIC_INFO_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
       type: context.config.type,
-      brief: stripStageOutput(context.stageResults.planner as Record<string, unknown>),
-      flags: context.config.flags,
-      purpose: context.stageResults.purpose ? stripStageOutput(context.stageResults.purpose as Record<string, unknown>) : undefined,
     };
 
+    // Include planner brief if available (compact)
+    const planner = context.stageResults.planner;
+    if (planner) {
+      userPrompt.brief = stripStageOutput(planner);
+    }
+
+    // Include purpose if available (compact)
+    const purpose = context.stageResults.purpose;
+    if (purpose) {
+      userPrompt.purpose = stripStageOutput(purpose);
+    }
+
     // Canon reference
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ CRITICAL: Canon facts were already provided in the Planner stage. REVIEW those facts from your conversation history. Use them to inform your creation.`;
+    if (planner) {
+      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Use them to inform your creation.`;
     } else {
       userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
     }
@@ -154,46 +104,16 @@ Create a solid foundation for this NPC that the next stages will build upon.`,
 export const NPC_CREATOR_CORE_DETAILS = {
   name: 'Creator: Core Details',
   routerKey: 'coreDetails',
-  systemPrompt: `${BASE_NPC_SYSTEM_PROMPT}
-
-You are creating the CORE DETAILS & PERSONALITY section of an NPC.
-
-⚠️ CRITICAL: You MUST provide ALL of the following fields SEPARATELY AND CLEARLY LABELED ⚠️
-
-REQUIRED FIELDS - All must be included:
-1. personality_traits: Array of distinct personality characteristics
-2. ideals: What the character believes in and values
-3. bonds: Personal connections, loyalties, and attachments
-4. flaws: Weaknesses, vices, or negative traits
-5. goals: What the character wants to achieve
-6. fears: What the character is afraid of or avoids
-7. quirks: Unusual habits, mannerisms, or peculiarities
-8. voice_mannerisms: How they speak and physical mannerisms
-9. hooks: Story hooks and adventure opportunities
-
-DO NOT simply provide "hooks" alone - you must provide all 9 fields listed above.
-Each field must be separate, labeled, and contain appropriate content.
-
-${formatSchemaForPrompt(getCoreDetailsSchema(), 'Core Details & Personality')}
-
-Build a rich, memorable personality that aligns with the basic information from the previous stage.
-
-VALIDATION CHECKLIST:
-✓ All 9 fields are present in your JSON output
-✓ Each field has its correct label (personality_traits, ideals, bonds, flaws, goals, fears, quirks, voice_mannerisms, hooks)
-✓ Each field contains relevant, appropriate content
-✓ You did NOT skip any fields or combine them into "hooks"`,
+  systemPrompt: CORE_DETAILS_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
       basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
-      brief: stripStageOutput(context.stageResults.planner as Record<string, unknown>),
-      flags: context.config.flags,
     };
 
     if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for personality and relationship details.`;
+      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for personality and relationship details.`;
     } else {
       userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
     }
@@ -212,59 +132,23 @@ VALIDATION CHECKLIST:
 export const NPC_CREATOR_STATS = {
   name: 'Creator: Stats',
   routerKey: 'stats',
-  systemPrompt: `${BASE_NPC_SYSTEM_PROMPT}
-
-You are creating the STATS & ABILITIES section of an NPC.
-
-⚠️ CRITICAL: YOU ARE A CREATOR, NOT A REPORTER ⚠️
-Your job is to CREATE appropriate stats for this character, NOT to report what canon says.
-Canon facts are provided as REFERENCE to inform your design choices.
-If canon doesn't specify exact stats, you MUST create them based on:
-- The character's role and concept from Basic Info stage
-- The character's personality and abilities from Core Details stage
-- D&D 5E rules and typical stat ranges for similar characters
-- Reasonable assumptions about what makes sense for this character
-
-DO NOT say "canon doesn't provide stats" - YOU are creating the stats!
-DO NOT leave fields empty because canon doesn't specify them - FILL THEM IN!
-DO NOT refuse to do the work - this is your PRIMARY TASK!
-
-Your focus: Ability scores, AC, HP, speed, proficiency bonus, senses, languages, saving throws, skills, resistances/immunities/vulnerabilities.
-
-${formatSchemaForPrompt(getStatsSchema(), 'Stats & Abilities')}
-
-CRITICAL D&D 5E RULES (if applicable):
-- Proficiency bonus = ceil(CR/4) + 1, or based on class levels
-- Skill bonuses = ability modifier + proficiency bonus (if proficient)
-- Saving throw bonuses = ability modifier + proficiency bonus (if proficient)
-- HP = (hit dice × level) + (CON modifier × level)
-- AC typically ranges from 10 (unarmored) to 20+ (heavy armor/magic)
-- Ability scores range from 1-30, with 10-11 being average for a commoner
-- Calculate all derived values accurately
-
-EXAMPLES OF WHAT TO DO:
-✓ "Prince Derek is a skilled diplomat, so I'll give him high CHA (16) and decent INT (14)"
-✓ "As a royal warrior, he likely has fighter training, so STR 14, DEX 13, CON 12"
-✓ "His AC would be 16 (chain mail) or 18 if he has plate armor available as a prince"
-
-EXAMPLES OF WHAT NOT TO DO:
-✗ "Canon doesn't specify stats, so I won't provide them"
-✗ Returning empty fields or just assumptions without actual stats
-✗ Asking for stats instead of creating them
-
-Create mechanically sound stats that support the character concept from previous stages.`,
+  systemPrompt: STATS_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
+    const basicInfo = context.stageResults['creator:_basic_info'];
+    const coreDetails = context.stageResults['creator:_core_details'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
-      basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
-      core_details: stripStageOutput(context.stageResults['creator:_core_details'] as Record<string, unknown>),
-      brief: stripStageOutput(context.stageResults.planner as Record<string, unknown>),
-      flags: context.config.flags,
+      // Only carry forward the fields Stats actually needs
+      name: basicInfo?.name,
+      race: basicInfo?.race,
+      class_levels: basicInfo?.class_levels || coreDetails?.class_levels,
+      challenge_rating: basicInfo?.challenge_rating,
+      role: coreDetails?.role,
     };
 
     if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for racial stats, template modifiers, and mechanical details.`;
+      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for racial stats and mechanical details.`;
     } else {
       userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
     }
@@ -283,51 +167,23 @@ Create mechanically sound stats that support the character concept from previous
 export const NPC_CREATOR_CHARACTER_BUILD = {
   name: 'Creator: Character Build',
   routerKey: 'characterBuild',
-  systemPrompt: `${BASE_NPC_SYSTEM_PROMPT}
-
-You are creating the CHARACTER BUILD section of an NPC.
-
-⚠️ CRITICAL: YOU ARE A CREATOR ⚠️
-Your job is to CREATE the COMPLETE list of character features based on class levels, race, and background.
-This is one of the most important sections — it defines what the character CAN DO.
-
-Your focus:
-- ALL base class features for EVERY class level (e.g., Wizard: Arcane Recovery at 1, Spell Mastery at 18, Signature Spells at 20)
-- ALL subclass/archetype features (e.g., Divination Wizard: Portent at 2, Expert Divination at 6, The Third Eye at 10, Greater Portent at 14)
-- ALL racial features/traits (e.g., Human: Resourceful, Skillful, Versatile; Elf: Darkvision, Fey Ancestry, Trance)
-- ALL feats (from ASI choices, background origin feat, racial bonus feat)
-- ASI choices at each ASI level (what was taken: +2 to one ability or a feat)
-- Background feature and origin feat (2024 rules)
-- Abilities (special traits), ability_scores, skill_proficiencies, saving_throws, fighting_styles
-
-${formatSchemaForPrompt(getCharacterBuildSchema(), 'Character Build')}
-
-CRITICAL D&D 5E CHARACTER BUILD RULES:
-- Wizards get ASIs at levels 4, 8, 12, 16, 19
-- Fighters get ASIs at levels 4, 6, 8, 12, 14, 16, 19
-- Rogues get ASIs at levels 4, 8, 10, 12, 16, 19
-- All other classes get ASIs at levels 4, 8, 12, 16, 19
-- At each ASI, the character can choose +2 to one ability score, +1 to two scores, OR take a feat
-- Background grants an Origin Feat (2024 rules) such as Alert, Magic Initiate, Skilled, etc.
-
-COMPLETENESS IS CRITICAL:
-- List EVERY class feature from level 1 through the character's level
-- List EVERY subclass feature from the subclass selection level through the character's level
-- Do NOT skip or summarize features — include FULL mechanical descriptions
-- For a Level 20 Wizard (Divination), expect ~10+ class features and ~4+ subclass features
-- For each ASI level, specify whether an ASI or feat was taken`,
+  systemPrompt: CHARACTER_BUILD_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
+    const basicInfo = context.stageResults['creator:_basic_info'];
+    const stats = context.stageResults['creator:_stats'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
-      basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
-      stats: stripStageOutput(context.stageResults['creator:_stats'] as Record<string, unknown>),
-      brief: stripStageOutput(context.stageResults.planner as Record<string, unknown>),
-      flags: context.config.flags,
+      // Only carry forward the fields Character Build actually needs
+      race: basicInfo?.race,
+      background: basicInfo?.background,
+      class_levels: basicInfo?.class_levels,
+      ability_scores: stats?.ability_scores,
+      proficiency_bonus: stats?.proficiency_bonus,
     };
 
     if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for class features, racial traits, feats, and background details.`;
+      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for class features, racial traits, feats, and background details.`;
     } else {
       userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
     }
@@ -346,44 +202,27 @@ COMPLETENESS IS CRITICAL:
 export const NPC_CREATOR_COMBAT = {
   name: 'Creator: Combat',
   routerKey: 'combat',
-  systemPrompt: `${BASE_NPC_SYSTEM_PROMPT}
-
-You are creating the COMBAT & ACTIONS section of an NPC.
-
-⚠️ CRITICAL: YOU ARE A CREATOR ⚠️
-Your job is to CREATE combat abilities and actions for this character.
-Use the stats from the previous stage to create appropriate combat mechanics.
-DO NOT say "canon doesn't specify combat actions" - CREATE them!
-Base your creations on:
-- The character's stats and abilities from previous stages
-- D&D 5E combat mechanics and action economy
-- Similar creatures/NPCs at this CR/level
-- The character's role and fighting style
-
-Your focus: Abilities (special traits), actions, bonus actions, reactions, multiattack, tactics.
-
-${formatSchemaForPrompt(getCombatSchema(), 'Combat & Actions')}
-
-CRITICAL D&D 5E COMBAT RULES (if applicable):
-- Attack bonus = proficiency bonus + relevant ability modifier
-- Damage should match CR and threat level
-- Special abilities should have clear mechanics (uses, recharge, range, duration)
-- Tactics should leverage abilities and reflect intelligence/personality
-
-Create engaging combat capabilities that fit the CR and character concept.`,
+  systemPrompt: COMBAT_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
+    const stats = context.stageResults['creator:_stats'];
+    const build = context.stageResults['creator:_character_build'];
+    const coreDetails = context.stageResults['creator:_core_details'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
-      basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
-      core_details: stripStageOutput(context.stageResults['creator:_core_details'] as Record<string, unknown>),
-      stats: stripStageOutput(context.stageResults['creator:_stats'] as Record<string, unknown>),
-      brief: stripStageOutput(context.stageResults.planner as Record<string, unknown>),
-      flags: context.config.flags,
+      // Only carry forward the fields Combat actually needs
+      ability_scores: stats?.ability_scores,
+      proficiency_bonus: stats?.proficiency_bonus,
+      armor_class: stats?.armor_class,
+      hit_points: stats?.hit_points,
+      class_features: build?.class_features,
+      fighting_styles: build?.fighting_styles,
+      role: coreDetails?.role,
+      class_levels: coreDetails?.class_levels,
     };
 
     if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for special abilities, powers, and combat mechanics.`;
+      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for special abilities and combat mechanics.`;
     } else {
       userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
     }
@@ -402,34 +241,24 @@ Create engaging combat capabilities that fit the CR and character concept.`,
 export const NPC_CREATOR_SPELLCASTING = {
   name: 'Creator: Spellcasting',
   routerKey: 'spellcasting',
-  systemPrompt: `${BASE_NPC_SYSTEM_PROMPT}
-
-You are creating the SPELLCASTING section of an NPC.
-
-Your focus: Spellcasting ability, cantrips, prepared spells, spell slots, innate spellcasting, spell focus, spell-storing items.
-
-${formatSchemaForPrompt(getSpellcastingSchema(), 'Spellcasting')}
-
-CRITICAL SPELLCASTING RULES (if D&D 5E):
-- Spell save DC = 8 + proficiency bonus + spellcasting ability modifier
-- Spell attack bonus = proficiency bonus + spellcasting ability modifier
-- Spell slots based on class level(s)
-- Cantrips scale with total character level
-- Prepared spells = spellcasting ability modifier + class level
-
-Only include this section if the NPC has spellcasting abilities. If not a spellcaster, output minimal JSON with empty fields.`,
+  systemPrompt: SPELLCASTING_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
+    const stats = context.stageResults['creator:_stats'];
+    const build = context.stageResults['creator:_character_build'];
+    const coreDetails = context.stageResults['creator:_core_details'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
-      basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
-      stats: stripStageOutput(context.stageResults['creator:_stats'] as Record<string, unknown>),
-      brief: stripStageOutput(context.stageResults.planner as Record<string, unknown>),
-      flags: context.config.flags,
+      // Only carry forward the fields Spellcasting actually needs
+      class_levels: coreDetails?.class_levels || context.stageResults['creator:_basic_info']?.class_levels,
+      ability_scores: stats?.ability_scores,
+      proficiency_bonus: stats?.proficiency_bonus,
+      class_features: build?.class_features,
+      subclass_features: build?.subclass_features,
     };
 
     if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for spellcasting details and spell lists.`;
+      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for spellcasting details and spell lists.`;
     } else {
       userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
     }
@@ -448,35 +277,21 @@ Only include this section if the NPC has spellcasting abilities. If not a spellc
 export const NPC_CREATOR_LEGENDARY = {
   name: 'Creator: Legendary',
   routerKey: 'legendary',
-  systemPrompt: `${BASE_NPC_SYSTEM_PROMPT}
-
-You are creating the LEGENDARY & MYTHIC ACTIONS section of an NPC.
-
-Your focus: Legendary actions, mythic actions, lair actions, regional effects.
-
-${formatSchemaForPrompt(getLegendarySchema(), 'Legendary & Mythic Actions')}
-
-CRITICAL LEGENDARY ACTION RULES (if D&D 5E):
-- Legendary creatures can take 3 legendary actions per round
-- Only one legendary action at a time, at the end of another creature's turn
-- Legendary actions should cost 1-3 actions depending on power
-- Lair actions happen on initiative count 20
-- Regional effects persist even when the creature is elsewhere
-
-Only include this section if the NPC has legendary/mythic status (typically CR 11+). If not legendary, output minimal JSON with empty fields.`,
+  systemPrompt: LEGENDARY_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
+    const coreDetails = context.stageResults['creator:_core_details'];
+    const combat = context.stageResults['creator:_combat'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
-      basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
-      stats: stripStageOutput(context.stageResults['creator:_stats'] as Record<string, unknown>),
-      combat: stripStageOutput(context.stageResults['creator:_combat'] as Record<string, unknown>),
-      brief: stripStageOutput(context.stageResults.planner as Record<string, unknown>),
-      flags: context.config.flags,
+      // Only carry forward the fields Legendary actually needs
+      challenge_rating: coreDetails?.challenge_rating || context.stageResults['creator:_basic_info']?.challenge_rating,
+      role: coreDetails?.role,
+      actions: combat?.actions,
     };
 
     if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for legendary abilities and lair information.`;
+      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for legendary abilities and lair information.`;
     } else {
       userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
     }
@@ -495,33 +310,23 @@ Only include this section if the NPC has legendary/mythic status (typically CR 1
 export const NPC_CREATOR_RELATIONSHIPS = {
   name: 'Creator: Relationships',
   routerKey: 'relationships',
-  systemPrompt: `${BASE_NPC_SYSTEM_PROMPT}
-
-You are creating the RELATIONSHIPS & NETWORKS section of an NPC.
-
-Your focus: Allies/friends, foes, rivals, mentors, students, family, factions, minions, conflicts.
-
-${formatSchemaForPrompt(getRelationshipsSchema(), 'Relationships & Networks')}
-
-Build a rich social network that:
-- Connects the NPC to the broader world
-- Creates adventure hooks and complications
-- Reflects the NPC's personality and background
-- Uses canon entities where applicable
-
-Focus on relationships that GMs can leverage in their campaigns.`,
+  systemPrompt: RELATIONSHIPS_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
+    const basicInfo = context.stageResults['creator:_basic_info'];
+    const coreDetails = context.stageResults['creator:_core_details'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
-      basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
-      core_details: stripStageOutput(context.stageResults['creator:_core_details'] as Record<string, unknown>),
-      brief: stripStageOutput(context.stageResults.planner as Record<string, unknown>),
-      flags: context.config.flags,
+      // Only carry forward the fields Relationships actually needs
+      name: basicInfo?.name,
+      race: basicInfo?.race,
+      background: basicInfo?.background,
+      alignment: basicInfo?.alignment,
+      personality_traits: coreDetails?.personality_traits,
     };
 
     if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for related NPCs, factions, and relationships.`;
+      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for related NPCs, factions, and relationships.`;
     } else {
       userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
     }
@@ -540,55 +345,27 @@ Focus on relationships that GMs can leverage in their campaigns.`,
 export const NPC_CREATOR_EQUIPMENT = {
   name: 'Creator: Equipment',
   routerKey: 'equipment',
-  systemPrompt: `${BASE_NPC_SYSTEM_PROMPT}
+  systemPrompt: EQUIPMENT_CONTRACT,
 
-You are creating the EQUIPMENT & POSSESSIONS section of an NPC.
-
-⚠️ CRITICAL: YOU ARE A CREATOR ⚡
-Your job is to CREATE appropriate equipment for this character.
-Base your choices on:
-- The character's role, class, and combat style
-- The character's race/species and typical gear
-- The character's level and wealth tier
-- D&D 5E equipment rules and typical loadouts
-
-**MAGIC ITEM GUARDRAILS**
-- Ask the user (or use provided constraints) for a maximum rarity (e.g., uncommon, rare) and enforce it.
-- Only include items that exist in officially published RAW sources.
-- Limit the total number of magic items to a reasonable count for the character’s level (e.g., ≤2 for low‑level, ≤4 for mid‑level, ≤6 for high‑level).
-- Ensure any attuned items are listed in 'attuned_items' and that their effects are reflected in the character’s final ability scores, AC, HP, or other derived stats.
-
-**BASIC EQUIPMENT**
-- Provide a complete set of standard gear (armor, weapons, tools, adventuring gear) appropriate for the class and race.
-- Include sensible wealth‑based upgrades (e.g., better armor for wealthy nobles).
-
-If attuned magic items modify ability scores, armor class, hit points, or other derived statistics, include those adjustments in the output (e.g., updated 'ability_scores', 'armor_class', 'hit_points').
-
-${formatSchemaForPrompt(getEquipmentSchema(), 'Equipment & Possessions')}
-
-Create a practical equipment loadout that supports the character concept and respects the guardrails above.
-
-Your focus: Armor, weapons, tools, magic items, treasure, carried items, worn items.
-
-EQUIPMENT GUIDELINES:
-- Armor and weapons should match proficiencies and combat style
-- Magic items should be appropriate for CR/level
-- Include utility items that reflect the character's profession
-- Consider wealth level: peasants have simple gear, nobles have fine equipment
-- Don't forget consumables (potions, scrolls) for spellcasters`
-,
   buildUserPrompt: (context: StageContext) => {
+    const basicInfo = context.stageResults['creator:_basic_info'];
+    const stats = context.stageResults['creator:_stats'];
+    const build = context.stageResults['creator:_character_build'];
+    const coreDetails = context.stageResults['creator:_core_details'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
-      basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
-      stats: stripStageOutput(context.stageResults['creator:_stats'] as Record<string, unknown>),
-      combat: stripStageOutput(context.stageResults['creator:_combat'] as Record<string, unknown>),
-      brief: stripStageOutput(context.stageResults.planner as Record<string, unknown>),
-      flags: context.config.flags,
+      // Only carry forward the fields Equipment actually needs
+      class_levels: coreDetails?.class_levels || basicInfo?.class_levels,
+      role: coreDetails?.role,
+      ability_scores: stats?.ability_scores,
+      proficiency_bonus: stats?.proficiency_bonus,
+      skill_proficiencies: build?.skill_proficiencies,
+      fighting_styles: build?.fighting_styles,
+      background: basicInfo?.background,
     };
 
     if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for equipment, treasure, and magic items.`;
+      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for equipment, treasure, and magic items.`;
     } else {
       userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
     }
