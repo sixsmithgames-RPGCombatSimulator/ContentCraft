@@ -4448,6 +4448,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     // Check if this stage has a minimal contract (new prompt packer system)
     const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
+    const isLegendaryStage = normalizedStageName.toLowerCase() === 'legendary';
     const stageContract =
       getStageContract(stage.id ?? stage.name) ||
       getStageContract(normalizedStageName) ||
@@ -4468,14 +4469,14 @@ Output: Valid JSON only. No markdown, no prose.`;
           stageContract: stageContract!,
           outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
           requiredKeys: generateCompactSchemaSpec(stageSchema as any, requiredFields),
-          stageInputs: reduceStageInputs(stage.id ?? normalizedStageName, results),
+          stageInputs: isLegendaryStage ? undefined : reduceStageInputs(stage.id ?? normalizedStageName, results),
         },
         shouldHave: {
           canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
           previousDecisionsSummary: limitedDecisions ? JSON.stringify(limitedDecisions, null, 2) : undefined,
         },
         niceToHave: {
-          verboseFlags: cfg.flags,
+          verboseFlags: isLegendaryStage ? undefined : cfg.flags,
         },
         safetyCeiling: PROMPT_SAFETY_CEILING,
       };
