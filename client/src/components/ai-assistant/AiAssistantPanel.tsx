@@ -248,9 +248,11 @@ export default function AiAssistantPanel() {
     }
   }, [isPanelOpen]);
 
-  // Reset stageRunId when workflow stage changes
+  const effectiveStageKey = workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest?.stageKey || null;
+
+  // Reset stageRunId when stage changes (use compiled request as fallback identifier)
   useEffect(() => {
-    if (!workflowContext?.stageRouterKey) {
+    if (!effectiveStageKey) {
       setStageRunId(null);
       setHasAutoStarted(false);
       return;
@@ -259,17 +261,17 @@ export default function AiAssistantPanel() {
     setStageRunnerState('idle');
     setStageRunnerError(null);
     setHasAutoStarted(false);
-  }, [workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest?.prompt]);
+  }, [effectiveStageKey, workflowContext?.compiledStageRequest?.prompt]);
 
-  // Hard error if stageRouterKey is missing while integrated runner is active
+  // Avoid hard error when stageRouterKey is temporarily missing; rely on compiled stage key if present
   useEffect(() => {
     if (assistMode !== 'integrated') return;
     if (!isPanelOpen) return;
-    if (!workflowContext?.stageRouterKey) {
-      setStageRunnerError('Workflow stalled: missing stageRouterKey. Please resume or restart the run.');
-      setStageRunnerState('error');
+    if (!effectiveStageKey) {
+      setStageRunnerError('Workflow is waiting for stage context.');
+      setStageRunnerState('idle');
     }
-  }, [assistMode, isPanelOpen, workflowContext?.stageRouterKey]);
+  }, [assistMode, isPanelOpen, effectiveStageKey]);
 
   // NOTE: Panel auto-open is now controlled by ManualGenerator after mode selection
 
@@ -284,12 +286,12 @@ export default function AiAssistantPanel() {
         assistMode,
         providerType: providerConfig.type,
         hasProvider,
-        stageRouterKey: workflowContext?.stageRouterKey,
+        stageRouterKey: workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest?.stageKey,
         stageRunnerState,
         hasAutoStarted,
       });
     },
-    [assistMode, hasAutoStarted, hasProvider, isPanelOpen, providerConfig.type, stageRunnerState, workflowContext?.stageRouterKey]
+    [assistMode, hasAutoStarted, hasProvider, isPanelOpen, providerConfig.type, stageRunnerState, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest?.stageKey]
   );
 
   // ─── Handlers ────────────────────────────────────────────────────────────
@@ -578,9 +580,11 @@ export default function AiAssistantPanel() {
       logStageRunnerGate(`skip: in-flight (${stageRunnerState})`);
       return;
     }
-    if (!workflowContext || !workflowContext.stageRouterKey) {
-      setStageRunnerError('No active stage to run.');
-      setStageRunnerState('error');
+    const stageKeyForRun = effectiveStageKey;
+    if (!workflowContext || !stageKeyForRun) {
+      logStageRunnerGate('skip: awaiting stage context');
+      setStageRunnerError('Workflow is waiting for stage context.');
+      setStageRunnerState('idle');
       return;
     }
     if (providerConfig.type !== 'gemini') {
@@ -590,8 +594,7 @@ export default function AiAssistantPanel() {
     }
     const compiledStageRequest = getCompiledStageRequest();
     if (!compiledStageRequest) {
-      setStageRunnerError('No compiled stage request is available for the active stage yet.');
-      setStageRunnerState('error');
+      logStageRunnerGate('skip: awaiting compiled stage request');
       return;
     }
 
@@ -604,7 +607,7 @@ export default function AiAssistantPanel() {
     }
 
     const prompt = compiledStageRequest.prompt;
-    const stageKey = compiledStageRequest.stageKey;
+    const stageKey = stageKeyForRun || compiledStageRequest.stageKey;
     const runId = stageRunId || crypto.randomUUID();
     setStageRunId(runId);
     setStageRunnerState('sending');
@@ -803,10 +806,9 @@ export default function AiAssistantPanel() {
       logStageRunnerGate('skip: awaiting compiled stage request');
       return;
     }
-    if (!workflowContext?.stageRouterKey) {
-      const message = 'Workflow stalled: missing stageRouterKey. Please resume or restart the run.';
+    if (!workflowContext || !effectiveStageKey) {
       logStageRunnerGate('skip: missing stageRouterKey');
-      setStageRunnerError(message);
+      setStageRunnerError('Workflow stalled: missing stageRouterKey. Please resume or restart the run.');
       setStageRunnerState('error');
       return;
     }
