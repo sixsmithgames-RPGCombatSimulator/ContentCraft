@@ -880,7 +880,7 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
     }
 
     if (extraction.patch) {
-      // Pre-validation cleanup: ensure only the requested stageId is present at the top level
+      // Normalize patch to target stageId and strip extras
       if (extraction.patch[body.stageId]) {
         for (const key of Object.keys(extraction.patch)) {
           if (key !== body.stageId) {
@@ -888,6 +888,20 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
             delete extraction.patch[key];
           }
         }
+      } else {
+        const patchKeys = Object.keys(extraction.patch);
+        if (patchKeys.length === 0) {
+          return res.status(422).json({
+            ok: false,
+            requestId,
+            stageRunId: body.stageRunId,
+            error: { type: 'INVALID_RESPONSE', message: 'Empty patch returned from provider.', retryable: false },
+          } satisfies GeminiFailureResponse);
+        }
+
+        // Coerce bare patch into the expected stageId container for robustness
+        console.warn(`[AI][Gemini] Coercing patch into stageId container '${body.stageId}' (received keys: ${patchKeys.join(', ')})`);
+        extraction.patch = { [body.stageId]: extraction.patch } as Record<string, unknown>;
       }
 
       const scopeResult = validateScope(body.stageId, extraction.patch);
