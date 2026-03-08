@@ -2792,12 +2792,13 @@ export default function ManualGenerator() {
 
     const wfType = configTypeToWorkflow(config.type);
     const currentStage = STAGES[currentStageIndex];
+    const isWorkflowComplete = isComplete || currentStageIndex >= STAGES.length;
 
     setWorkflowContext({
       workflowType: wfType,
       workflowLabel: workflowLabelMap[wfType] || 'Content Generator',
-      currentStage: currentStage?.name,
-      stageRouterKey: currentStage ? getStageLookupKey(currentStage) : undefined,
+      currentStage: isWorkflowComplete ? undefined : currentStage?.name,
+      stageRouterKey: isWorkflowComplete ? undefined : currentStage ? getStageLookupKey(currentStage) : undefined,
       stageProgress: currentStageIndex >= 0
         ? { current: currentStageIndex + 1, total: STAGES.length }
         : undefined,
@@ -2810,12 +2811,12 @@ export default function ManualGenerator() {
         prompt: config.prompt,
         flags: config.flags,
       },
-      compiledStageRequest: compiledStageRequest || undefined,
+      compiledStageRequest: isWorkflowComplete ? undefined : compiledStageRequest || undefined,
       generatorType: config.type,
       schemaVersion: 'v1.1-client',
       projectId: projectId !== 'default' ? projectId : undefined,
     });
-  }, [compiledStageRequest, config, currentStageIndex, stageResults, factpack, STAGES, projectId, setWorkflowContext]);
+  }, [compiledStageRequest, config, currentStageIndex, stageResults, factpack, STAGES, projectId, setWorkflowContext, isComplete]);
 
   // Register applyChanges callback so the AI panel can merge changes back
   useEffect(() => {
@@ -4715,13 +4716,18 @@ Output: Valid JSON only. No markdown, no prose.`;
     if (usePackedPrompt) {
       console.log(`[Prompt Packer] Using packed prompt for stage: ${stage.name}`);
 
+      const reducedStageInputs = reduceStageInputs(stageLookupKey, results);
+
       // Build packed prompt config - stage contracts already contain required keys
       const packConfig: PromptPackConfig = {
         mustHave: {
           stageContract: stageContract!,
           outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
           requiredKeys: '', // Contracts already embed required keys
-          stageInputs: reduceStageInputs(stageLookupKey, results),
+          stageInputs: {
+            original_user_request: cfg.prompt,
+            ...reducedStageInputs,
+          },
         },
         shouldHave: {
           canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
@@ -7070,6 +7076,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           _pipeline_stages: newResults,
         };
 
+        setCompiledStageRequest(null);
         setModalMode(null);
         setStageResults(newResults);
         setFinalOutput(finalContent);

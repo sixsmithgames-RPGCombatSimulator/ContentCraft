@@ -228,6 +228,9 @@ ${BASE_COMPLETENESS}
  */
 export const LEGENDARY_CONTRACT = `${BASE_OUTPUT_FORMAT}
 
+⚠️ REQUEST OVERRIDE: If the original_user_request says there are NO legendary actions, then do NOT invent any legendary actions, lair actions, regional effects, or legendary resistance.
+In that case, return an empty/disabled legendary payload only.
+
 **Required Keys (if legendary creature):**
 - legendary_actions: {summary: string, options: array of {name, description, cost?}}
 - legendary_resistance: {uses_per_day: integer, description: string}
@@ -235,6 +238,10 @@ export const LEGENDARY_CONTRACT = `${BASE_OUTPUT_FORMAT}
 **Optional:**
 - lair_actions: array of {name, description, initiative_count?}
 - regional_effects: array of {description, range?}
+
+**If NOT legendary or explicitly forbidden by the user request:**
+- legendary_actions: {actions: [], lair_actions: [], regional_effects: []}
+- Omit legendary_resistance
 
 **Legendary Action Rules:**
 - Creature can take 3 legendary actions per round

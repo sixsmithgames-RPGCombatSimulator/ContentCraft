@@ -249,11 +249,15 @@ export default function AiAssistantPanel() {
   }, [isPanelOpen]);
 
   const effectiveStageKey = workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest?.stageKey || null;
+  const hasActiveAutomatedStage = Boolean(workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest);
 
   // Reset stageRunId when stage changes (use compiled request as fallback identifier)
   useEffect(() => {
     if (!effectiveStageKey) {
       setStageRunId(null);
+      setStageRunnerState('idle');
+      setStageRunnerError(null);
+      setExtractedPayload(null);
       setHasAutoStarted(false);
       return;
     }
@@ -875,6 +879,7 @@ export default function AiAssistantPanel() {
   useEffect(() => {
     if (assistMode !== 'integrated') return;
     if (!isPanelOpen) return;
+    if (!hasActiveAutomatedStage) return;
 
     // Clear any existing stall timer when routerKey changes
     if (stallTimerRef.current) {
@@ -885,8 +890,6 @@ export default function AiAssistantPanel() {
 
     // If complete and routerKey is missing, surface error (no retry here)
     if (stageRunnerState === 'complete' && !workflowContext?.stageRouterKey) {
-      setStageRunnerError('Workflow stalled: missing stageRouterKey after stage completion. Please resume or restart.');
-      setStageRunnerState('error');
       return;
     }
 
@@ -917,7 +920,7 @@ export default function AiAssistantPanel() {
         stallTimerRef.current = null;
       };
     }
-  }, [assistMode, isPanelOpen, stageRunnerState, workflowContext?.stageRouterKey, runStageWithGemini]);
+  }, [assistMode, hasActiveAutomatedStage, isPanelOpen, stageRunnerState, workflowContext?.stageRouterKey, runStageWithGemini]);
 
   const handleConfirmApply = useCallback(() => {
     if (!pendingDiff || !applyChanges) return;
