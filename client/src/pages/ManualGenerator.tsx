@@ -252,6 +252,15 @@ const sanitizeProposalsValue = (value: unknown): JsonRecord[] => {
   return cleaned;
 };
 
+const shouldLogAiPayload = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (window.localStorage?.getItem('DEBUG_AI_LOG') || '').toLowerCase() === 'true';
+  } catch (_err) {
+    return false;
+  }
+};
+
 type RetryRepairMode = 'core_details' | 'spellcasting' | 'relationships';
 
 const RETRY_REPAIR_MODE_MARKER = '__RETRY_REPAIR_MODE__:';
@@ -6000,6 +6009,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     try {
       const currentStage = STAGES[currentStageIndex];
+      const logAi = shouldLogAiPayload();
 
       // Special handling for Visual Map stage - it outputs pure HTML, not JSON
       let parsed: JsonRecord;
@@ -6012,6 +6022,10 @@ Output: Valid JSON only. No markdown, no prose.`;
           generated_at: new Date().toISOString(),
         };
       } else {
+        if (logAi) {
+          console.log(`[AI][RAW][${currentStage.name}] (${aiResponse.length} chars)`, aiResponse);
+        }
+
         // Parse AI response with improved error handling for JSON stages
         const parseResult = parseAIResponse<JsonRecord>(aiResponse);
 
@@ -6031,6 +6045,10 @@ Output: Valid JSON only. No markdown, no prose.`;
         }
         if (currentStage.name === 'Creator: Core Details') {
           parsed = normalizeCoreDetailsStageOutput(parsed);
+        }
+
+        if (logAi) {
+          console.log(`[AI][PARSED][${currentStage.name}]`, parsed);
         }
       }
 
