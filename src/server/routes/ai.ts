@@ -89,7 +89,25 @@ function validateScope(stageId: string, patch: Record<string, unknown>): { ok: t
   if (keys.length !== 1 || keys[0] !== stageId) {
     return { ok: false, message: `Patch must contain only the current stageId (${stageId}).` };
   }
-  const payload = patch[stageId];
+  let payload = patch[stageId];
+
+  // Coerce common mis-shapes for equipment stage (model sometimes returns an array directly)
+  if (Array.isArray(payload) && stageId.toLowerCase().includes('equipment')) {
+    patch[stageId] = { equipment: payload } as Record<string, unknown>;
+    payload = patch[stageId];
+  } else if (typeof payload === 'string' && stageId.toLowerCase().includes('equipment')) {
+    try {
+      const parsed = JSON.parse(payload);
+      if (Array.isArray(parsed)) {
+        patch[stageId] = { equipment: parsed } as Record<string, unknown>;
+        payload = patch[stageId];
+      }
+    } catch (_) {
+      patch[stageId] = { equipment: [payload] } as Record<string, unknown>;
+      payload = patch[stageId];
+    }
+  }
+
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return { ok: false, message: 'Stage payload must be an object.' };
   }
