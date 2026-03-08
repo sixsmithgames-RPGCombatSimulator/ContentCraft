@@ -170,6 +170,20 @@ function loadSchemaForGenerator(generatorType: string): StageRegistryEntry | nul
   }
 }
 
+function normalizeScalarStrings(container: Record<string, unknown>, fields: string[]): void {
+  for (const field of fields) {
+    if (!Object.prototype.hasOwnProperty.call(container, field)) continue;
+    const value = container[field];
+    if (value === null || value === undefined) {
+      delete container[field];
+      continue;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      container[field] = String(value);
+    }
+  }
+}
+
 /**
  * Normalize personality to an object with array fields. Coerces string to single-item arrays.
  * Ensures schema compliance to avoid '/personality must be object' errors.
@@ -1002,6 +1016,15 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       normalizeStringList(payload, 'damage_immunities');
       normalizeStringList(payload, 'damage_vulnerabilities');
       normalizeStringList(payload, 'condition_immunities');
+      normalizeScalarStrings(payload, [
+        'challenge_rating',
+        'size',
+        'creature_type',
+        'subtype',
+        'alignment',
+        'race',
+        'class_levels',
+      ]);
       normalizeNameValueArray(payload, 'saving_throws');
       normalizeNameValueArray(payload, 'skill_proficiencies');
       normalizeNameDescriptionArray(payload, 'abilities');
@@ -1119,6 +1142,15 @@ ${JSON.stringify(payload)}`;
           normalizeStringList(retryPayload, 'damage_immunities');
           normalizeStringList(retryPayload, 'damage_vulnerabilities');
           normalizeStringList(retryPayload, 'condition_immunities');
+          normalizeScalarStrings(retryPayload, [
+            'challenge_rating',
+            'size',
+            'creature_type',
+            'subtype',
+            'alignment',
+            'race',
+            'class_levels',
+          ]);
           normalizeNameValueArray(retryPayload, 'saving_throws');
           normalizeNameValueArray(retryPayload, 'skill_proficiencies');
           normalizeNameDescriptionArray(retryPayload, 'abilities');

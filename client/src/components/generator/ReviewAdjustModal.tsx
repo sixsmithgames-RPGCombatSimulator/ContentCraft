@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, AlertTriangle, AlertCircle, CheckCircle } from 'lucide-react';
+import { useAiAssistant } from '../../contexts/AiAssistantContext';
 
 type Proposal = {
   question?: string;
@@ -56,6 +57,7 @@ export default function ReviewAdjustModal({
   onAccept,
   onClose,
 }: ReviewAdjustModalProps) {
+  const { isPanelOpen } = useAiAssistant();
   const [proposalAnswers, setProposalAnswers] = useState<Record<number, string>>({});
   const [selectedIssues, setSelectedIssues] = useState<Set<number>>(new Set());
 
@@ -142,10 +144,12 @@ export default function ReviewAdjustModal({
 
   const allProposalsAnswered = proposals.every((_, i: number) => i in proposalAnswers);
   const canProceed = allProposalsAnswered && (criticalIssues.length === 0 || selectedIssues.size > 0);
+  const panelOffsetClass = isPanelOpen ? 'lg:pr-[24rem]' : '';
+  const modalMaxWidthClass = isPanelOpen ? 'max-w-3xl xl:max-w-4xl' : 'max-w-4xl';
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 transition-[padding] duration-200 ${panelOffsetClass}`}>
+      <div className={`bg-white rounded-lg shadow-xl w-full ${modalMaxWidthClass} max-h-[90vh] flex flex-col`}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-yellow-50 to-orange-50">
           <div>
