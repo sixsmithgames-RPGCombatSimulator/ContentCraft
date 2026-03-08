@@ -7649,14 +7649,16 @@ Output: Valid JSON only. No markdown, no prose.`;
       Object.entries(answers).forEach(([question, answer]) => {
         additionalInstructions += `Q: ${question}\nA: ${answer}\n\n`;
       });
+      additionalInstructions += 'Use these answers as final decisions. Do not ask follow-up questions about the same topics.\n\n';
     }
 
     if (issuesToAddress.length > 0) {
-      additionalInstructions += 'CRITICAL ISSUES TO ADDRESS (YOU MUST FIX ALL SELECTED ISSUES):\n';
+      additionalInstructions += 'CRITICAL ISSUES YOU MUST FIX IN THIS RESPONSE:\n';
       issuesToAddress.forEach((issue, i) => {
         additionalInstructions += `${i + 1}. ${issue}\n`;
       });
-      additionalInstructions += '\nYou MUST revise your output to address these critical issues completely.\n';
+      additionalInstructions += '\nRevise your response to fix every listed issue completely.\n';
+      additionalInstructions += 'Do not repeat any missing field, empty field, placeholder value, or invalid structure described above.\n';
     }
 
     // Stage-specific hard requirements for retries (keep minimal to avoid prompt bloat)
@@ -7685,6 +7687,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       additionalInstructions += '- For this retry, return a JSON object with exactly one key: repair_text.\n';
       additionalInstructions += '- Inside repair_text, use the required labels from the retry contract exactly.\n';
       additionalInstructions += '- Do NOT return the normal stage JSON object on this retry.\n';
+      additionalInstructions += '- If you return any key other than repair_text, the response is invalid.\n';
 
       const failedOutputSnapshot = buildStageRetrySnapshot(stageForRetry?.name || '', currentStageOutput);
       if (failedOutputSnapshot) {
@@ -7693,7 +7696,12 @@ Output: Valid JSON only. No markdown, no prose.`;
       }
     }
 
-    additionalInstructions += '\n⚠️ IMPORTANT: This is a retry. Regenerate your response using these instructions. Ensure NO proposals or critical issues remain. Fix every missing field and do not repeat prior omissions.';
+    additionalInstructions += '\nFINAL RETRY INSTRUCTIONS:\n';
+    additionalInstructions += '- Follow the required output format exactly.\n';
+    additionalInstructions += '- Fix every listed issue in this response.\n';
+    additionalInstructions += '- Fill every required field with concrete content.\n';
+    additionalInstructions += '- Do not return placeholders, empty scaffolding, or unrelated extra structures.\n';
+    additionalInstructions += '- Do not repeat the previous invalid response.\n';
 
     setTimeout(() => {
       showStageOutput(
