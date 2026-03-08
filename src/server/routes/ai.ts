@@ -39,6 +39,44 @@ interface GeminiRequestBody {
   };
 }
 
+function normalizeArmorClass(container: Record<string, unknown>): void {
+  const ac = (container as Record<string, unknown>).armor_class as unknown;
+  const coerceEntry = (entry: unknown): { type: string; value: number } | null => {
+    if (typeof entry === 'number') return { type: 'base', value: entry };
+    if (typeof entry === 'string') {
+      const n = Number(entry);
+      return Number.isFinite(n) ? { type: 'base', value: n } : null;
+    }
+    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      const obj = entry as Record<string, unknown>;
+      const v = typeof obj.value === 'number' ? obj.value : Number(obj.value);
+      const t = typeof obj.type === 'string' ? obj.type : 'base';
+      return Number.isFinite(v) ? { type: t, value: v } : null;
+    }
+    return null;
+  };
+
+  if (ac === undefined) return;
+  if (Array.isArray(ac)) {
+    const normalized = ac
+      .map(coerceEntry)
+      .filter((v): v is { type: string; value: number } => v !== null);
+    if (normalized.length > 0) {
+      (container as Record<string, unknown>).armor_class = normalized;
+      return;
+    }
+    delete (container as Record<string, unknown>).armor_class;
+    return;
+  }
+
+  const coerced = coerceEntry(ac);
+  if (coerced) {
+    (container as Record<string, unknown>).armor_class = Math.round(coerced.value);
+  } else {
+    delete (container as Record<string, unknown>).armor_class;
+  }
+}
+
 interface StageRegistryEntry {
   allowedPaths: string[];
   schemaVersion: string;
@@ -1016,6 +1054,7 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       normalizeStringList(payload, 'damage_immunities');
       normalizeStringList(payload, 'damage_vulnerabilities');
       normalizeStringList(payload, 'condition_immunities');
+      normalizeArmorClass(payload);
       normalizeScalarStrings(payload, [
         'challenge_rating',
         'size',
@@ -1142,6 +1181,7 @@ ${JSON.stringify(payload)}`;
           normalizeStringList(retryPayload, 'damage_immunities');
           normalizeStringList(retryPayload, 'damage_vulnerabilities');
           normalizeStringList(retryPayload, 'condition_immunities');
+          normalizeArmorClass(retryPayload);
           normalizeScalarStrings(retryPayload, [
             'challenge_rating',
             'size',
