@@ -252,6 +252,226 @@ const sanitizeProposalsValue = (value: unknown): JsonRecord[] => {
   return cleaned;
 };
 
+type RetryRepairMode = 'core_details' | 'spellcasting' | 'relationships';
+
+const RETRY_REPAIR_MODE_MARKER = '__RETRY_REPAIR_MODE__:';
+
+const CORE_DETAILS_REPAIR_CONTRACT = `⚠️ CRITICAL RETRY OUTPUT REQUIREMENT ⚠️
+Output ONLY valid JSON with exactly one top-level key: "repair_text".
+Do NOT return the normal stage JSON shape on this retry.
+
+Inside repair_text, provide exactly these labeled lines:
+PERSONALITY_TRAITS: item || item || item
+IDEALS: item || item || item
+BONDS: item || item || item
+FLAWS: item || item || item
+GOALS: item || item || item
+FEARS: item || item || item
+QUIRKS: item || item || item
+VOICE_MANNERISMS: item || item || item
+HOOKS: item || item || item
+
+Rules:
+- Provide at least 3 items for every label.
+- Use plain text only inside repair_text.
+- Do NOT use nested personality objects.
+- Do NOT omit any label.`;
+
+const SPELLCASTING_REPAIR_CONTRACT = `⚠️ CRITICAL RETRY OUTPUT REQUIREMENT ⚠️
+Output ONLY valid JSON with exactly one top-level key: "repair_text".
+Do NOT return the normal stage JSON shape on this retry.
+
+Inside repair_text, provide exactly these labeled lines:
+SPELLCASTING_ABILITY: value
+SPELL_SAVE_DC: integer
+SPELL_ATTACK_BONUS: integer
+SPELL_SLOTS: 1=value || 2=value || 3=value
+SPELLS_KNOWN: name :: level :: school :: casting_time :: range :: components :: duration :: description || next spell
+CANTRIPS_KNOWN: item || item
+PREPARED_SPELLS: item || item
+RITUAL_CASTING: true or false
+SPELLCASTING_FOCUS: value
+
+Rules:
+- If the class is a spellcaster, include all required labels.
+- Provide at least 3 spells in SPELLS_KNOWN when applicable.
+- Use plain text only inside repair_text.
+- Do NOT omit SPELL_SLOTS or SPELLS_KNOWN for spellcasting classes.`;
+
+const RELATIONSHIPS_REPAIR_CONTRACT = `⚠️ CRITICAL RETRY OUTPUT REQUIREMENT ⚠️
+Output ONLY valid JSON with exactly one top-level key: "repair_text".
+Do NOT return the normal stage JSON shape on this retry.
+
+Inside repair_text, provide exactly these labeled lines:
+ALLIES: name :: relationship :: notes || next ally
+ENEMIES: name :: relationship :: notes || next enemy
+ORGANIZATIONS: name :: role :: standing :: notes || next organization
+FAMILY: name :: relationship :: status || next family member
+CONTACTS: name :: profession :: location :: notes || next contact
+
+Rules:
+- Provide at least one non-empty category.
+- Prefer 2-4 concrete entries total.
+- Use plain text only inside repair_text.
+- Do NOT return generic prose paragraphs without labels.`;
+
+const getRetryRepairModeForStage = (stageName: string): RetryRepairMode | null => {
+  if (stageName === 'Creator: Core Details') return 'core_details';
+  if (stageName === 'Creator: Spellcasting') return 'spellcasting';
+  if (stageName === 'Creator: Relationships') return 'relationships';
+  return null;
+};
+
+const extractRetryRepairMode = (guidance?: string): RetryRepairMode | null => {
+  if (!guidance) return null;
+  const markerIndex = guidance.indexOf(RETRY_REPAIR_MODE_MARKER);
+  if (markerIndex === -1) return null;
+  const value = guidance.slice(markerIndex + RETRY_REPAIR_MODE_MARKER.length).split(/\r?\n/, 1)[0]?.trim();
+  if (value === 'core_details' || value === 'spellcasting' || value === 'relationships') {
+    return value;
+  }
+  return null;
+};
+
+const stripRetryRepairMarker = (guidance?: string): string | undefined => {
+  if (!guidance) return guidance;
+  return guidance
+    .split(/\r?\n/)
+    .filter((line) => !line.startsWith(RETRY_REPAIR_MODE_MARKER))
+    .join('\n')
+    .trim();
+};
+
+const getRetryRepairContract = (mode: RetryRepairMode | null): string | null => {
+  if (mode === 'core_details') return CORE_DETAILS_REPAIR_CONTRACT;
+  if (mode === 'spellcasting') return SPELLCASTING_REPAIR_CONTRACT;
+  if (mode === 'relationships') return RELATIONSHIPS_REPAIR_CONTRACT;
+  return null;
+};
+
+const splitRepairItems = (value: string): string[] =>
+  value
+    .split('||')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+const parseLabeledRepairText = (repairText: string): Record<string, string> => {
+  const labeled: Record<string, string> = {};
+  for (const rawLine of repairText.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex <= 0) continue;
+    const label = line.slice(0, separatorIndex).trim().toUpperCase();
+    const value = line.slice(separatorIndex + 1).trim();
+    if (value.length === 0) continue;
+    labeled[label] = value;
+  }
+  return labeled;
+};
+
+const parseCoreDetailsRepairText = (repairText: string): JsonRecord => {
+  const labeled = parseLabeledRepairText(repairText);
+  return {
+    personality_traits: splitRepairItems(labeled.PERSONALITY_TRAITS || ''),
+    ideals: splitRepairItems(labeled.IDEALS || ''),
+    bonds: splitRepairItems(labeled.BONDS || ''),
+    flaws: splitRepairItems(labeled.FLAWS || ''),
+    goals: splitRepairItems(labeled.GOALS || ''),
+    fears: splitRepairItems(labeled.FEARS || ''),
+    quirks: splitRepairItems(labeled.QUIRKS || ''),
+    voice_mannerisms: splitRepairItems(labeled.VOICE_MANNERISMS || ''),
+    hooks: splitRepairItems(labeled.HOOKS || ''),
+  };
+};
+
+const parseSpellValue = (item: string): JsonRecord | null => {
+  const parts = item.split('::').map((part) => part.trim());
+  if (parts.length < 2 || parts[0].length === 0) {
+    return null;
+  }
+  return {
+    name: parts[0],
+    level: parts[1],
+    ...(parts[2] ? { school: parts[2] } : {}),
+    ...(parts[3] ? { casting_time: parts[3] } : {}),
+    ...(parts[4] ? { range: parts[4] } : {}),
+    ...(parts[5] ? { components: parts[5] } : {}),
+    ...(parts[6] ? { duration: parts[6] } : {}),
+    ...(parts[7] ? { description: parts[7] } : {}),
+  };
+};
+
+const parseSpellSlots = (value: string): JsonRecord => {
+  const slots: JsonRecord = {};
+  for (const entry of splitRepairItems(value)) {
+    const [level, amount] = entry.split('=').map((part) => part.trim());
+    if (!level || !amount) continue;
+    const parsedAmount = Number(amount);
+    if (!Number.isNaN(parsedAmount)) {
+      slots[level] = parsedAmount;
+    }
+  }
+  return slots;
+};
+
+const parseSpellcastingRepairText = (repairText: string): JsonRecord => {
+  const labeled = parseLabeledRepairText(repairText);
+  const spellSaveDc = Number(labeled.SPELL_SAVE_DC);
+  const spellAttackBonus = Number(labeled.SPELL_ATTACK_BONUS);
+  return {
+    ...(labeled.SPELLCASTING_ABILITY ? { spellcasting_ability: labeled.SPELLCASTING_ABILITY } : {}),
+    ...(!Number.isNaN(spellSaveDc) ? { spell_save_dc: spellSaveDc } : {}),
+    ...(!Number.isNaN(spellAttackBonus) ? { spell_attack_bonus: spellAttackBonus } : {}),
+    spell_slots: parseSpellSlots(labeled.SPELL_SLOTS || ''),
+    spells_known: splitRepairItems(labeled.SPELLS_KNOWN || '').map(parseSpellValue).filter((value): value is JsonRecord => value !== null),
+    ...(labeled.CANTRIPS_KNOWN ? { cantrips_known: splitRepairItems(labeled.CANTRIPS_KNOWN) } : {}),
+    ...(labeled.PREPARED_SPELLS ? { prepared_spells: splitRepairItems(labeled.PREPARED_SPELLS) } : {}),
+    ...(labeled.RITUAL_CASTING ? { ritual_casting: labeled.RITUAL_CASTING.toLowerCase() === 'true' } : {}),
+    ...(labeled.SPELLCASTING_FOCUS ? { spellcasting_focus: labeled.SPELLCASTING_FOCUS } : {}),
+  };
+};
+
+const parseRelationshipEntry = (item: string, keys: string[]): JsonRecord | null => {
+  const parts = item.split('::').map((part) => part.trim());
+  if (parts.length === 0 || parts[0].length === 0) {
+    return null;
+  }
+  const entry: JsonRecord = {};
+  keys.forEach((key, index) => {
+    const value = parts[index];
+    if (value) {
+      entry[key] = value;
+    }
+  });
+  return Object.keys(entry).length > 0 ? entry : null;
+};
+
+const parseRelationshipsRepairText = (repairText: string): JsonRecord => {
+  const labeled = parseLabeledRepairText(repairText);
+  return {
+    allies: splitRepairItems(labeled.ALLIES || '').map((item) => parseRelationshipEntry(item, ['name', 'relationship', 'notes'])).filter((value): value is JsonRecord => value !== null),
+    enemies: splitRepairItems(labeled.ENEMIES || '').map((item) => parseRelationshipEntry(item, ['name', 'relationship', 'notes'])).filter((value): value is JsonRecord => value !== null),
+    organizations: splitRepairItems(labeled.ORGANIZATIONS || '').map((item) => parseRelationshipEntry(item, ['name', 'role', 'standing', 'notes'])).filter((value): value is JsonRecord => value !== null),
+    family: splitRepairItems(labeled.FAMILY || '').map((item) => parseRelationshipEntry(item, ['name', 'relationship', 'status'])).filter((value): value is JsonRecord => value !== null),
+    contacts: splitRepairItems(labeled.CONTACTS || '').map((item) => parseRelationshipEntry(item, ['name', 'profession', 'location', 'notes'])).filter((value): value is JsonRecord => value !== null),
+  };
+};
+
+const parseRetryRepairTextForStage = (stageName: string, repairText: string): JsonRecord | null => {
+  const mode = getRetryRepairModeForStage(stageName);
+  if (mode === 'core_details') {
+    return parseCoreDetailsRepairText(repairText);
+  }
+  if (mode === 'spellcasting') {
+    return parseSpellcastingRepairText(repairText);
+  }
+  if (mode === 'relationships') {
+    return parseRelationshipsRepairText(repairText);
+  }
+  return null;
+};
+
 const normalizeCoreDetailsStageOutput = (value: JsonRecord): JsonRecord => {
   const normalized: JsonRecord = { ...value };
   const personality = isRecord(value.personality) ? value.personality : null;
@@ -309,6 +529,19 @@ const buildCoreDetailsRetrySnapshot = (value: JsonRecord | null): string | null 
   }
 
   const serialized = JSON.stringify(snapshot, null, 2);
+  return serialized.length > 1600 ? `${serialized.slice(0, 1597)}...` : serialized;
+};
+
+const buildStageRetrySnapshot = (stageName: string, value: JsonRecord | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  if (stageName === 'Creator: Core Details') {
+    return buildCoreDetailsRetrySnapshot(value);
+  }
+
+  const serialized = JSON.stringify(value, null, 2);
   return serialized.length > 1600 ? `${serialized.slice(0, 1597)}...` : serialized;
 };
 
@@ -4799,7 +5032,11 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     // Check if this stage has a minimal contract (new prompt packer system)
     const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
+    const retryRepairMode = extractRetryRepairMode(additionalGuidance);
+    const additionalGuidanceToUse = stripRetryRepairMarker(additionalGuidance);
+    const repairContract = getRetryRepairContract(retryRepairMode);
     const stageContract =
+      repairContract ||
       getStageContract(stageLookupKey) ||
       getStageContract(normalizedStageName) ||
       null;
@@ -4815,13 +5052,15 @@ Output: Valid JSON only. No markdown, no prose.`;
       const packConfig: PromptPackConfig = {
         mustHave: {
           stageContract: stageContract!,
-          outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
+          outputFormat: retryRepairMode
+            ? 'Output ONLY valid JSON with exactly one top-level key: repair_text.'
+            : 'Output ONLY valid JSON. NO markdown. NO prose.',
           requiredKeys: '', // Contracts already embed required keys
           stageInputs: {
             original_user_request: cfg.prompt,
             ...reducedStageInputs,
-            ...(additionalGuidance && additionalGuidance.trim().length > 0
-              ? { additional_critical_instructions: additionalGuidance.trim() }
+            ...(additionalGuidanceToUse && additionalGuidanceToUse.trim().length > 0
+              ? { additional_critical_instructions: additionalGuidanceToUse.trim() }
               : {}),
           },
         },
@@ -5783,6 +6022,13 @@ Output: Valid JSON only. No markdown, no prose.`;
         }
 
         parsed = parseResult.data || {};
+        const repairText = typeof parsed.repair_text === 'string' ? parsed.repair_text : null;
+        if (repairText) {
+          const repaired = parseRetryRepairTextForStage(currentStage.name, repairText);
+          if (repaired) {
+            parsed = repaired;
+          }
+        }
         if (currentStage.name === 'Creator: Core Details') {
           parsed = normalizeCoreDetailsStageOutput(parsed);
         }
@@ -7366,6 +7612,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     const stageForRetry = STAGES[currentStageIndex];
 
     let additionalInstructions = 'ADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY):\n\n';
+    const retryRepairMode = getRetryRepairModeForStage(stageForRetry?.name || '');
 
     if (Object.keys(answers).length > 0) {
       additionalInstructions += 'NEW ANSWERS TO PROPOSALS:\n';
@@ -7388,10 +7635,30 @@ Output: Valid JSON only. No markdown, no prose.`;
       additionalInstructions += '- Provide ALL personality fields as non-empty arrays: personality_traits, ideals, bonds, flaws, goals, fears, quirks, voice_mannerisms, hooks.\n';
       additionalInstructions += '- Do NOT collapse into hooks-only or summaries. Each field must be distinct and populated.\n';
       additionalInstructions += '- If any field was missing previously, you MUST supply it now with concrete content. Placeholders/empty values are not acceptable.\n';
+    }
 
-      const failedOutputSnapshot = buildCoreDetailsRetrySnapshot(currentStageOutput);
+    if (stageForRetry?.name === 'Creator: Spellcasting') {
+      additionalInstructions += '\nMANDATORY OUTPUT FOR SPELLCASTING:\n';
+      additionalInstructions += '- Provide spellcasting_ability, spells_known, and spell_slots if the class can cast spells.\n';
+      additionalInstructions += '- Do NOT return empty scaffolding or omit required spell data.\n';
+    }
+
+    if (stageForRetry?.name === 'Creator: Relationships') {
+      additionalInstructions += '\nMANDATORY OUTPUT FOR RELATIONSHIPS:\n';
+      additionalInstructions += '- Provide concrete allies, enemies, organizations, family, or contacts tied to this character.\n';
+      additionalInstructions += '- Do NOT return only generic personality repetition or empty arrays.\n';
+    }
+
+    if (retryRepairMode) {
+      additionalInstructions += `\n${RETRY_REPAIR_MODE_MARKER}${retryRepairMode}\n`;
+      additionalInstructions += 'RETRY FORMAT OVERRIDE:\n';
+      additionalInstructions += '- For this retry, return a JSON object with exactly one key: repair_text.\n';
+      additionalInstructions += '- Inside repair_text, use the required labels from the retry contract exactly.\n';
+      additionalInstructions += '- Do NOT return the normal stage JSON object on this retry.\n';
+
+      const failedOutputSnapshot = buildStageRetrySnapshot(stageForRetry?.name || '', currentStageOutput);
       if (failedOutputSnapshot) {
-        additionalInstructions += '\nLAST_FAILED_CORE_DETAILS_OUTPUT (fix this exact output rather than repeating it):\n';
+        additionalInstructions += '\nLAST_FAILED_STAGE_OUTPUT (repair this instead of repeating it):\n';
         additionalInstructions += `${failedOutputSnapshot}\n`;
       }
     }

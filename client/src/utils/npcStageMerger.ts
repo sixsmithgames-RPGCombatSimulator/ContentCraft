@@ -76,6 +76,42 @@ function isPlainObject(value: unknown): value is JsonRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isEmptyArray(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 0;
+}
+
+function isEmptyObject(value: unknown): boolean {
+  return isPlainObject(value) && Object.keys(value).length === 0;
+}
+
+function isEmptyPersonalityShell(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  const keys = ['traits', 'ideals', 'bonds', 'flaws'];
+  return keys.every((key) => Array.isArray(value[key]) && (value[key] as unknown[]).length === 0);
+}
+
+function isDefaultAbilityScores(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  const keys = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+  return keys.every((key) => value[key] === 10);
+}
+
+function isDefaultSpeed(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length === 1 && value.walk === '30 ft.';
+}
+
+function isMeaningfulFieldValue(field: string, value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string' && value.trim().length === 0) return false;
+  if (isEmptyArray(value) || isEmptyObject(value)) return false;
+  if (field === 'personality' && isEmptyPersonalityShell(value)) return false;
+  if (field === 'ability_scores' && isDefaultAbilityScores(value)) return false;
+  if (field === 'speed' && isDefaultSpeed(value)) return false;
+  return true;
+}
+
 /**
  * Deep equality check for detecting actual conflicts
  */
@@ -120,6 +156,14 @@ function mergeValues(_field: string, oldValue: unknown, newValue: unknown, _stag
     }
 
     return { merged: newVersion || oldVersion, hadConflict: true, resolution: 'last-wins' };
+  }
+
+  if (!isMeaningfulFieldValue(_field, newValue)) {
+    return { merged: oldValue, hadConflict: false, resolution: 'last-wins' };
+  }
+
+  if (!isMeaningfulFieldValue(_field, oldValue)) {
+    return { merged: newValue, hadConflict: false, resolution: 'last-wins' };
   }
 
   // If values are identical, no conflict
@@ -235,7 +279,7 @@ export function mergeNpcStages(stageResults: Record<string, JsonRecord>): NpcMer
 
     for (const [field, value] of Object.entries(stageData)) {
       if (metadataFields.includes(field)) continue;
-      if (value === undefined || value === null) continue;
+      if (!isMeaningfulFieldValue(field, value)) continue;
 
       // Track provenance
       if (!fieldProvenance[field]) {

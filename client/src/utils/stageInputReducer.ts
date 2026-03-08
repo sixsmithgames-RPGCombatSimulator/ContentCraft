@@ -15,6 +15,46 @@ export interface StageResults {
   [stageName: string]: Record<string, unknown>;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isEmptyArray(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 0;
+}
+
+function isEmptyObject(value: unknown): boolean {
+  return isPlainObject(value) && Object.keys(value).length === 0;
+}
+
+function isEmptyPersonalityShell(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  const keys = ['traits', 'ideals', 'bonds', 'flaws'];
+  return keys.every((key) => Array.isArray(value[key]) && (value[key] as unknown[]).length === 0);
+}
+
+function isDefaultAbilityScores(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  const keys = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+  return keys.every((key) => value[key] === 10);
+}
+
+function isDefaultSpeed(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length === 1 && value.walk === '30 ft.';
+}
+
+function shouldIncludeReducedField(fieldName: string, value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string' && value.trim().length === 0) return false;
+  if (isEmptyArray(value) || isEmptyObject(value)) return false;
+  if (fieldName === 'personality' && isEmptyPersonalityShell(value)) return false;
+  if (fieldName === 'ability_scores' && isDefaultAbilityScores(value)) return false;
+  if (fieldName === 'speed' && isDefaultSpeed(value)) return false;
+  return true;
+}
+
 /**
  * Helper to safely extract a value from stage results.
  *
@@ -41,7 +81,7 @@ function getFields(results: StageResults, stageName: string, fieldNames: string[
   const extracted: Record<string, unknown> = {};
   for (const fieldName of fieldNames) {
     const value = getField(results, stageName, fieldName);
-    if (value !== undefined) {
+    if (shouldIncludeReducedField(fieldName, value)) {
       extracted[fieldName] = value;
     }
   }
@@ -195,8 +235,8 @@ function reduceRelationshipsInputs(results: StageResults): Record<string, unknow
   return {
     ...getFields(results, 'basic_info', ['name', 'race', 'background', 'alignment']),
     ...getFields(results, 'creator:_basic_info', ['name', 'race', 'background', 'alignment']),
-    ...getFields(results, 'core_details', ['personality', 'motivations']),
-    ...getFields(results, 'creator:_core_details', ['personality', 'motivations']),
+    ...getFields(results, 'core_details', ['personality_traits', 'ideals', 'bonds', 'flaws', 'goals', 'hooks']),
+    ...getFields(results, 'creator:_core_details', ['personality_traits', 'ideals', 'bonds', 'flaws', 'goals', 'hooks']),
   };
 }
 
