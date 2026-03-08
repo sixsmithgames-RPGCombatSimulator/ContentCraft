@@ -70,7 +70,7 @@ interface StageContext {
     currentChunk: number;
     totalChunks: number;
     chunkLabel: string;
-  }
+  };
   previousDecisions?: Record<string, string>; // Accumulated answers from previous chunks
   unansweredProposals?: unknown[]; // Proposals from previous chunks that need answering
   npcSectionContext?: {
@@ -78,6 +78,32 @@ interface StageContext {
     currentSectionIndex: number;
     currentSection: NpcSectionChunk | null;
     accumulatedSections: JsonRecord;
+  };
+}
+
+function getCoreDetailsCompletenessIssue(output: Record<string, unknown>): Record<string, string> | null {
+  const requiredFields = [
+    'personality_traits', 'ideals', 'bonds', 'flaws',
+    'goals', 'fears', 'quirks', 'voice_mannerisms', 'hooks'
+  ];
+
+  const incompleteFields = requiredFields.filter((field) => {
+    if (!(field in output)) {
+      return true;
+    }
+
+    const value = output[field];
+    return !Array.isArray(value) || value.length === 0 || value.every((entry) => typeof entry !== 'string' || entry.trim().length === 0);
+  });
+
+  if (incompleteFields.length === 0) {
+    return null;
+  }
+
+  return {
+    severity: 'critical',
+    description: `AI response is incomplete. These required personality fields are missing or empty: ${incompleteFields.join(', ')}. The retry must provide non-empty array values for every listed field.`,
+    suggestion: 'Retry this stage and require concrete non-empty array entries for every Core Details field.',
   };
 }
 
@@ -2776,6 +2802,7 @@ export default function ManualGenerator() {
     const factpackChanged = prevFactpackKeyRef.current !== factpackKey;
     const compiledStageRequestKey = compiledStageRequest
       ? JSON.stringify({
+        requestId: compiledStageRequest.requestId,
         stageKey: compiledStageRequest.stageKey,
         measuredChars: compiledStageRequest.promptBudget.measuredChars,
         prompt: compiledStageRequest.prompt,
@@ -4759,6 +4786,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
       const packedPrompt = `${packed.systemPrompt}\n\n---\n\n${packed.userPrompt}`;
       const packedRequest: AiCompiledStageRequest = {
+        requestId: crypto.randomUUID(),
         stageKey: stageLookupKey,
         stageLabel: stage.name,
         prompt: packedPrompt,
@@ -4962,6 +4990,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         );
 
         const rebuiltRequest: AiCompiledStageRequest = {
+          requestId: crypto.randomUUID(),
           stageKey: stageLookupKey,
           stageLabel: stage.name,
           prompt: rebuiltPrompt,
@@ -4991,6 +5020,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
       // Continue to show the prompt instead of blocking - user can proceed with caution
       const overflowRequest: AiCompiledStageRequest = {
+        requestId: crypto.randomUUID(),
         stageKey: stageLookupKey,
         stageLabel: stage.name,
         prompt: fullPrompt,
@@ -5019,6 +5049,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     }
 
     const safeRequest: AiCompiledStageRequest = {
+      requestId: crypto.randomUUID(),
       stageKey: stageLookupKey,
       stageLabel: stage.name,
       prompt: fullPrompt,
@@ -5937,6 +5968,17 @@ Output: Valid JSON only. No markdown, no prose.`;
         }
       }
 
+      if (currentStage.name.toLowerCase().includes('core details')) {
+        const coreDetailsIssue = getCoreDetailsCompletenessIssue(parsed as Record<string, unknown>);
+        if (coreDetailsIssue) {
+          console.error('[Validation] Core Details stage has incomplete required fields:', coreDetailsIssue.description);
+          if (!Array.isArray((parsed as JsonRecord).conflicts)) {
+            (parsed as JsonRecord).conflicts = [];
+          }
+          ((parsed as JsonRecord).conflicts as unknown[]).unshift(coreDetailsIssue);
+        }
+      }
+
       // Check if this stage has proposals or critical issues that need review
       const hasProposals = Array.isArray(parsed.proposals) && parsed.proposals.length > 0;
       const hasCriticalPhysics = Array.isArray(parsed.physics_issues)
@@ -6627,27 +6669,15 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         // VALIDATION: Check for missing required fields
         if (currentStage.name.toLowerCase().includes('core details')) {
-          const requiredFields = [
-            'personality_traits', 'ideals', 'bonds', 'flaws',
-            'goals', 'fears', 'quirks', 'voice_mannerisms', 'hooks'
-          ];
-          const missingFields = requiredFields.filter(field => !(field in mergedStageOutput));
-
-          if (missingFields.length > 0) {
-            console.error(`[Validation] Core Details stage is missing required fields:`, missingFields);
-            console.error(`[Validation] Stage output:`, mergedStageOutput);
-
-            // Add a critical issue to force user review
-            const criticalIssue = {
-              severity: 'critical',
-              description: `AI response is incomplete. Missing required personality fields: ${missingFields.join(', ')}. Please retry this stage with better instructions.`,
-              suggestion: 'Click "Reject & Retry" and tell the AI to provide ALL personality fields separately.',
-            };
+          const coreDetailsIssue = getCoreDetailsCompletenessIssue(mergedStageOutput);
+          if (coreDetailsIssue) {
+            console.error('[Validation] Core Details stage has incomplete required fields after merge:', coreDetailsIssue.description);
+            console.error('[Validation] Stage output:', mergedStageOutput);
 
             if (!Array.isArray(mergedStageOutput.conflicts)) {
               mergedStageOutput.conflicts = [];
             }
-            (mergedStageOutput.conflicts as unknown[]).unshift(criticalIssue);
+            (mergedStageOutput.conflicts as unknown[]).unshift(coreDetailsIssue);
           }
         }
 

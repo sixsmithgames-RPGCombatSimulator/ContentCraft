@@ -265,7 +265,7 @@ export default function AiAssistantPanel() {
     setStageRunnerState('idle');
     setStageRunnerError(null);
     setHasAutoStarted(false);
-  }, [effectiveStageKey, workflowContext?.compiledStageRequest?.prompt]);
+  }, [effectiveStageKey, workflowContext?.compiledStageRequest?.requestId, workflowContext?.compiledStageRequest?.prompt]);
 
   // Avoid hard error when stageRouterKey is temporarily missing; rely on compiled stage key if present
   useEffect(() => {

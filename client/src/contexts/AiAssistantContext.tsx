@@ -50,6 +50,7 @@ export interface AiStageMemorySummary {
 }
 
 export interface AiCompiledStageRequest {
+  requestId: string;
   stageKey: string;
   stageLabel: string;
   prompt: string;
