@@ -49,6 +49,27 @@ interface ReviewAdjustModalProps {
   onClose: () => void;
 }
 
+function deduplicateIssues(issues: Issue[]): Issue[] {
+  const seen = new Set<string>();
+  const deduped: Issue[] = [];
+
+  for (const issue of issues) {
+    const keySource = typeof issue.description === 'string' && issue.description.trim().length > 0
+      ? issue.description
+      : issue.new_claim || issue.summary || '';
+    const key = keySource.trim().toLowerCase();
+
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    deduped.push(issue);
+  }
+
+  return deduped;
+}
+
 export default function ReviewAdjustModal({
   isOpen,
   stageName,
@@ -80,10 +101,10 @@ export default function ReviewAdjustModal({
   if (!isOpen || !stageOutput) return null;
 
   const proposals: Proposal[] = stageOutput?.proposals || [];
-  const criticalIssues: Issue[] = [
+  const criticalIssues: Issue[] = deduplicateIssues([
     ...((stageOutput?.physics_issues || []).filter((i) => i.severity === 'critical')),
     ...((stageOutput?.conflicts || []).filter((c) => c.severity === 'critical')),
-  ];
+  ]);
 
   const handleProposalAnswer = (index: number, answer: string) => {
     setProposalAnswers({ ...proposalAnswers, [index]: answer });

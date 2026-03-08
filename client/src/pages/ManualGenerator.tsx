@@ -81,30 +81,34 @@ interface StageContext {
   };
 }
 
-function getCoreDetailsCompletenessIssue(output: Record<string, unknown>): Record<string, string> | null {
-  const requiredFields = [
-    'personality_traits', 'ideals', 'bonds', 'flaws',
-    'goals', 'fears', 'quirks', 'voice_mannerisms', 'hooks'
-  ];
+function deduplicateConflictIssues(conflicts: unknown[]): unknown[] {
+  const seen = new Set<string>();
+  const deduped: unknown[] = [];
 
-  const incompleteFields = requiredFields.filter((field) => {
-    if (!(field in output)) {
-      return true;
+  for (const conflict of conflicts) {
+    if (!isRecord(conflict)) {
+      deduped.push(conflict);
+      continue;
     }
 
-    const value = output[field];
-    return !Array.isArray(value) || value.length === 0 || value.every((entry) => typeof entry !== 'string' || entry.trim().length === 0);
-  });
+    const keySource = typeof conflict.description === 'string' && conflict.description.trim().length > 0
+      ? conflict.description
+      : typeof conflict.new_claim === 'string' && conflict.new_claim.trim().length > 0
+        ? conflict.new_claim
+        : typeof conflict.summary === 'string'
+          ? conflict.summary
+          : JSON.stringify(conflict);
+    const key = keySource.trim().toLowerCase();
 
-  if (incompleteFields.length === 0) {
-    return null;
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    deduped.push(conflict);
   }
 
-  return {
-    severity: 'critical',
-    description: `AI response is incomplete. These required personality fields are missing or empty: ${incompleteFields.join(', ')}. The retry must provide non-empty array values for every listed field.`,
-    suggestion: 'Retry this stage and require concrete non-empty array entries for every Core Details field.',
-  };
+  return deduped;
 }
 
 interface CanonEntityClaim {
@@ -4740,7 +4744,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       getStageContract(normalizedStageName) ||
       null;
     // Use packed prompt for ANY stage that has a contract (not just NPC), except subsequent chunks
-    const usePackedPrompt = !!stageContract && !isSubsequentChunk && !additionalGuidance;
+    const usePackedPrompt = !!stageContract && !isSubsequentChunk;
 
     if (usePackedPrompt) {
       console.log(`[Prompt Packer] Using packed prompt for stage: ${stage.name}`);
@@ -4756,6 +4760,9 @@ Output: Valid JSON only. No markdown, no prose.`;
           stageInputs: {
             original_user_request: cfg.prompt,
             ...reducedStageInputs,
+            ...(additionalGuidance && additionalGuidance.trim().length > 0
+              ? { additional_critical_instructions: additionalGuidance.trim() }
+              : {}),
           },
         },
         shouldHave: {
@@ -5929,6 +5936,16 @@ Output: Valid JSON only. No markdown, no prose.`;
         (parsed as any).proposals = sanitizeProposalsValue((parsed as any).proposals);
       }
 
+      if (Array.isArray((parsed as JsonRecord).conflicts) && ((parsed as JsonRecord).conflicts as unknown[]).length > 0) {
+        const conflicts = (parsed as JsonRecord).conflicts as unknown[];
+        const originalCount = conflicts.length;
+        (parsed as JsonRecord).conflicts = deduplicateConflictIssues(conflicts);
+        const nextConflicts = (parsed as JsonRecord).conflicts as unknown[];
+        if (nextConflicts.length !== originalCount) {
+          console.log(`[Stage ${currentStage.name}] Deduplicated conflicts: ${originalCount} -> ${nextConflicts.length}`);
+        }
+      }
+
       if (config?.type === 'npc' && currentStage.name.startsWith('Creator:')) {
         const stageContextForValidation: JsonRecord = {
           ...getStageObject(stageResults, 'creator:_basic_info'),
@@ -5965,17 +5982,6 @@ Output: Valid JSON only. No markdown, no prose.`;
         const newProposals = (parsed as JsonRecord).proposals as unknown[];
         if (newProposals.length !== originalCount) {
           console.log(`[Stage ${currentStage.name}] Deduplicated proposals: ${originalCount} -> ${newProposals.length}`);
-        }
-      }
-
-      if (currentStage.name.toLowerCase().includes('core details')) {
-        const coreDetailsIssue = getCoreDetailsCompletenessIssue(parsed as Record<string, unknown>);
-        if (coreDetailsIssue) {
-          console.error('[Validation] Core Details stage has incomplete required fields:', coreDetailsIssue.description);
-          if (!Array.isArray((parsed as JsonRecord).conflicts)) {
-            (parsed as JsonRecord).conflicts = [];
-          }
-          ((parsed as JsonRecord).conflicts as unknown[]).unshift(coreDetailsIssue);
         }
       }
 
@@ -6666,20 +6672,6 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         // Merge all chunk results for this stage
         const mergedStageOutput = mergeChunkOutputs(chunkResults, currentStage.name);
-
-        // VALIDATION: Check for missing required fields
-        if (currentStage.name.toLowerCase().includes('core details')) {
-          const coreDetailsIssue = getCoreDetailsCompletenessIssue(mergedStageOutput);
-          if (coreDetailsIssue) {
-            console.error('[Validation] Core Details stage has incomplete required fields after merge:', coreDetailsIssue.description);
-            console.error('[Validation] Stage output:', mergedStageOutput);
-
-            if (!Array.isArray(mergedStageOutput.conflicts)) {
-              mergedStageOutput.conflicts = [];
-            }
-            (mergedStageOutput.conflicts as unknown[]).unshift(coreDetailsIssue);
-          }
-        }
 
         // VALIDATION: Check Stats stage for refusal to create stats
         if (currentStage.name.toLowerCase().includes('stats')) {

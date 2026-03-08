@@ -58,34 +58,23 @@ export function validateCoreDetailsStage(output: Record<string, unknown>): Valid
     'hooks',
   ];
 
-  const missingFields: string[] = [];
+  const incompleteFields: string[] = [];
 
   for (const field of requiredFields) {
     if (!(field in output)) {
-      missingFields.push(field);
+      incompleteFields.push(field);
     } else {
       const value = output[field];
-      // Check if field is empty/null
-      if (value === null || value === undefined || value === '') {
-        warnings.push(`Field "${field}" is present but empty`);
-      } else if (Array.isArray(value) && value.length === 0) {
-        warnings.push(`Field "${field}" is an empty array`);
+      if (!Array.isArray(value) || value.length === 0 || value.every((item) => typeof item !== 'string' || item.trim().length === 0)) {
+        incompleteFields.push(field);
       }
     }
   }
 
-  if (missingFields.length > 0) {
+  if (incompleteFields.length > 0) {
     errors.push(
-      `Missing required personality fields: ${missingFields.join(', ')}. ` +
-      `The AI must provide ALL personality fields separately, not just hooks.`
-    );
-  }
-
-  // Special check: if only hooks is present, that's a critical error
-  if (missingFields.length === requiredFields.length - 1 && 'hooks' in output) {
-    errors.push(
-      `CRITICAL: AI only provided "hooks" field and skipped all other personality fields. ` +
-      `This is not acceptable. The AI must provide: ${requiredFields.join(', ')}`
+      `AI response is incomplete. These required personality fields are missing or empty: ${incompleteFields.join(', ')}. ` +
+      `The AI must provide non-empty arrays for all 9 fields separately, not just hooks.`
     );
   }
 
