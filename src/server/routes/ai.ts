@@ -342,6 +342,32 @@ function normalizeArrays(container: Record<string, unknown>, fields: string[]): 
   }
 }
 
+function normalizeStringArrays(container: Record<string, unknown>, fields: string[]): void {
+  for (const field of fields) {
+    if (!Object.prototype.hasOwnProperty.call(container, field)) continue;
+    const current = (container as Record<string, unknown>)[field];
+    if (!Array.isArray(current)) {
+      (container as Record<string, unknown>)[field] = [];
+      continue;
+    }
+    (container as Record<string, unknown>)[field] = current
+      .map((entry) => {
+        if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') {
+          return String(entry);
+        }
+        if (entry && typeof entry === 'object') {
+          try {
+            return JSON.stringify(entry);
+          } catch (_) {
+            return null;
+          }
+        }
+        return null;
+      })
+      .filter((v): v is string => v !== null);
+  }
+}
+
 /**
  * Normalize arrays that must contain objects with name/value to satisfy schema requirements.
  */
@@ -1067,6 +1093,7 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         'minions',
         'senses',
       ]);
+      normalizeStringArrays(payload, ['equipment', 'attuned_items', 'magic_items']);
       normalizeStringList(payload, 'languages');
       normalizeStringList(payload, 'damage_resistances');
       normalizeStringList(payload, 'damage_immunities');
@@ -1194,6 +1221,7 @@ ${JSON.stringify(payload)}`;
             'minions',
             'senses',
           ]);
+          normalizeStringArrays(retryPayload, ['equipment', 'attuned_items', 'magic_items']);
           normalizeStringList(retryPayload, 'languages');
           normalizeStringList(retryPayload, 'damage_resistances');
           normalizeStringList(retryPayload, 'damage_immunities');
