@@ -244,17 +244,20 @@ export const NPC_CREATOR_SPELLCASTING = {
   systemPrompt: SPELLCASTING_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
+    const basicInfo = context.stageResults['creator:_basic_info'];
     const stats = context.stageResults['creator:_stats'];
     const build = context.stageResults['creator:_character_build'];
     const coreDetails = context.stageResults['creator:_core_details'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
       // Only carry forward the fields Spellcasting actually needs
-      class_levels: coreDetails?.class_levels || context.stageResults['creator:_basic_info']?.class_levels,
+      name: basicInfo?.name,
+      class_levels: coreDetails?.class_levels || basicInfo?.class_levels,
       ability_scores: stats?.ability_scores,
       proficiency_bonus: stats?.proficiency_bonus,
       class_features: build?.class_features,
       subclass_features: build?.subclass_features,
+      racial_features: build?.racial_features,
     };
 
     if (context.stageResults.planner) {
@@ -323,6 +326,13 @@ export const NPC_CREATOR_RELATIONSHIPS = {
       background: basicInfo?.background,
       alignment: basicInfo?.alignment,
       personality_traits: coreDetails?.personality_traits,
+      ideals: coreDetails?.ideals,
+      bonds: coreDetails?.bonds,
+      flaws: coreDetails?.flaws,
+      goals: coreDetails?.goals,
+      hooks: coreDetails?.hooks,
+      affiliation: basicInfo?.affiliation,
+      location: basicInfo?.location,
     };
 
     if (context.stageResults.planner) {
@@ -355,6 +365,7 @@ export const NPC_CREATOR_EQUIPMENT = {
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
       // Only carry forward the fields Equipment actually needs
+      name: basicInfo?.name,
       class_levels: coreDetails?.class_levels || basicInfo?.class_levels,
       role: coreDetails?.role,
       ability_scores: stats?.ability_scores,
@@ -362,6 +373,8 @@ export const NPC_CREATOR_EQUIPMENT = {
       skill_proficiencies: build?.skill_proficiencies,
       fighting_styles: build?.fighting_styles,
       background: basicInfo?.background,
+      existing_signature_items: basicInfo?.equipment,
+      abilities: build?.abilities,
     };
 
     if (context.stageResults.planner) {

@@ -272,7 +272,7 @@ export default function AiAssistantPanel() {
     if (assistMode !== 'integrated') return;
     if (!isPanelOpen) return;
     if (!effectiveStageKey) {
-      setStageRunnerError('Workflow is waiting for stage context.');
+      setStageRunnerError(null);
       setStageRunnerState('idle');
     }
   }, [assistMode, isPanelOpen, effectiveStageKey]);
@@ -812,8 +812,6 @@ export default function AiAssistantPanel() {
     }
     if (!workflowContext || !effectiveStageKey) {
       logStageRunnerGate('skip: missing stageRouterKey');
-      setStageRunnerError('Workflow stalled: missing stageRouterKey. Please resume or restart the run.');
-      setStageRunnerState('error');
       return;
     }
     if (stageRunnerState !== 'idle') {
@@ -1065,7 +1063,7 @@ export default function AiAssistantPanel() {
         )}
 
         {/* Stage Runner */}
-        {workflowContext?.stageRouterKey && assistMode === 'integrated' && (
+        {hasActiveAutomatedStage && assistMode === 'integrated' && (
           <div className="bg-gradient-to-r from-primary-50 to-primary-100 border-b border-primary-200 px-4 py-3 flex flex-col gap-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1074,7 +1072,7 @@ export default function AiAssistantPanel() {
                 </div>
                 <div>
                   <div className="text-sm font-semibold text-gray-900">Automated Stage Runner</div>
-                  <div className="text-xs text-gray-600">{workflowContext.stageRouterKey}</div>
+                  <div className="text-xs text-gray-600">{workflowContext.stageRouterKey || workflowContext.compiledStageRequest?.stageKey}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1100,10 +1098,10 @@ export default function AiAssistantPanel() {
                 )}
               </div>
             </div>
-            {stageRunnerState === 'idle' && (
+            {stageRunnerState === 'idle' && !hasAutoStarted && (
               <div className="bg-white rounded-lg p-3 border border-primary-200">
                 <p className="text-xs text-gray-600 mb-2">
-                  {hasAutoStarted ? 'Stage automation ready. Click to run again.' : 'Stage will run automatically when ready.'}
+                  Stage will run automatically when ready.
                 </p>
                 <button
                   onClick={runStageWithGemini}
@@ -1117,7 +1115,7 @@ export default function AiAssistantPanel() {
             {stageRunnerState === 'complete' && (
               <div className="bg-green-50 rounded-lg p-3 border border-green-200">
                 <p className="text-xs text-green-700 font-medium mb-1">Stage completed successfully!</p>
-                <p className="text-xs text-green-600 mb-2">Changes have been applied. You can now advance to the next stage.</p>
+                <p className="text-xs text-green-600 mb-2">Changes have been applied. Waiting for the workflow to advance.</p>
                 {extractedPayload && (
                   <div className="mt-2">
                     <p className="text-xs text-green-800 font-medium mb-1">Extracted Data:</p>
@@ -1130,7 +1128,7 @@ export default function AiAssistantPanel() {
                 )}
               </div>
             )}
-            {stageRunnerError && (
+            {stageRunnerError && stageRunnerState === 'error' && (
               <div className="bg-red-50 rounded-lg p-3 border border-red-200">
                 <p className="text-xs text-red-700 font-medium mb-1">Error occurred:</p>
                 <p className="text-xs text-red-600">{stageRunnerError}</p>

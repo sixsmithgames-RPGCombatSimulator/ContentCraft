@@ -37,6 +37,8 @@ import {
 } from '../utils/promptLimits';
 import { buildPackedPrompt, formatSizeBreakdown, PROMPT_SAFETY_CEILING, type PromptPackConfig } from '../utils/promptPacker';
 import { reduceStageInputs } from '../utils/stageInputReducer';
+import { validateNpcStageOutput } from '../utils/npcStageValidator';
+import { mergeNpcStages } from '../utils/npcStageMerger';
 import { getStageContract } from '../config/npcStageContracts';
 import { NPC_CREATOR_STAGES, STAGE_ROUTER_MAP } from '../config/npcCreatorStages';
 import { determineRequiredStages, getRoutingSummary, type StageRoutingDecision } from '../config/npcStageRouter';
@@ -5896,6 +5898,34 @@ Output: Valid JSON only. No markdown, no prose.`;
         (parsed as any).proposals = sanitizeProposalsValue((parsed as any).proposals);
       }
 
+      if (config?.type === 'npc' && currentStage.name.startsWith('Creator:')) {
+        const stageContextForValidation: JsonRecord = {
+          ...getStageObject(stageResults, 'creator:_basic_info'),
+          ...getStageObject(stageResults, 'creator:_core_details'),
+          ...getStageObject(stageResults, 'creator:_stats'),
+          ...getStageObject(stageResults, 'creator:_character_build'),
+          ...parsed,
+        };
+        const validation = validateNpcStageOutput(currentStage.name, stageContextForValidation);
+        if (!validation.isValid || validation.warnings.length > 0) {
+          const stageIssues = [
+            ...validation.errors.map((message) => ({
+              severity: 'critical',
+              description: message,
+              suggestion: 'Retry this stage and require complete, fully populated NPC data.',
+            })),
+            ...validation.warnings.map((message) => ({
+              severity: 'warning',
+              description: message,
+              suggestion: 'Review this stage output and confirm whether the data is sufficiently complete.',
+            })),
+          ];
+
+          const existingConflicts = Array.isArray(parsed.conflicts) ? parsed.conflicts as unknown[] : [];
+          parsed.conflicts = [...stageIssues, ...existingConflicts];
+        }
+      }
+
       // Deduplicate proposals against already-answered questions BEFORE checking if we need review
       if (Array.isArray((parsed as JsonRecord).proposals) && ((parsed as JsonRecord).proposals as unknown[]).length > 0) {
         const proposals = (parsed as JsonRecord).proposals as unknown[];
@@ -7445,58 +7475,15 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         console.log('[handleAcceptWithIssues] Monster: Merged all 5 stage results');
       } else if (config!.type === 'npc') {
-        const npcStageKeys = [
-          'creator:_basic_info',
-          'creator:_core_details',
-          'creator:_stats',
-          'creator:_character_build',
-          'creator:_combat',
-          'creator:_spellcasting',
-          'creator:_legendary',
-          'creator:_relationships',
-          'creator:_equipment',
-        ] as const;
-
-        const mergedNpc: JsonRecord = {};
-        const sourcesUsedSet = new Set<string>();
-        const assumptionsSet = new Set<string>();
-        let schemaVersion: string | undefined;
-
-        for (const key of npcStageKeys) {
-          const stageOut = (newResults as any)[key];
-          if (!isRecord(stageOut)) continue;
-
-          if (!schemaVersion && typeof stageOut.schema_version === 'string') {
-            schemaVersion = stageOut.schema_version;
-          }
-
-          if (Array.isArray(stageOut.sources_used)) {
-            stageOut.sources_used
-              .filter((s: unknown) => typeof s === 'string' && s.trim().length > 0)
-              .forEach((s: string) => sourcesUsedSet.add(s));
-          }
-
-          if (Array.isArray(stageOut.assumptions)) {
-            stageOut.assumptions
-              .filter((s: unknown) => typeof s === 'string' && s.trim().length > 0)
-              .forEach((s: string) => assumptionsSet.add(s));
-          }
-
-          Object.assign(mergedNpc, stageOut);
-        }
-
-        mergedNpc.deliverable = 'npc';
-        if (schemaVersion) {
-          mergedNpc.schema_version = schemaVersion;
-        }
-
-        mergedNpc.sources_used = Array.from(sourcesUsedSet);
-        mergedNpc.assumptions = Array.from(assumptionsSet);
-
-        mergedNpc.proposals = [];
-
-        baseContent = mergedNpc;
-        console.log('[handleAcceptWithIssues] NPC: Merged all creator stage results');
+        const mergeResult = mergeNpcStages(newResults);
+        baseContent = {
+          ...mergeResult.merged,
+          proposals: [],
+        };
+        console.log('[handleAcceptWithIssues] NPC: Intelligently merged creator stage results', {
+          conflicts: mergeResult.conflicts.length,
+          warnings: mergeResult.warnings,
+        });
       } else if (config?.type === 'nonfiction') {
         const finalizer = getStageObject(newResults, 'finalizer');
         const editorStyle = getStageObject(newResults, 'editor_&_style');
