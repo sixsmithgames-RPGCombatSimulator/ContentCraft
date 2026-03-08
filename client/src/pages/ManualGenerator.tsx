@@ -7277,7 +7277,9 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     console.log('[ManualGenerator] Accumulated answers after retry:', updatedAnswers);
 
-    let additionalInstructions = 'ADDITIONAL GUIDANCE FROM USER (RETRY):\n\n';
+    const stageForRetry = STAGES[currentStageIndex];
+
+    let additionalInstructions = 'ADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY):\n\n';
 
     if (Object.keys(answers).length > 0) {
       additionalInstructions += 'NEW ANSWERS TO PROPOSALS:\n';
@@ -7287,14 +7289,22 @@ Output: Valid JSON only. No markdown, no prose.`;
     }
 
     if (issuesToAddress.length > 0) {
-      additionalInstructions += 'CRITICAL ISSUES TO ADDRESS:\n';
+      additionalInstructions += 'CRITICAL ISSUES TO ADDRESS (YOU MUST FIX ALL SELECTED ISSUES):\n';
       issuesToAddress.forEach((issue, i) => {
         additionalInstructions += `${i + 1}. ${issue}\n`;
       });
-      additionalInstructions += '\nPlease revise your output to address these critical issues.\n';
+      additionalInstructions += '\nYou MUST revise your output to address these critical issues completely.\n';
     }
 
-    additionalInstructions += '\n⚠️ IMPORTANT: This is a retry. Please regenerate your response with these clarifications, ensuring NO proposals or critical issues remain.';
+    // Stage-specific hard requirements for retries (keep minimal to avoid prompt bloat)
+    if (stageForRetry?.name === 'Creator: Core Details') {
+      additionalInstructions += '\nMANDATORY OUTPUT FOR CORE DETAILS (no omissions allowed):\n';
+      additionalInstructions += '- Provide ALL personality fields as non-empty arrays: personality_traits, ideals, bonds, flaws, goals, fears, quirks, voice_mannerisms, hooks.\n';
+      additionalInstructions += '- Do NOT collapse into hooks-only or summaries. Each field must be distinct and populated.\n';
+      additionalInstructions += '- If any field was missing previously, you MUST supply it now with concrete content. Placeholders/empty values are not acceptable.\n';
+    }
+
+    additionalInstructions += '\n⚠️ IMPORTANT: This is a retry. Regenerate your response using these instructions. Ensure NO proposals or critical issues remain. Fix every missing field and do not repeat prior omissions.';
 
     setTimeout(() => {
       showStageOutput(
