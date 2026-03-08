@@ -5054,6 +5054,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     if (usePackedPrompt) {
       console.log(`[Prompt Packer] Using packed prompt for stage: ${stage.name}`);
+      const logAi = shouldLogAiPayload();
 
       const reducedStageInputs = reduceStageInputs(stageLookupKey, results);
 
@@ -5100,6 +5101,11 @@ Output: Valid JSON only. No markdown, no prose.`;
       }
 
       const packedPrompt = `${packed.systemPrompt}\n\n---\n\n${packed.userPrompt}`;
+      if (logAi) {
+        console.log(`[AI][PROMPT][${stage.name}][packed] total=${packedPrompt.length} system=${(packed.systemPrompt || '').length} user=${(packed.userPrompt || '').length}`);
+        console.log('[AI][PROMPT][system]', packed.systemPrompt || '');
+        console.log('[AI][PROMPT][user]', packed.userPrompt || '');
+      }
       const packedRequest: AiCompiledStageRequest = {
         requestId: crypto.randomUUID(),
         stageKey: stageLookupKey,
@@ -5155,6 +5161,12 @@ Output: Valid JSON only. No markdown, no prose.`;
         forceIncludeSchema: isSubsequentChunk ? false : isNpcStage,
       }
     );
+
+    if (shouldLogAiPayload()) {
+      console.log(`[AI][PROMPT][${stage.name}][safe] total=${fullPrompt.length} system=${systemPromptToUse.length} user=${userPromptToUse.length}`);
+      console.log('[AI][PROMPT][system]', systemPromptToUse);
+      console.log('[AI][PROMPT][user]', userPromptToUse);
+    }
 
     // Log prompt analysis
     console.log(`\n${formatPromptAnalysis(analysis)}`);
