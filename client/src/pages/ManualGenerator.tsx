@@ -252,6 +252,66 @@ const sanitizeProposalsValue = (value: unknown): JsonRecord[] => {
   return cleaned;
 };
 
+const normalizeCoreDetailsStageOutput = (value: JsonRecord): JsonRecord => {
+  const normalized: JsonRecord = { ...value };
+  const personality = isRecord(value.personality) ? value.personality : null;
+
+  const assignIfMissing = (targetKey: string, sourceValue: unknown) => {
+    if (targetKey in normalized) {
+      return;
+    }
+
+    const entries = toStringArray(sourceValue).map((item) => item.trim()).filter((item) => item.length > 0);
+    if (entries.length > 0) {
+      normalized[targetKey] = entries;
+    }
+  };
+
+  assignIfMissing('personality_traits', personality?.traits);
+  assignIfMissing('ideals', personality?.ideals);
+  assignIfMissing('bonds', personality?.bonds);
+  assignIfMissing('flaws', personality?.flaws);
+  assignIfMissing('goals', personality?.goals ?? value.motivations);
+  assignIfMissing('fears', personality?.fears);
+  assignIfMissing('quirks', personality?.quirks);
+  assignIfMissing('voice_mannerisms', personality?.voice_mannerisms ?? personality?.mannerisms ?? value.mannerisms);
+  assignIfMissing('hooks', personality?.hooks);
+
+  return normalized;
+};
+
+const buildCoreDetailsRetrySnapshot = (value: JsonRecord | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeCoreDetailsStageOutput(value);
+  const snapshot: JsonRecord = {};
+  const fields = [
+    'role',
+    'personality_traits',
+    'ideals',
+    'bonds',
+    'flaws',
+    'goals',
+    'fears',
+    'quirks',
+    'voice_mannerisms',
+    'hooks',
+    'proposals',
+    'conflicts',
+  ];
+
+  for (const field of fields) {
+    if (field in normalized) {
+      snapshot[field] = normalized[field];
+    }
+  }
+
+  const serialized = JSON.stringify(snapshot, null, 2);
+  return serialized.length > 1600 ? `${serialized.slice(0, 1597)}...` : serialized;
+};
+
 const getString = (source: JsonRecord | null | undefined, key: string): string | undefined => {
   if (!source) return undefined;
   const value = source[key];
@@ -5723,6 +5783,9 @@ Output: Valid JSON only. No markdown, no prose.`;
         }
 
         parsed = parseResult.data || {};
+        if (currentStage.name === 'Creator: Core Details') {
+          parsed = normalizeCoreDetailsStageOutput(parsed);
+        }
       }
 
       if (currentStage.name === 'Spaces' && config?.type === 'location') {
@@ -5735,8 +5798,9 @@ Output: Valid JSON only. No markdown, no prose.`;
         const validation = validateIncomingLocationSpace(candidateSpace, {
           requireFeaturePositionAnchor: true,
         });
-        if (!validation.ok) {
-          setError(validation.error);
+        if (validation.ok === false) {
+          const errorMessage = validation.error;
+          setError(errorMessage);
           return;
         }
       }
@@ -7324,6 +7388,12 @@ Output: Valid JSON only. No markdown, no prose.`;
       additionalInstructions += '- Provide ALL personality fields as non-empty arrays: personality_traits, ideals, bonds, flaws, goals, fears, quirks, voice_mannerisms, hooks.\n';
       additionalInstructions += '- Do NOT collapse into hooks-only or summaries. Each field must be distinct and populated.\n';
       additionalInstructions += '- If any field was missing previously, you MUST supply it now with concrete content. Placeholders/empty values are not acceptable.\n';
+
+      const failedOutputSnapshot = buildCoreDetailsRetrySnapshot(currentStageOutput);
+      if (failedOutputSnapshot) {
+        additionalInstructions += '\nLAST_FAILED_CORE_DETAILS_OUTPUT (fix this exact output rather than repeating it):\n';
+        additionalInstructions += `${failedOutputSnapshot}\n`;
+      }
     }
 
     additionalInstructions += '\n⚠️ IMPORTANT: This is a retry. Regenerate your response using these instructions. Ensure NO proposals or critical issues remain. Fix every missing field and do not repeat prior omissions.';

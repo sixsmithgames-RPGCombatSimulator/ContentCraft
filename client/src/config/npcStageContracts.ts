@@ -60,7 +60,7 @@ export const CORE_DETAILS_CONTRACT = `${BASE_OUTPUT_FORMAT}
 
 ${BASE_COMPLETENESS}
 
-**Required Keys — ALL 9 must be present:**
+**Required Keys — ALL 9 must be present (flat, top-level arrays):**
 1. personality_traits: array of strings (distinct characteristics)
 2. ideals: array of strings (values and beliefs)
 3. bonds: array of strings (personal connections and loyalties)
@@ -71,7 +71,26 @@ ${BASE_COMPLETENESS}
 8. voice_mannerisms: array of strings (speech patterns, physical gestures)
 9. hooks: array of strings (story hooks and adventure opportunities)
 
-**Validation:** Do NOT skip any of the 9 fields. Do NOT combine fields. Each must be separate and labeled.`;
+**Minimum completeness per field:** At least 3 items per array (more if obvious), no empty strings, no placeholders.
+
+**FORBIDDEN:**
+- Nested or combined personality objects (e.g., no {"personality": {...}} wrappers).
+- Merging fields together or renaming keys.
+
+**Shape example (follow exactly, flat keys only):**
+{
+  "personality_traits": ["bluntly honest", "protective of underdogs", "keeps meticulous notes"],
+  "ideals": ["justice over law", "knowledge should be shared", "loyalty to crew"],
+  "bonds": ["owes a debt to the harbor master", "sworn siblinghood with the navigator", "secret patron in the guild"],
+  "flaws": ["trusts too quickly", "gambling habit", "holds grudges"],
+  "goals": ["clear her captain's name", "secure a private ship", "map the storm reefs"],
+  "fears": ["open ocean at night", "being powerless again", "losing her journal"],
+  "quirks": ["taps quill while thinking", "collects tide glass", "sings old sea shanties off-key"],
+  "voice_mannerisms": ["low gravelly voice", "pauses before revealing facts", "avoids eye contact when lying"],
+  "hooks": ["a rival wants her journal", "storm cult hunts her crew", "knows a secret smuggling route"]
+}
+
+**Validation:** Do NOT skip any of the 9 fields. Do NOT combine fields. Each must be separate, labeled, flat, and non-empty.`;
 
 /**
  * Stats stage contract.
