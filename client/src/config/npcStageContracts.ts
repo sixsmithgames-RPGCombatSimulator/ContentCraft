@@ -9,292 +9,168 @@
  */
 
 /**
- * Base output format requirement (used by all stages).
+ * Basic Info stage contract (stage-isolated, concise).
  */
-const BASE_OUTPUT_FORMAT = `⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.
-Start your response with { and end with }. Nothing before or after.
-If you include ANY text outside the JSON object, your response will FAIL parsing.`;
+export const BASIC_INFO_CONTRACT = `You are the NPC Creator (Basic Info slice).
 
-/**
- * Base completeness requirement (used by all stages).
- */
-const BASE_COMPLETENESS = `⚠️ COMPLETENESS REQUIREMENT - NO LAZY RESPONSES ⚠️
-You MUST provide COMPLETE, THOROUGH data for ALL required fields.
-DO NOT provide minimal or abbreviated responses.
-DO NOT omit required fields.
-DO NOT use placeholder values or empty arrays when real data is expected.
-Incomplete responses will be REJECTED and you will be asked to retry.`;
-
-/**
- * Basic Info stage contract.
- * Target: ~600 chars
- */
-export const BASIC_INFO_CONTRACT = `${BASE_OUTPUT_FORMAT}
-
-${BASE_COMPLETENESS}
-
-⚠️ IDENTITY: The original_user_request is THE PRIMARY SOURCE OF TRUTH about what to create.
-Canon facts are reference material — do NOT substitute the requested character with other canon characters.
-
-**Required Keys:**
+Return JSON with ONLY these keys (no extras):
 - name: string
-- description: string (rich, detailed — 2-4 sentences minimum)
-- appearance: string (physical appearance description)
-- background: string (character's backstory)
-- race: string (D&D race/species)
-- alignment: string (e.g., "Lawful Good", "Chaotic Neutral")
-- challenge_rating: number or string (e.g., 5, "1/2")
-- class_levels: array of {class, level} (if applicable)
+- title: string (optional)
+- description: string (2–4 sentences)
+- appearance: string
+- background: string
+- species: string
+- alignment: string
+- class_levels: array of { class: string, level: number }
+- location: string (optional)
+- affiliation: string (optional)
 
-**Optional but Recommended:**
-- title, aliases, size, creature_type, subtype, affiliation, location, era, experience_points
-
-**Creator Role:** You are CREATING a character, not reporting canon. If canon doesn't specify details, invent them based on the concept, D&D 5e conventions, and the user request.`;
-
-/**
- * Core Details stage contract.
- * Target: ~600 chars
- */
-export const CORE_DETAILS_CONTRACT = `${BASE_OUTPUT_FORMAT}
-
-${BASE_COMPLETENESS}
-
-**Required Keys — ALL 9 must be present (flat, top-level arrays):**
-1. personality_traits: array of strings (distinct characteristics)
-2. ideals: array of strings (values and beliefs)
-3. bonds: array of strings (personal connections and loyalties)
-4. flaws: array of strings (weaknesses and vices)
-5. goals: array of strings (what they want to achieve)
-6. fears: array of strings (what they avoid or dread)
-7. quirks: array of strings (unusual habits or mannerisms)
-8. voice_mannerisms: array of strings (speech patterns, physical gestures)
-9. hooks: array of strings (story hooks and adventure opportunities)
-
-**Minimum completeness per field:** At least 3 items per array (more if obvious), no empty strings, no placeholders.
-
-**FORBIDDEN:**
-- Nested or combined personality objects (e.g., no {"personality": {...}} wrappers).
-- Merging fields together or renaming keys.
-
-**Shape example (follow exactly, flat keys only):**
-{
-  "personality_traits": ["bluntly honest", "protective of underdogs", "keeps meticulous notes"],
-  "ideals": ["justice over law", "knowledge should be shared", "loyalty to crew"],
-  "bonds": ["owes a debt to the harbor master", "sworn siblinghood with the navigator", "secret patron in the guild"],
-  "flaws": ["trusts too quickly", "gambling habit", "holds grudges"],
-  "goals": ["clear her captain's name", "secure a private ship", "map the storm reefs"],
-  "fears": ["open ocean at night", "being powerless again", "losing her journal"],
-  "quirks": ["taps quill while thinking", "collects tide glass", "sings old sea shanties off-key"],
-  "voice_mannerisms": ["low gravelly voice", "pauses before revealing facts", "avoids eye contact when lying"],
-  "hooks": ["a rival wants her journal", "storm cult hunts her crew", "knows a secret smuggling route"]
-}
-
-**Validation:** Do NOT skip any of the 9 fields. Do NOT combine fields. Each must be separate, labeled, flat, and non-empty.`;
+Rules:
+- If an optional field is unknown, omit it (do not add empty strings).
+- Forbidden keys: ability_scores, hit_points, armor_class, speed, senses, personality, equipment, feats, class_features, spells, legendary_actions.`;
 
 /**
- * Stats stage contract.
- * Target: ~600 chars
+ * Core Details stage contract — same shape on retries.
  */
-export const STATS_CONTRACT = `${BASE_OUTPUT_FORMAT}
+export const CORE_DETAILS_CONTRACT = `You are the NPC Creator (Core Details slice).
 
-${BASE_COMPLETENESS}
+Return JSON with ONLY these keys (no extras):
+- personality_traits: string[]
+- ideals: string[]
+- bonds: string[]
+- flaws: string[]
+- goals: string[]
+- fears: string[]
+- quirks: string[]
+- voice_mannerisms: string[]
+- hooks: string[]
 
-**Required Keys:**
-- ability_scores: {str, dex, con, int, wis, cha} (integers 1-30, LOWERCASE keys only)
-- proficiency_bonus: integer +2 to +9 based on level/CR
-- speed: {walk: integer >= 0, fly?, swim?, climb?, burrow?}
-- armor_class: integer or {value: integer, source?: string}
-- hit_points: integer or {average: integer, formula: string}
-- senses: array of strings (e.g., ["darkvision 60 ft.", "passive Perception 14"])
-
-**Critical Naming Rules:**
-- Ability scores: LOWERCASE only (str, dex, con, int, wis, cha) - NOT STR, DEX, etc.
-- No null values unless schema explicitly allows
-- All required keys must be present with valid values
-
-**D&D 5e Rules:**
-- Proficiency bonus: +2 (levels 1-4), +3 (5-8), +4 (9-12), +5 (13-16), +6 (17-20)
-- Ability scores: Standard array, point buy, or rolled stats (typically 8-18 for PCs, can go higher for monsters)
-- Speed: Most humanoids have 30 ft. walk speed; adjust for race/size
-- AC: 10 + Dex modifier + armor + shield + other bonuses
-- HP: (Hit Die average × level) + (Con modifier × level)`;
+Rules:
+- Minimum 3 items per array; no empty strings; no placeholders.
+- Do NOT return a nested "personality" object.
+- On retry, return the SAME JSON shape and replace missing/empty arrays with 3–6 concrete items each.`;
 
 /**
- * Character Build stage contract.
- * Target: ~800 chars
+ * Stats stage contract — numeric speeds, lowercase abilities.
  */
-export const CHARACTER_BUILD_CONTRACT = `${BASE_OUTPUT_FORMAT}
+export const STATS_CONTRACT = `You are the NPC Creator (Stats slice).
 
-${BASE_COMPLETENESS}
+Return JSON with ONLY these keys:
+- ability_scores: { str: number, dex: number, con: number, int: number, wis: number, cha: number }
+- proficiency_bonus: number
+- speed: { walk: number, fly?: number, swim?: number, climb?: number, burrow?: number }
+- armor_class: { value: number, breakdown: string } | number
+- hit_points: { average: number, formula: string } | number
+- senses: string[]
 
-**Required Keys:**
-- class_features: array of {name, description, level, source, uses?, notes?}
-- subclass_features: array of {name, description, level, source, uses?, notes?}
-- racial_features: array of {name, description, source?, notes?}
-- feats: array of {name, description, source?, prerequisite?, notes?}
-- asi_choices: array of {level, choice, details?, source_class?}
-- background_feature: {background_name, feature_name, description, origin_feat?, skill_proficiencies?, tool_proficiencies?}
-- abilities: array of {name, description, uses?, recharge?, notes?, source?}
-- ability_scores: {str, dex, con, int, wis, cha} (LOWERCASE only)
-- skill_proficiencies: array of {name, value: string like "+5"}
-- saving_throws: array of {name, value: string like "+7"}
-- fighting_styles: array of {name, description, source?}
+Rules:
+- Ability score keys must be lowercase.
+- Speed values are numbers (feet). Example: walk: 30.
+- Return only these keys; do NOT include personality, equipment, or spells.`;
 
-**Completeness Requirements:**
-- Include ALL class features from level 1 to character level (not just highlights)
-- Include ALL subclass features gained at this level
-- Include ALL racial traits (Darkvision, Fey Ancestry, etc.)
-- Include ALL feats (from ASI, background, racial bonus, etc.)
-- List ASI choices at each ASI level (4th, 8th, 12th, 16th, 19th for most classes)
-- Do NOT use placeholder values or empty arrays for required fields
+/**
+ * Character Build stage contract — isolated keys.
+ */
+export const CHARACTER_BUILD_CONTRACT = `You are the NPC Creator (Character Build slice).
 
-**Critical Rules:**
-- Ability scores: LOWERCASE keys only
-- Skill/save values: strings with + or - (e.g., "+5", "-1")
-- No null values unless schema allows`;
+Return JSON with ONLY these keys:
+- class_features: { name: string, level: number, description: string, source: string }[]
+- subclass_features: { name: string, level: number, description: string, source: string }[]
+- racial_features: { name: string, description: string, source?: string }[]
+- feats: { name: string, description: string, source?: string }[]
+- fighting_styles: { name: string, description: string, source?: string }[]
+- skill_proficiencies: { name: string, value: string }[]
+- saving_throws: { name: string, value: string }[]
+
+Rules:
+- Keep descriptions concise (2–5 sentences per feature).
+- Skill/save values must be signed strings (e.g., "+7").
+- Return only these keys; no stats, personality, or equipment.`;
 
 /**
  * Combat stage contract.
  * Target: ~700 chars
  */
-export const COMBAT_CONTRACT = `${BASE_OUTPUT_FORMAT}
+export const COMBAT_CONTRACT = `You are the NPC Creator (Combat slice).
 
-${BASE_COMPLETENESS}
+Return JSON with ONLY these keys:
+- actions: { name: string, description: string, attack_bonus?: string | number, damage?: string, range?: string, notes?: string }[]
+- bonus_actions: { name: string, description: string, uses?: string, notes?: string }[]
+- reactions: { name: string, description: string, trigger?: string, notes?: string }[]
+- multiattack?: { description: string, attacks_per_action?: number }
+- special_attacks?: { name: string, description: string, save_dc?: number, damage?: string, notes?: string }[]
 
-**Required Keys:**
-- actions: array of {name, description, attack_bonus?, damage?, range?, notes?}
-- bonus_actions: array of {name, description, uses?, notes?}
-- reactions: array of {name, description, trigger?, notes?}
+Rules:
+- Keep values concise and mechanical; return only these keys.`;
 
-**Optional but Common:**
-- multiattack: {description, attacks_per_action?}
-- special_attacks: array of {name, description, save_dc?, damage?, notes?}
+export const EQUIPMENT_CONTRACT = `You are the NPC Creator (Equipment slice).
 
-**D&D 5e Combat Rules:**
-- Attack bonus = proficiency + ability modifier + magic bonus
-- Damage format: "1d8+3 slashing" or "2d6+4 fire"
-- Save DC = 8 + proficiency + ability modifier
-- Action economy: 1 action, 1 bonus action (if available), 1 reaction per round
-- Multiattack: Typically gained at level 5 for martial classes
+Return JSON with ONLY these keys:
+- weapons: { name: string, notes?: string }[]
+- armor_and_shields: { name: string, notes?: string }[]
+- wondrous_items: { name: string, notes?: string }[]
+- consumables: { name: string, quantity: number, notes?: string }[]
+- other_gear: { name: string, notes?: string }[]
 
-**Completeness:**
-- Include at least 2-3 actions (basic attack, class feature attack, etc.)
-- Include bonus actions if class has them (e.g., Cunning Action, Flurry of Blows)
-- Include reactions if applicable (e.g., Opportunity Attack, Shield spell)`;
-
-/**
- * Equipment stage contract.
- * Target: ~500 chars
- */
-export const EQUIPMENT_CONTRACT = `${BASE_OUTPUT_FORMAT}
-
-${BASE_COMPLETENESS}
-
-**Required Keys:**
-- equipment: array of strings or {name, quantity?, notes?}
-- attuned_items: array of {name, rarity, effects: array of strings, attunement_requirement?}
-
-**Equipment Rules:**
-- Include basic gear appropriate to class/species/level (armor, weapons, tools, adventuring gear)
-- Magic items must respect rarity cap and level appropriateness
-- Attuned effects MUST be incorporated into final stats/abilities
-- Maximum 3 attuned items (D&D 5e attunement limit)
-
-**Rarity Guidelines by Level:**
-- Levels 1-4: Common, Uncommon
-- Levels 5-10: Uncommon, Rare
-- Levels 11-16: Rare, Very Rare
-- Levels 17-20: Very Rare, Legendary
-
-**Attuned Item Effects:**
-- Update ability scores if item grants bonuses (e.g., Gauntlets of Ogre Power sets Str to 19)
-- Update AC if item grants armor bonus (e.g., +1 armor, Ring of Protection)
-- Update HP if item grants hit point maximum increase
-- Add special abilities granted by items to the abilities array`;
+Rules:
+- Use the user request as the source of truth for named items.
+- Return only these keys; no stats or personality fields.`;
 
 /**
- * Spellcasting stage contract.
- * Target: ~600 chars
+ * Spellcasting stage contract — isolated keys.
  */
-export const SPELLCASTING_CONTRACT = `${BASE_OUTPUT_FORMAT}
+export const SPELLCASTING_CONTRACT = `You are the NPC Creator (Spellcasting slice).
 
-${BASE_COMPLETENESS}
+Return JSON with ONLY these keys (if the class can cast spells):
+- spellcasting_ability: string
+- spell_save_dc: number
+- spell_attack_bonus: number
+- spells_known: { name: string, level: number, school?: string, casting_time?: string, range?: string, components?: string, duration?: string, description: string }[]
+- spell_slots: { 1?: number, 2?: number, 3?: number, 4?: number, 5?: number, 6?: number, 7?: number, 8?: number, 9?: number }
 
-**Required Keys (if spellcaster):**
-- spellcasting_ability: string (e.g., "Intelligence", "Wisdom", "Charisma")
-- spell_save_dc: integer (8 + proficiency + ability modifier)
-- spell_attack_bonus: integer (proficiency + ability modifier)
-- spells_known: array of {name, level, school?, casting_time?, range?, components?, duration?, description}
-- spell_slots: {1?: integer, 2?: integer, 3?: integer, ...} (by spell level)
-
-**Optional:**
-- cantrips_known: array of spell names
-- prepared_spells: array of spell names (for prepared casters)
+Optional keys (include only if applicable):
+- cantrips_known: string[]
+- prepared_spells: string[]
 - ritual_casting: boolean
 - spellcasting_focus: string
 
-**D&D 5e Spellcasting Rules:**
-- Spell slots by class level (consult class tables)
-- Spell save DC = 8 + proficiency + spellcasting ability modifier
-- Spell attack bonus = proficiency + spellcasting ability modifier
-- Cantrips scale with character level, not class level
-- Prepared casters can change prepared spells after long rest`;
+Rules:
+- Return only these keys; do NOT include equipment, stats, or personality.`;
 
 /**
- * Legendary stage contract.
- * Target: ~500 chars
+ * Legendary stage contract (concise).
  */
-export const LEGENDARY_CONTRACT = `${BASE_OUTPUT_FORMAT}
+export const LEGENDARY_CONTRACT = `You are the NPC Creator (Legendary slice).
 
-⚠️ REQUEST OVERRIDE: If the original_user_request says there are NO legendary actions, then do NOT invent any legendary actions, lair actions, regional effects, or legendary resistance.
-In that case, return an empty/disabled legendary payload only.
+If the request says there are NO legendary actions, return an empty legendary payload.
 
-**Required Keys (if legendary creature):**
-- legendary_actions: {summary: string, options: array of {name, description, cost?}}
-- legendary_resistance: {uses_per_day: integer, description: string}
+Return JSON with ONLY these keys (if legendary creature):
+- legendary_actions: { summary: string, options: { name: string, description: string, cost?: number }[] }
+- legendary_resistance: { uses_per_day: number, description: string }
 
-**Optional:**
-- lair_actions: array of {name, description, initiative_count?}
-- regional_effects: array of {description, range?}
+Optional:
+- lair_actions: { name: string, description: string, initiative_count?: number }[]
+- regional_effects: { description: string, range?: string }[]
 
-**If NOT legendary or explicitly forbidden by the user request:**
-- legendary_actions: {actions: [], lair_actions: [], regional_effects: []}
-- Omit legendary_resistance
-
-**Legendary Action Rules:**
-- Creature can take 3 legendary actions per round
-- Only one legendary action at a time
-- Only at the end of another creature's turn
-- Regains spent legendary actions at start of its turn
-- Some actions cost 2 or 3 legendary actions
-
-**Legendary Resistance:**
-- Typically 3 uses per day
-- Allows creature to succeed on a failed save
-- Used to prevent debilitating effects (stun, paralysis, etc.)`;
+Rules:
+- If not legendary, set legendary_actions to empty arrays and omit legendary_resistance.`;
 
 /**
- * Relationships stage contract.
- * Target: ~400 chars
+ * Relationships stage contract (concise, isolated).
  */
-export const RELATIONSHIPS_CONTRACT = `${BASE_OUTPUT_FORMAT}
+export const RELATIONSHIPS_CONTRACT = `You are the NPC Creator (Relationships slice).
 
-**Required Keys:**
-- allies: array of {name, relationship, notes?}
-- enemies: array of {name, relationship, notes?}
-- organizations: array of {name, role, standing?, notes?}
+Return JSON with ONLY these keys:
+- allies: { name: string, relationship: string, notes?: string }[]
+- enemies: { name: string, relationship: string, notes?: string }[]
+- organizations: { name: string, role: string, standing?: string, notes?: string }[]
+Optional keys:
+- family: { name: string, relationship: string, status?: string }[]
+- contacts: { name: string, profession: string, location?: string, notes?: string }[]
 
-**Optional:**
-- family: array of {name, relationship, status?}
-- contacts: array of {name, profession, location?, notes?}
-
-**Relationship Guidelines:**
-- Allies: Friends, mentors, patrons, party members
-- Enemies: Rivals, nemeses, opposing factions
-- Organizations: Guilds, churches, governments, secret societies
-- Include 2-4 relationships minimum for depth
-- Relationships should tie to character background and motivations`;
+Rules:
+- Provide 2–4 concrete relationships tied to the character’s background.
+- Return only these keys; do NOT include personality or stats.`;
 
 /**
  * Stage contract map.

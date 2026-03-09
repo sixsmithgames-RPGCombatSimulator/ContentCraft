@@ -141,10 +141,9 @@ export const NPC_CREATOR_STATS = {
       original_user_request: context.config.prompt,
       // Only carry forward the fields Stats actually needs
       name: basicInfo?.name,
-      race: basicInfo?.race,
+      species: basicInfo?.species || basicInfo?.race,
       class_levels: basicInfo?.class_levels || coreDetails?.class_levels,
       challenge_rating: basicInfo?.challenge_rating,
-      role: coreDetails?.role,
     };
 
     if (context.stageResults.planner) {
@@ -175,7 +174,7 @@ export const NPC_CREATOR_CHARACTER_BUILD = {
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
       // Only carry forward the fields Character Build actually needs
-      race: basicInfo?.race,
+      species: basicInfo?.species || basicInfo?.race,
       background: basicInfo?.background,
       class_levels: basicInfo?.class_levels,
       ability_scores: stats?.ability_scores,
@@ -207,7 +206,7 @@ export const NPC_CREATOR_COMBAT = {
   buildUserPrompt: (context: StageContext) => {
     const stats = context.stageResults['creator:_stats'];
     const build = context.stageResults['creator:_character_build'];
-    const coreDetails = context.stageResults['creator:_core_details'];
+    const basicInfo = context.stageResults['creator:_basic_info'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
       // Only carry forward the fields Combat actually needs
@@ -217,8 +216,7 @@ export const NPC_CREATOR_COMBAT = {
       hit_points: stats?.hit_points,
       class_features: build?.class_features,
       fighting_styles: build?.fighting_styles,
-      role: coreDetails?.role,
-      class_levels: coreDetails?.class_levels,
+      class_levels: basicInfo?.class_levels,
     };
 
     if (context.stageResults.planner) {
@@ -247,12 +245,12 @@ export const NPC_CREATOR_SPELLCASTING = {
     const basicInfo = context.stageResults['creator:_basic_info'];
     const stats = context.stageResults['creator:_stats'];
     const build = context.stageResults['creator:_character_build'];
-    const coreDetails = context.stageResults['creator:_core_details'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
       // Only carry forward the fields Spellcasting actually needs
       name: basicInfo?.name,
-      class_levels: coreDetails?.class_levels || basicInfo?.class_levels,
+      species: basicInfo?.species || basicInfo?.race,
+      class_levels: basicInfo?.class_levels,
       ability_scores: stats?.ability_scores,
       proficiency_bonus: stats?.proficiency_bonus,
       class_features: build?.class_features,
@@ -283,13 +281,14 @@ export const NPC_CREATOR_LEGENDARY = {
   systemPrompt: LEGENDARY_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
-    const coreDetails = context.stageResults['creator:_core_details'];
+    const basicInfo = context.stageResults['creator:_basic_info'];
     const combat = context.stageResults['creator:_combat'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
       // Only carry forward the fields Legendary actually needs
-      challenge_rating: coreDetails?.challenge_rating || context.stageResults['creator:_basic_info']?.challenge_rating,
-      role: coreDetails?.role,
+      name: basicInfo?.name,
+      species: basicInfo?.species || basicInfo?.race,
+      class_levels: basicInfo?.class_levels,
       actions: combat?.actions,
     };
 
@@ -322,7 +321,7 @@ export const NPC_CREATOR_RELATIONSHIPS = {
       original_user_request: context.config.prompt,
       // Only carry forward the fields Relationships actually needs
       name: basicInfo?.name,
-      race: basicInfo?.race,
+      species: basicInfo?.species || basicInfo?.race,
       background: basicInfo?.background,
       alignment: basicInfo?.alignment,
       personality_traits: coreDetails?.personality_traits,
@@ -361,20 +360,17 @@ export const NPC_CREATOR_EQUIPMENT = {
     const basicInfo = context.stageResults['creator:_basic_info'];
     const stats = context.stageResults['creator:_stats'];
     const build = context.stageResults['creator:_character_build'];
-    const coreDetails = context.stageResults['creator:_core_details'];
     const userPrompt: Record<string, unknown> = {
       original_user_request: context.config.prompt,
       // Only carry forward the fields Equipment actually needs
       name: basicInfo?.name,
-      class_levels: coreDetails?.class_levels || basicInfo?.class_levels,
-      role: coreDetails?.role,
-      ability_scores: stats?.ability_scores,
+      species: basicInfo?.species || basicInfo?.race,
+      class_levels: basicInfo?.class_levels,
       proficiency_bonus: stats?.proficiency_bonus,
       skill_proficiencies: build?.skill_proficiencies,
       fighting_styles: build?.fighting_styles,
       background: basicInfo?.background,
-      existing_signature_items: basicInfo?.equipment,
-      abilities: build?.abilities,
+      armor_class: stats?.armor_class,
     };
 
     if (context.stageResults.planner) {

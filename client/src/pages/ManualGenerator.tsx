@@ -56,6 +56,7 @@ import { projectApi, API_BASE_URL } from '../services/api';
 import type { Project } from '../types';
 import { useAiAssistant } from '../contexts/AiAssistantContext';
 import type { AiCompiledStageRequest, AiStageMemorySummary, WorkflowType } from '../contexts/AiAssistantContext';
+import { pruneToAllowedKeys, STAGE_OUTPUT_CONTRACTS, validateStageOutput, type StageKey } from '../utils/stageOutputContracts';
 import ModeSelectionDialog from '../components/ai-assistant/ModeSelectionDialog';
 
 type JsonRecord = Record<string, unknown>;
@@ -261,223 +262,18 @@ const shouldLogAiPayload = (): boolean => {
   }
 };
 
-type RetryRepairMode = 'core_details' | 'spellcasting' | 'relationships';
-
-const RETRY_REPAIR_MODE_MARKER = '__RETRY_REPAIR_MODE__:';
-
-const CORE_DETAILS_REPAIR_CONTRACT = `⚠️ CRITICAL RETRY OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON with exactly one top-level key: "repair_text".
-Do NOT return the normal stage JSON shape on this retry.
-
-Inside repair_text, provide exactly these labeled lines:
-PERSONALITY_TRAITS: item || item || item
-IDEALS: item || item || item
-BONDS: item || item || item
-FLAWS: item || item || item
-GOALS: item || item || item
-FEARS: item || item || item
-QUIRKS: item || item || item
-VOICE_MANNERISMS: item || item || item
-HOOKS: item || item || item
-
-Rules:
-- Provide at least 3 items for every label.
-- Use plain text only inside repair_text.
-- Do NOT use nested personality objects.
-- Do NOT omit any label.`;
-
-const SPELLCASTING_REPAIR_CONTRACT = `⚠️ CRITICAL RETRY OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON with exactly one top-level key: "repair_text".
-Do NOT return the normal stage JSON shape on this retry.
-
-Inside repair_text, provide exactly these labeled lines:
-SPELLCASTING_ABILITY: value
-SPELL_SAVE_DC: integer
-SPELL_ATTACK_BONUS: integer
-SPELL_SLOTS: 1=value || 2=value || 3=value
-SPELLS_KNOWN: name :: level :: school :: casting_time :: range :: components :: duration :: description || next spell
-CANTRIPS_KNOWN: item || item
-PREPARED_SPELLS: item || item
-RITUAL_CASTING: true or false
-SPELLCASTING_FOCUS: value
-
-Rules:
-- If the class is a spellcaster, include all required labels.
-- Provide at least 3 spells in SPELLS_KNOWN when applicable.
-- Use plain text only inside repair_text.
-- Do NOT omit SPELL_SLOTS or SPELLS_KNOWN for spellcasting classes.`;
-
-const RELATIONSHIPS_REPAIR_CONTRACT = `⚠️ CRITICAL RETRY OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON with exactly one top-level key: "repair_text".
-Do NOT return the normal stage JSON shape on this retry.
-
-Inside repair_text, provide exactly these labeled lines:
-ALLIES: name :: relationship :: notes || next ally
-ENEMIES: name :: relationship :: notes || next enemy
-ORGANIZATIONS: name :: role :: standing :: notes || next organization
-FAMILY: name :: relationship :: status || next family member
-CONTACTS: name :: profession :: location :: notes || next contact
-
-Rules:
-- Provide at least one non-empty category.
-- Prefer 2-4 concrete entries total.
-- Use plain text only inside repair_text.
-- Do NOT return generic prose paragraphs without labels.`;
-
-const getRetryRepairModeForStage = (stageName: string): RetryRepairMode | null => {
-  if (stageName === 'Creator: Core Details') return 'core_details';
+const getStageContractKey = (stageName: string): StageKey | null => {
+  if (stageName === 'Keyword Extractor') return 'keywordExtractor';
+  if (stageName === 'Planner') return 'planner';
+  if (stageName === 'Creator: Basic Info') return 'basicInfo';
+  if (stageName === 'Creator: Core Details') return 'coreDetails';
+  if (stageName === 'Creator: Stats') return 'stats';
+  if (stageName === 'Creator: Character Build') return 'characterBuild';
+  if (stageName === 'Creator: Combat') return 'combat';
   if (stageName === 'Creator: Spellcasting') return 'spellcasting';
+  if (stageName === 'Creator: Legendary') return 'legendary';
   if (stageName === 'Creator: Relationships') return 'relationships';
-  return null;
-};
-
-const extractRetryRepairMode = (guidance?: string): RetryRepairMode | null => {
-  if (!guidance) return null;
-  const markerIndex = guidance.indexOf(RETRY_REPAIR_MODE_MARKER);
-  if (markerIndex === -1) return null;
-  const value = guidance.slice(markerIndex + RETRY_REPAIR_MODE_MARKER.length).split(/\r?\n/, 1)[0]?.trim();
-  if (value === 'core_details' || value === 'spellcasting' || value === 'relationships') {
-    return value;
-  }
-  return null;
-};
-
-const stripRetryRepairMarker = (guidance?: string): string | undefined => {
-  if (!guidance) return guidance;
-  return guidance
-    .split(/\r?\n/)
-    .filter((line) => !line.startsWith(RETRY_REPAIR_MODE_MARKER))
-    .join('\n')
-    .trim();
-};
-
-const getRetryRepairContract = (mode: RetryRepairMode | null): string | null => {
-  if (mode === 'core_details') return CORE_DETAILS_REPAIR_CONTRACT;
-  if (mode === 'spellcasting') return SPELLCASTING_REPAIR_CONTRACT;
-  if (mode === 'relationships') return RELATIONSHIPS_REPAIR_CONTRACT;
-  return null;
-};
-
-const splitRepairItems = (value: string): string[] =>
-  value
-    .split('||')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-
-const parseLabeledRepairText = (repairText: string): Record<string, string> => {
-  const labeled: Record<string, string> = {};
-  for (const rawLine of repairText.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const separatorIndex = line.indexOf(':');
-    if (separatorIndex <= 0) continue;
-    const label = line.slice(0, separatorIndex).trim().toUpperCase();
-    const value = line.slice(separatorIndex + 1).trim();
-    if (value.length === 0) continue;
-    labeled[label] = value;
-  }
-  return labeled;
-};
-
-const parseCoreDetailsRepairText = (repairText: string): JsonRecord => {
-  const labeled = parseLabeledRepairText(repairText);
-  return {
-    personality_traits: splitRepairItems(labeled.PERSONALITY_TRAITS || ''),
-    ideals: splitRepairItems(labeled.IDEALS || ''),
-    bonds: splitRepairItems(labeled.BONDS || ''),
-    flaws: splitRepairItems(labeled.FLAWS || ''),
-    goals: splitRepairItems(labeled.GOALS || ''),
-    fears: splitRepairItems(labeled.FEARS || ''),
-    quirks: splitRepairItems(labeled.QUIRKS || ''),
-    voice_mannerisms: splitRepairItems(labeled.VOICE_MANNERISMS || ''),
-    hooks: splitRepairItems(labeled.HOOKS || ''),
-  };
-};
-
-const parseSpellValue = (item: string): JsonRecord | null => {
-  const parts = item.split('::').map((part) => part.trim());
-  if (parts.length < 2 || parts[0].length === 0) {
-    return null;
-  }
-  return {
-    name: parts[0],
-    level: parts[1],
-    ...(parts[2] ? { school: parts[2] } : {}),
-    ...(parts[3] ? { casting_time: parts[3] } : {}),
-    ...(parts[4] ? { range: parts[4] } : {}),
-    ...(parts[5] ? { components: parts[5] } : {}),
-    ...(parts[6] ? { duration: parts[6] } : {}),
-    ...(parts[7] ? { description: parts[7] } : {}),
-  };
-};
-
-const parseSpellSlots = (value: string): JsonRecord => {
-  const slots: JsonRecord = {};
-  for (const entry of splitRepairItems(value)) {
-    const [level, amount] = entry.split('=').map((part) => part.trim());
-    if (!level || !amount) continue;
-    const parsedAmount = Number(amount);
-    if (!Number.isNaN(parsedAmount)) {
-      slots[level] = parsedAmount;
-    }
-  }
-  return slots;
-};
-
-const parseSpellcastingRepairText = (repairText: string): JsonRecord => {
-  const labeled = parseLabeledRepairText(repairText);
-  const spellSaveDc = Number(labeled.SPELL_SAVE_DC);
-  const spellAttackBonus = Number(labeled.SPELL_ATTACK_BONUS);
-  return {
-    ...(labeled.SPELLCASTING_ABILITY ? { spellcasting_ability: labeled.SPELLCASTING_ABILITY } : {}),
-    ...(!Number.isNaN(spellSaveDc) ? { spell_save_dc: spellSaveDc } : {}),
-    ...(!Number.isNaN(spellAttackBonus) ? { spell_attack_bonus: spellAttackBonus } : {}),
-    spell_slots: parseSpellSlots(labeled.SPELL_SLOTS || ''),
-    spells_known: splitRepairItems(labeled.SPELLS_KNOWN || '').map(parseSpellValue).filter((value): value is JsonRecord => value !== null),
-    ...(labeled.CANTRIPS_KNOWN ? { cantrips_known: splitRepairItems(labeled.CANTRIPS_KNOWN) } : {}),
-    ...(labeled.PREPARED_SPELLS ? { prepared_spells: splitRepairItems(labeled.PREPARED_SPELLS) } : {}),
-    ...(labeled.RITUAL_CASTING ? { ritual_casting: labeled.RITUAL_CASTING.toLowerCase() === 'true' } : {}),
-    ...(labeled.SPELLCASTING_FOCUS ? { spellcasting_focus: labeled.SPELLCASTING_FOCUS } : {}),
-  };
-};
-
-const parseRelationshipEntry = (item: string, keys: string[]): JsonRecord | null => {
-  const parts = item.split('::').map((part) => part.trim());
-  if (parts.length === 0 || parts[0].length === 0) {
-    return null;
-  }
-  const entry: JsonRecord = {};
-  keys.forEach((key, index) => {
-    const value = parts[index];
-    if (value) {
-      entry[key] = value;
-    }
-  });
-  return Object.keys(entry).length > 0 ? entry : null;
-};
-
-const parseRelationshipsRepairText = (repairText: string): JsonRecord => {
-  const labeled = parseLabeledRepairText(repairText);
-  return {
-    allies: splitRepairItems(labeled.ALLIES || '').map((item) => parseRelationshipEntry(item, ['name', 'relationship', 'notes'])).filter((value): value is JsonRecord => value !== null),
-    enemies: splitRepairItems(labeled.ENEMIES || '').map((item) => parseRelationshipEntry(item, ['name', 'relationship', 'notes'])).filter((value): value is JsonRecord => value !== null),
-    organizations: splitRepairItems(labeled.ORGANIZATIONS || '').map((item) => parseRelationshipEntry(item, ['name', 'role', 'standing', 'notes'])).filter((value): value is JsonRecord => value !== null),
-    family: splitRepairItems(labeled.FAMILY || '').map((item) => parseRelationshipEntry(item, ['name', 'relationship', 'status'])).filter((value): value is JsonRecord => value !== null),
-    contacts: splitRepairItems(labeled.CONTACTS || '').map((item) => parseRelationshipEntry(item, ['name', 'profession', 'location', 'notes'])).filter((value): value is JsonRecord => value !== null),
-  };
-};
-
-const parseRetryRepairTextForStage = (stageName: string, repairText: string): JsonRecord | null => {
-  const mode = getRetryRepairModeForStage(stageName);
-  if (mode === 'core_details') {
-    return parseCoreDetailsRepairText(repairText);
-  }
-  if (mode === 'spellcasting') {
-    return parseSpellcastingRepairText(repairText);
-  }
-  if (mode === 'relationships') {
-    return parseRelationshipsRepairText(repairText);
-  }
+  if (stageName === 'Creator: Equipment') return 'equipment';
   return null;
 };
 
@@ -2936,7 +2732,9 @@ export default function ManualGenerator() {
   const [factpack, setFactpack] = useState<Factpack | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<'idle' | 'running' | 'awaiting_user_decisions' | 'error' | 'complete'>('idle');
   const [finalOutput, setFinalOutput] = useState<JsonRecord | null>(null);
+  const [lastStageError, setLastStageError] = useState<{ stage?: string; message: string; rawSnippet?: string } | null>(null);
   const [showCanonDeltaModal, setShowCanonDeltaModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -3223,6 +3021,11 @@ export default function ManualGenerator() {
     _setSkipMode(false);
     setStageResults({});
     setError(null);
+    setLastStageError(null);
+    setSessionStatus('idle');
+    setIsComplete(false);
+    setFinalOutput(null);
+    setCompiledStageRequest(null);
     setShowReviewModal(false);
     _setShowNarrowingModal(false);
     setCurrentKeywords([]);
@@ -4484,6 +4287,8 @@ export default function ManualGenerator() {
     setConfig(generationConfig);
     setStageResults({});
     setError(null);
+    setLastStageError(null);
+    setSessionStatus('running');
     setIsComplete(false);
     setFinalOutput(null);
 
@@ -5041,11 +4846,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     // Check if this stage has a minimal contract (new prompt packer system)
     const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
-    const retryRepairMode = extractRetryRepairMode(additionalGuidance);
-    const additionalGuidanceToUse = stripRetryRepairMarker(additionalGuidance);
-    const repairContract = getRetryRepairContract(retryRepairMode);
     const stageContract =
-      repairContract ||
       getStageContract(stageLookupKey) ||
       getStageContract(normalizedStageName) ||
       null;
@@ -5062,15 +4863,13 @@ Output: Valid JSON only. No markdown, no prose.`;
       const packConfig: PromptPackConfig = {
         mustHave: {
           stageContract: stageContract!,
-          outputFormat: retryRepairMode
-            ? 'Output ONLY valid JSON with exactly one top-level key: repair_text.'
-            : 'Output ONLY valid JSON. NO markdown. NO prose.',
+          outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
           requiredKeys: '', // Contracts already embed required keys
           stageInputs: {
             original_user_request: cfg.prompt,
             ...reducedStageInputs,
-            ...(additionalGuidanceToUse && additionalGuidanceToUse.trim().length > 0
-              ? { additional_critical_instructions: additionalGuidanceToUse.trim() }
+            ...(additionalGuidance && additionalGuidance.trim().length > 0
+              ? { additional_critical_instructions: additionalGuidance.trim() }
               : {}),
           },
         },
@@ -6012,6 +5811,9 @@ Output: Valid JSON only. No markdown, no prose.`;
     } else {
       setFinalOutput(normalizeLocationData(finalResults));
       setIsComplete(true);
+      setSessionStatus('complete');
+      setCompiledStageRequest(null);
+      setModalMode(null);
     }
   };
 
@@ -6043,20 +5845,53 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         if (!parseResult.success) {
           const errorMessage = formatParseError(parseResult);
+          const stageName = currentStage.name;
+          const rawSnippet = typeof aiResponse === 'string' ? aiResponse.slice(0, 500) : undefined;
           setError(errorMessage);
+          setLastStageError({ stage: stageName, message: errorMessage, rawSnippet });
+          setCurrentStageOutput({ stage: stageName, error: errorMessage, rawResponseSnippet: rawSnippet } as unknown as JsonRecord);
+          setShowReviewModal(true);
+          setSessionStatus('error');
+          // Clear any pending state to avoid stalls
+          setPendingStageResults(null);
+          setProcessingRetrievalHints(false);
+          _setShowNarrowingModal(false);
+          setPendingFactpack(null);
+          setCurrentKeywords([]);
+          setIsStageChunking(false);
+          setIsMultiPartGeneration(false);
           return;
         }
 
         parsed = parseResult.data || {};
-        const repairText = typeof parsed.repair_text === 'string' ? parsed.repair_text : null;
-        if (repairText) {
-          const repaired = parseRetryRepairTextForStage(currentStage.name, repairText);
-          if (repaired) {
-            parsed = repaired;
-          }
-        }
+
         if (currentStage.name === 'Creator: Core Details') {
           parsed = normalizeCoreDetailsStageOutput(parsed);
+        }
+
+        // Prune to allowed keys for the current stage to prevent bleed-over
+        const contractKey = getStageContractKey(currentStage.name);
+        if (contractKey) {
+          parsed = pruneToAllowedKeys(parsed, STAGE_OUTPUT_CONTRACTS[contractKey].allowedKeys) as JsonRecord;
+          const validation = validateStageOutput(contractKey, parsed);
+          if (!validation.ok) {
+            const message = `AI response is invalid for ${currentStage.name}: ${validation.error}`;
+            const rawSnippet = typeof aiResponse === 'string' ? aiResponse.slice(0, 500) : undefined;
+            setError(message);
+            setLastStageError({ stage: currentStage.name, message, rawSnippet });
+            setCurrentStageOutput({ stage: currentStage.name, error: message, rawResponseSnippet: rawSnippet } as unknown as JsonRecord);
+            setShowReviewModal(true);
+            setSessionStatus('error');
+            // Clear any pending state to avoid stalls
+            setPendingStageResults(null);
+            setProcessingRetrievalHints(false);
+            _setShowNarrowingModal(false);
+            setPendingFactpack(null);
+            setCurrentKeywords([]);
+            setIsStageChunking(false);
+            setIsMultiPartGeneration(false);
+            return;
+          }
         }
 
         if (logAi) {
@@ -6147,6 +5982,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         setStageResults({ ...newResults, merged: finalContent });
         setFinalOutput(finalContent);
         setIsComplete(true);
+        setSessionStatus('complete');
         setModalMode(null);
 
         console.log('[Homebrew] Extraction complete:', finalContent);
@@ -6325,8 +6161,18 @@ Output: Valid JSON only. No markdown, no prose.`;
         }
       }
 
-      // Check if this stage has proposals or critical issues that need review
+      // Planner gate: if proposals exist and no decisions yet, stop and collect user decisions
       const hasProposals = Array.isArray(parsed.proposals) && parsed.proposals.length > 0;
+      if (currentStage.name === 'Planner' && hasProposals && Object.keys(accumulatedAnswers || {}).length === 0) {
+        console.log('[Planner] Proposals present and no user decisions yet. Pausing pipeline for user input.');
+        setCurrentStageOutput(parsed);
+        setShowReviewModal(true);
+        setCompiledStageRequest(null);
+        setSessionStatus('awaiting_user_decisions');
+        return; // Do not advance until decisions provided
+      }
+
+      // Check if this stage has proposals or critical issues that need review
       const hasCriticalPhysics = Array.isArray(parsed.physics_issues)
         && parsed.physics_issues.some((issue: unknown) =>
           typeof issue === 'object' && issue !== null && 'severity' in issue &&
@@ -7505,6 +7351,7 @@ Output: Valid JSON only. No markdown, no prose.`;
             setCurrentStageIndex(0); // Planner is at index 0
             setIsComplete(false);
             setFinalOutput(null);
+            setSessionStatus('idle');
             setStageResults({});
 
             // Create chunk info for next chunk
@@ -7557,8 +7404,29 @@ Output: Valid JSON only. No markdown, no prose.`;
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error processing AI response';
-      // Set error but keep modal open so user can fix the input
-      setError(`Error processing response: ${message}\n\nPlease check the response and try again.`);
+      console.error('[handleSubmit] Error handling AI response:', err);
+      const rawSnippet = typeof aiResponse === 'string' ? aiResponse.slice(0, 500) : '';
+      const stageName = STAGES[currentStageIndex]?.name ?? 'Unknown stage';
+      const messageText = 'Failed to process AI response. Please try again.';
+      setError(messageText);
+      setLastStageError({ stage: stageName, message: String(err), rawSnippet });
+      setCurrentStageOutput({
+        stage: stageName,
+        error: String(err),
+        rawResponseSnippet: rawSnippet,
+      } as unknown as JsonRecord);
+      setShowReviewModal(true);
+      setSessionStatus('error');
+      // Clear any pending state to avoid stalls
+      setCompiledStageRequest(null);
+      setPendingStageResults(null);
+      setProcessingRetrievalHints(false);
+      _setShowNarrowingModal(false);
+      setPendingFactpack(null);
+      setCurrentKeywords([]);
+      setIsStageChunking(false);
+      setIsMultiPartGeneration(false);
+      return;
     }
   };
 
@@ -7579,15 +7447,12 @@ Output: Valid JSON only. No markdown, no prose.`;
       // Just close the modal - don't reset if data is saved
       if (dataSaved) {
         setModalMode(null);
+        setSessionStatus('idle');
         console.log('[Close] Session closed but saved. Can resume from:', progressSession.sessionId);
       } else {
         // Reset everything if not saved
-        setCurrentStageIndex(-1);
-        setModalMode(null);
-        _setSkipMode(false);
-        setStageResults({} as StageResults);
+        resetPipelineState();
         setConfig(null);
-        setError(null);
       }
     } else {
       setModalMode(null);
@@ -7596,18 +7461,16 @@ Output: Valid JSON only. No markdown, no prose.`;
   };
 
   const handleReset = () => {
-    setCurrentStageIndex(-1);
-    setModalMode(null);
-    _setSkipMode(false);
-    setStageResults({} as StageResults);
+    resetPipelineState();
     setConfig(null);
-    setError(null);
-    setIsComplete(false);
-    setFinalOutput(null);
   };
 
   const handleRetryCurrentStage = () => {
     if (currentStageIndex >= 0 && config) {
+      setError(null);
+      setLastStageError(null);
+      setShowReviewModal(false);
+      setSessionStatus('running');
       showStageOutput(currentStageIndex, config, stageResults, factpack);
     }
   };
@@ -7629,6 +7492,9 @@ Output: Valid JSON only. No markdown, no prose.`;
   const handleRetryWithAnswers = (answers: Record<string, string>, issuesToAddress: string[]) => {
     // Close review modal
     setShowReviewModal(false);
+    setError(null);
+    setLastStageError(null);
+    setSessionStatus('running');
 
     // Accumulate answers from this retry
     const updatedAnswers = {
@@ -7642,7 +7508,6 @@ Output: Valid JSON only. No markdown, no prose.`;
     const stageForRetry = STAGES[currentStageIndex];
 
     let additionalInstructions = 'ADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY):\n\n';
-    const retryRepairMode = getRetryRepairModeForStage(stageForRetry?.name || '');
 
     if (Object.keys(answers).length > 0) {
       additionalInstructions += 'NEW ANSWERS TO PROPOSALS:\n';
@@ -7681,23 +7546,16 @@ Output: Valid JSON only. No markdown, no prose.`;
       additionalInstructions += '- Do NOT return only generic personality repetition or empty arrays.\n';
     }
 
-    if (retryRepairMode) {
-      additionalInstructions += `\n${RETRY_REPAIR_MODE_MARKER}${retryRepairMode}\n`;
-      additionalInstructions += 'RETRY FORMAT OVERRIDE:\n';
-      additionalInstructions += '- For this retry, return a JSON object with exactly one key: repair_text.\n';
-      additionalInstructions += '- Inside repair_text, use the required labels from the retry contract exactly.\n';
-      additionalInstructions += '- Do NOT return the normal stage JSON object on this retry.\n';
-      additionalInstructions += '- If you return any key other than repair_text, the response is invalid.\n';
-
-      const failedOutputSnapshot = buildStageRetrySnapshot(stageForRetry?.name || '', currentStageOutput);
-      if (failedOutputSnapshot) {
-        additionalInstructions += '\nLAST_FAILED_STAGE_OUTPUT (repair this instead of repeating it):\n';
-        additionalInstructions += `${failedOutputSnapshot}\n`;
-      }
+    const failedOutputSnapshot = buildStageRetrySnapshot(stageForRetry?.name || '', currentStageOutput);
+    if (failedOutputSnapshot) {
+      additionalInstructions += '\nLAST_FAILED_STAGE_OUTPUT (repair this instead of repeating it):\n';
+      additionalInstructions += `${failedOutputSnapshot}\n`;
     }
 
     additionalInstructions += '\nFINAL RETRY INSTRUCTIONS:\n';
     additionalInstructions += '- Follow the required output format exactly.\n';
+    additionalInstructions += '- Return the same JSON object shape required for this stage.\n';
+    additionalInstructions += '- Replace missing, empty, or invalid fields in place. Do not add new keys.\n';
     additionalInstructions += '- Fix every listed issue in this response.\n';
     additionalInstructions += '- Fill every required field with concrete content.\n';
     additionalInstructions += '- Do not return placeholders, empty scaffolding, or unrelated extra structures.\n';
@@ -7720,6 +7578,9 @@ Output: Valid JSON only. No markdown, no prose.`;
   const handleAcceptWithIssues = (answers: Record<string, string>) => {
     // User chose to accept despite proposals/issues
     setShowReviewModal(false);
+    setError(null);
+    setLastStageError(null);
+    setSessionStatus('running');
 
     // Accumulate answers from this stage
     const updatedAnswers = {
@@ -7824,6 +7685,8 @@ Output: Valid JSON only. No markdown, no prose.`;
         if (!nextStageConfig) {
           setIsComplete(true);
           setFinalOutput(newResults as unknown as JsonRecord);
+          setSessionStatus('complete');
+          setCompiledStageRequest(null);
           setModalMode(null);
           return;
         }
@@ -7998,6 +7861,9 @@ Output: Valid JSON only. No markdown, no prose.`;
       setStageResults(newResults);
       setFinalOutput(finalContent);
       setIsComplete(true);
+      setSessionStatus('complete');
+      setLastStageError(null);
+      setCompiledStageRequest(null);
       setModalMode(null); // CRITICAL: Close the modal
 
       console.log('[ManualGenerator] Pipeline complete via handleAcceptWithIssues');

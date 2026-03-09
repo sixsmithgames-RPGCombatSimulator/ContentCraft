@@ -56,6 +56,55 @@ function cleanAIArtifacts(text: string): string {
 }
 
 /**
+ * Prefer fenced blocks, otherwise extract first JSON object via brace matching (string-aware)
+ */
+export function extractFirstJsonObject(text: string): string | null {
+  // 1) Prefer fenced ```json blocks
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced?.[1] ?? text).trim();
+
+  // 2) Find first '{' and parse braces while respecting strings/escapes
+  const start = candidate.indexOf('{');
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+
+  for (let i = start; i < candidate.length; i++) {
+    const ch = candidate[i];
+
+    if (inStr) {
+      if (esc) {
+        esc = false;
+        continue;
+      }
+      if (ch === '\\') {
+        esc = true;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = false;
+        continue;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+    if (ch === '{') depth++;
+    if (ch === '}') depth--;
+    if (depth === 0) {
+      return candidate.slice(start, i + 1);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Repair common JSON issues
  */
 function repairJSON(jsonText: string): string {
@@ -289,23 +338,26 @@ export function parseAIResponse<T = unknown>(text: string): ParseResult<T> {
   // Step 1: Clean AI artifacts
   const cleaned = cleanAIArtifacts(text);
 
-  // Step 2: First attempt - parse as-is
+  // Step 2: Extract the first JSON object (fenced block preferred)
+  const extracted = extractFirstJsonObject(cleaned) ?? cleaned;
+
+  // Step 3: First attempt - parse extracted
   try {
-    const parsed = JSON.parse(cleaned) as T;
+    const parsed = JSON.parse(extracted) as T;
     return { success: true, data: parsed };
   } catch {
     // First parse failed - fall back to repair pass
     console.log('First parse attempt failed, attempting repair...');
 
-    // Step 3: Second attempt - repair and parse
-    const repaired = repairJSON(cleaned);
+    // Step 4: Repair and parse
+    const repaired = repairJSON(extracted);
 
     try {
       const parsed = JSON.parse(repaired) as T;
       console.log('✅ Successfully parsed after repair');
       return { success: true, data: parsed, wasRepaired: true, cleanedText: repaired };
     } catch (secondError) {
-      // Step 4: Generate helpful error message
+      // Step 5: Generate helpful error message
       console.error('❌ Parse failed even after repair:', secondError);
       console.error('Original text length:', text.length);
       console.error('Repaired text length:', repaired.length);

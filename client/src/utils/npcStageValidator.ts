@@ -221,12 +221,14 @@ function validateEquipmentStage(output: Record<string, unknown>): ValidationResu
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  if (!Array.isArray(output.equipment) || output.equipment.length === 0) {
-    errors.push('Equipment stage is empty. Include concrete gear and possessions.');
-  }
+  const hasAnyEquipment = hasNonEmptyObjectArray(output.weapons)
+    || hasNonEmptyObjectArray(output.armor_and_shields)
+    || hasNonEmptyObjectArray(output.wondrous_items)
+    || hasNonEmptyObjectArray(output.consumables)
+    || hasNonEmptyObjectArray(output.other_gear);
 
-  if (!Array.isArray(output.attuned_items)) {
-    warnings.push('attuned_items missing. Use an empty array if none are attuned.');
+  if (!hasAnyEquipment) {
+    errors.push('Equipment stage is empty. Include weapons, armor, wondrous items, consumables, or other gear as appropriate.');
   }
 
   return {
