@@ -254,6 +254,24 @@ function analyzeNeedsLegendary(
   race: string,
   role: string
 ): StageRequirement {
+  const negativeLegendaryPatterns = [
+    /no\s+legendary\s+actions?/i,
+    /no\s+legendary/i,
+    /not\s+legendary/i,
+    /without\s+legendary/i,
+    /skip\s+legendary/i,
+    /non-legendary/i,
+    /without\s+mythic/i,
+    /no\s+mythic/i,
+  ];
+
+  if (negativeLegendaryPatterns.some((pattern) => pattern.test(request))) {
+    return {
+      required: false,
+      reason: 'User explicitly excluded legendary or mythic actions',
+    };
+  }
+
   // Legendary keywords
   const legendaryKeywords = [
     'legendary', 'mythic', 'ancient dragon', 'demon lord', 'archdevil',

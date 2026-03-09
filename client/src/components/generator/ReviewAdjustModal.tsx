@@ -8,7 +8,11 @@ import { X, AlertTriangle, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAiAssistant } from '../../contexts/AiAssistantContext';
 
 type Proposal = {
+  id?: string;
+  topic?: string;
   question?: string;
+  default?: string;
+  required?: boolean;
   options?: (string | { choice: string; description: string })[];
   rule_impact?: string;
   field_path?: string;
@@ -38,6 +42,8 @@ interface StageOutput {
   proposals?: Proposal[];
   physics_issues?: Issue[];
   conflicts?: Issue[];
+  error?: string;
+  rawResponseSnippet?: string;
 }
 
 interface ReviewAdjustModalProps {
@@ -101,6 +107,7 @@ export default function ReviewAdjustModal({
   if (!isOpen || !stageOutput) return null;
 
   const proposals: Proposal[] = stageOutput?.proposals || [];
+  const stageError = typeof stageOutput.error === 'string' ? stageOutput.error : null;
   const criticalIssues: Issue[] = deduplicateIssues([
     ...((stageOutput?.physics_issues || []).filter((i) => i.severity === 'critical')),
     ...((stageOutput?.conflicts || []).filter((c) => c.severity === 'critical')),
@@ -163,8 +170,13 @@ export default function ReviewAdjustModal({
     onAccept(answers);
   };
 
-  const allProposalsAnswered = proposals.every((_, i: number) => i in proposalAnswers);
-  const canProceed = allProposalsAnswered && (criticalIssues.length === 0 || selectedIssues.size > 0);
+  const allProposalsAnswered = proposals.every((proposal, i: number) => {
+    if (!proposal.required) {
+      return true;
+    }
+    return i in proposalAnswers;
+  });
+  const canProceed = stageError !== null || (allProposalsAnswered && (criticalIssues.length === 0 || selectedIssues.size > 0));
   const panelOffsetClass = isPanelOpen ? 'lg:pr-[24rem]' : '';
   const modalMaxWidthClass = isPanelOpen ? 'max-w-3xl xl:max-w-4xl' : 'max-w-4xl';
 
@@ -189,6 +201,22 @@ export default function ReviewAdjustModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {stageError && (
+            <div className="border border-red-300 bg-red-50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-red-900 mb-2 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                Stage error
+              </h3>
+              <p className="text-sm text-red-800 whitespace-pre-wrap">{stageError}</p>
+              {stageOutput.rawResponseSnippet && (
+                <div className="mt-3 p-3 bg-white border border-red-200 rounded">
+                  <p className="text-xs font-medium text-red-700 mb-1">Raw response snippet</p>
+                  <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words">{stageOutput.rawResponseSnippet}</pre>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Proposals Section */}
           {proposals.length > 0 && (
             <div>
@@ -201,16 +229,24 @@ export default function ReviewAdjustModal({
               </p>
               <div className="space-y-4">
                 {proposals.map((proposal, index: number) => {
+                  const proposalLabel = proposal.question || proposal.topic || `(missing question ${index + 1})`;
+
                   // Debug logging
-                  if (!proposal.question) {
+                  if (!proposal.question && !proposal.topic) {
                     console.warn(`[ReviewAdjustModal] Proposal ${index} is missing question:`, proposal);
                   }
 
                   return (
-                  <div key={index} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div key={proposal.id ?? `${index}`} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <h4 className="font-medium text-yellow-900 mb-2">
-                      {proposal.question || `Question ${index + 1} (no question text provided)`}
+                      {proposalLabel}
                     </h4>
+
+                    {proposal.topic && proposal.topic !== proposal.question && (
+                      <p className="text-xs text-yellow-700 mb-2">
+                        <strong>Topic:</strong> {proposal.topic}
+                      </p>
+                    )}
 
                     {/* Field Path */}
                     {proposal.field_path && (
@@ -252,6 +288,20 @@ export default function ReviewAdjustModal({
                       <p className="text-sm text-yellow-700 mb-3">
                         <strong>Rule Impact:</strong> {proposal.rule_impact}
                       </p>
+                    )}
+
+                    {proposal.default && (
+                      <p className="text-xs text-yellow-700 mb-3">
+                        <strong>Default:</strong> {proposal.default}
+                      </p>
+                    )}
+
+                    {proposal.options && proposal.options.length === 0 && (
+                      <div className="mb-3 p-3 bg-white border border-yellow-200 rounded">
+                        <p className="text-sm text-gray-700">
+                          No preset options were provided for this question. Enter a custom answer or let the AI decide.
+                        </p>
+                      </div>
                     )}
                     <div className="space-y-2">
                       {proposal.options?.map((option: string | { choice: string; description?: string }, optIndex: number) => {
@@ -357,6 +407,18 @@ export default function ReviewAdjustModal({
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {!stageError && proposals.length === 0 && criticalIssues.length === 0 && (
+            <div className="border border-green-200 bg-green-50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-green-900 mb-2 flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                No decisions needed
+              </h3>
+              <p className="text-sm text-green-800">
+                No proposals or critical issues were returned for this stage. Click <strong>Accept &amp; Continue</strong> to proceed.
+              </p>
             </div>
           )}
 
@@ -480,7 +542,7 @@ export default function ReviewAdjustModal({
           </button>
           <div className="flex gap-3">
             {/* Show Accept button if no proposals/issues OR if all proposals are answered */}
-            {(proposals.length === 0 && criticalIssues.length === 0) || allProposalsAnswered ? (
+            {!stageError && ((proposals.length === 0 && criticalIssues.length === 0) || allProposalsAnswered) ? (
               <button
                 onClick={handleAccept}
                 className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"

@@ -231,26 +231,121 @@ const toStringArray = (value: unknown): string[] =>
 const toObjectArray = (value: unknown): JsonRecord[] =>
   Array.isArray(value) ? value.filter(isRecord) : [];
 
+const slugifyProposalKey = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 48);
+
 const sanitizeProposalsValue = (value: unknown): JsonRecord[] => {
   if (!Array.isArray(value)) return [];
 
   const cleaned: JsonRecord[] = [];
-  for (const item of value) {
+  for (const [index, item] of value.entries()) {
     if (item === null || item === undefined) continue;
 
     if (typeof item === 'string') {
       const q = item.trim();
       if (q.length === 0) continue;
-      cleaned.push({ question: q });
+      cleaned.push({
+        id: slugifyProposalKey(q || `proposal-${index}`),
+        topic: `Decision ${index + 1}`,
+        question: q,
+        options: [],
+        default: '',
+        required: false,
+      });
       continue;
     }
 
-    if (isRecord(item) && typeof item.question === 'string' && item.question.trim().length > 0) {
-      cleaned.push(item);
+    if (!isRecord(item)) {
+      continue;
     }
+
+    const question = typeof item.question === 'string'
+      ? item.question.trim()
+      : typeof item.topic === 'string'
+        ? item.topic.trim()
+        : '';
+    if (question.length === 0) {
+      continue;
+    }
+
+    const normalizedOptions = Array.isArray(item.options)
+      ? item.options
+        .map((option) => {
+          if (typeof option === 'string') {
+            const trimmed = option.trim();
+            return trimmed.length > 0 ? trimmed : null;
+          }
+          if (isRecord(option) && typeof option.choice === 'string' && option.choice.trim().length > 0) {
+            return {
+              choice: option.choice.trim(),
+              ...(typeof option.description === 'string' && option.description.trim().length > 0
+                ? { description: option.description.trim() }
+                : {}),
+            };
+          }
+          return null;
+        })
+        .filter((option): option is string | { choice: string; description?: string } => option !== null)
+      : [];
+
+    const topic = typeof item.topic === 'string' && item.topic.trim().length > 0
+      ? item.topic.trim()
+      : `Decision ${index + 1}`;
+    const defaultValue = typeof item.default === 'string' && item.default.trim().length > 0
+      ? item.default.trim()
+      : (() => {
+          const firstOption = normalizedOptions[0];
+          if (typeof firstOption === 'string') return firstOption;
+          if (firstOption && typeof firstOption.choice === 'string') return firstOption.choice;
+          return '';
+        })();
+
+    cleaned.push({
+      ...item,
+      id: typeof item.id === 'string' && item.id.trim().length > 0
+        ? item.id.trim()
+        : slugifyProposalKey(topic || question || `proposal-${index}`),
+      topic,
+      question,
+      options: normalizedOptions,
+      default: defaultValue,
+      required: Boolean(item.required ?? false),
+    });
   }
 
   return cleaned;
+};
+
+const normalizePlannerOutput = (value: JsonRecord, inputFlags?: JsonRecord): JsonRecord => {
+  const retrievalHints = isRecord(value.retrieval_hints) ? value.retrieval_hints : {};
+
+  return {
+    deliverable: typeof value.deliverable === 'string' && value.deliverable.trim().length > 0
+      ? value.deliverable.trim()
+      : 'npc',
+    retrieval_hints: {
+      entities: toStringArray(retrievalHints.entities),
+      regions: toStringArray(retrievalHints.regions),
+      eras: toStringArray(retrievalHints.eras),
+      keywords: toStringArray(retrievalHints.keywords),
+    },
+    proposals: sanitizeProposalsValue(value.proposals),
+    assumptions: toStringArray(value.assumptions),
+    flags_echo: isRecord(value.flags_echo)
+      ? value.flags_echo
+      : {
+          allow_invention: value.allow_invention ?? inputFlags?.allow_invention,
+          tone: value.tone ?? inputFlags?.tone,
+          rule_base: value.rule_base ?? inputFlags?.rule_base,
+          mode: value.mode ?? inputFlags?.mode ?? 'GM',
+          difficulty: value.difficulty ?? inputFlags?.difficulty,
+          realism: value.realism ?? inputFlags?.realism,
+        },
+  };
 };
 
 const shouldLogAiPayload = (): boolean => {
@@ -5865,6 +5960,10 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         parsed = parseResult.data || {};
 
+        if (currentStage.name === 'Planner') {
+          parsed = normalizePlannerOutput(parsed, config?.flags as JsonRecord | undefined);
+        }
+
         if (currentStage.name === 'Creator: Core Details') {
           parsed = normalizeCoreDetailsStageOutput(parsed);
         }
@@ -6131,20 +6230,42 @@ Output: Valid JSON only. No markdown, no prose.`;
           ...parsed,
         };
         const validation = validateNpcStageOutput(currentStage.name, stageContextForValidation);
-        if (!validation.isValid || validation.warnings.length > 0) {
-          const stageIssues = [
-            ...validation.errors.map((message) => ({
-              severity: 'critical',
-              description: message,
-              suggestion: 'Retry this stage and require complete, fully populated NPC data.',
-            })),
-            ...validation.warnings.map((message) => ({
-              severity: 'warning',
-              description: message,
-              suggestion: 'Review this stage output and confirm whether the data is sufficiently complete.',
-            })),
-          ];
+        if (!validation.isValid) {
+          const message = validation.errors.join(' ');
+          const rawSnippet = typeof aiResponse === 'string' ? aiResponse.slice(0, 500) : undefined;
+          const existingConflicts = Array.isArray(parsed.conflicts) ? parsed.conflicts as unknown[] : [];
+          const stageIssues = validation.errors.map((errorMessage) => ({
+            severity: 'critical',
+            description: errorMessage,
+            suggestion: 'Retry this stage and require complete, fully populated NPC data.',
+          }));
+          setError(message);
+          setLastStageError({ stage: currentStage.name, message, rawSnippet });
+          setCurrentStageOutput({
+            ...parsed,
+            error: message,
+            rawResponseSnippet: rawSnippet,
+            conflicts: [...stageIssues, ...existingConflicts],
+          } as unknown as JsonRecord);
+          setShowReviewModal(true);
+          setSessionStatus('error');
+          setCompiledStageRequest(null);
+          setPendingStageResults(null);
+          setProcessingRetrievalHints(false);
+          _setShowNarrowingModal(false);
+          setPendingFactpack(null);
+          setCurrentKeywords([]);
+          setIsStageChunking(false);
+          setIsMultiPartGeneration(false);
+          return;
+        }
 
+        if (validation.warnings.length > 0) {
+          const stageIssues = validation.warnings.map((message) => ({
+            severity: 'warning',
+            description: message,
+            suggestion: 'Review this stage output and confirm whether the data is sufficiently complete.',
+          }));
           const existingConflicts = Array.isArray(parsed.conflicts) ? parsed.conflicts as unknown[] : [];
           parsed.conflicts = [...stageIssues, ...existingConflicts];
         }
@@ -6192,6 +6313,8 @@ Output: Valid JSON only. No markdown, no prose.`;
       if ((hasProposals || hasCriticalIssues) && !isMultiPartGeneration && !isLocationSpacesStage) {
         setCurrentStageOutput(parsed);
         setShowReviewModal(true);
+        setCompiledStageRequest(null);
+        setSessionStatus('awaiting_user_decisions');
         return; // Don't proceed to next stage yet
       }
 
@@ -7576,6 +7699,11 @@ Output: Valid JSON only. No markdown, no prose.`;
   };
 
   const handleAcceptWithIssues = (answers: Record<string, string>) => {
+    if (currentStageOutput && typeof currentStageOutput.error === 'string' && currentStageOutput.error.trim().length > 0) {
+      console.warn('[ManualGenerator] Refusing to accept output while current stage is in an error state. Retry is required.');
+      return;
+    }
+
     // User chose to accept despite proposals/issues
     setShowReviewModal(false);
     setError(null);
