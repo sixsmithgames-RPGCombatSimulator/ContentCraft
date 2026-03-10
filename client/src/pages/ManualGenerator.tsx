@@ -392,6 +392,120 @@ const coerceSpeedNumbers = (speed: unknown): Record<string, number> | null => {
   return Object.keys(result).length > 0 ? result : null;
 };
 
+const CORE_DETAILS_ALLOWED_KEYS = [
+  'personality_traits',
+  'ideals',
+  'bonds',
+  'flaws',
+  'goals',
+  'fears',
+  'quirks',
+  'voice_mannerisms',
+  'hooks',
+] as const;
+
+type CoreDetails = Record<(typeof CORE_DETAILS_ALLOWED_KEYS)[number], string[]>;
+
+const normalizeStringArray = (v: unknown): string[] => {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => String(x ?? '').trim()).filter((x) => x.length > 0);
+};
+
+const clampMin3 = (arr: string[], fallback: string[]): string[] => {
+  const out = arr.filter(Boolean);
+  if (out.length >= 3) return out.slice(0, 6);
+  const needed = 3 - out.length;
+  return out.concat(fallback.slice(0, needed));
+};
+
+const buildCoreDetailsFallback = (ctx: {
+  name: string;
+  alignment?: string;
+  oath?: string;
+  location?: string;
+  tone?: string;
+}): Omit<CoreDetails, 'hooks'> => ({
+  personality_traits: [
+    'stoic under pressure',
+    'measured, disciplined presence',
+    'vigilant and hard to distract',
+    'quietly protective of innocents',
+  ],
+  ideals: [
+    "duty to the Moonmaiden’s light",
+    'honor and truth in word and deed',
+    'sacrifice for the greater good',
+    'order as a shield against darkness',
+  ],
+  bonds: [
+    `sworn to uphold the ${ctx.oath ?? 'Oath of Devotion'}`,
+    'devoted to the faithful of Selûne',
+    `protects travelers who venture near ${ctx.location ?? 'the Tears of Selûne'}`,
+    'keeps a personal vow tied to a fallen comrade',
+  ],
+  flaws: [
+    'unbending once committed',
+    'judges moral compromise harshly',
+    'suppresses emotion until it erupts',
+    'reluctant to ask for help',
+  ],
+  goals: [
+    'eradicate a growing shadow presence',
+    'recover a relic stolen from Selûne’s faithful',
+    'strengthen protections around sacred sites',
+    'prove worthy of her celestial heritage',
+  ],
+  fears: [
+    'failing her oath at a decisive moment',
+    'the light within her being extinguished',
+    'innocents harmed because she hesitated',
+    'corruption taking root in sacred ground',
+  ],
+  quirks: [
+    'counts prayer beads while thinking',
+    'speaks in short, deliberate sentences',
+    'polishes armor and blade as a nightly ritual',
+    'pauses to observe the sky before acting',
+  ],
+  voice_mannerisms: [
+    'low, calm voice with clipped phrasing',
+    'rarely raises volume; intensity comes from stillness',
+    'uses formal address even under stress',
+    'makes brief Selûnite blessings before combat',
+  ],
+});
+
+const normalizeCoreDetails = (
+  raw: JsonRecord,
+  ctx: { name: string; alignment?: string; oath?: string; location?: string; tone?: string }
+): CoreDetails => {
+  const pruned: Partial<CoreDetails> = {};
+  for (const k of CORE_DETAILS_ALLOWED_KEYS) {
+    pruned[k] = normalizeStringArray(raw?.[k]);
+  }
+
+  const legacyHooks = normalizeStringArray(raw?.hooks);
+  const hooks = legacyHooks.length ? legacyHooks : [];
+
+  const fb = buildCoreDetailsFallback(ctx);
+
+  return {
+    personality_traits: clampMin3(pruned.personality_traits ?? [], fb.personality_traits),
+    ideals: clampMin3(pruned.ideals ?? [], fb.ideals),
+    bonds: clampMin3(pruned.bonds ?? [], fb.bonds),
+    flaws: clampMin3(pruned.flaws ?? [], fb.flaws),
+    goals: clampMin3(pruned.goals ?? [], fb.goals),
+    fears: clampMin3(pruned.fears ?? [], fb.fears),
+    quirks: clampMin3(pruned.quirks ?? [], fb.quirks),
+    voice_mannerisms: clampMin3(pruned.voice_mannerisms ?? [], fb.voice_mannerisms),
+    hooks: clampMin3(hooks, [
+      `${ctx.name} needs allies to cleanse a defiled Selûnite site`,
+      `${ctx.name} is tracking a void-touched entity seen near the Tears`,
+      `${ctx.name} seeks a missing shard tied to a celestial omen`,
+    ]),
+  };
+};
+
 const normalizePlannerOutput = (value: JsonRecord, inputFlags?: JsonRecord): JsonRecord => {
   const retrievalHints = isRecord(value.retrieval_hints) ? value.retrieval_hints : {};
 
@@ -6012,6 +6126,19 @@ Output: Valid JSON only. No markdown, no prose.`;
             }
           }
 
+          if (contractKey === 'coreDetails') {
+            const coreCtx = {
+              name: typeof parsed.name === 'string' && parsed.name.trim().length > 0 ? parsed.name : 'Unknown',
+              alignment: typeof parsed.alignment === 'string' ? parsed.alignment : undefined,
+              oath: accumulatedAnswers['oath-subclass'],
+              location: typeof parsed.location === 'string' ? parsed.location : undefined,
+              tone: typeof (config?.flags as Record<string, unknown> | undefined)?.tone === 'string'
+                ? (config!.flags as Record<string, string>).tone
+                : undefined,
+            };
+            parsed = normalizeCoreDetails(parsed, coreCtx) as JsonRecord;
+          }
+
           if (contractKey === 'stats' && parsed.speed) {
             const coercedSpeed = coerceSpeedNumbers(parsed.speed);
             if (coercedSpeed) {
@@ -7722,12 +7849,6 @@ Output: Valid JSON only. No markdown, no prose.`;
         additionalInstructions += '\nMANDATORY OUTPUT FOR RELATIONSHIPS:\n';
         additionalInstructions += '- Provide concrete allies, enemies, organizations, family, or contacts tied to this character.\n';
         additionalInstructions += '- Do NOT return only generic personality repetition or empty arrays.\n';
-      }
-
-      const failedOutputSnapshot = buildStageRetrySnapshot(stageForRetry?.name || '', currentStageOutput);
-      if (failedOutputSnapshot) {
-        additionalInstructions += '\nLAST_FAILED_STAGE_OUTPUT (repair this instead of repeating it):\n';
-        additionalInstructions += `${failedOutputSnapshot}\n`;
       }
 
       additionalInstructions += '\nFINAL RETRY INSTRUCTIONS:\n';
