@@ -167,24 +167,49 @@ function validateCombatStage(output: Record<string, unknown>): ValidationResult 
 function validateSpellcastingStage(output: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const shouldHaveSpellcasting = hasClassNamed(output, 'paladin')
-    || hasClassNamed(output, 'cleric')
-    || hasClassNamed(output, 'wizard')
-    || hasClassNamed(output, 'sorcerer')
-    || hasClassNamed(output, 'bard')
-    || hasClassNamed(output, 'warlock')
-    || hasClassNamed(output, 'druid')
-    || hasClassNamed(output, 'ranger');
+  const preparedCasters = ['cleric', 'druid', 'paladin', 'wizard', 'artificer'];
+  const knownCasters = ['bard', 'sorcerer', 'warlock'];
+  const halfCasters = ['ranger'];
+
+  const isPrepared = preparedCasters.some((cls) => hasClassNamed(output, cls));
+  const isKnown = knownCasters.some((cls) => hasClassNamed(output, cls));
+  const isHalf = halfCasters.some((cls) => hasClassNamed(output, cls));
+  const shouldHaveSpellcasting = isPrepared || isKnown || isHalf;
+
+  const hasSlots = isRecord(output.spell_slots) && Object.keys(output.spell_slots).length > 0;
+  const hasPrepared = isRecord(output.prepared_spells) && Object.values(output.prepared_spells).some((v) => Array.isArray(v) && v.length > 0);
+  const hasAlwaysPrepared = isRecord(output.always_prepared_spells) && Object.values(output.always_prepared_spells).some((v) => Array.isArray(v) && v.length > 0);
+  const hasKnown = Array.isArray(output.spells_known) && output.spells_known.length > 0;
+  const hasInnate = isRecord(output.innate_spells) && Object.keys(output.innate_spells).length > 0;
 
   if (shouldHaveSpellcasting) {
     if (typeof output.spellcasting_ability !== 'string' || output.spellcasting_ability.trim().length === 0) {
       errors.push('Missing spellcasting_ability for a spellcasting class.');
     }
-    if (!Array.isArray(output.spells_known) || output.spells_known.length === 0) {
-      errors.push('Missing spells_known for a spellcasting class.');
+
+    if (isPrepared || isHalf) {
+      if (!hasSlots) {
+        errors.push('Missing spell_slots for a prepared/slots-based caster.');
+      }
+      if (!hasPrepared && !hasAlwaysPrepared && !hasInnate) {
+        errors.push('Prepared casters must include prepared_spells or always_prepared_spells (innate allowed as supplement).');
+      }
     }
-    if (!isRecord(output.spell_slots) || Object.keys(output.spell_slots).length === 0) {
-      errors.push('Missing spell_slots for a spellcasting class.');
+
+    if (isKnown) {
+      if (!hasKnown) {
+        errors.push('Known casters must include spells_known.');
+      }
+      if (!hasSlots && !hasInnate) {
+        errors.push('Known casters should include spell_slots (or innate_spells if purely innate).');
+      }
+    }
+
+    if (typeof output.spell_save_dc !== 'number' || !Number.isFinite(output.spell_save_dc)) {
+      errors.push('Missing spell_save_dc for a spellcasting class.');
+    }
+    if (typeof output.spell_attack_bonus !== 'number' || !Number.isFinite(output.spell_attack_bonus)) {
+      errors.push('Missing spell_attack_bonus for a spellcasting class.');
     }
   } else if (Object.keys(output).length === 0) {
     warnings.push('Spellcasting stage returned an empty object.');

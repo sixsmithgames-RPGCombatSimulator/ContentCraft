@@ -188,8 +188,8 @@ export function buildSafePrompt(
   warnings: string[];
 } {
   const warnings: string[] = [];
-  let finalSystemPrompt = systemPrompt;
-  let finalUserPrompt = userPrompt;
+  const finalSystemPrompt = systemPrompt;
+  const finalUserPrompt = userPrompt;
   let accumulatedSection = '';
   let schemaSection = '';
 

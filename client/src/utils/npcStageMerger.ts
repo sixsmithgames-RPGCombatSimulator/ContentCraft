@@ -126,10 +126,12 @@ function deepEqual(a: unknown, b: unknown): boolean {
   }
 
   if (typeof a === 'object' && typeof b === 'object') {
-    const aKeys = Object.keys(a as object);
-    const bKeys = Object.keys(b as object);
+    const aObj = a as Record<string, unknown>;
+    const bObj = b as Record<string, unknown>;
+    const aKeys = Object.keys(aObj);
+    const bKeys = Object.keys(bObj);
     if (aKeys.length !== bKeys.length) return false;
-    return aKeys.every(key => deepEqual((a as any)[key], (b as any)[key]));
+    return aKeys.every(key => deepEqual(aObj[key], bObj[key]));
   }
 
   return false;
@@ -138,7 +140,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
 /**
  * Intelligently merge two values based on their types
  */
-function mergeValues(_field: string, oldValue: unknown, newValue: unknown, _stageName: string): {
+function mergeValues(_field: string, oldValue: unknown, newValue: unknown): {
   merged: unknown;
   hadConflict: boolean;
   resolution: FieldConflict['resolution'];
@@ -303,7 +305,7 @@ export function mergeNpcStages(stageResults: Record<string, JsonRecord>): NpcMer
 
       for (let i = 1; i < provenance.length; i++) {
         const { stage, value } = provenance[i];
-        const mergeResult = mergeValues(field, currentValue, value, stage);
+        const mergeResult = mergeValues(field, currentValue, value);
 
         currentValue = mergeResult.merged;
 

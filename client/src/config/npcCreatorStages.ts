@@ -52,7 +52,12 @@ function createMinimalFactpack(factpack: unknown): unknown {
  */
 function stripStageOutput(result: Record<string, unknown>): Record<string, unknown> {
   if (!result) return {};
-  const { sources_used, assumptions, proposals, retrieval_hints, canon_update, ...content } = result;
+  const content = { ...result } as Record<string, unknown>;
+  delete content.sources_used;
+  delete content.assumptions;
+  delete content.proposals;
+  delete content.retrieval_hints;
+  delete content.canon_update;
   return content;
 }
 

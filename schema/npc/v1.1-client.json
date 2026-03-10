@@ -584,6 +584,11 @@
           "additionalProperties": { "type": "array", "items": { "type": "string" } },
           "description": "Prepared spells by level (e.g., {'1st': ['Shield', 'Cure Wounds']})"
         },
+        "always_prepared_spells": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } },
+          "description": "Always-prepared or granted spells by feature/oath/domain"
+        },
         "innate_spells": {
           "type": "object",
           "additionalProperties": { "type": "array", "items": { "type": "string" } },

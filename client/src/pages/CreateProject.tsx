@@ -47,7 +47,8 @@ export const CreateProject: React.FC = () => {
     }
   };
 
-  const handleChange = (field: string, value: any) => {
+  type FormField = 'title' | 'description' | 'type' | 'status';
+  const handleChange = <K extends FormField>(field: K, value: typeof formData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (error) setError(null);
   };

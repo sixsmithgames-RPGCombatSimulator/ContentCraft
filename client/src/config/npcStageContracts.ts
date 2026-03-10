@@ -128,17 +128,17 @@ Return JSON with ONLY these keys (if the class can cast spells):
 - spellcasting_ability: string
 - spell_save_dc: number
 - spell_attack_bonus: number
-- spells_known: { name: string, level: number, school?: string, casting_time?: string, range?: string, components?: string, duration?: string, description: string }[]
 - spell_slots: { 1?: number, 2?: number, 3?: number, 4?: number, 5?: number, 6?: number, 7?: number, 8?: number, 9?: number }
-
-Optional keys (include only if applicable):
-- cantrips_known: string[]
-- prepared_spells: string[]
-- ritual_casting: boolean
+- prepared_spells: { [level: string]: string[] } (prepared/slots casters)
+- always_prepared_spells: { [source: string]: string[] } (granted/domain/oath spells)
+- innate_spells: { [usage: string]: string[] } (at will / per day groupings)
+- spells_known: string[] (known casters)
 - spellcasting_focus: string
 
 Rules:
-- Return only these keys; do NOT include equipment, stats, or personality.`;
+- Keep values minimal; no descriptions, no extra keys, no nested objects beyond the maps above.
+- If a field is not applicable, omit it.
+- Do NOT include equipment, stats, personality, or narrative text.`;
 
 /**
  * Legendary stage contract (concise).

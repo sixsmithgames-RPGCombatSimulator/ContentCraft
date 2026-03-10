@@ -39,7 +39,8 @@ interface BasicInfoOutput {
  */
 export function determineRequiredStages(
   basicInfoOutput: BasicInfoOutput,
-  userRequest: string
+  userRequest: string,
+  resolvedMechanics?: { spellcasting?: { has_spellcasting?: boolean }; combat?: { has_combat_actions?: boolean }; legendary?: { has_legendary?: boolean } }
 ): StageRoutingDecision {
   const cr = parseChallenge(basicInfoOutput.challenge_rating);
   const hasClassLevels = hasClasses(basicInfoOutput.class_levels);
@@ -67,9 +68,9 @@ export function determineRequiredStages(
       required: true,
       reason: 'Class features, racial features, feats, ASI, background - always required'
     },
-    combat: analyzeNeedsCombat(cr, hasClassLevels, description, request, role),
-    spellcasting: analyzeNeedsSpellcasting(cr, hasClassLevels, basicInfoOutput, description, request, race, subtype),
-    legendary: analyzeNeedsLegendary(cr, description, request, race, role),
+    combat: analyzeNeedsCombat(cr, hasClassLevels, description, request, role, resolvedMechanics?.combat),
+    spellcasting: analyzeNeedsSpellcasting(cr, hasClassLevels, basicInfoOutput, description, request, race, subtype, resolvedMechanics?.spellcasting),
+    legendary: analyzeNeedsLegendary(cr, description, request, race, role, resolvedMechanics?.legendary),
     relationships: analyzeNeedsRelationships(description, request, role),
     equipment: analyzeNeedsEquipment(cr, hasClassLevels, description, request, role)
   };
@@ -109,8 +110,12 @@ function analyzeNeedsCombat(
   hasClassLevels: boolean,
   description: string,
   request: string,
-  role: string
+  role: string,
+  mechanics?: { has_combat_actions?: boolean }
 ): StageRequirement {
+  if (mechanics?.has_combat_actions) {
+    return { required: true, reason: 'Resolved mechanics indicate combat actions present' };
+  }
   // Combat keywords
   const combatKeywords = [
     'warrior', 'fighter', 'soldier', 'guard', 'knight', 'barbarian',
@@ -180,7 +185,8 @@ function analyzeNeedsSpellcasting(
   description: string,
   request: string,
   race: string,
-  subtype: string
+  subtype: string,
+  mechanics?: { has_spellcasting?: boolean }
 ): StageRequirement {
   const classLevels = basicInfo.class_levels as Record<string, number> || {};
 
@@ -189,6 +195,14 @@ function analyzeNeedsSpellcasting(
     'wizard', 'sorcerer', 'warlock', 'cleric', 'druid', 'bard',
     'paladin', 'ranger', 'artificer', 'eldritch knight', 'arcane trickster'
   ];
+
+  // Prefer resolved mechanics flag if present
+  if (mechanics?.has_spellcasting) {
+    return {
+      required: true,
+      reason: 'Resolved mechanics indicate spellcasting capability',
+    };
+  }
 
   // Check class levels for spellcasters
   const hasSpellcastingClass = Object.keys(classLevels).some(className =>
@@ -252,8 +266,15 @@ function analyzeNeedsLegendary(
   description: string,
   request: string,
   race: string,
-  role: string
+  role: string,
+  mechanics?: { has_legendary?: boolean }
 ): StageRequirement {
+  if (mechanics?.has_legendary) {
+    return {
+      required: true,
+      reason: 'Resolved mechanics indicate legendary traits',
+    };
+  }
   const negativeLegendaryPatterns = [
     /no\s+legendary\s+actions?/i,
     /no\s+legendary/i,

@@ -62,6 +62,9 @@ import ModeSelectionDialog from '../components/ai-assistant/ModeSelectionDialog'
 type JsonRecord = Record<string, unknown>;
 type StageResults = Record<string, JsonRecord>;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
 interface StageContext {
   config: GenerationConfig;
   stageResults: StageResults;
@@ -81,6 +84,363 @@ interface StageContext {
     accumulatedSections: JsonRecord;
   };
 }
+
+type SpellSlots = Record<string, number>;
+
+type SpellListByKey = Record<string, string[]>;
+
+type SpellcastingNormalized = {
+  spellcasting_ability: string;
+  spell_save_dc: number;
+  spell_attack_bonus: number;
+  spell_slots: SpellSlots;
+  prepared_spells?: SpellListByKey;
+  always_prepared_spells?: SpellListByKey;
+  innate_spells?: SpellListByKey;
+  spellcasting_focus?: string;
+  spells_known?: string[];
+};
+
+type ResolvedMechanics = {
+  spellcasting?: {
+    has_spellcasting: boolean;
+    caster_mode: 'prepared' | 'known' | 'innate' | 'hybrid';
+    has_slots: boolean;
+    has_innate: boolean;
+    spellcasting_ability?: string;
+    spell_save_dc?: number;
+    spell_attack_bonus?: number;
+    spellcasting_focus?: string;
+  };
+  combat?: {
+    has_combat_actions: boolean;
+    has_bonus_actions: boolean;
+    has_reactions: boolean;
+  };
+  legendary?: {
+    has_legendary: boolean;
+  };
+};
+
+const buildCombatCapabilities = (combat: JsonRecord): ResolvedMechanics['combat'] => {
+  const hasActions = Array.isArray(combat.actions) && combat.actions.length > 0;
+  const hasBonus = Array.isArray(combat.bonus_actions) && combat.bonus_actions.length > 0;
+  const hasReactions = Array.isArray(combat.reactions) && combat.reactions.length > 0;
+  return {
+    has_combat_actions: hasActions,
+    has_bonus_actions: hasBonus,
+    has_reactions: hasReactions,
+  };
+};
+
+const buildLegendaryCapabilities = (legendary: JsonRecord): ResolvedMechanics['legendary'] => {
+  const hasLegendaryActions = isRecord(legendary.legendary_actions)
+    || (Array.isArray(legendary.legendary_actions) && legendary.legendary_actions.length > 0);
+  const hasLegendaryResistance = isRecord(legendary.legendary_resistance);
+  return {
+    has_legendary: Boolean(hasLegendaryActions || hasLegendaryResistance),
+  };
+};
+
+const resolveCombat = (context: JsonRecord, existing: JsonRecord): JsonRecord => {
+  // If AI provided actions, keep them; otherwise scaffold a basic attack from STR/DEX/proficiency
+  const hasActions = Array.isArray(existing.actions) && existing.actions.length > 0;
+  if (hasActions) return existing;
+
+  const abilities = context.ability_scores as JsonRecord | undefined;
+  const prof = typeof context.proficiency_bonus === 'number' ? context.proficiency_bonus : 0;
+  const str = abilities && typeof abilities.str === 'number' ? abilities.str : 10;
+  const dex = abilities && typeof abilities.dex === 'number' ? abilities.dex : 10;
+  const mod = Math.max(Math.floor((str - 10) / 2), Math.floor((dex - 10) / 2));
+  const attackBonus = prof + mod;
+
+  return {
+    ...existing,
+    actions: [
+      {
+        name: 'Weapon Attack',
+        description: 'A basic attack with the wielded weapon.',
+        attack_bonus: attackBonus,
+        damage: '1d8 + mod',
+        range: 'melee or 30 ft.',
+      },
+    ],
+    bonus_actions: Array.isArray(existing.bonus_actions) ? existing.bonus_actions : [],
+    reactions: Array.isArray(existing.reactions) ? existing.reactions : [],
+  } as JsonRecord;
+};
+
+const PALADIN_SLOTS_BY_LEVEL: Record<number, SpellSlots> = {
+  1: { '1': 0 },
+  2: { '1': 2 },
+  3: { '1': 3 },
+  4: { '1': 3 },
+  5: { '1': 4, '2': 2 },
+  6: { '1': 4, '2': 2 },
+  7: { '1': 4, '2': 3 },
+  8: { '1': 4, '2': 3 },
+  9: { '1': 4, '2': 3, '3': 2 },
+  10: { '1': 4, '2': 3, '3': 2 },
+  11: { '1': 4, '2': 3, '3': 3 },
+  12: { '1': 4, '2': 3, '3': 3 },
+  13: { '1': 4, '2': 3, '3': 3, '4': 1 },
+  14: { '1': 4, '2': 3, '3': 3, '4': 1 },
+  15: { '1': 4, '2': 3, '3': 3, '4': 2 },
+  16: { '1': 4, '2': 3, '3': 3, '4': 2 },
+  17: { '1': 4, '2': 3, '3': 3, '4': 3 },
+  18: { '1': 4, '2': 3, '3': 3, '4': 3 },
+  19: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 1 },
+  20: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 1 },
+};
+
+const FULL_CASTER_SLOTS: Record<number, SpellSlots> = {
+  1: { '1': 2 },
+  2: { '1': 3 },
+  3: { '1': 4, '2': 2 },
+  4: { '1': 4, '2': 3 },
+  5: { '1': 4, '2': 3, '3': 2 },
+  6: { '1': 4, '2': 3, '3': 3 },
+  7: { '1': 4, '2': 3, '3': 3, '4': 1 },
+  8: { '1': 4, '2': 3, '3': 3, '4': 2 },
+  9: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 1 },
+  10: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2 },
+  11: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1 },
+  12: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1 },
+  13: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1 },
+  14: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1 },
+  15: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1, '8': 1 },
+  16: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1, '8': 1 },
+  17: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1, '8': 1, '9': 1 },
+  18: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 3, '6': 1, '7': 1, '8': 1, '9': 1 },
+  19: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 3, '6': 2, '7': 1, '8': 1, '9': 1 },
+  20: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 3, '6': 2, '7': 2, '8': 1, '9': 1 },
+};
+
+const DEFAULT_PREPARED_SPELLS: Record<string, SpellListByKey> = {
+  cleric: { '1': ['cure wounds', 'guiding bolt', 'bless'], '2': ['lesser restoration', 'spiritual weapon'] },
+  druid: { '1': ['entangle', 'faerie fire', 'cure wounds'], '2': ['heat metal', 'pass without trace'] },
+  wizard: { '1': ['magic missile', 'shield', 'mage armor'], '2': ['misty step', 'mirror image'] },
+  artificer: { '1': ['cure wounds', 'faerie fire'], '2': ['invisibility', 'see invisibility'] },
+  paladin: { '1': ['bless', 'cure wounds'], '2': ['lesser restoration'] },
+  ranger: { '1': ['hunter\'s mark', 'cure wounds'], '2': ['pass without trace'] },
+};
+
+const DEFAULT_KNOWN_SPELLS: Record<string, string[]> = {
+  bard: ['vicious mockery', 'healing word', 'dissonant whispers'],
+  sorcerer: ['fire bolt', 'magic missile', 'shield'],
+  warlock: ['eldritch blast', 'hex'],
+};
+
+const getAbilityMod = (score: number | undefined): number => {
+  if (typeof score !== 'number') return 0;
+  return Math.floor((score - 10) / 2);
+};
+
+const resolveSpellcasting = (context: JsonRecord): SpellcastingNormalized | null => {
+  const classLevels = context.class_levels as JsonRecord[] | undefined;
+  const abilityScores = context.ability_scores as JsonRecord | undefined;
+  const proficiency = context.proficiency_bonus as number | undefined;
+
+  if (!classLevels || !Array.isArray(classLevels) || classLevels.length === 0) return null;
+
+  const casterInfo = classLevels
+    .filter((cl) => isRecord(cl) && typeof cl.class === 'string')
+    .map((cl) => {
+      const rawLevel = (cl as JsonRecord).level;
+      const parsedLevel = typeof rawLevel === 'number' ? rawLevel : Number.parseInt(String(rawLevel ?? '0'), 10) || 0;
+      return {
+        name: String((cl as JsonRecord).class).toLowerCase(),
+        level: parsedLevel,
+        subclass: isRecord((cl as JsonRecord)) && typeof (cl as JsonRecord).subclass === 'string' ? String((cl as JsonRecord).subclass).toLowerCase() : undefined,
+      };
+    });
+
+  const totalLevel = casterInfo.reduce((acc: number, cl) => acc + (cl.level ?? 0), 0);
+  const isPrepared = casterInfo.some((c) => ['cleric', 'druid', 'wizard', 'artificer', 'paladin'].includes(c.name));
+  const isKnown = casterInfo.some((c) => ['bard', 'sorcerer', 'warlock'].includes(c.name));
+  const isHalf = casterInfo.some((c) => ['paladin', 'ranger'].includes(c.name));
+
+  if (!isPrepared && !isKnown && !isHalf) return null;
+
+  const highest = [...casterInfo].sort((a, b) => (b.level ?? 0) - (a.level ?? 0))[0];
+  const abilityMap: Record<string, string> = {
+    cleric: 'WIS',
+    druid: 'WIS',
+    paladin: 'CHA',
+    ranger: 'WIS',
+    wizard: 'INT',
+    artificer: 'INT',
+    bard: 'CHA',
+    sorcerer: 'CHA',
+    warlock: 'CHA',
+  };
+  const abilityKey = abilityMap[highest?.name] || 'CHA';
+  const abilityScore = abilityScores && typeof abilityScores[abilityKey.toLowerCase() as keyof typeof abilityScores] === 'number'
+    ? (abilityScores[abilityKey.toLowerCase() as keyof typeof abilityScores] as number)
+    : undefined;
+  const mod = getAbilityMod(abilityScore);
+  const prof = typeof proficiency === 'number' ? proficiency : 0;
+
+  const casterLevel = Math.max(1, Math.min(20, highest?.level || totalLevel || 1));
+  const slots = isPrepared || (!isKnown && !isHalf)
+    ? (FULL_CASTER_SLOTS[casterLevel] || FULL_CASTER_SLOTS[1])
+    : (PALADIN_SLOTS_BY_LEVEL[casterLevel] || PALADIN_SLOTS_BY_LEVEL[1]);
+
+  const preparedSeeds = DEFAULT_PREPARED_SPELLS[highest?.name] || {};
+  const prepared: SpellListByKey = {};
+  Object.keys(slots).forEach((lvl) => {
+    const seedList = preparedSeeds[lvl] || preparedSeeds['1'] || ['bless'];
+    prepared[lvl] = seedList;
+  });
+
+  const alwaysPrepared: SpellListByKey = {};
+  const paladinOaths: Record<string, string[]> = {
+    devotion: ['protection from evil and good', 'sanctuary', 'lesser restoration', 'zone of truth'],
+  };
+  const paladinSubclass = casterInfo.find((c) => c.name === 'paladin')?.subclass;
+  const oathList = paladinSubclass ? paladinOaths[paladinSubclass] : undefined;
+  if (oathList && oathList.length > 0) {
+    alwaysPrepared.oath = oathList;
+  }
+
+  const knownSpells = isKnown ? (DEFAULT_KNOWN_SPELLS[highest?.name] || ['eldritch blast']) : [];
+
+  return {
+    spellcasting_ability: abilityKey,
+    spell_save_dc: 8 + prof + mod,
+    spell_attack_bonus: prof + mod,
+    spell_slots: slots,
+    prepared_spells: isPrepared || isHalf ? prepared : {},
+    always_prepared_spells: alwaysPrepared,
+    innate_spells: {},
+    spells_known: isKnown ? knownSpells : [],
+    spellcasting_focus: highest?.name === 'cleric' || highest?.name === 'paladin' ? 'holy symbol' : highest?.name === 'wizard' ? 'arcane focus' : 'focus',
+  };
+};
+
+const buildSpellcastingCapabilities = (spellcasting: SpellcastingNormalized | null): ResolvedMechanics['spellcasting'] => {
+  if (!spellcasting) return undefined;
+  const hasSlots = isRecord(spellcasting.spell_slots) && Object.keys(spellcasting.spell_slots).length > 0;
+  const hasPrepared = isRecord(spellcasting.prepared_spells) && Object.keys(spellcasting.prepared_spells).length > 0;
+  const hasKnown = Array.isArray(spellcasting.spells_known) && spellcasting.spells_known.length > 0;
+  const hasInnate = isRecord(spellcasting.innate_spells) && Object.keys(spellcasting.innate_spells).length > 0;
+
+  let casterMode: 'prepared' | 'known' | 'innate' | 'hybrid' = 'innate';
+  if (hasPrepared && hasKnown) casterMode = 'hybrid';
+  else if (hasPrepared || hasSlots) casterMode = 'prepared';
+  else if (hasKnown) casterMode = 'known';
+
+  return {
+    has_spellcasting: hasPrepared || hasKnown || hasInnate || hasSlots,
+    caster_mode: casterMode,
+    has_slots: hasSlots,
+    has_innate: hasInnate,
+    spellcasting_ability: spellcasting.spellcasting_ability,
+    spell_save_dc: spellcasting.spell_save_dc,
+    spell_attack_bonus: spellcasting.spell_attack_bonus,
+    spellcasting_focus: spellcasting.spellcasting_focus,
+  };
+};
+
+const SPELLCASTING_ALLOWED_KEYS: (keyof SpellcastingNormalized)[] = [
+  'spellcasting_ability',
+  'spell_save_dc',
+  'spell_attack_bonus',
+  'spell_slots',
+  'prepared_spells',
+  'always_prepared_spells',
+  'innate_spells',
+  'spellcasting_focus',
+  'spells_known',
+];
+
+const normalizeSpellcasting = (raw: JsonRecord, resolver: SpellcastingNormalized | null): SpellcastingNormalized => {
+  const pruned: Partial<SpellcastingNormalized> = {};
+
+  const mapSpellListRecord = (value: unknown): SpellListByKey => {
+    if (!isRecord(value)) return {};
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([lvl, spells]) => {
+          const arr = Array.isArray(spells)
+            ? spells.filter((x) => typeof x === 'string' && x.trim().length > 0).map((x) => x.trim())
+            : [];
+          return [lvl, arr];
+        })
+        .filter(([, arr]) => (arr as string[]).length > 0)
+    );
+  };
+
+  for (const key of SPELLCASTING_ALLOWED_KEYS) {
+    const v = raw[key as keyof JsonRecord];
+
+    if (key === 'spell_slots' && isRecord(v)) {
+      pruned[key] = Object.fromEntries(Object.entries(v).map(([lvl, val]) => [lvl, Number(val) || 0])) as SpellSlots;
+      continue;
+    }
+
+    if (key === 'prepared_spells' || key === 'innate_spells' || key === 'always_prepared_spells') {
+      pruned[key] = mapSpellListRecord(v);
+      continue;
+    }
+
+    if (key === 'spells_known' && Array.isArray(v)) {
+      pruned[key] = v.filter((x) => typeof x === 'string' && x.trim().length > 0).map((x) => x.trim());
+      continue;
+    }
+
+    if (key === 'spellcasting_ability' || key === 'spellcasting_focus') {
+      if (typeof v === 'string' && v.trim().length > 0) {
+        pruned[key] = v.trim();
+      }
+      continue;
+    }
+
+    if (key === 'spell_save_dc' || key === 'spell_attack_bonus') {
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        pruned[key] = v;
+      }
+      continue;
+    }
+  }
+
+  const base = resolver ?? {
+    spellcasting_ability: 'CHA',
+    spell_save_dc: 0,
+    spell_attack_bonus: 0,
+    spell_slots: {},
+    prepared_spells: {},
+    always_prepared_spells: {},
+    innate_spells: {},
+    spells_known: [],
+  };
+
+  return {
+    spellcasting_ability: typeof pruned.spellcasting_ability === 'string' && pruned.spellcasting_ability.trim().length > 0
+      ? pruned.spellcasting_ability
+      : base.spellcasting_ability,
+    spell_save_dc: typeof pruned.spell_save_dc === 'number' && Number.isFinite(pruned.spell_save_dc)
+      ? pruned.spell_save_dc
+      : base.spell_save_dc,
+    spell_attack_bonus: typeof pruned.spell_attack_bonus === 'number' && Number.isFinite(pruned.spell_attack_bonus)
+      ? pruned.spell_attack_bonus
+      : base.spell_attack_bonus,
+    spell_slots: (pruned.spell_slots && Object.keys(pruned.spell_slots).length > 0
+      ? pruned.spell_slots
+      : base.spell_slots) as SpellSlots,
+    prepared_spells: pruned.prepared_spells ?? base.prepared_spells,
+    always_prepared_spells: pruned.always_prepared_spells ?? base.always_prepared_spells,
+    innate_spells: pruned.innate_spells ?? base.innate_spells,
+    spells_known: Array.isArray(pruned.spells_known)
+      ? pruned.spells_known
+      : Array.isArray(resolver?.spells_known)
+        ? resolver?.spells_known
+        : base.spells_known,
+    spellcasting_focus: typeof pruned.spellcasting_focus === 'string' && pruned.spellcasting_focus.trim().length > 0
+      ? pruned.spellcasting_focus.trim()
+      : base.spellcasting_focus,
+  };
+};
 
 function deduplicateConflictIssues(conflicts: unknown[]): unknown[] {
   const seen = new Set<string>();
@@ -192,9 +552,6 @@ interface Proposal {
   clarification_needed?: string;
   recommended_revision?: string;
 };
-
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const toStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -615,19 +972,6 @@ const buildCoreDetailsRetrySnapshot = (value: JsonRecord | null): string | null 
   }
 
   const serialized = JSON.stringify(snapshot, null, 2);
-  return serialized.length > 1600 ? `${serialized.slice(0, 1597)}...` : serialized;
-};
-
-const buildStageRetrySnapshot = (stageName: string, value: JsonRecord | null): string | null => {
-  if (!value) {
-    return null;
-  }
-
-  if (stageName === 'Creator: Core Details') {
-    return buildCoreDetailsRetrySnapshot(value);
-  }
-
-  const serialized = JSON.stringify(value, null, 2);
   return serialized.length > 1600 ? `${serialized.slice(0, 1597)}...` : serialized;
 };
 
@@ -2928,9 +3272,9 @@ export default function ManualGenerator() {
   const [factpack, setFactpack] = useState<Factpack | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
-  const [sessionStatus, setSessionStatus] = useState<'idle' | 'running' | 'awaiting_user_decisions' | 'error' | 'complete'>('idle');
+  const [_sessionStatus, setSessionStatus] = useState<'idle' | 'running' | 'awaiting_user_decisions' | 'error' | 'complete'>('idle');
   const [finalOutput, setFinalOutput] = useState<JsonRecord | null>(null);
-  const [lastStageError, setLastStageError] = useState<{ stage?: string; message: string; rawSnippet?: string } | null>(null);
+  const [_lastStageError, setLastStageError] = useState<{ stage?: string; message: string; rawSnippet?: string } | null>(null);
   const [showCanonDeltaModal, setShowCanonDeltaModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -2978,7 +3322,7 @@ export default function ManualGenerator() {
   // Space approval workflow state (for Location Spaces stage)
   const [showSpaceApprovalModal, setShowSpaceApprovalModal] = useState(false);
   const [pendingSpace, setPendingSpace] = useState<JsonRecord | null>(null);
-  const [_rejectedSpaces, _setRejectedSpaces] = useState<Array<{ space: JsonRecord; reason?: string }>>([]);
+  const [_rejectedSpaces, setRejectedSpaces] = useState<Array<{ space: JsonRecord; reason?: string }>>([]);
   const [rejectionFeedback, setRejectionFeedback] = useState<string | null>(null);
   const [reviewingSpaceIndex, setReviewingSpaceIndex] = useState<number>(-1); // Index in accumulatedChunkResults, -1 = new space
   const [savedNewSpace, setSavedNewSpace] = useState<JsonRecord | null>(null); // Save new space when navigating away
@@ -5677,7 +6021,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     console.log(`[Space Approval] Space rejected: ${pendingSpace.name}${reason ? `, Reason: ${reason}` : ''}`);
 
     // Track rejected space for analytics/debugging
-    _setRejectedSpaces(prev => [...prev, { space: pendingSpace, reason }]);
+    setRejectedSpaces(prev => [...prev, { space: pendingSpace, reason }]);
 
     // Build feedback for next AI generation
     const spaceName = pendingSpace.name || 'the space';
@@ -6132,9 +6476,10 @@ Output: Valid JSON only. No markdown, no prose.`;
               alignment: typeof parsed.alignment === 'string' ? parsed.alignment : undefined,
               oath: accumulatedAnswers['oath-subclass'],
               location: typeof parsed.location === 'string' ? parsed.location : undefined,
-              tone: typeof (config?.flags as Record<string, unknown> | undefined)?.tone === 'string'
-                ? (config!.flags as Record<string, string>).tone
-                : undefined,
+              tone: (() => {
+                const flagsRecord = config?.flags as JsonRecord | undefined;
+                return typeof flagsRecord?.tone === 'string' ? flagsRecord.tone : undefined;
+              })(),
             };
             parsed = normalizeCoreDetails(parsed, coreCtx) as JsonRecord;
           }
@@ -6144,6 +6489,39 @@ Output: Valid JSON only. No markdown, no prose.`;
             if (coercedSpeed) {
               parsed.speed = coercedSpeed;
             }
+          }
+
+          if (contractKey === 'spellcasting') {
+            const spellCtx: JsonRecord = {
+              ...getStageObject(stageResults, 'creator:_basic_info'),
+              ...getStageObject(stageResults, 'creator:_stats'),
+              ...parsed,
+            };
+            const resolved = resolveSpellcasting(spellCtx);
+            parsed = normalizeSpellcasting(parsed, resolved) as JsonRecord;
+
+            const spellMechanics = buildSpellcastingCapabilities(resolved ?? (parsed as unknown as SpellcastingNormalized));
+            if (spellMechanics) {
+              parsed.resolved_mechanics = spellMechanics as unknown as JsonRecord;
+            }
+          }
+
+          if (contractKey === 'combat') {
+            const combatCtx: JsonRecord = {
+              ...getStageObject(stageResults, 'creator:_stats'),
+              ...getStageObject(stageResults, 'creator:_equipment'),
+              ...parsed,
+            };
+            parsed = resolveCombat(combatCtx, parsed) as JsonRecord;
+            const combatMechanics = buildCombatCapabilities(parsed);
+            if (combatMechanics) {
+              parsed.resolved_mechanics = combatMechanics as unknown as JsonRecord;
+            }
+          }
+
+          if (contractKey === 'legendary') {
+            const legendaryMechanics = buildLegendaryCapabilities(parsed);
+            parsed.resolved_mechanics = legendaryMechanics as unknown as JsonRecord;
           }
 
           const validation = validateStageOutput(contractKey, parsed);
@@ -6208,13 +6586,21 @@ Output: Valid JSON only. No markdown, no prose.`;
       if (config?.type === 'homebrew' && stageResults.homebrew_chunks) {
         const homebrewChunks = getHomebrewChunks(stageResults.homebrew_chunks);
         const currentChunkIndex = getNumber(stageResults, 'current_chunk') ?? 0;
+        const stageKey = getStageStorageKey(currentStage);
 
         // Store this chunk's result
-        const chunkResults = [...getJsonRecordList(stageResults.chunk_results), parsed];
+        const mechanicsFromStage = isRecord((parsed as JsonRecord).resolved_mechanics)
+          ? { resolved_mechanics: parsed.resolved_mechanics as JsonRecord }
+          : {};
+
+        const mergedMechanics = mechanicsFromStage.resolved_mechanics && isRecord(stageResults.resolved_mechanics)
+          ? { resolved_mechanics: { ...stageResults.resolved_mechanics, ...mechanicsFromStage.resolved_mechanics } as JsonRecord }
+          : mechanicsFromStage;
 
         const newResults: StageResults = {
           ...stageResults,
-          chunk_results: setStageArrayValue(chunkResults),
+          ...mergedMechanics,
+          [stageKey]: parsed,
         };
         setStageResults(newResults);
 
@@ -6238,6 +6624,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         }
 
         // All chunks processed - merge results
+        const chunkResults = [...asJsonRecordArray(newResults[`${stageKey}_chunks`]), parsed];
         console.log(`[Homebrew] All ${chunkResults.length} chunks processed. Merging...`);
 
         const mergedContent = mergeHomebrewChunks(chunkResults);

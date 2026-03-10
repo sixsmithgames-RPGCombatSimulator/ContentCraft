@@ -350,7 +350,7 @@ export function extractJsonFromResponse(text: string): {
       if (Array.isArray(parsed)) {
         return { success: true, data: { items: parsed } };
       }
-    } catch (e) {
+    } catch {
       // Fall through to other methods
     }
   }
@@ -365,7 +365,7 @@ export function extractJsonFromResponse(text: string): {
       if (typeof parsed === 'object' && parsed !== null) {
         return { success: true, data: parsed };
       }
-    } catch (e) {
+    } catch {
       // Fall through
     }
   }
