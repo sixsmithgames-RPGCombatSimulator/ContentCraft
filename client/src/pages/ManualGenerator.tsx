@@ -188,39 +188,18 @@ interface Proposal {
   reason?: string;
   clarification_needed?: string;
   recommended_revision?: string;
-}
+  id?: string;
+  topic?: string;
+  default?: string;
+  required?: boolean;
+  choices?: Array<string | { choice: string; description: string }>;
+};
 
 interface Conflict {
   new_claim?: string;
   existing_claim?: string;
   entity_id?: string;
-  entity_name?: string;
-  field_path?: string;
-  location?: string;
-  conflict_type?: string;
-  severity?: string;
-  summary?: string;
-  details?: string;
-  reason?: string;
-  suggested_fix?: string;
-  recommended_action?: string;
-  resolution?: 'keep_old' | 'use_new' | 'merge' | 'skip';
 }
-
-type PhysicsIssue = {
-  severity?: string;
-  description?: string;
-  issue_type?: string;
-  location?: string;
-  suggestion?: string;
-  field_path?: string;
-  summary?: string;
-  details?: string;
-  rule_reference?: string;
-  suggested_fix?: string;
-  current_value?: string;
-  resolution?: 'acknowledge' | 'will_fix' | 'ignore';
-};
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -238,86 +217,152 @@ const slugifyProposalKey = (value: string): string =>
     .replace(/(^-|-$)/g, '')
     .slice(0, 48);
 
+const normalizeProposal = (p: any, index: number): JsonRecord | null => {
+  if (p === null || p === undefined) return null;
+
+  if (typeof p === 'string') {
+    const q = p.trim();
+    if (q.length === 0) return null;
+    return {
+      id: slugifyProposalKey(q || `proposal-${index}`),
+      topic: `Decision ${index + 1}`,
+      question: q,
+      options: [q],
+      default: q,
+      required: false,
+    };
+  }
+
+  if (!isRecord(p)) return null;
+
+  const topic = typeof p.topic === 'string' && p.topic.trim().length > 0
+    ? p.topic.trim()
+    : typeof p.question === 'string'
+      ? p.question.trim()
+      : `Decision ${index + 1}`;
+  const question = typeof p.question === 'string' && p.question.trim().length > 0
+    ? p.question.trim()
+    : topic;
+
+  if (question.length === 0) return null;
+
+  const choices = Array.isArray(p.choices)
+    ? p.choices
+      .map((c) => {
+        if (typeof c === 'string') {
+          const trimmed = c.trim();
+          return trimmed.length > 0 ? trimmed : null;
+        }
+        if (isRecord(c) && typeof c.choice === 'string' && c.choice.trim().length > 0) {
+          return c.choice.trim();
+        }
+        return null;
+      })
+      .filter((c): c is string => c !== null)
+    : [];
+
+  const optionsRaw = Array.isArray(p.options)
+    ? p.options
+      .map((o) => {
+        if (typeof o === 'string') {
+          const trimmed = o.trim();
+          return trimmed.length > 0 ? trimmed : null;
+        }
+        if (isRecord(o) && typeof o.choice === 'string' && o.choice.trim().length > 0) {
+          return o.choice.trim();
+        }
+        return null;
+      })
+      .filter((o): o is string => o !== null)
+    : [];
+
+  const options = optionsRaw.length > 0 ? optionsRaw : choices;
+  if (!options || options.length === 0) return null;
+
+  const def = (() => {
+    if (typeof p.default === 'string' && p.default.trim().length > 0) {
+      const candidate = p.default.trim();
+      if (options.includes(candidate)) return candidate;
+    }
+    return options[0];
+  })();
+
+  return {
+    id: typeof p.id === 'string' && p.id.trim().length > 0
+      ? p.id.trim()
+      : slugifyProposalKey(topic || question || `proposal-${index}`),
+    topic,
+    question,
+    options,
+    default: def,
+    required: Boolean(p.required ?? false),
+    rule_impact: typeof p.rule_impact === 'string' ? p.rule_impact : undefined,
+    field_path: typeof p.field_path === 'string' ? p.field_path : undefined,
+    current_value: typeof p.current_value === 'string' ? p.current_value : undefined,
+    reason: typeof p.reason === 'string' ? p.reason : undefined,
+    clarification_needed: typeof p.clarification_needed === 'string' ? p.clarification_needed : undefined,
+    recommended_revision: typeof p.recommended_revision === 'string' ? p.recommended_revision : undefined,
+  };
+};
+
 const sanitizeProposalsValue = (value: unknown): JsonRecord[] => {
   if (!Array.isArray(value)) return [];
 
-  const cleaned: JsonRecord[] = [];
-  for (const [index, item] of value.entries()) {
-    if (item === null || item === undefined) continue;
+  const normalized = value
+    .map((item, index) => normalizeProposal(item, index))
+    .filter((p): p is JsonRecord => p !== null)
+    .filter((p) => Array.isArray(p.options) && p.options.length > 0);
 
-    if (typeof item === 'string') {
-      const q = item.trim();
-      if (q.length === 0) continue;
-      cleaned.push({
-        id: slugifyProposalKey(q || `proposal-${index}`),
-        topic: `Decision ${index + 1}`,
-        question: q,
-        options: [],
-        default: '',
-        required: false,
-      });
-      continue;
-    }
+  return normalized;
+};
 
-    if (!isRecord(item)) {
-      continue;
-    }
+const inferSpecies = (input: { original_user_request?: string; previous_decisions?: Record<string, string> }): string | null => {
+  const text = (input.original_user_request || '').toLowerCase();
+  const decisions = input.previous_decisions || {};
 
-    const question = typeof item.question === 'string'
-      ? item.question.trim()
-      : typeof item.topic === 'string'
-        ? item.topic.trim()
-        : '';
-    if (question.length === 0) {
-      continue;
-    }
+  const patterns: Array<{ regex: RegExp; value: string }> = [
+    { regex: /\baas+i?m+a?r\b/, value: 'Aasimar' },
+    { regex: /\bdragonborn\b/, value: 'Dragonborn' },
+    { regex: /\bdwarf\b/, value: 'Dwarf' },
+    { regex: /\belf\b/, value: 'Elf' },
+    { regex: /\bhalf-?elf\b/, value: 'Half-Elf' },
+    { regex: /\bgnome\b/, value: 'Gnome' },
+    { regex: /\bhalfling\b/, value: 'Halfling' },
+    { regex: /\bhuman\b/, value: 'Human' },
+    { regex: /\btiefling\b/, value: 'Tiefling' },
+    { regex: /\borc\b/, value: 'Orc' },
+    { regex: /\bgoliath\b/, value: 'Goliath' },
+    { regex: /\bgenasi\b/, value: 'Genasi' },
+    { regex: /\bshifter\b/, value: 'Shifter' },
+  ];
 
-    const normalizedOptions = Array.isArray(item.options)
-      ? item.options
-        .map((option) => {
-          if (typeof option === 'string') {
-            const trimmed = option.trim();
-            return trimmed.length > 0 ? trimmed : null;
-          }
-          if (isRecord(option) && typeof option.choice === 'string' && option.choice.trim().length > 0) {
-            return {
-              choice: option.choice.trim(),
-              ...(typeof option.description === 'string' && option.description.trim().length > 0
-                ? { description: option.description.trim() }
-                : {}),
-            };
-          }
-          return null;
-        })
-        .filter((option): option is string | { choice: string; description?: string } => option !== null)
-      : [];
-
-    const topic = typeof item.topic === 'string' && item.topic.trim().length > 0
-      ? item.topic.trim()
-      : `Decision ${index + 1}`;
-    const defaultValue = typeof item.default === 'string' && item.default.trim().length > 0
-      ? item.default.trim()
-      : (() => {
-          const firstOption = normalizedOptions[0];
-          if (typeof firstOption === 'string') return firstOption;
-          if (firstOption && typeof firstOption.choice === 'string') return firstOption.choice;
-          return '';
-        })();
-
-    cleaned.push({
-      ...item,
-      id: typeof item.id === 'string' && item.id.trim().length > 0
-        ? item.id.trim()
-        : slugifyProposalKey(topic || question || `proposal-${index}`),
-      topic,
-      question,
-      options: normalizedOptions,
-      default: defaultValue,
-      required: Boolean(item.required ?? false),
-    });
+  for (const entry of patterns) {
+    if (entry.regex.test(text)) return entry.value;
   }
 
-  return cleaned;
+  const aasimarSubrace = String(decisions['Aasimar Subrace'] || '').toLowerCase();
+  if (aasimarSubrace.includes('aasimar')) return 'Aasimar';
+
+  return null;
+};
+
+const coerceSpeedNumbers = (speed: unknown): Record<string, number> | null => {
+  if (!isRecord(speed)) return null;
+  const result: Record<string, number> = {};
+  for (const key of Object.keys(speed)) {
+    const value = (speed as Record<string, unknown>)[key];
+    if (typeof value === 'number') {
+      result[key] = value;
+      continue;
+    }
+    if (typeof value === 'string') {
+      const parsed = parseInt(value, 10);
+      if (!Number.isNaN(parsed)) {
+        result[key] = parsed;
+      }
+    }
+  }
+  return Object.keys(result).length > 0 ? result : null;
 };
 
 const normalizePlannerOutput = (value: JsonRecord, inputFlags?: JsonRecord): JsonRecord => {
@@ -1451,7 +1496,15 @@ Analyze the user prompt and produce a Design Brief JSON with:
 - story_clock: narrative timing/urgency (optional)
 - threads: story threads to weave in (optional)
 - retrieval_hints: { entities: [], regions: [], eras: [], keywords: [] }
-- proposals: array of questions/choices for the user
+- proposals: array of questions for the user
+  - Each proposal object MUST use these fields only:
+    - id (string, slug)
+    - topic (string)
+    - question (string)
+    - options (string[])
+    - default (string, MUST equal one of options)
+    - required (boolean)
+  - Forbidden fields: choices, selection, any other keys
 - allow_invention: from flags
 - rule_base: from flags
 - tone: from flags
@@ -2677,7 +2730,7 @@ function limitAccumulatedAnswers(
  * This prevents asking the user the same question multiple times when retrying stages
  *
  * Proposals typically have this structure:
- * { topic: "custom_item_effect_sleep_arrow", question: "What is the effect...", options: [...] }
+ * { id: "custom_item_effect_sleep_arrow", topic: "custom_item_effect_sleep_arrow", question: "What is the effect...", options: [...] }
  *
  * Accumulated answers are stored as:
  * { "question text": "answer", ... } OR { "topic": "answer", ... }
@@ -2690,127 +2743,34 @@ function deduplicateProposals(
     return proposals;
   }
 
-  // Build comprehensive sets of what's been answered
-  const answeredQuestions = new Set(Object.keys(accumulatedAnswers));
-  const answeredTopics = new Set<string>();
+  const answered = new Set(Object.keys(accumulatedAnswers));
+  const seen = new Set<string>();
+  const deduped: unknown[] = [];
 
-  // Extract topics from accumulated answers keys
-  Object.keys(accumulatedAnswers).forEach(key => {
-    // If the key looks like a topic (e.g., "custom_item_effect_sleep_arrow"), add it
-    if (key.includes('_') && !key.includes(' ') && key.length < 100) {
-      answeredTopics.add(key);
+  proposals.forEach((p, index) => {
+    if (!isRecord(p)) {
+      deduped.push(p);
+      return;
     }
 
-    // Also try to extract topic prefix (e.g., "custom_item_effect:" -> "custom_item_effect")
-    const topicMatch = key.match(/^([a-z_]+):/i);
-    if (topicMatch) {
-      answeredTopics.add(topicMatch[1]);
-    }
+    const id = typeof p.id === 'string' && p.id.trim().length > 0
+      ? p.id.trim()
+      : slugifyProposalKey(typeof p.topic === 'string' ? p.topic : typeof p.question === 'string' ? p.question : `proposal-${index}`);
+    const question = typeof p.question === 'string' ? p.question.trim() : '';
+    const topic = typeof p.topic === 'string' ? p.topic.trim() : '';
+
+    const dedupKey = id || topic || question;
+
+    if (dedupKey && answered.has(dedupKey)) return;
+    if (question && answered.has(question)) return;
+    if (topic && answered.has(topic)) return;
+    if (dedupKey && seen.has(dedupKey)) return;
+    if (dedupKey) seen.add(dedupKey);
+
+    deduped.push({ ...p, id });
   });
 
-  // Also check for semantic similarity in question text
-  const answeredQuestionWords = new Set<string>();
-  Object.keys(accumulatedAnswers).forEach(key => {
-    // Extract significant words from question (4+ chars, alphanumeric)
-    const words = key.toLowerCase().match(/\b\w{4,}\b/g) || [];
-    words.forEach(word => answeredQuestionWords.add(word));
-  });
-
-  const seenQuestions = new Set<string>();
-  const seenTopics = new Set<string>();
-  const seenFields = new Set<string>();
-  const seenQuestionFingerprints = new Set<string>();
-
-  // Helper to create a semantic fingerprint of a question
-  const getQuestionFingerprint = (text: string): string => {
-    // Normalize: lowercase, remove punctuation, extract key words
-    const normalized = text.toLowerCase()
-      .replace(/[^\w\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // Extract significant words (4+ chars), sort alphabetically for consistency
-    const words = normalized.match(/\b\w{4,}\b/g) || [];
-    const uniqueWords = [...new Set(words)].sort();
-
-    // Create fingerprint from top 5 most significant words
-    return uniqueWords.slice(0, 5).join('_');
-  };
-
-  const deduplicated = proposals.filter((proposal) => {
-    if (proposal === null || proposal === undefined) {
-      return false;
-    }
-    if (typeof proposal !== 'object') {
-      return true;
-    }
-
-    const prop = proposal as Record<string, unknown>;
-
-    // Extract fields
-    const topic = typeof prop.topic === 'string' ? prop.topic : null;
-    const question = typeof prop.question === 'string' ? prop.question : null;
-    const fieldPath = typeof prop.field_path === 'string' ? prop.field_path :
-      (typeof prop.field === 'string' ? prop.field : null);
-    // Filter out proposals with topics that were already answered
-    if (topic && answeredTopics.has(topic)) {
-      console.log(`[Proposal Dedup] Filtered out already-answered topic: ${topic}`);
-      return false;
-    }
-
-    // Filter out proposals with exact question matches
-    if (question && answeredQuestions.has(question)) {
-      console.log(`[Proposal Dedup] Filtered out already-answered question: ${question.substring(0, 50)}...`);
-      return false;
-    }
-
-    // NEW: Filter out proposals targeting the same field_path
-    if (fieldPath) {
-      if (seenFields.has(fieldPath)) {
-        console.log(`[Proposal Dedup] Filtered out duplicate field_path: ${fieldPath}`);
-        return false;
-      }
-      seenFields.add(fieldPath);
-    }
-
-    // NEW: Semantic deduplication using question fingerprints
-    if (question) {
-      const fingerprint = getQuestionFingerprint(question);
-      if (fingerprint && seenQuestionFingerprints.has(fingerprint)) {
-        console.log(`[Proposal Dedup] Filtered out semantically similar question: ${question.substring(0, 50)}...`);
-        return false;
-      }
-      if (fingerprint) {
-        seenQuestionFingerprints.add(fingerprint);
-      }
-    }
-
-    // Filter out duplicate topics in the current proposals array
-    if (topic) {
-      if (seenTopics.has(topic)) {
-        console.log(`[Proposal Dedup] Filtered out duplicate topic in current set: ${topic}`);
-        return false;
-      }
-      seenTopics.add(topic);
-    }
-
-    // Filter out duplicate questions in the current proposals array
-    if (question) {
-      if (seenQuestions.has(question)) {
-        console.log(`[Proposal Dedup] Filtered out duplicate question in current set: ${question.substring(0, 50)}...`);
-        return false;
-      }
-      seenQuestions.add(question);
-    }
-
-    return true;
-  });
-
-  if (deduplicated.length < proposals.length) {
-    console.log(`[Proposal Dedup] Reduced from ${proposals.length} to ${deduplicated.length} proposals (${proposals.length - deduplicated.length} duplicates removed)`);
-  }
-
-  return deduplicated;
+  return deduped;
 }
 
 export default function ManualGenerator() {
@@ -5972,6 +5932,24 @@ Output: Valid JSON only. No markdown, no prose.`;
         const contractKey = getStageContractKey(currentStage.name);
         if (contractKey) {
           parsed = pruneToAllowedKeys(parsed, STAGE_OUTPUT_CONTRACTS[contractKey].allowedKeys) as JsonRecord;
+
+          if (contractKey === 'basicInfo') {
+            const inferred = inferSpecies({
+              original_user_request: config?.prompt,
+              previous_decisions: accumulatedAnswers,
+            });
+            if (inferred && typeof parsed.species !== 'string') {
+              parsed.species = inferred;
+            }
+          }
+
+          if (contractKey === 'stats' && parsed.speed) {
+            const coercedSpeed = coerceSpeedNumbers(parsed.speed);
+            if (coercedSpeed) {
+              parsed.speed = coercedSpeed;
+            }
+          }
+
           const validation = validateStageOutput(contractKey, parsed);
           if (!validation.ok) {
             const message = `AI response is invalid for ${currentStage.name}: ${validation.error}`;

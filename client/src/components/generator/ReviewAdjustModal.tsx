@@ -85,7 +85,7 @@ export default function ReviewAdjustModal({
   onClose,
 }: ReviewAdjustModalProps) {
   const { isPanelOpen } = useAiAssistant();
-  const [proposalAnswers, setProposalAnswers] = useState<Record<number, string>>({});
+  const [proposalAnswers, setProposalAnswers] = useState<Record<string, string>>({});
   const [selectedIssues, setSelectedIssues] = useState<Set<number>>(new Set());
 
   // Reset and initialize state when modal opens or stageOutput changes
@@ -114,7 +114,9 @@ export default function ReviewAdjustModal({
   ]);
 
   const handleProposalAnswer = (index: number, answer: string) => {
-    setProposalAnswers({ ...proposalAnswers, [index]: answer });
+    const proposal = proposals[index];
+    const key = proposal?.id || proposal?.question || `proposal-${index}`;
+    setProposalAnswers({ ...proposalAnswers, [key]: answer });
   };
 
   const toggleIssue = (index: number) => {
@@ -131,11 +133,9 @@ export default function ReviewAdjustModal({
     // Collect all answered proposals
     const answers: Record<string, string> = {};
     proposals.forEach((proposal, index: number) => {
-      const ans = proposalAnswers[index];
+      const key = proposal.id || proposal.question || `proposal-${index}`;
+      const ans = proposalAnswers[key];
       if (ans) {
-        const key = typeof proposal.question === 'string' && proposal.question.length > 0
-          ? proposal.question
-          : `proposal_${index}`;
         answers[key] = ans;
       }
     });
@@ -158,11 +158,9 @@ export default function ReviewAdjustModal({
     // Collect all answered proposals
     const answers: Record<string, string> = {};
     proposals.forEach((proposal, index: number) => {
-      const ans = proposalAnswers[index];
+      const key = proposal.id || proposal.question || `proposal-${index}`;
+      const ans = proposalAnswers[key];
       if (ans) {
-        const key = typeof proposal.question === 'string' && proposal.question.length > 0
-          ? proposal.question
-          : `proposal_${index}`;
         answers[key] = ans;
       }
     });
@@ -174,7 +172,8 @@ export default function ReviewAdjustModal({
     if (!proposal.required) {
       return true;
     }
-    return i in proposalAnswers;
+    const key = proposal.id || proposal.question || `proposal-${i}`;
+    return key in proposalAnswers;
   });
   const canProceed = stageError !== null || (allProposalsAnswered && (criticalIssues.length === 0 || selectedIssues.size > 0));
   const panelOffsetClass = isPanelOpen ? 'lg:pr-[24rem]' : '';
@@ -230,6 +229,11 @@ export default function ReviewAdjustModal({
               <div className="space-y-4">
                 {proposals.map((proposal, index: number) => {
                   const proposalLabel = proposal.question || proposal.topic || `(missing question ${index + 1})`;
+                  const optionsSource = proposal.options && proposal.options.length > 0
+                    ? proposal.options
+                    : (proposal as any).choices && Array.isArray((proposal as any).choices)
+                      ? (proposal as any).choices
+                      : [];
 
                   // Debug logging
                   if (!proposal.question && !proposal.topic) {
@@ -296,15 +300,15 @@ export default function ReviewAdjustModal({
                       </p>
                     )}
 
-                    {proposal.options && proposal.options.length === 0 && (
+                    {optionsSource.length === 0 && (
                       <div className="mb-3 p-3 bg-white border border-yellow-200 rounded">
                         <p className="text-sm text-gray-700">
-                          No preset options were provided for this question. Enter a custom answer or let the AI decide.
+                          Planner output did not include options for this proposal. Enter a custom answer or let the AI decide.
                         </p>
                       </div>
                     )}
                     <div className="space-y-2">
-                      {proposal.options?.map((option: string | { choice: string; description?: string }, optIndex: number) => {
+                      {optionsSource.map((option: string | { choice: string; description?: string }, optIndex: number) => {
                         // Handle both string options and object options with {choice, description}
                         const optionValue = typeof option === 'string' ? option : option.choice;
                         const optionDescription = typeof option === 'object' && option.description ? option.description : null;
@@ -315,8 +319,10 @@ export default function ReviewAdjustModal({
                           : optionValue;
 
                         // Check if this option is selected (compare against actual stored value)
-                        const isSelected = proposalAnswers[index] === actualValue ||
-                          (optionValue === 'Use recommended revision' && proposalAnswers[index] === proposal.recommended_revision);
+                        const key = proposal.id || `proposal-${index}`;
+                        const answer = proposalAnswers[key];
+                        const isSelected = answer === actualValue ||
+                          (optionValue === 'Use recommended revision' && answer === proposal.recommended_revision);
 
                         return (
                           <label key={optIndex} className={`flex items-start gap-3 p-3 border rounded cursor-pointer transition-colors ${
@@ -324,7 +330,7 @@ export default function ReviewAdjustModal({
                           }`}>
                             <input
                               type="radio"
-                              name={`proposal-${index}`}
+                              name={proposal.id || `proposal-${index}`}
                               checked={isSelected}
                               onChange={() => handleProposalAnswer(index, actualValue)}
                               className="mt-1 w-4 h-4 text-blue-600"
@@ -341,34 +347,39 @@ export default function ReviewAdjustModal({
                       <label className="flex items-start gap-3 p-3 bg-white border border-yellow-200 rounded cursor-pointer hover:bg-yellow-50">
                         <input
                           type="radio"
-                          name={`proposal-${index}`}
-                          checked={(index in proposalAnswers) && !proposal.options?.some((opt: string | { choice: string; description?: string }) => {
-                            const optValue = typeof opt === 'string' ? opt : opt.choice;
-                            // Check actual stored values, including recommended_revision for "Use recommended revision"
-                            const actualValue = optValue === 'Use recommended revision' && proposal.recommended_revision
-                              ? proposal.recommended_revision
-                              : optValue;
-                            return actualValue === proposalAnswers[index];
-                          })}
+                          name={proposal.id || `proposal-${index}`}
+                          checked={(() => {
+                            const key = proposal.id || `proposal-${index}`;
+                            const answer = proposalAnswers[key];
+                            return answer !== undefined && !optionsSource.some((opt: string | { choice: string; description?: string }) => {
+                              const optValue = typeof opt === 'string' ? opt : opt.choice;
+                              const actualValue = optValue === 'Use recommended revision' && proposal.recommended_revision
+                                ? proposal.recommended_revision
+                                : optValue;
+                              return actualValue === answer;
+                            });
+                          })()}
                           onChange={() => {
-                            // When clicking "Custom Answer" radio, initialize with empty string
                             handleProposalAnswer(index, '');
                           }}
                           className="mt-1 w-4 h-4 text-blue-600"
                         />
                         <div className="flex-1">
                           <span className="text-sm text-gray-800 block mb-2">Custom Answer</span>
-                          {((index in proposalAnswers) && !proposal.options?.some((opt: string | { choice: string; description?: string }) => {
-                            const optValue = typeof opt === 'string' ? opt : opt.choice;
-                            // Check actual stored values, including recommended_revision for "Use recommended revision"
-                            const actualValue = optValue === 'Use recommended revision' && proposal.recommended_revision
-                              ? proposal.recommended_revision
-                              : optValue;
-                            return actualValue === proposalAnswers[index];
-                          })) && (
+                          {(() => {
+                            const key = proposal.id || `proposal-${index}`;
+                            const answer = proposalAnswers[key];
+                            return answer !== undefined && !optionsSource.some((opt: string | { choice: string; description?: string }) => {
+                              const optValue = typeof opt === 'string' ? opt : opt.choice;
+                              const actualValue = optValue === 'Use recommended revision' && proposal.recommended_revision
+                                ? proposal.recommended_revision
+                                : optValue;
+                              return actualValue === answer;
+                            });
+                          })() && (
                             <input
                               type="text"
-                              value={proposalAnswers[index] || ''}
+                              value={proposalAnswers[proposal.id || `proposal-${index}`] || ''}
                               onChange={(e) => handleProposalAnswer(index, e.target.value)}
                               placeholder="Enter your answer..."
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
@@ -376,17 +387,17 @@ export default function ReviewAdjustModal({
                           )}
                         </div>
                       </label>
-                      
+
                       {/* Let AI Decide Option */}
                       <label className={`flex items-start gap-3 p-3 border rounded cursor-pointer transition-colors ${
-                        proposalAnswers[index] === '[AI_DECIDE]' 
-                          ? 'bg-purple-50 border-purple-400' 
+                        proposalAnswers[proposal.id || `proposal-${index}`] === '[AI_DECIDE]'
+                          ? 'bg-purple-50 border-purple-400'
                           : 'bg-white border-purple-200 hover:bg-purple-50'
                       }`}>
                         <input
                           type="radio"
-                          name={`proposal-${index}`}
-                          checked={proposalAnswers[index] === '[AI_DECIDE]'}
+                          name={proposal.id || `proposal-${index}`}
+                          checked={proposalAnswers[proposal.id || `proposal-${index}`] === '[AI_DECIDE]'}
                           onChange={() => handleProposalAnswer(index, '[AI_DECIDE]')}
                           className="mt-1 w-4 h-4 text-purple-600"
                         />
