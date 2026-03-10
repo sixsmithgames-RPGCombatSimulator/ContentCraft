@@ -279,10 +279,17 @@ const normalizeProposal = (p: any, index: number): JsonRecord | null => {
     return options[0];
   })();
 
+  let proposalId = typeof p.id === 'string' && p.id.trim().length > 0
+    ? p.id.trim()
+    : slugifyProposalKey(topic || question || `proposal-${index}`);
+
+  // Normalize known ID variants to keep dedup stable
+  if (proposalId === 'prayer-bead-type') {
+    proposalId = 'prayer-beads-type';
+  }
+
   return {
-    id: typeof p.id === 'string' && p.id.trim().length > 0
-      ? p.id.trim()
-      : slugifyProposalKey(topic || question || `proposal-${index}`),
+    id: proposalId,
     topic,
     question,
     options,
@@ -308,32 +315,60 @@ const sanitizeProposalsValue = (value: unknown): JsonRecord[] => {
   return normalized;
 };
 
+const SPECIES_CANON = [
+  'Aasimar',
+  'Human',
+  'Elf',
+  'Dwarf',
+  'Halfling',
+  'Gnome',
+  'Tiefling',
+  'Dragonborn',
+  'Half-Elf',
+  'Half-Orc',
+  'Goliath',
+] as const;
+
+const levenshtein = (a: string, b: string): number => {
+  const n = a.length;
+  const m = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => i);
+  for (let i = 1; i <= n; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= m; j++) {
+      const temp = dp[j];
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + cost);
+      prev = temp;
+    }
+  }
+  return dp[m];
+};
+
+const tokenizeLower = (text: string): string[] =>
+  (text || '')
+    .toLowerCase()
+    .replace(/[^a-z\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
 const inferSpecies = (input: { original_user_request?: string; previous_decisions?: Record<string, string> }): string | null => {
-  const text = (input.original_user_request || '').toLowerCase();
+  const text = input.original_user_request || '';
   const decisions = input.previous_decisions || {};
 
-  const patterns: Array<{ regex: RegExp; value: string }> = [
-    { regex: /\baas+i?m+a?r\b/, value: 'Aasimar' },
-    { regex: /\bdragonborn\b/, value: 'Dragonborn' },
-    { regex: /\bdwarf\b/, value: 'Dwarf' },
-    { regex: /\belf\b/, value: 'Elf' },
-    { regex: /\bhalf-?elf\b/, value: 'Half-Elf' },
-    { regex: /\bgnome\b/, value: 'Gnome' },
-    { regex: /\bhalfling\b/, value: 'Halfling' },
-    { regex: /\bhuman\b/, value: 'Human' },
-    { regex: /\btiefling\b/, value: 'Tiefling' },
-    { regex: /\borc\b/, value: 'Orc' },
-    { regex: /\bgoliath\b/, value: 'Goliath' },
-    { regex: /\bgenasi\b/, value: 'Genasi' },
-    { regex: /\bshifter\b/, value: 'Shifter' },
-  ];
+  // Heritage/subrace hints
+  const heritage = String(decisions['aasimar-heritage'] ?? decisions['Aasimar Subrace'] ?? '').toLowerCase();
+  if (heritage.includes('aasimar')) return 'Aasimar';
 
-  for (const entry of patterns) {
-    if (entry.regex.test(text)) return entry.value;
+  const tokens = tokenizeLower(text);
+  for (const tok of tokens) {
+    for (const sp of SPECIES_CANON) {
+      const target = sp.toLowerCase();
+      if (tok === target) return sp;
+      if (tok.length >= 5 && Math.abs(tok.length - target.length) <= 2 && levenshtein(tok, target) <= 1) return sp;
+    }
   }
-
-  const aasimarSubrace = String(decisions['Aasimar Subrace'] || '').toLowerCase();
-  if (aasimarSubrace.includes('aasimar')) return 'Aasimar';
 
   return null;
 };
@@ -4952,6 +4987,10 @@ Output: Valid JSON only. No markdown, no prose.`;
           requiredKeys: '', // Contracts already embed required keys
           stageInputs: {
             original_user_request: cfg.prompt,
+            inferred_species: inferSpecies({
+              original_user_request: cfg.prompt,
+              previous_decisions: limitedDecisions,
+            }) || undefined,
             ...reducedStageInputs,
             ...(additionalGuidance && additionalGuidance.trim().length > 0
               ? { additional_critical_instructions: additionalGuidance.trim() }

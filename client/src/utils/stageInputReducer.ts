@@ -15,6 +15,61 @@ export interface StageResults {
   [stageName: string]: Record<string, unknown>;
 }
 
+
+const SPECIES_CANON = [
+  'Aasimar',
+  'Human',
+  'Elf',
+  'Dwarf',
+  'Halfling',
+  'Gnome',
+  'Tiefling',
+  'Dragonborn',
+  'Half-Elf',
+  'Half-Orc',
+  'Goliath',
+] as const;
+
+const levenshtein = (a: string, b: string): number => {
+  const n = a.length;
+  const m = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => i);
+  for (let i = 1; i <= n; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= m; j++) {
+      const temp = dp[j];
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + cost);
+      prev = temp;
+    }
+  }
+  return dp[m];
+};
+
+const tokenizeLower = (text: string): string[] =>
+  (text || '')
+    .toLowerCase()
+    .replace(/[^a-z\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
+const inferSpeciesFromText = (originalUserRequest: string, previousDecisions?: Record<string, unknown>): string | null => {
+  const heritage = String(previousDecisions?.['aasimar-heritage'] ?? previousDecisions?.['Aasimar Subrace'] ?? '').toLowerCase();
+  if (heritage.includes('aasimar')) return 'Aasimar';
+
+  const tokens = tokenizeLower(originalUserRequest);
+  for (const tok of tokens) {
+    for (const sp of SPECIES_CANON) {
+      const target = sp.toLowerCase();
+      if (tok === target) return sp;
+      if (tok.length >= 5 && Math.abs(tok.length - target.length) <= 2 && levenshtein(tok, target) <= 1) return sp;
+    }
+  }
+
+  return null;
+};
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

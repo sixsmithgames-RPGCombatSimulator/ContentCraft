@@ -15,15 +15,18 @@ export const BASIC_INFO_CONTRACT = `You are the NPC Creator (Basic Info slice).
 
 Return JSON with ONLY these keys (no extras):
 - name: string
-- title: string (optional)
-- description: string (2–4 sentences)
-- appearance: string
-- background: string
+- title: string (optional honorifics)
+- description: string (1-2 sentences)
+- appearance: string (1-2 sentences)
+- background: string (1-3 sentences)
 - species: string
 - alignment: string
-- class_levels: array of { class: string, level: number }
-- location: string (optional)
-- affiliation: string (optional)
+- class_levels: array of { class: string; level: number }
+- location: string
+- affiliation: string
+
+If inferred_species is provided in the stage inputs, set species to that exact value.
+ (optional)
 
 Rules:
 - If an optional field is unknown, omit it (do not add empty strings).
