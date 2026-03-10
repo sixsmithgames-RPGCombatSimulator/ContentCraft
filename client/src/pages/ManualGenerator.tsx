@@ -9,7 +9,7 @@ import GeneratorPanel, { GenerationConfig } from '../components/generator/Genera
 import ResourcesPanel from '../components/generator/ResourcesPanel';
 import CopyPasteModal from '../components/generator/CopyPasteModal';
 import ReviewAdjustModal from '../components/generator/ReviewAdjustModal';
-import CanonDeltaModal from '../components/generator/CanonDeltaModal';
+import CanonDeltaModal, { type Conflict, type PhysicsIssue } from '../components/generator/CanonDeltaModal';
 import EditContentModal from '../components/generator/EditContentModal';
 import HomebrewEditModal from '../components/generator/HomebrewEditModal';
 import SaveContentModal from '../components/generator/SaveContentModal';
@@ -179,27 +179,19 @@ interface Stage {
 
 // Types aligned with CanonDeltaModal's onApprove callback
 interface Proposal {
-  question: string;
-  options?: Array<string | { choice: string; description: string }>;
+  id?: string;
+  topic?: string;
+  question?: string;
+  default?: string;
+  required?: boolean;
+  options?: (string | { choice: string; description: string })[];
   rule_impact?: string;
-  selected?: string;
   field_path?: string;
   current_value?: string;
   reason?: string;
   clarification_needed?: string;
   recommended_revision?: string;
-  id?: string;
-  topic?: string;
-  default?: string;
-  required?: boolean;
-  choices?: Array<string | { choice: string; description: string }>;
 };
-
-interface Conflict {
-  new_claim?: string;
-  existing_claim?: string;
-  entity_id?: string;
-}
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -4821,9 +4813,35 @@ Validation will reject incorrect field names or missing required fields.`;
 
     // Build user prompt and log its size
     let userPromptContent = stage.buildUserPrompt(context);
-    if (additionalGuidance && additionalGuidance.trim().length > 0) {
-      userPromptContent = `${userPromptContent}\n\n---\n\n${additionalGuidance.trim()}`;
+    let guidanceToAppend = additionalGuidance?.trim() || '';
+
+    // For Planner, merge fix list directly into JSON to keep payload tiny
+    if (stage.name === 'Planner' && guidanceToAppend.length > 0) {
+      try {
+        const base = JSON.parse(userPromptContent);
+        const guidanceJson = JSON.parse(guidanceToAppend);
+        const fixList = Array.isArray(guidanceJson.fix)
+          ? guidanceJson.fix.slice(0, 6)
+          : [];
+        if (fixList.length > 0) {
+          base.fix = fixList;
+          userPromptContent = JSON.stringify(base, null, 2);
+        }
+        guidanceToAppend = '';
+      } catch (err) {
+        console.warn('[Planner Retry] Failed to merge guidance JSON; falling back to append');
+      }
     }
+
+    if (guidanceToAppend.length > 0) {
+      // For Planner retries we keep guidance extremely small to avoid hitting prompt caps
+      const isPlanner = stage.name === 'Planner';
+      const trimmedGuidance = isPlanner
+        ? guidanceToAppend.slice(0, 600) // hard cap retry guidance for Planner
+        : guidanceToAppend;
+      userPromptContent = `${userPromptContent}\n\n---\n\n${trimmedGuidance}`;
+    }
+
     console.log(`[Prompt Building] ${stage.name} user prompt: ${userPromptContent.length.toLocaleString()} chars`);
 
     // If user prompt is unusually large for early stages, investigate and trim
@@ -4897,6 +4915,18 @@ Output: Valid JSON only. No markdown, no prose.`;
     } else if (isSubsequentChunk && isLocationSpacesStage) {
       // Spaces stage needs full system prompt every time for visual data generation
       console.log(`📦 Chunk ${chunkInfo!.currentChunk}/${chunkInfo!.totalChunks}: Using full prompt (Spaces stage requires it)`);
+    }
+
+    // Hard guard for Planner prompt size on retries and primary runs
+    if (stage.name === 'Planner') {
+      const systemChars = systemPromptToUse.length;
+      const userChars = userPromptToUse.length;
+      const totalChars = systemChars + userChars;
+      if (totalChars > 7200) {
+        setError(`Planner prompt exceeds safe limit: ${totalChars.toLocaleString()} chars (system: ${systemChars.toLocaleString()}, user: ${userChars.toLocaleString()}). Shorten the prompt or flags and retry.`);
+        setSessionStatus('error');
+        return;
+      }
     }
 
     // Check if this stage has a minimal contract (new prompt packer system)
@@ -7608,59 +7638,68 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     const stageForRetry = STAGES[currentStageIndex];
 
-    let additionalInstructions = 'ADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY):\n\n';
+    // Planner retries must stay tiny: no failed output echo, no QA restatement
+    let additionalInstructions = '';
+    if (stageForRetry?.name === 'Planner') {
+      const fixList = issuesToAddress.length > 0
+        ? issuesToAddress
+        : ['Return proposals as []', 'Return flags_echo'];
+      additionalInstructions = JSON.stringify({ fix: fixList }, null, 2);
+    } else {
+      additionalInstructions = 'ADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY):\n\n';
 
-    if (Object.keys(answers).length > 0) {
-      additionalInstructions += 'NEW ANSWERS TO PROPOSALS:\n';
-      Object.entries(answers).forEach(([question, answer]) => {
-        additionalInstructions += `Q: ${question}\nA: ${answer}\n\n`;
-      });
-      additionalInstructions += 'Use these answers as final decisions. Do not ask follow-up questions about the same topics.\n\n';
+      if (Object.keys(answers).length > 0) {
+        additionalInstructions += 'NEW ANSWERS TO PROPOSALS:\n';
+        Object.entries(answers).forEach(([question, answer]) => {
+          additionalInstructions += `Q: ${question}\nA: ${answer}\n\n`;
+        });
+        additionalInstructions += 'Use these answers as final decisions. Do not ask follow-up questions about the same topics.\n\n';
+      }
+
+      if (issuesToAddress.length > 0) {
+        additionalInstructions += 'CRITICAL ISSUES YOU MUST FIX IN THIS RESPONSE:\n';
+        issuesToAddress.forEach((issue, i) => {
+          additionalInstructions += `${i + 1}. ${issue}\n`;
+        });
+        additionalInstructions += '\nRevise your response to fix every listed issue completely.\n';
+        additionalInstructions += 'Do not repeat any missing field, empty field, placeholder value, or invalid structure described above.\n';
+      }
+
+      // Stage-specific hard requirements for retries (keep minimal to avoid prompt bloat)
+      if (stageForRetry?.name === 'Creator: Core Details') {
+        additionalInstructions += '\nMANDATORY OUTPUT FOR CORE DETAILS (no omissions allowed):\n';
+        additionalInstructions += '- Provide ALL personality fields as non-empty arrays: personality_traits, ideals, bonds, flaws, goals, fears, quirks, voice_mannerisms, hooks.\n';
+        additionalInstructions += '- Do NOT collapse into hooks-only or summaries. Each field must be distinct and populated.\n';
+        additionalInstructions += '- If any field was missing previously, you MUST supply it now with concrete content. Placeholders/empty values are not acceptable.\n';
+      }
+
+      if (stageForRetry?.name === 'Creator: Spellcasting') {
+        additionalInstructions += '\nMANDATORY OUTPUT FOR SPELLCASTING:\n';
+        additionalInstructions += '- Provide spellcasting_ability, spells_known, and spell_slots if the class can cast spells.\n';
+        additionalInstructions += '- Do NOT return empty scaffolding or omit required spell data.\n';
+      }
+
+      if (stageForRetry?.name === 'Creator: Relationships') {
+        additionalInstructions += '\nMANDATORY OUTPUT FOR RELATIONSHIPS:\n';
+        additionalInstructions += '- Provide concrete allies, enemies, organizations, family, or contacts tied to this character.\n';
+        additionalInstructions += '- Do NOT return only generic personality repetition or empty arrays.\n';
+      }
+
+      const failedOutputSnapshot = buildStageRetrySnapshot(stageForRetry?.name || '', currentStageOutput);
+      if (failedOutputSnapshot) {
+        additionalInstructions += '\nLAST_FAILED_STAGE_OUTPUT (repair this instead of repeating it):\n';
+        additionalInstructions += `${failedOutputSnapshot}\n`;
+      }
+
+      additionalInstructions += '\nFINAL RETRY INSTRUCTIONS:\n';
+      additionalInstructions += '- Follow the required output format exactly.\n';
+      additionalInstructions += '- Return the same JSON object shape required for this stage.\n';
+      additionalInstructions += '- Replace missing, empty, or invalid fields in place. Do not add new keys.\n';
+      additionalInstructions += '- Fix every listed issue in this response.\n';
+      additionalInstructions += '- Fill every required field with concrete content.\n';
+      additionalInstructions += '- Do not return placeholders, empty scaffolding, or unrelated extra structures.\n';
+      additionalInstructions += '- Do not repeat the previous invalid response.\n';
     }
-
-    if (issuesToAddress.length > 0) {
-      additionalInstructions += 'CRITICAL ISSUES YOU MUST FIX IN THIS RESPONSE:\n';
-      issuesToAddress.forEach((issue, i) => {
-        additionalInstructions += `${i + 1}. ${issue}\n`;
-      });
-      additionalInstructions += '\nRevise your response to fix every listed issue completely.\n';
-      additionalInstructions += 'Do not repeat any missing field, empty field, placeholder value, or invalid structure described above.\n';
-    }
-
-    // Stage-specific hard requirements for retries (keep minimal to avoid prompt bloat)
-    if (stageForRetry?.name === 'Creator: Core Details') {
-      additionalInstructions += '\nMANDATORY OUTPUT FOR CORE DETAILS (no omissions allowed):\n';
-      additionalInstructions += '- Provide ALL personality fields as non-empty arrays: personality_traits, ideals, bonds, flaws, goals, fears, quirks, voice_mannerisms, hooks.\n';
-      additionalInstructions += '- Do NOT collapse into hooks-only or summaries. Each field must be distinct and populated.\n';
-      additionalInstructions += '- If any field was missing previously, you MUST supply it now with concrete content. Placeholders/empty values are not acceptable.\n';
-    }
-
-    if (stageForRetry?.name === 'Creator: Spellcasting') {
-      additionalInstructions += '\nMANDATORY OUTPUT FOR SPELLCASTING:\n';
-      additionalInstructions += '- Provide spellcasting_ability, spells_known, and spell_slots if the class can cast spells.\n';
-      additionalInstructions += '- Do NOT return empty scaffolding or omit required spell data.\n';
-    }
-
-    if (stageForRetry?.name === 'Creator: Relationships') {
-      additionalInstructions += '\nMANDATORY OUTPUT FOR RELATIONSHIPS:\n';
-      additionalInstructions += '- Provide concrete allies, enemies, organizations, family, or contacts tied to this character.\n';
-      additionalInstructions += '- Do NOT return only generic personality repetition or empty arrays.\n';
-    }
-
-    const failedOutputSnapshot = buildStageRetrySnapshot(stageForRetry?.name || '', currentStageOutput);
-    if (failedOutputSnapshot) {
-      additionalInstructions += '\nLAST_FAILED_STAGE_OUTPUT (repair this instead of repeating it):\n';
-      additionalInstructions += `${failedOutputSnapshot}\n`;
-    }
-
-    additionalInstructions += '\nFINAL RETRY INSTRUCTIONS:\n';
-    additionalInstructions += '- Follow the required output format exactly.\n';
-    additionalInstructions += '- Return the same JSON object shape required for this stage.\n';
-    additionalInstructions += '- Replace missing, empty, or invalid fields in place. Do not add new keys.\n';
-    additionalInstructions += '- Fix every listed issue in this response.\n';
-    additionalInstructions += '- Fill every required field with concrete content.\n';
-    additionalInstructions += '- Do not return placeholders, empty scaffolding, or unrelated extra structures.\n';
-    additionalInstructions += '- Do not repeat the previous invalid response.\n';
 
     setTimeout(() => {
       showStageOutput(

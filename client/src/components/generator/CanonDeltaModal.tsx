@@ -13,7 +13,7 @@ interface Proposal {
   selected?: string;
 }
 
-interface Conflict {
+export interface Conflict {
   new_claim?: string;
   existing_claim?: string;
   entity_id?: string;
@@ -31,7 +31,7 @@ interface Conflict {
   resolution?: 'keep_old' | 'use_new' | 'merge' | 'skip';
 }
 
-type PhysicsIssue = {
+export type PhysicsIssue = {
   severity?: string;
   description?: string;
   issue_type?: string;
