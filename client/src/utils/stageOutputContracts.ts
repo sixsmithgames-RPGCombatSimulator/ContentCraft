@@ -78,16 +78,29 @@ export function validateStageOutput(stage: StageKey, obj: JsonRecord): { ok: boo
     return { ok: false, error: `Missing required keys: ${missing.join(', ')}` };
   }
 
-  const requiredArrayFields: Partial<Record<StageKey, readonly string[]>> = {
+  const arrayFields: Partial<Record<StageKey, readonly string[]>> = {
     keywordExtractor: ['keywords'],
     coreDetails: contract.requiredKeys,
     characterBuild: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
     combat: ['actions', 'bonus_actions', 'reactions'],
-    relationships: ['allies', 'enemies', 'organizations'],
+    relationships: ['allies', 'enemies', 'organizations', 'family', 'contacts'],
     equipment: ['weapons', 'armor_and_shields', 'wondrous_items', 'consumables', 'other_gear'],
   };
 
-  for (const field of requiredArrayFields[stage] ?? []) {
+  const nonEmptyArrayFields: Partial<Record<StageKey, readonly string[]>> = {
+    keywordExtractor: ['keywords'],
+    coreDetails: contract.requiredKeys,
+    combat: ['actions'],
+  };
+
+  for (const field of arrayFields[stage] ?? []) {
+    const value = obj[field];
+    if (!Array.isArray(value)) {
+      return { ok: false, error: `Field ${field} must be an array.` };
+    }
+  }
+
+  for (const field of nonEmptyArrayFields[stage] ?? []) {
     const value = obj[field];
     if (!Array.isArray(value) || value.length === 0) {
       return { ok: false, error: `Field ${field} must be a non-empty array.` };
