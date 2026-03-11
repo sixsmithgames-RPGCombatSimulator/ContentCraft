@@ -8,6 +8,7 @@ import {
   AbilityScores,
   Feature,
   NormalizedNpc,
+  SpellMap,
   SpellcastingSummary,
   featuresToMultiline,
   listToMultiline,
@@ -79,6 +80,16 @@ const AbilityScoresSection: FC<{
   </div>
 );
 
+const normalizeSpellMap = (spellMap?: SpellMap | null): SpellMap =>
+  Object.fromEntries(
+    Object.entries(spellMap ?? {})
+      .map(([group, spells]) => [
+        group.trim(),
+        [...(spells ?? [])].map((spell) => spell.trim()).filter(Boolean),
+      ])
+      .filter(([group, spells]) => group.length > 0 && spells.length > 0),
+  ) as SpellMap;
+
 const normalizeSpellcasting = (spellcasting?: SpellcastingSummary | null): SpellcastingSummary | undefined => {
   if (!spellcasting) return undefined;
   const normalized: SpellcastingSummary = {
@@ -87,17 +98,25 @@ const normalizeSpellcasting = (spellcasting?: SpellcastingSummary | null): Spell
     saveDc: spellcasting.saveDc ?? undefined,
     attackBonus: spellcasting.attackBonus ?? undefined,
     knownSpells: [...(spellcasting.knownSpells ?? [])].map((spell) => spell.trim()).filter(Boolean),
+    preparedSpells: normalizeSpellMap(spellcasting.preparedSpells),
+    alwaysPreparedSpells: normalizeSpellMap(spellcasting.alwaysPreparedSpells),
+    innateSpells: normalizeSpellMap(spellcasting.innateSpells),
     spellSlots: Object.fromEntries(
       Object.entries(spellcasting.spellSlots ?? {}).filter(([, amount]) => Number.isFinite(amount)),
     ),
+    focus: spellcasting.focus?.trim() || undefined,
     notes: spellcasting.notes?.trim() || undefined,
   };
 
   const hasData =
     normalized.type ||
     normalized.ability ||
+    normalized.focus ||
     normalized.notes ||
     normalized.knownSpells.length > 0 ||
+    Object.keys(normalized.preparedSpells).length > 0 ||
+    Object.keys(normalized.alwaysPreparedSpells).length > 0 ||
+    Object.keys(normalized.innateSpells).length > 0 ||
     Object.keys(normalized.spellSlots).length > 0 ||
     normalized.saveDc !== undefined ||
     normalized.attackBonus !== undefined;
@@ -109,6 +128,31 @@ const spellSlotsToText = (slots?: Record<string, number>): string =>
   Object.entries(slots ?? {})
     .map(([level, amount]) => `${level}: ${amount}`)
     .join('\n');
+
+const spellMapToText = (spellMap?: SpellMap): string =>
+  Object.entries(spellMap ?? {})
+    .map(([group, spells]) => `${group}: ${spells.join(', ')}`)
+    .join('\n');
+
+const textToSpellMap = (value: string): SpellMap => {
+  const result: SpellMap = {};
+  multilineToList(value).forEach((line) => {
+    const [groupPart, ...rest] = line.split(':');
+    const group = groupPart.trim();
+    if (!group) return;
+
+    const spells = rest
+      .join(':')
+      .split(',')
+      .map((spell) => spell.trim())
+      .filter(Boolean);
+
+    if (spells.length > 0) {
+      result[group] = spells;
+    }
+  });
+  return result;
+};
 
 const textToSpellSlots = (value: string): Record<string, number> => {
   const result: Record<string, number> = {};
@@ -197,7 +241,11 @@ const NpcContentForm: FC<NpcContentFormProps> = ({ value, onChange }) => {
       saveDc: spellcasting?.saveDc,
       attackBonus: spellcasting?.attackBonus,
       knownSpells: [...(spellcasting?.knownSpells ?? [])],
+      preparedSpells: { ...(spellcasting?.preparedSpells ?? {}) },
+      alwaysPreparedSpells: { ...(spellcasting?.alwaysPreparedSpells ?? {}) },
+      innateSpells: { ...(spellcasting?.innateSpells ?? {}) },
       spellSlots: { ...(spellcasting?.spellSlots ?? {}) },
+      focus: spellcasting?.focus,
       notes: spellcasting?.notes,
       ...changes,
     };
@@ -681,6 +729,15 @@ const NpcContentForm: FC<NpcContentFormProps> = ({ value, onChange }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Spellcasting Focus</label>
+            <input
+              type="text"
+              value={spellcasting?.focus ?? ''}
+              onChange={(e) => updateSpellcasting({ focus: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
         </div>
 
         <ListTextarea
@@ -690,14 +747,43 @@ const NpcContentForm: FC<NpcContentFormProps> = ({ value, onChange }) => {
           helper="One spell per line"
         />
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Spell Slots (Format: level: count)</label>
-          <textarea
-            value={spellSlotsToText(spellcasting?.spellSlots)}
-            onChange={(e) => updateSpellcasting({ spellSlots: textToSpellSlots(e.target.value) })}
-            rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Prepared Spells (Format: group: spell, spell)</label>
+            <textarea
+              value={spellMapToText(spellcasting?.preparedSpells)}
+              onChange={(e) => updateSpellcasting({ preparedSpells: textToSpellMap(e.target.value) })}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Always Prepared (Format: source: spell, spell)</label>
+            <textarea
+              value={spellMapToText(spellcasting?.alwaysPreparedSpells)}
+              onChange={(e) => updateSpellcasting({ alwaysPreparedSpells: textToSpellMap(e.target.value) })}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Innate Spells (Format: usage: spell, spell)</label>
+            <textarea
+              value={spellMapToText(spellcasting?.innateSpells)}
+              onChange={(e) => updateSpellcasting({ innateSpells: textToSpellMap(e.target.value) })}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Spell Slots (Format: level: count)</label>
+            <textarea
+              value={spellSlotsToText(spellcasting?.spellSlots)}
+              onChange={(e) => updateSpellcasting({ spellSlots: textToSpellSlots(e.target.value) })}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            />
+          </div>
         </div>
 
         <div>

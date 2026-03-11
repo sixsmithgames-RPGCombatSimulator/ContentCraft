@@ -26,7 +26,7 @@ export const STAGE_OUTPUT_CONTRACTS: Record<StageKey, StageContract> = {
     requiredKeys: ['deliverable', 'retrieval_hints', 'proposals', 'flags_echo'],
   },
   basicInfo: {
-    allowedKeys: ['name', 'title', 'description', 'appearance', 'background', 'species', 'alignment', 'class_levels', 'location', 'affiliation'],
+    allowedKeys: ['name', 'title', 'description', 'appearance', 'background', 'species', 'race', 'alignment', 'class_levels', 'location', 'affiliation'],
     requiredKeys: ['name', 'description', 'appearance', 'background', 'species', 'alignment', 'class_levels'],
   },
   coreDetails: {
@@ -122,7 +122,20 @@ export function pruneToAllowedKeys<T extends Record<string, unknown>>(obj: T, al
 export function validateStageOutput(stage: StageKey, obj: JsonRecord): { ok: boolean; error?: string } {
   const contract = STAGE_OUTPUT_CONTRACTS[stage];
   const missing = contract.requiredKeys.filter((key) => obj[key] === undefined || obj[key] === null);
-  if (missing.length > 0) {
+
+  if (stage === 'basicInfo') {
+    const hasSpecies = typeof obj.species === 'string' && obj.species.trim().length > 0;
+    const hasRace = typeof obj.race === 'string' && obj.race.trim().length > 0;
+    const filteredMissing = missing.filter((key) => key !== 'species');
+
+    if (!hasSpecies && !hasRace) {
+      filteredMissing.push('species or race');
+    }
+
+    if (filteredMissing.length > 0) {
+      return { ok: false, error: `Missing required keys: ${filteredMissing.join(', ')}` };
+    }
+  } else if (missing.length > 0) {
     return { ok: false, error: `Missing required keys: ${missing.join(', ')}` };
   }
 

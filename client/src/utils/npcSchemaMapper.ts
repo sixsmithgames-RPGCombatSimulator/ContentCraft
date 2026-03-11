@@ -468,6 +468,12 @@ export function mapToCanonicalStructure(rawData: Record<string, unknown>): Mappi
       result.warnings.push('Mapped "canonical_name" to "name"');
     }
 
+    // 6a. Map species to race when stage outputs use 2024 terminology
+    if (!rawData.race && typeof rawData.species === 'string' && rawData.species.trim().length > 0) {
+      mapped.race = rawData.species;
+      result.warnings.push('Mapped "species" to canonical "race" field');
+    }
+
     // 7. Normalize class_levels (v1.1: string OR array)
     const classLevels = normalizeClassLevels(rawData);
     if (classLevels !== null) {

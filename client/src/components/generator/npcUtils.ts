@@ -35,13 +35,32 @@ export interface Relationship {
   notes?: string;
 }
 
+export interface NamedEntry {
+  name: string;
+  notes?: string;
+  quantity?: number;
+  relationship?: string;
+  role?: string;
+  standing?: string;
+  status?: string;
+  profession?: string;
+  location?: string;
+  [key: string]: unknown;
+}
+
+export type SpellMap = Record<string, string[]>;
+
 export interface SpellcastingSummary {
   type?: string;
   ability?: string;
   saveDc?: number;
   attackBonus?: number;
   knownSpells: string[];
+  preparedSpells: SpellMap;
+  alwaysPreparedSpells: SpellMap;
+  innateSpells: SpellMap;
   spellSlots: Record<string, number>;
+  focus?: string;
   notes?: string;
 }
 
@@ -76,6 +95,10 @@ export interface NormalizedNpc {
   experiencePoints?: number;
   hooks: string[];
   motivations: string[];
+  goals: string[];
+  fears: string[];
+  quirks: string[];
+  voiceMannerisms: string[];
   tactics?: string;
   classLevels: ClassLevel[];
   abilityScores: AbilityScores;
@@ -96,11 +119,22 @@ export interface NormalizedNpc {
   conditionImmunities: string[];
   abilities: Feature[];
   additionalTraits: Feature[];
+  fightingStyles: Feature[];
   equipment: string[];
   magicItems: string[];
+  weapons: NamedEntry[];
+  armorAndShields: NamedEntry[];
+  wondrousItems: NamedEntry[];
+  consumables: NamedEntry[];
+  otherGear: NamedEntry[];
   relationships: Relationship[];
   allies: string[];
   foes: string[];
+  alliesDetailed: NamedEntry[];
+  enemiesDetailed: NamedEntry[];
+  organizations: NamedEntry[];
+  family: NamedEntry[];
+  contacts: NamedEntry[];
   personality: {
     traits: string[];
     ideals: string[];
@@ -117,6 +151,7 @@ export interface NormalizedNpc {
   actions: Feature[];
   bonusActions: Feature[];
   reactions: Feature[];
+  legendaryResistance?: PrimitiveRecord;
   lairActions: string[];
   regionalEffects: string[];
   notes: string[];
@@ -241,6 +276,42 @@ const normalizeRelationships = (value: unknown): Relationship[] =>
     };
   }) as Relationship[];
 
+const normalizeNamedEntries = (value: unknown): NamedEntry[] =>
+  ensureArray(value, (entry) => {
+    if (typeof entry === 'string') {
+      const name = ensureString(entry);
+      return name ? { name } : undefined;
+    }
+
+    const obj = ensureObject(entry);
+    const name = ensureString(obj.name) || ensureString(obj.entity) || ensureString(obj.title);
+    if (!name) return undefined;
+
+    const normalized: NamedEntry = { name };
+    const passthroughKeys = [
+      'notes',
+      'quantity',
+      'relationship',
+      'role',
+      'standing',
+      'status',
+      'profession',
+      'location',
+    ] as const;
+
+    for (const key of passthroughKeys) {
+      const fieldValue = obj[key];
+      if (key === 'quantity') {
+        const parsedQuantity = ensureNumber(fieldValue);
+        if (parsedQuantity !== undefined) normalized.quantity = parsedQuantity;
+      } else if (typeof fieldValue === 'string' && fieldValue.trim().length > 0) {
+        normalized[key] = fieldValue.trim();
+      }
+    }
+
+    return normalized;
+  }) as NamedEntry[];
+
 const normalizeClassLevels = (value: unknown): ClassLevel[] =>
   ensureArray(value, (entry) => {
     const obj = ensureObject(entry);
@@ -289,23 +360,46 @@ const normalizeHitPoints = (value: unknown, fallbackFormula?: string): HitPoints
   };
 };
 
+const normalizeSpellMap = (value: unknown): SpellMap => {
+  const obj = ensureObject(value);
+  const normalized: SpellMap = {};
+
+  for (const [key, entry] of Object.entries(obj)) {
+    const spells = ensureStringArray(entry);
+    if (spells.length > 0) {
+      normalized[key] = spells;
+    }
+  }
+
+  return normalized;
+};
+
 const normalizeSpellcasting = (value: unknown): SpellcastingSummary | undefined => {
   const obj = ensureObject(value);
   if (Object.keys(obj).length === 0) return undefined;
 
   const spellSlots: Record<string, number> = {};
-  Object.entries(ensureObject(obj.spell_slots)).forEach(([level, amount]) => {
+  Object.entries(ensureObject(obj.spell_slots || obj.spellSlots)).forEach(([level, amount]) => {
     const parsed = ensureNumber(amount);
     if (parsed !== undefined) spellSlots[level] = parsed;
   });
 
+  const preparedSpells = normalizeSpellMap(obj.prepared_spells || obj.preparedSpells);
+  const alwaysPreparedSpells = normalizeSpellMap(obj.always_prepared_spells || obj.alwaysPreparedSpells);
+  const innateSpells = normalizeSpellMap(obj.innate_spells || obj.innateSpells);
+  const knownSpells = ensureStringArray(obj.known_spells || obj.spells_known || obj.knownSpells);
+
   return {
     type: ensureString(obj.type) || ensureString(obj.tradition) || undefined,
     ability: ensureString(obj.ability) || ensureString(obj.spellcasting_ability) || undefined,
-    saveDc: ensureNumber(obj.save_dc),
-    attackBonus: ensureNumber(obj.attack_bonus),
-    knownSpells: ensureStringArray(obj.known_spells),
+    saveDc: ensureNumber(obj.save_dc ?? obj.spell_save_dc),
+    attackBonus: ensureNumber(obj.attack_bonus ?? obj.spell_attack_bonus),
+    knownSpells,
+    preparedSpells,
+    alwaysPreparedSpells,
+    innateSpells,
     spellSlots,
+    focus: ensureString(obj.spellcasting_focus || obj.focus) || undefined,
     notes: ensureString(obj.notes) || ensureString(obj.text) || undefined,
   };
 };
@@ -358,19 +452,41 @@ export const inferNpcType = (record: PrimitiveRecord, deliverable?: string): Con
 };
 
 export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
-  // Step 1: Use schema mapper to intelligently map field variations to canonical structure
   const mappingResult = mapToCanonicalStructure(record);
   logMappingResult(mappingResult, 'normalizeNpc');
 
-  // Use mapped data if successful, otherwise use original
   const sourceData = mappingResult.success ? mappingResult.mapped : record;
-
   const npcSource = ensureObject(sourceData.npc || sourceData.character || sourceData);
   const statBlock = ensureObject(npcSource.stat_block);
   const personalitySource = ensureObject(npcSource.personality);
   const factCheckSource = ensureObject(sourceData.fact_check_report);
+  const topLevelSpellcasting = {
+    spellcasting_ability: npcSource.spellcasting_ability,
+    spell_save_dc: npcSource.spell_save_dc,
+    spell_attack_bonus: npcSource.spell_attack_bonus,
+    spell_slots: npcSource.spell_slots,
+    prepared_spells: npcSource.prepared_spells,
+    always_prepared_spells: npcSource.always_prepared_spells,
+    innate_spells: npcSource.innate_spells,
+    spells_known: npcSource.spells_known,
+    known_spells: npcSource.known_spells,
+    spellcasting_focus: npcSource.spellcasting_focus,
+  };
+  const alliesDetailed = normalizeNamedEntries(npcSource.allies_friends || npcSource.allies);
+  const enemiesDetailed = normalizeNamedEntries(npcSource.enemies || npcSource.foes);
+  const weapons = normalizeNamedEntries(npcSource.weapons);
+  const armorAndShields = normalizeNamedEntries(npcSource.armor_and_shields);
+  const wondrousItems = normalizeNamedEntries(npcSource.wondrous_items);
+  const consumables = normalizeNamedEntries(npcSource.consumables);
+  const otherGear = normalizeNamedEntries(npcSource.other_gear);
+  const groupedEquipment = [
+    ...weapons.map((entry) => entry.name),
+    ...armorAndShields.map((entry) => entry.name),
+    ...wondrousItems.map((entry) => entry.name),
+    ...consumables.map((entry) => entry.name),
+    ...otherGear.map((entry) => entry.name),
+  ].filter(Boolean);
 
-  // Normalize personality to required structure
   const normalizedPersonality = {
     traits: ensureStringArray(personalitySource.traits || personalitySource.personality_traits),
     ideals: ensureStringArray(personalitySource.ideals),
@@ -394,7 +510,7 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
     description: ensureString(npcSource.description),
     appearance: ensureString(npcSource.appearance) || undefined,
     background: ensureString(npcSource.background) || undefined,
-    race: ensureString(npcSource.race) || undefined,
+    race: ensureString(npcSource.race || npcSource.species) || undefined,
     alignment: ensureString(npcSource.alignment) || undefined,
     affiliation: ensureString(npcSource.affiliation) || undefined,
     location: ensureString(npcSource.location) || undefined,
@@ -404,12 +520,17 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
     experiencePoints: ensureNumber(npcSource.experience_points),
     hooks: ensureStringArray(npcSource.hooks),
     motivations: ensureStringArray(npcSource.motivations),
+    goals: ensureStringArray(npcSource.goals),
+    fears: ensureStringArray(npcSource.fears),
+    quirks: ensureStringArray(npcSource.quirks),
+    voiceMannerisms: ensureStringArray(npcSource.voice_mannerisms),
     tactics: ensureString(npcSource.tactics) || undefined,
     classLevels: normalizeClassLevels(npcSource.class_levels),
     classFeatures: normalizeFeatureList(npcSource.class_features),
     subclassFeatures: normalizeFeatureList(npcSource.subclass_features),
     racialFeatures: normalizeFeatureList(npcSource.racial_features),
     feats: normalizeFeatureList(npcSource.feats),
+    fightingStyles: normalizeFeatureList(npcSource.fighting_styles),
     asiChoices: ensureArray(npcSource.asi_choices, (entry) => {
       const obj = ensureObject(entry);
       if (!obj.level && !obj.choice) return undefined;
@@ -432,23 +553,39 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
     passivePerception: ensureNumber(npcSource.passive_perception) ?? ensureNumber(statBlock.passive_perception),
     languages: ensureStringArray(npcSource.languages || statBlock.languages),
     savingThrows: normalizeScoredList(npcSource.saving_throws || statBlock.saving_throws),
-    skills: normalizeScoredList(npcSource.skills || statBlock.skills),
+    skills: normalizeScoredList(npcSource.skills || npcSource.skill_proficiencies || statBlock.skills),
     damageResistances: ensureStringArray(npcSource.damage_resistances || statBlock.damage_resistances),
     damageImmunities: ensureStringArray(npcSource.damage_immunities || statBlock.damage_immunities),
     damageVulnerabilities: ensureStringArray(npcSource.damage_vulnerabilities || statBlock.damage_vulnerabilities),
     conditionImmunities: ensureStringArray(npcSource.condition_immunities || statBlock.condition_immunities),
     abilities: normalizeFeatureList(npcSource.abilities || statBlock.abilities),
     additionalTraits: normalizeFeatureList(npcSource.additional_traits),
-    equipment: ensureStringArray(npcSource.equipment),
-    magicItems: ensureStringArray(npcSource.magicItems),
+    equipment: (() => {
+      const flat = ensureStringArray(npcSource.equipment);
+      return flat.length > 0 ? flat : groupedEquipment;
+    })(),
+    magicItems: ensureStringArray(npcSource.magicItems || npcSource.magic_items),
+    weapons,
+    armorAndShields,
+    wondrousItems,
+    consumables,
+    otherGear,
     relationships: normalizeRelationships(npcSource.relationships),
-    allies: ensureStringArray(npcSource.allies),
-    foes: ensureStringArray(npcSource.foes),
+    allies: alliesDetailed.length > 0 ? alliesDetailed.map((entry) => entry.name) : ensureStringArray(npcSource.allies),
+    foes: enemiesDetailed.length > 0 ? enemiesDetailed.map((entry) => entry.name) : ensureStringArray(npcSource.foes || npcSource.enemies),
+    alliesDetailed,
+    enemiesDetailed,
+    organizations: normalizeNamedEntries(npcSource.organizations || npcSource.factions),
+    family: normalizeNamedEntries(npcSource.family),
+    contacts: normalizeNamedEntries(npcSource.contacts),
     personality: normalizedPersonality,
-    spellcasting: normalizeSpellcasting(npcSource.spellcasting),
+    spellcasting: normalizeSpellcasting({ ...topLevelSpellcasting, ...ensureObject(npcSource.spellcasting) }),
     actions: normalizeFeatureList(npcSource.actions || statBlock.actions),
     bonusActions: normalizeFeatureList(npcSource.bonus_actions || statBlock.bonus_actions),
     reactions: normalizeFeatureList(npcSource.reactions || statBlock.reactions),
+    legendaryResistance: Object.keys(ensureObject(npcSource.legendary_resistance)).length > 0
+      ? ensureObject(npcSource.legendary_resistance)
+      : undefined,
     lairActions: ensureStringArray(npcSource.lair_actions || statBlock.lair_actions),
     regionalEffects: ensureStringArray(npcSource.regional_effects || statBlock.regional_effects),
     notes: ensureStringArray(npcSource.notes),
@@ -456,7 +593,7 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
     sourcesUsed: ensureStringArray(sourceData.sources_used),
     assumptions: ensureStringArray(sourceData.assumptions),
     factCheckReport: Object.keys(factCheckSource).length ? factCheckSource : undefined,
-    schemaVersion: ensureString(sourceData.schema_version) || undefined,
+    schemaVersion: ensureString(sourceData.schema_version) || ensureString(sourceData.schemaVersion) || undefined,
     statBlock: statBlock,
   };
 };
@@ -607,12 +744,17 @@ export const normalizedNpcToRecord = (
   assign('aliases', npc.aliases);
   assign('hooks', npc.hooks);
   assign('motivations', npc.motivations);
+  assign('goals', npc.goals);
+  assign('fears', npc.fears);
+  assign('quirks', npc.quirks);
+  assign('voice_mannerisms', npc.voiceMannerisms);
   assign('tactics', npc.tactics);
   assign('class_levels', npc.classLevels);
   assign('class_features', npc.classFeatures);
   assign('subclass_features', npc.subclassFeatures);
   assign('racial_features', npc.racialFeatures);
   assign('feats', npc.feats);
+  assign('fighting_styles', npc.fightingStyles);
   assign('asi_choices', npc.asiChoices);
   assign('background_feature', npc.backgroundFeature);
   assign('ability_scores', npc.abilityScores);
@@ -635,19 +777,60 @@ export const normalizedNpcToRecord = (
   assign('additional_traits', npc.additionalTraits);
   assign('equipment', npc.equipment);
   assign('magic_items', npc.magicItems);
+  assign('weapons', npc.weapons);
+  assign('armor_and_shields', npc.armorAndShields);
+  assign('wondrous_items', npc.wondrousItems);
+  assign('consumables', npc.consumables);
+  assign('other_gear', npc.otherGear);
   assign('relationships', npc.relationships);
-  assign('allies', npc.allies);
+  assign('allies', npc.alliesDetailed.length > 0 ? npc.alliesDetailed : npc.allies.map((name) => ({ name, relationship: 'ally' })));
+  assign('allies_friends', npc.alliesDetailed.length > 0 ? npc.alliesDetailed : npc.allies.map((name) => ({ name, relationship: 'ally' })));
+  assign('enemies', npc.enemiesDetailed.length > 0 ? npc.enemiesDetailed : npc.foes.map((name) => ({ name, relationship: 'enemy' })));
   assign('foes', npc.foes);
+  assign('organizations', npc.organizations);
+  assign('family', npc.family);
+  assign('contacts', npc.contacts);
+  assign('personality_traits', npc.personality.traits);
+  assign('ideals', npc.personality.ideals);
+  assign('bonds', npc.personality.bonds);
+  assign('flaws', npc.personality.flaws);
   assign('personality', {
     traits: npc.personality.traits,
     ideals: npc.personality.ideals,
     bonds: npc.personality.bonds,
     flaws: npc.personality.flaws,
   });
-  assign('spellcasting', npc.spellcasting);
+  if (npc.spellcasting) {
+    const spellcastingRecord: PrimitiveRecord = {
+      ...(npc.spellcasting.type ? { type: npc.spellcasting.type } : {}),
+      ...(npc.spellcasting.ability ? { ability: npc.spellcasting.ability, spellcasting_ability: npc.spellcasting.ability } : {}),
+      ...(npc.spellcasting.saveDc !== undefined ? { save_dc: npc.spellcasting.saveDc, spell_save_dc: npc.spellcasting.saveDc } : {}),
+      ...(npc.spellcasting.attackBonus !== undefined ? { attack_bonus: npc.spellcasting.attackBonus, spell_attack_bonus: npc.spellcasting.attackBonus } : {}),
+      ...(Object.keys(npc.spellcasting.spellSlots).length > 0 ? { spell_slots: npc.spellcasting.spellSlots } : {}),
+      ...(Object.keys(npc.spellcasting.preparedSpells).length > 0 ? { prepared_spells: npc.spellcasting.preparedSpells } : {}),
+      ...(Object.keys(npc.spellcasting.alwaysPreparedSpells).length > 0 ? { always_prepared_spells: npc.spellcasting.alwaysPreparedSpells } : {}),
+      ...(Object.keys(npc.spellcasting.innateSpells).length > 0 ? { innate_spells: npc.spellcasting.innateSpells } : {}),
+      ...(npc.spellcasting.knownSpells.length > 0 ? { known_spells: npc.spellcasting.knownSpells, spells_known: npc.spellcasting.knownSpells } : {}),
+      ...(npc.spellcasting.focus ? { spellcasting_focus: npc.spellcasting.focus } : {}),
+      ...(npc.spellcasting.notes ? { notes: npc.spellcasting.notes } : {}),
+    };
+    assign('spellcasting', spellcastingRecord);
+    assign('spellcasting_ability', npc.spellcasting.ability);
+    assign('spell_save_dc', npc.spellcasting.saveDc);
+    assign('spell_attack_bonus', npc.spellcasting.attackBonus);
+    assign('spell_slots', npc.spellcasting.spellSlots);
+    assign('prepared_spells', npc.spellcasting.preparedSpells);
+    assign('always_prepared_spells', npc.spellcasting.alwaysPreparedSpells);
+    assign('innate_spells', npc.spellcasting.innateSpells);
+    assign('spells_known', npc.spellcasting.knownSpells);
+    assign('spellcasting_focus', npc.spellcasting.focus);
+  } else {
+    delete updated.spellcasting;
+  }
   assign('actions', npc.actions);
   assign('bonus_actions', npc.bonusActions);
   assign('reactions', npc.reactions);
+  assign('legendary_resistance', npc.legendaryResistance);
   assign('lair_actions', npc.lairActions);
   assign('regional_effects', npc.regionalEffects);
   assign('notes', npc.notes);

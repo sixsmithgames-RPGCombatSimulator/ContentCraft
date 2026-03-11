@@ -66,6 +66,57 @@ describe('npcValidator.validateNpcSafe', () => {
     expect(result.errors.length).toBe(0);
   });
 
+
+  it('mapAndValidateNpc preserves rich manual-generator NPC fields and maps species to race', () => {
+    const npc = {
+      schema_version: '1.1',
+      name: 'Seraphina Vale',
+      description: 'A veteran knight-captain with a measured voice, scarred shield, and a tactical mind sharpened by years on the frontier.',
+      species: 'Human',
+      personality: {
+        traits: ['Measured', 'Protective'],
+        ideals: ['Duty'],
+        bonds: ['Her garrison'],
+        flaws: ['Rigid'],
+      },
+      motivations: ['Protect innocent travelers'],
+      goals: ['Keep the northern trade road open through winter'],
+      fears: ['Losing soldiers because she hesitated'],
+      quirks: ['Counts exits whenever she enters a room'],
+      voice_mannerisms: ['Speaks in clipped military phrases'],
+      fighting_styles: [{ name: 'Defense', description: 'Keeps a shield wall between danger and her allies.' }],
+      weapons: [{ name: 'Longsword', notes: '+1 blade from her order' }],
+      armor_and_shields: [{ name: 'Shield', notes: 'Stamped with the Silver Order crest' }],
+      organizations: [{ name: 'Silver Order', role: 'Captain', standing: 'Respected' }],
+      family: [{ name: 'Mira Vale', relationship: 'Sister', status: 'Alive' }],
+      contacts: [{ name: 'Hollis Reed', profession: 'Quartermaster', location: 'Northwatch' }],
+      legendary_resistance: { uses_per_day: 1, description: 'Can steel herself against one failed saving throw.' },
+      spellcasting_ability: 'Wisdom',
+      spell_save_dc: 15,
+      spell_attack_bonus: 7,
+      spell_slots: { '1': 4, '2': 2 },
+      prepared_spells: { '1': ['bless', 'shield of faith'], '2': ['lesser restoration'] },
+      always_prepared_spells: { Oath: ['heroism'] },
+      innate_spells: { 'At will': ['light'] },
+      spells_known: ['bless', 'lesser restoration'],
+      spellcasting_focus: 'Silver holy symbol',
+    };
+
+    const result = mapAndValidateNpc(npc as unknown as Record<string, unknown>);
+
+    expect(result.success).toBe(true);
+    expect(result.data?.race).toBe('Human');
+    expect(result.data?.goals).toEqual(['Keep the northern trade road open through winter']);
+    expect(result.data?.fears).toEqual(['Losing soldiers because she hesitated']);
+    expect(result.data?.quirks).toEqual(['Counts exits whenever she enters a room']);
+    expect(result.data?.voice_mannerisms).toEqual(['Speaks in clipped military phrases']);
+    expect(result.data?.prepared_spells).toEqual({ '1': ['bless', 'shield of faith'], '2': ['lesser restoration'] });
+    expect(result.data?.always_prepared_spells).toEqual({ Oath: ['heroism'] });
+    expect(result.data?.legendary_resistance).toEqual({ uses_per_day: 1, description: 'Can steel herself against one failed saving throw.' });
+    expect(result.data?.organizations).toEqual([{ name: 'Silver Order', role: 'Captain', standing: 'Respected' }]);
+    expect(result.warnings).toContain('Mapped "species" to canonical "race" field');
+  });
+
   it('defaults to v1.0 and fails when legacy required fields are missing', () => {
     const legacyNpc = {
       name: 'Legacy NPC',

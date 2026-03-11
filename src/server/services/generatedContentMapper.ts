@@ -14,16 +14,20 @@ type AbilityScores = {
   cha: number;
 };
 
+type SpellMap = Record<string, string[]>;
+
 interface SpellcastingDetails {
   type?: string;
   ability?: string;
   save_dc?: number;
   attack_bonus?: number;
   notes?: string;
-  spell_slots: Record<string, unknown>;
-  prepared_spells: Record<string, unknown>;
-  innate_spells: Record<string, unknown>;
+  spell_slots: Record<string, number>;
+  prepared_spells: SpellMap;
+  always_prepared_spells: SpellMap;
+  innate_spells: SpellMap;
   known_spells: string[];
+  focus?: string;
 }
 
 interface NpcFeature {
@@ -45,6 +49,18 @@ interface NpcClassLevel {
   level?: number;
   subclass?: string;
   notes?: string;
+}
+
+interface NamedEntry {
+  name: string;
+  notes?: string;
+  quantity?: number;
+  relationship?: string;
+  role?: string;
+  standing?: string;
+  status?: string;
+  profession?: string;
+  location?: string;
 }
 
 interface NpcRelationship {
@@ -85,6 +101,10 @@ interface NormalizedNpc {
   experience_points?: number;
   hooks: string[];
   motivations: string[];
+  goals: string[];
+  fears: string[];
+  quirks: string[];
+  voice_mannerisms: string[];
   tactics: string;
   class_levels: NpcClassLevel[];
   ability_scores: AbilityScores;
@@ -106,12 +126,26 @@ interface NormalizedNpc {
   subclass_features: NpcFeature[];
   racial_features: NpcFeature[];
   feats: NpcFeature[];
+  fighting_styles: NpcFeature[];
   asi_choices: Record<string, unknown>[];
   background_feature?: Record<string, unknown>;
   abilities: NpcFeature[];
   additional_traits: NpcFeature[];
   equipment: string[];
+  magic_items: string[];
+  weapons: NamedEntry[];
+  armor_and_shields: NamedEntry[];
+  wondrous_items: NamedEntry[];
+  consumables: NamedEntry[];
+  other_gear: NamedEntry[];
   relationships: NpcRelationship[];
+  allies: string[];
+  foes: string[];
+  allies_detailed: NamedEntry[];
+  enemies_detailed: NamedEntry[];
+  organizations: NamedEntry[];
+  family: NamedEntry[];
+  contacts: NamedEntry[];
   personality: {
     traits: string[];
     ideals: string[];
@@ -124,10 +158,14 @@ interface NormalizedNpc {
   reactions: NpcFeature[];
   legendary_actions: Record<string, unknown>;
   mythic_actions: Record<string, unknown>;
+  legendary_resistance?: Record<string, unknown>;
   lair_actions: string[];
   regional_effects: string[];
   notes: string[];
   sources: string[];
+  sources_used: string[];
+  assumptions: string[];
+  schema_version?: string;
   stat_block: Record<string, unknown>;
   ac?: number | string | ArmorClassEntry[];
   hp?: number | string;
@@ -532,13 +570,46 @@ const DEFAULT_ABILITY_SCORES = {
 
 const formatList = (items: string[], emptyFallback = 'None'): string => {
   if (!items || items.length === 0) {
-    return `- ${emptyFallback}`;
+    return '- ' + emptyFallback;
   }
 
   return items
     .filter(Boolean)
-    .map((item) => `- ${item}`)
-    .join('\n') || `- ${emptyFallback}`;
+    .map((item) => '- ' + item)
+    .join('\n') || '- ' + emptyFallback;
+};
+
+const formatNamedEntries = (entries: NamedEntry[], emptyFallback = 'None'): string => {
+  if (!entries.length) {
+    return '- ' + emptyFallback;
+  }
+
+  return entries
+    .map((entry) => {
+      const details: string[] = [];
+      if (entry.quantity !== undefined) details.push('Qty ' + String(entry.quantity));
+      if (entry.relationship) details.push(entry.relationship);
+      if (entry.role) details.push('Role: ' + entry.role);
+      if (entry.standing) details.push('Standing: ' + entry.standing);
+      if (entry.status) details.push('Status: ' + entry.status);
+      if (entry.profession) details.push('Profession: ' + entry.profession);
+      if (entry.location) details.push('Location: ' + entry.location);
+
+      const base = '- ' + entry.name + (details.length ? ': ' + details.join(' | ') : '');
+      return entry.notes ? base + ' (' + entry.notes + ')' : base;
+    })
+    .join('\n');
+};
+
+const formatSpellMap = (map: SpellMap, emptyFallback = 'None'): string => {
+  const entries = Object.entries(map).filter(([, spells]) => Array.isArray(spells) && spells.length > 0);
+  if (!entries.length) {
+    return '- ' + emptyFallback;
+  }
+
+  return entries
+    .map(([label, spells]) => '- ' + label + ': ' + spells.join(', '))
+    .join('\n');
 };
 
 const ensureString = (value: unknown, fallback = ''): string => {
@@ -549,6 +620,21 @@ const ensureString = (value: unknown, fallback = ''): string => {
     return fallback;
   }
   return String(value).trim();
+};
+
+const ensureNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
 };
 
 const ensureArray = <T>(
@@ -648,6 +734,47 @@ const normalizeRelationshipsList = (value: unknown): NpcRelationship[] => {
   });
 };
 
+const normalizeNamedEntries = (value: unknown): NamedEntry[] => {
+  return ensureArray<NamedEntry>(value, (entry) => {
+    if (typeof entry === 'string') {
+      const name = ensureString(entry);
+      return name ? { name } : undefined;
+    }
+
+    const obj = ensureObject(entry);
+    const name = ensureString(obj.name ?? obj.entity ?? obj.title);
+    if (!name) return undefined;
+
+    const quantity = ensureNumber(obj.quantity);
+
+    return {
+      name,
+      notes: ensureString(obj.notes) || undefined,
+      quantity,
+      relationship: ensureString(obj.relationship) || undefined,
+      role: ensureString(obj.role) || undefined,
+      standing: ensureString(obj.standing) || undefined,
+      status: ensureString(obj.status) || undefined,
+      profession: ensureString(obj.profession) || undefined,
+      location: ensureString(obj.location) || undefined,
+    };
+  });
+};
+
+const normalizeSpellMap = (value: unknown): SpellMap => {
+  const obj = ensureObject(value);
+  const normalized: SpellMap = {};
+
+  for (const [key, entry] of Object.entries(obj)) {
+    const spells = ensureStringArray(entry);
+    if (spells.length > 0) {
+      normalized[key] = spells;
+    }
+  }
+
+  return normalized;
+};
+
 const normalizeArmorClass = (value: unknown): number | ArmorClassEntry[] | undefined => {
   if (Number.isFinite(value)) {
     return value as number;
@@ -689,16 +816,27 @@ const normalizeHitPoints = (value: unknown, fallbackFormula?: string): HitPoints
 const normalizeSpellcasting = (value: unknown): SpellcastingDetails | undefined => {
   const obj = ensureObject(value);
   if (Object.keys(obj).length === 0) return undefined;
+
+  const spellSlots: Record<string, number> = {};
+  for (const [level, amount] of Object.entries(ensureObject(obj.spell_slots ?? obj.spellSlots))) {
+    const parsed = ensureNumber(amount);
+    if (parsed !== undefined) {
+      spellSlots[level] = parsed;
+    }
+  }
+
   return {
-    type: ensureString(obj.type ?? obj.tradition),
-    ability: ensureString(obj.ability ?? obj.spellcasting_ability),
-    save_dc: Number.isFinite(obj.save_dc as number) ? (obj.save_dc as number) : undefined,
-    attack_bonus: Number.isFinite(obj.attack_bonus as number) ? (obj.attack_bonus as number) : undefined,
-    notes: ensureString(obj.notes ?? obj.text),
-    spell_slots: ensureObject(obj.spell_slots),
-    prepared_spells: ensureObject(obj.prepared_spells),
-    innate_spells: ensureObject(obj.innate_spells),
-    known_spells: ensureStringArray(obj.known_spells),
+    type: ensureString(obj.type ?? obj.tradition) || undefined,
+    ability: ensureString(obj.ability ?? obj.spellcasting_ability) || undefined,
+    save_dc: ensureNumber(obj.save_dc ?? obj.spell_save_dc),
+    attack_bonus: ensureNumber(obj.attack_bonus ?? obj.spell_attack_bonus),
+    notes: ensureString(obj.notes ?? obj.text) || undefined,
+    spell_slots: spellSlots,
+    prepared_spells: normalizeSpellMap(obj.prepared_spells ?? obj.preparedSpells),
+    always_prepared_spells: normalizeSpellMap(obj.always_prepared_spells ?? obj.alwaysPreparedSpells),
+    innate_spells: normalizeSpellMap(obj.innate_spells ?? obj.innateSpells),
+    known_spells: ensureStringArray(obj.known_spells ?? obj.spells_known ?? obj.knownSpells),
+    focus: ensureString(obj.spellcasting_focus ?? obj.focus) || undefined,
   };
 };
 
@@ -877,16 +1015,48 @@ const buildCommonMetadata = (params: GeneratedContentMapParams) => {
 };
 
 const normalizeNpc = (source: unknown): NormalizedNpc => {
-  const npcSource = ensureObject(source);
+  const rootSource = ensureObject(source);
+  const npcSource = ensureObject(rootSource.npc ?? rootSource.character ?? rootSource);
   const statBlock = ensureObject(npcSource.stat_block);
   const personalityObject = ensureObject(npcSource.personality);
-  const spellcasting = normalizeSpellcasting(npcSource.spellcasting ?? npcSource.spells);
+  const topLevelSpellcasting = {
+    spellcasting_ability: npcSource.spellcasting_ability,
+    spell_save_dc: npcSource.spell_save_dc,
+    spell_attack_bonus: npcSource.spell_attack_bonus,
+    spell_slots: npcSource.spell_slots,
+    prepared_spells: npcSource.prepared_spells,
+    always_prepared_spells: npcSource.always_prepared_spells,
+    innate_spells: npcSource.innate_spells,
+    spells_known: npcSource.spells_known,
+    known_spells: npcSource.known_spells,
+    spellcasting_focus: npcSource.spellcasting_focus,
+  };
+  const spellcasting = normalizeSpellcasting({
+    ...topLevelSpellcasting,
+    ...ensureObject(npcSource.spellcasting ?? npcSource.spells),
+  });
 
   const armorClass = normalizeArmorClass(npcSource.armor_class ?? npcSource.ac ?? statBlock.armor_class);
   const hitPoints = normalizeHitPoints(
     npcSource.hit_points ?? npcSource.hp ?? statBlock.hit_points,
     ensureString(statBlock.hit_points_formula),
   );
+
+  const weapons = normalizeNamedEntries(npcSource.weapons);
+  const armorAndShields = normalizeNamedEntries(npcSource.armor_and_shields);
+  const wondrousItems = normalizeNamedEntries(npcSource.wondrous_items);
+  const consumables = normalizeNamedEntries(npcSource.consumables);
+  const otherGear = normalizeNamedEntries(npcSource.other_gear);
+  const groupedEquipment = [
+    ...weapons.map((entry) => entry.name),
+    ...armorAndShields.map((entry) => entry.name),
+    ...wondrousItems.map((entry) => entry.name),
+    ...consumables.map((entry) => entry.name),
+    ...otherGear.map((entry) => entry.name),
+  ].filter(Boolean);
+  const alliesDetailed = normalizeNamedEntries(npcSource.allies_friends ?? npcSource.allies);
+  const enemiesDetailed = normalizeNamedEntries(npcSource.enemies ?? npcSource.foes);
+  const magicItems = normalizeNamedEntries(npcSource.magic_items ?? npcSource.magicItems ?? npcSource.attuned_items).map((entry) => entry.name);
 
   const normalizedNpc: NormalizedNpc = {
     name: ensureString(npcSource.name, ensureString(npcSource.canonical_name, 'Unknown NPC')),
@@ -896,7 +1066,7 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
     description: ensureString(npcSource.description ?? npcSource.summary),
     appearance: ensureString(npcSource.appearance ?? npcSource.physical_appearance),
     background: ensureString(npcSource.background),
-    race: ensureString(npcSource.race),
+    race: ensureString(npcSource.race ?? npcSource.species),
     size: ensureString(npcSource.size ?? statBlock.size),
     creature_type: ensureString(npcSource.creature_type ?? statBlock.creature_type ?? npcSource.type),
     subtype: ensureString(npcSource.subtype ?? statBlock.subtype),
@@ -905,34 +1075,34 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
     location: ensureString(npcSource.location),
     era: ensureString(npcSource.era),
     challenge_rating: ensureString(npcSource.challenge_rating ?? statBlock.challenge_rating),
-    experience_points: Number.isFinite(npcSource.experience_points as number)
-      ? (npcSource.experience_points as number)
-      : undefined,
+    experience_points: ensureNumber(npcSource.experience_points),
     hooks: ensureStringArray(npcSource.hooks),
     motivations: ensureStringArray(npcSource.motivations),
+    goals: ensureStringArray(npcSource.goals),
+    fears: ensureStringArray(npcSource.fears),
+    quirks: ensureStringArray(npcSource.quirks),
+    voice_mannerisms: ensureStringArray(npcSource.voice_mannerisms),
     tactics: ensureString(npcSource.combat_tactics ?? npcSource.tactics),
     class_levels: ensureArray<NpcClassLevel>(npcSource.class_levels, (cl) => {
       const clObj = ensureObject(cl);
       const className = ensureString(clObj.class ?? clObj.name);
-      const level = Number.isFinite(clObj.level as number) ? (clObj.level as number) : undefined;
+      const level = ensureNumber(clObj.level);
       const subclass = ensureString(clObj.subclass ?? clObj.archetype);
       if (!className && level === undefined) return undefined;
       return { class: className, level, subclass, notes: ensureString(clObj.notes) };
     }),
-    ability_scores: ensureAbilityScores(npcSource.ability_scores),
+    ability_scores: ensureAbilityScores(npcSource.ability_scores ?? statBlock.ability_scores),
     armor_class: armorClass,
     hit_points: hitPoints,
     hit_dice: ensureString(npcSource.hit_dice ?? statBlock.hit_dice),
-    proficiency_bonus: Number.isFinite(npcSource.proficiency_bonus as number)
-      ? (npcSource.proficiency_bonus as number)
-      : ensureString(npcSource.proficiency_bonus ?? statBlock.proficiency_bonus),
+    proficiency_bonus: ensureNumber(npcSource.proficiency_bonus)
+      ?? ensureString(npcSource.proficiency_bonus ?? statBlock.proficiency_bonus),
     speed: ensureObject(npcSource.speed ?? statBlock.speed),
     saving_throws: normalizeScoredList(npcSource.saving_throws ?? statBlock.saving_throws),
     skill_proficiencies: normalizeScoredList(npcSource.skills ?? npcSource.skill_proficiencies ?? statBlock.skills),
     senses: ensureStringArray(npcSource.senses ?? statBlock.senses),
-    passive_perception: Number.isFinite(npcSource.passive_perception as number)
-      ? (npcSource.passive_perception as number)
-      : Number.parseInt(ensureString(statBlock.passive_perception), 10) || undefined,
+    passive_perception: ensureNumber(npcSource.passive_perception)
+      ?? ensureNumber(statBlock.passive_perception),
     languages: ensureStringArray(npcSource.languages ?? statBlock.languages),
     damage_resistances: ensureStringArray(npcSource.damage_resistances ?? statBlock.damage_resistances),
     damage_immunities: ensureStringArray(npcSource.damage_immunities ?? statBlock.damage_immunities),
@@ -944,6 +1114,7 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
     subclass_features: normalizeFeatureList(npcSource.subclass_features),
     racial_features: normalizeFeatureList(npcSource.racial_features),
     feats: normalizeFeatureList(npcSource.feats),
+    fighting_styles: normalizeFeatureList(npcSource.fighting_styles),
     asi_choices: ensureArray<Record<string, unknown>>(npcSource.asi_choices, (entry) => {
       const obj = ensureObject(entry);
       if (!obj.level && !obj.choice) return undefined;
@@ -954,10 +1125,26 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
       : undefined,
     abilities: normalizeFeatureList(npcSource.abilities ?? statBlock.abilities),
     additional_traits: normalizeFeatureList(npcSource.additional_traits),
-    equipment: ensureStringArray(npcSource.equipment),
+    equipment: (() => {
+      const flatEquipment = ensureStringArray(npcSource.equipment);
+      return flatEquipment.length > 0 ? flatEquipment : groupedEquipment;
+    })(),
+    magic_items: magicItems,
+    weapons,
+    armor_and_shields: armorAndShields,
+    wondrous_items: wondrousItems,
+    consumables,
+    other_gear: otherGear,
     relationships: normalizeRelationshipsList(npcSource.relationships),
+    allies: alliesDetailed.length > 0 ? alliesDetailed.map((entry) => entry.name) : ensureStringArray(npcSource.allies),
+    foes: enemiesDetailed.length > 0 ? enemiesDetailed.map((entry) => entry.name) : ensureStringArray(npcSource.foes ?? npcSource.enemies),
+    allies_detailed: alliesDetailed,
+    enemies_detailed: enemiesDetailed,
+    organizations: normalizeNamedEntries(npcSource.organizations ?? npcSource.factions),
+    family: normalizeNamedEntries(npcSource.family),
+    contacts: normalizeNamedEntries(npcSource.contacts),
     personality: {
-      traits: ensureStringArray(personalityObject.traits),
+      traits: ensureStringArray(personalityObject.traits ?? personalityObject.personality_traits),
       ideals: ensureStringArray(personalityObject.ideals),
       bonds: ensureStringArray(personalityObject.bonds),
       flaws: ensureStringArray(personalityObject.flaws),
@@ -968,16 +1155,21 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
     reactions: normalizeFeatureList(npcSource.reactions ?? statBlock.reactions),
     legendary_actions: ensureObject(npcSource.legendary_actions ?? statBlock.legendary_actions),
     mythic_actions: ensureObject(npcSource.mythic_actions ?? statBlock.mythic_actions),
+    legendary_resistance: Object.keys(ensureObject(npcSource.legendary_resistance)).length > 0
+      ? ensureObject(npcSource.legendary_resistance)
+      : undefined,
     lair_actions: ensureStringArray(npcSource.lair_actions ?? statBlock.lair_actions),
     regional_effects: ensureStringArray(npcSource.regional_effects ?? statBlock.regional_effects),
     notes: ensureStringArray(npcSource.notes),
     sources: ensureStringArray(npcSource.sources),
+    sources_used: ensureStringArray(rootSource.sources_used ?? npcSource.sources_used),
+    assumptions: ensureStringArray(rootSource.assumptions ?? npcSource.assumptions),
+    schema_version: ensureString(rootSource.schema_version ?? npcSource.schema_version) || undefined,
     stat_block: statBlock,
   };
 
   return {
     ...normalizedNpc,
-    // Backwards compatible aliases for components expecting legacy keys
     ac: Array.isArray(armorClass) ? armorClass[0]?.value ?? '' : armorClass ?? '',
     hp: hitPoints?.average ?? hitPoints?.formula ?? '',
     proficiency_bonus_text: typeof normalizedNpc.proficiency_bonus === 'string' ? normalizedNpc.proficiency_bonus : undefined,
@@ -987,28 +1179,31 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
 const formatNpcContent = (title: string, normalized: NormalizedNpc): string => {
   const lines: string[] = [];
 
-  lines.push(`## NPC: ${title}`);
+  lines.push('## NPC: ' + title);
   lines.push('');
-  lines.push(`**Role:** ${normalized.role || 'Unknown role'}`);
-  lines.push(`**Title:** ${normalized.title || 'No formal title'}`);
-  lines.push(`**Race:** ${normalized.race || 'Unknown'}`);
-  lines.push(`**Alignment:** ${normalized.alignment || 'Unknown'}`);
-  lines.push(`**Affiliation:** ${normalized.affiliation || 'None noted'}`);
-  lines.push(`**Location:** ${normalized.location || 'Unknown'}`);
-  lines.push(`**Era:** ${normalized.era || 'Unknown'}`);
+  lines.push('**Role:** ' + (normalized.role || 'Unknown role'));
+  lines.push('**Title:** ' + (normalized.title || 'No formal title'));
+  lines.push('**Race:** ' + (normalized.race || 'Unknown'));
+  lines.push('**Alignment:** ' + (normalized.alignment || 'Unknown'));
+  lines.push('**Affiliation:** ' + (normalized.affiliation || 'None noted'));
+  lines.push('**Location:** ' + (normalized.location || 'Unknown'));
+  lines.push('**Era:** ' + (normalized.era || 'Unknown'));
   lines.push('');
   lines.push('### Description');
   lines.push(normalized.description || 'No description provided.');
+
   if (normalized.appearance) {
     lines.push('');
     lines.push('### Appearance');
     lines.push(normalized.appearance);
   }
+
   if (normalized.background) {
     lines.push('');
     lines.push('### Background');
     lines.push(normalized.background);
   }
+
   lines.push('');
   lines.push('### Personality');
   lines.push('**Traits**');
@@ -1019,127 +1214,291 @@ const formatNpcContent = (title: string, normalized: NormalizedNpc): string => {
   lines.push(formatList(normalized.personality.bonds));
   lines.push('**Flaws**');
   lines.push(formatList(normalized.personality.flaws));
+
+  if (normalized.goals.length) {
+    lines.push('**Goals**');
+    lines.push(formatList(normalized.goals));
+  }
+  if (normalized.fears.length) {
+    lines.push('**Fears**');
+    lines.push(formatList(normalized.fears));
+  }
+  if (normalized.quirks.length) {
+    lines.push('**Quirks**');
+    lines.push(formatList(normalized.quirks));
+  }
+  if (normalized.voice_mannerisms.length) {
+    lines.push('**Voice & Mannerisms**');
+    lines.push(formatList(normalized.voice_mannerisms));
+  }
+
   lines.push('');
   lines.push('### Motivations');
   lines.push(formatList(normalized.motivations));
+
   if (normalized.hooks.length) {
     lines.push('');
     lines.push('### Adventure Hooks');
     lines.push(formatList(normalized.hooks));
   }
-  const abilityLines = featureListToLines(normalized.abilities);
-  if (abilityLines.length) {
-    lines.push('');
-    lines.push('### Abilities & Skills');
-    lines.push(formatList(abilityLines));
-  }
-  if (normalized.tactics) {
-    lines.push('');
-    lines.push('### Combat Tactics');
-    lines.push(normalized.tactics);
-  }
+
   if (normalized.class_levels.length) {
     lines.push('');
     lines.push('### Class Levels');
     lines.push(
       normalized.class_levels
-        .map((cl) => `- ${cl.class || 'Class'} ${cl.level}${cl.subclass ? ` (${cl.subclass})` : ''}`)
+        .map((cl) => '- ' + (cl.class || 'Class') + ' ' + (cl.level ?? '') + (cl.subclass ? ' (' + cl.subclass + ')' : ''))
         .join('\n'),
     );
   }
+
   const classFeatureLines = featureListToLines(normalized.class_features);
   if (classFeatureLines.length) {
     lines.push('');
     lines.push('### Class Features');
     lines.push(formatList(classFeatureLines));
   }
+
   const subclassFeatureLines = featureListToLines(normalized.subclass_features);
   if (subclassFeatureLines.length) {
     lines.push('');
     lines.push('### Subclass Features');
     lines.push(formatList(subclassFeatureLines));
   }
+
   const racialFeatureLines = featureListToLines(normalized.racial_features);
   if (racialFeatureLines.length) {
     lines.push('');
     lines.push('### Racial Features');
     lines.push(formatList(racialFeatureLines));
   }
+
   const featLines = featureListToLines(normalized.feats);
   if (featLines.length) {
     lines.push('');
     lines.push('### Feats');
     lines.push(formatList(featLines));
   }
+
+  const fightingStyleLines = featureListToLines(normalized.fighting_styles);
+  if (fightingStyleLines.length) {
+    lines.push('');
+    lines.push('### Fighting Styles');
+    lines.push(formatList(fightingStyleLines));
+  }
+
   if (normalized.asi_choices.length) {
     lines.push('');
     lines.push('### ASI Choices');
     lines.push(
       normalized.asi_choices
-        .map((asi) => `- Level ${asi.level || '?'}: ${asi.choice || 'Unknown'}${asi.details ? ` (${asi.details})` : ''}`)
+        .map((asi) => '- Level ' + (asi.level || '?') + ': ' + (asi.choice || 'Unknown') + (asi.details ? ' (' + asi.details + ')' : ''))
         .join('\n'),
     );
   }
+
   if (normalized.background_feature && Object.keys(normalized.background_feature).length) {
     lines.push('');
-    lines.push('### Background');
+    lines.push('### Background Feature');
     const bg = normalized.background_feature;
-    if (bg.background_name) lines.push(`**Background:** ${bg.background_name}`);
-    if (bg.feature_name) lines.push(`**Feature:** ${bg.feature_name}`);
+    if (bg.background_name) lines.push('**Background:** ' + String(bg.background_name));
+    if (bg.feature_name) lines.push('**Feature:** ' + String(bg.feature_name));
     if (bg.description) lines.push(String(bg.description));
-    if (bg.origin_feat) lines.push(`**Origin Feat:** ${bg.origin_feat}`);
+    if (bg.origin_feat) lines.push('**Origin Feat:** ' + String(bg.origin_feat));
   }
+
   lines.push('');
   lines.push('### Ability Scores');
-  lines.push(
-    `- STR ${normalized.ability_scores.str} \| DEX ${normalized.ability_scores.dex} \| CON ${normalized.ability_scores.con}`,
-  );
-  lines.push(
-    `- INT ${normalized.ability_scores.int} \| WIS ${normalized.ability_scores.wis} \| CHA ${normalized.ability_scores.cha}`,
-  );
+  lines.push('- STR ' + normalized.ability_scores.str + ' | DEX ' + normalized.ability_scores.dex + ' | CON ' + normalized.ability_scores.con);
+  lines.push('- INT ' + normalized.ability_scores.int + ' | WIS ' + normalized.ability_scores.wis + ' | CHA ' + normalized.ability_scores.cha);
   lines.push('');
   lines.push('### Core Stats');
-  lines.push(`- Armor Class: ${normalized.ac || 'N/A'}`);
-  lines.push(`- Hit Points: ${normalized.hp || 'N/A'}`);
-  lines.push(`- Proficiency Bonus: ${normalized.proficiency_bonus || 'N/A'}`);
-  const knownSpells = normalized.spellcasting?.known_spells ?? [];
-  if (knownSpells.length) {
+  lines.push('- Armor Class: ' + (normalized.ac || 'N/A'));
+  lines.push('- Hit Points: ' + (normalized.hp || 'N/A'));
+  lines.push('- Proficiency Bonus: ' + (normalized.proficiency_bonus || 'N/A'));
+
+  const abilityLines = featureListToLines(normalized.abilities);
+  if (abilityLines.length) {
     lines.push('');
-    lines.push('### Known Spells');
-    lines.push(formatList(knownSpells));
+    lines.push('### Abilities');
+    lines.push(formatList(abilityLines));
   }
-  if (normalized.equipment.length) {
+
+  const traitLines = featureListToLines(normalized.additional_traits);
+  if (traitLines.length) {
+    lines.push('');
+    lines.push('### Additional Traits');
+    lines.push(formatList(traitLines));
+  }
+
+  if (normalized.tactics) {
+    lines.push('');
+    lines.push('### Combat Tactics');
+    lines.push(normalized.tactics);
+  }
+
+  if (normalized.legendary_resistance && Object.keys(normalized.legendary_resistance).length) {
+    lines.push('');
+    lines.push('### Legendary Resistance');
+    lines.push('```json');
+    lines.push(JSON.stringify(normalized.legendary_resistance, null, 2));
+    lines.push('```');
+  }
+
+  if (normalized.spellcasting) {
+    lines.push('');
+    lines.push('### Spellcasting');
+    if (normalized.spellcasting.type) lines.push('- Type: ' + normalized.spellcasting.type);
+    if (normalized.spellcasting.ability) lines.push('- Ability: ' + normalized.spellcasting.ability);
+    if (normalized.spellcasting.focus) lines.push('- Focus: ' + normalized.spellcasting.focus);
+    if (normalized.spellcasting.save_dc !== undefined) lines.push('- Save DC: ' + normalized.spellcasting.save_dc);
+    if (normalized.spellcasting.attack_bonus !== undefined) lines.push('- Attack Bonus: ' + normalized.spellcasting.attack_bonus);
+    if (normalized.spellcasting.known_spells.length) {
+      lines.push('**Known Spells**');
+      lines.push(formatList(normalized.spellcasting.known_spells));
+    }
+    if (Object.keys(normalized.spellcasting.prepared_spells).length) {
+      lines.push('**Prepared Spells**');
+      lines.push(formatSpellMap(normalized.spellcasting.prepared_spells));
+    }
+    if (Object.keys(normalized.spellcasting.always_prepared_spells).length) {
+      lines.push('**Always Prepared**');
+      lines.push(formatSpellMap(normalized.spellcasting.always_prepared_spells));
+    }
+    if (Object.keys(normalized.spellcasting.innate_spells).length) {
+      lines.push('**Innate Spells**');
+      lines.push(formatSpellMap(normalized.spellcasting.innate_spells));
+    }
+    if (Object.keys(normalized.spellcasting.spell_slots).length) {
+      lines.push('**Spell Slots**');
+      lines.push(
+        Object.entries(normalized.spellcasting.spell_slots)
+          .map(([level, slots]) => '- Level ' + level + ': ' + slots)
+          .join('\n'),
+      );
+    }
+    if (normalized.spellcasting.notes) lines.push(normalized.spellcasting.notes);
+  }
+
+  if (normalized.equipment.length || normalized.magic_items.length || normalized.weapons.length || normalized.armor_and_shields.length || normalized.wondrous_items.length || normalized.consumables.length || normalized.other_gear.length) {
     lines.push('');
     lines.push('### Equipment');
-    lines.push(formatList(normalized.equipment));
+    if (normalized.equipment.length) {
+      lines.push('**Equipment**');
+      lines.push(formatList(normalized.equipment));
+    }
+    if (normalized.magic_items.length) {
+      lines.push('**Magic Items**');
+      lines.push(formatList(normalized.magic_items));
+    }
+    if (normalized.weapons.length) {
+      lines.push('**Weapons**');
+      lines.push(formatNamedEntries(normalized.weapons));
+    }
+    if (normalized.armor_and_shields.length) {
+      lines.push('**Armor & Shields**');
+      lines.push(formatNamedEntries(normalized.armor_and_shields));
+    }
+    if (normalized.wondrous_items.length) {
+      lines.push('**Wondrous Items**');
+      lines.push(formatNamedEntries(normalized.wondrous_items));
+    }
+    if (normalized.consumables.length) {
+      lines.push('**Consumables**');
+      lines.push(formatNamedEntries(normalized.consumables));
+    }
+    if (normalized.other_gear.length) {
+      lines.push('**Other Gear**');
+      lines.push(formatNamedEntries(normalized.other_gear));
+    }
   }
+
   const actionLines = featureListToLines(normalized.actions);
   if (actionLines.length) {
     lines.push('');
     lines.push('### Actions');
     lines.push(formatList(actionLines));
   }
+
   const bonusActionLines = featureListToLines(normalized.bonus_actions);
   if (bonusActionLines.length) {
     lines.push('');
     lines.push('### Bonus Actions');
     lines.push(formatList(bonusActionLines));
   }
+
   const reactionLines = featureListToLines(normalized.reactions);
   if (reactionLines.length) {
     lines.push('');
     lines.push('### Reactions');
     lines.push(formatList(reactionLines));
   }
-  if (normalized.relationships.length) {
+
+  if (normalized.relationships.length || normalized.allies.length || normalized.foes.length || normalized.organizations.length || normalized.family.length || normalized.contacts.length) {
     lines.push('');
     lines.push('### Relationships');
-    lines.push(
-      normalized.relationships
-        .map((rel) => `- ${rel.entity || 'Unknown'}: ${rel.relationship || 'Relationship unspecified'}`)
-        .join('\n'),
-    );
+    if (normalized.relationships.length) {
+      lines.push(
+        normalized.relationships
+          .map((rel) => '- ' + (rel.entity || 'Unknown') + ': ' + (rel.relationship || 'Relationship unspecified'))
+          .join('\n'),
+      );
+    }
+    if (normalized.allies.length) {
+      lines.push('**Allies**');
+      lines.push(formatList(normalized.allies));
+    }
+    if (normalized.foes.length) {
+      lines.push('**Foes**');
+      lines.push(formatList(normalized.foes));
+    }
+    if (normalized.organizations.length) {
+      lines.push('**Organizations**');
+      lines.push(formatNamedEntries(normalized.organizations));
+    }
+    if (normalized.family.length) {
+      lines.push('**Family**');
+      lines.push(formatNamedEntries(normalized.family));
+    }
+    if (normalized.contacts.length) {
+      lines.push('**Contacts**');
+      lines.push(formatNamedEntries(normalized.contacts));
+    }
   }
+
+  if (normalized.lair_actions.length) {
+    lines.push('');
+    lines.push('### Lair Actions');
+    lines.push(formatList(normalized.lair_actions));
+  }
+
+  if (normalized.regional_effects.length) {
+    lines.push('');
+    lines.push('### Regional Effects');
+    lines.push(formatList(normalized.regional_effects));
+  }
+
+  if (normalized.notes.length || normalized.sources.length || normalized.sources_used.length || normalized.assumptions.length) {
+    lines.push('');
+    lines.push('### Notes & Sources');
+    if (normalized.notes.length) {
+      lines.push('**Notes**');
+      lines.push(formatList(normalized.notes));
+    }
+    if (normalized.sources.length) {
+      lines.push('**Sources**');
+      lines.push(formatList(normalized.sources));
+    }
+    if (normalized.sources_used.length) {
+      lines.push('**Sources Used**');
+      lines.push(formatList(normalized.sources_used));
+    }
+    if (normalized.assumptions.length) {
+      lines.push('**Assumptions**');
+      lines.push(formatList(normalized.assumptions));
+    }
+  }
+
   if (Object.keys(normalized.stat_block).length) {
     lines.push('');
     lines.push('### Stat Block');

@@ -6459,12 +6459,24 @@ Output: Valid JSON only. No markdown, no prose.`;
           parsed = pruneToAllowedKeys(parsed, STAGE_OUTPUT_CONTRACTS[contractKey].allowedKeys) as JsonRecord;
 
           if (contractKey === 'basicInfo') {
+            if (typeof parsed.race === 'string' && typeof parsed.species !== 'string') {
+              parsed.species = parsed.race;
+            }
+            if (typeof parsed.species === 'string' && typeof parsed.race !== 'string') {
+              parsed.race = parsed.species;
+            }
+
             const inferred = inferSpecies({
               original_user_request: config?.prompt,
               previous_decisions: accumulatedAnswers,
             });
-            if (inferred && typeof parsed.species !== 'string') {
-              parsed.species = inferred;
+            if (inferred) {
+              if (typeof parsed.species !== 'string') {
+                parsed.species = inferred;
+              }
+              if (typeof parsed.race !== 'string') {
+                parsed.race = parsed.species;
+              }
             }
           }
 
