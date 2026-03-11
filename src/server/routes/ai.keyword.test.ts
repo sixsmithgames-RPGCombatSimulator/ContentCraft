@@ -51,7 +51,7 @@ describe('evaluateKeywordExtractorCompliance', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.message).toContain('no usable keywords');
+      expect('message' in result ? result.message : '').toContain('no usable keywords');
       expect(result.prunedKeywordCount).toBe(0);
     }
   });
@@ -63,7 +63,7 @@ describe('evaluateKeywordExtractorCompliance', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.message).toContain('no usable keywords');
+      expect('message' in result ? result.message : '').toContain('no usable keywords');
       expect(result.rawKeywordCount).toBe(0);
     }
   });

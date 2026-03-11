@@ -1474,7 +1474,7 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
             stageRunId: body.stageRunId,
             error: {
               type: 'INVALID_RESPONSE',
-              message: compliance.message,
+              message: 'message' in compliance ? compliance.message : 'keyword_extractor returned no usable keywords.',
               retryable: false,
             },
           } satisfies GeminiFailureResponse);
