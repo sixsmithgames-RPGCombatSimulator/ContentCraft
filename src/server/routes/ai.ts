@@ -60,6 +60,60 @@ function hasNonEmptySpellMap(value: unknown): boolean {
   return Object.values(value).some((entry) => hasNonEmptyStringArray(entry));
 }
 
+function normalizeKeywordArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const entry of value) {
+    const str = typeof entry === 'string' ? entry.trim() : String(entry ?? '').trim();
+    if (!str) continue;
+    if (seen.has(str)) continue;
+    seen.add(str);
+    normalized.push(str);
+  }
+  return normalized;
+}
+
+/**
+ * Validate raw keyword_extractor payload compliance, normalizing keyword strings and enforcing non-empty output.
+ */
+function evaluateKeywordExtractorCompliance(
+  payload: Record<string, unknown>,
+):
+  | {
+      ok: true;
+      rawKeywordCount: number;
+      prunedKeywordCount: number;
+      normalizedKeywords: string[];
+    }
+  | {
+      ok: false;
+      rawKeywordCount: number;
+      prunedKeywordCount: number;
+      normalizedKeywords: string[];
+      message: string;
+    } {
+  const rawKeywords = normalizeKeywordArray((payload as any)?.keywords);
+  const normalizedKeywords = rawKeywords.length > 0 ? rawKeywords : [];
+
+  if (normalizedKeywords.length === 0) {
+    return {
+      ok: false,
+      rawKeywordCount: rawKeywords.length,
+      prunedKeywordCount: 0,
+      normalizedKeywords: [] as string[],
+      message: 'keyword_extractor returned no usable keywords.',
+    };
+  }
+
+  return {
+    ok: true,
+    rawKeywordCount: rawKeywords.length,
+    prunedKeywordCount: normalizedKeywords.length,
+    normalizedKeywords,
+  };
+}
+
 function sumSpellSlots(value: unknown): number {
   if (!isRecord(value)) return 0;
   let total = 0;
@@ -1268,13 +1322,14 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       const payload = extraction.patch[body.stageId] as Record<string, unknown>;
       const allowedKeys = getStageAllowedKeys(body.stageId, registry);
       const prunedPayload = pruneToAllowedKeys(allowedKeys, payload);
-      const rawAllowedKeyCount = Object.keys(prunedPayload).length;
+      let rawAllowedKeyCount = Object.keys(prunedPayload).length;
       console.log(`[AI][PRUNED][${body.stageId}]`, {
         stageRunId: body.stageRunId,
         rawAllowedKeyCount,
         keys: Object.keys(prunedPayload),
       });
       const isSpellcastingStage = body.stageId.toLowerCase().includes('spellcasting');
+      const isKeywordExtractor = body.stageId === 'keyword_extractor';
       const criticalZeroGuardStages = ['basic_info', 'creator:_basic_info', 'core_details', 'creator:_core_details'];
 
       if (criticalZeroGuardStages.includes(body.stageId.toLowerCase()) && rawAllowedKeyCount === 0) {
@@ -1403,13 +1458,41 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       normalizeLegendaryActions(prunedPayload);
       normalizeLairAndRegional(prunedPayload);
 
+      if (isKeywordExtractor) {
+        const compliance = evaluateKeywordExtractorCompliance(payload);
+        console.debug('[AI][VALIDATION][keyword_extractor]', {
+          stageRunId: body.stageRunId,
+          rawKeywordCount: compliance.rawKeywordCount,
+          prunedKeywordCount: compliance.prunedKeywordCount,
+          rawCompliance: compliance.ok ? 'keyword-array-present' : 'missing-keywords',
+        });
+
+        if (!compliance.ok) {
+          return res.status(422).json({
+            ok: false,
+            requestId,
+            stageRunId: body.stageRunId,
+            error: {
+              type: 'INVALID_RESPONSE',
+              message: compliance.message,
+              retryable: false,
+            },
+          } satisfies GeminiFailureResponse);
+        }
+
+        prunedPayload.keywords = compliance.normalizedKeywords;
+        rawAllowedKeyCount = compliance.prunedKeywordCount;
+      }
+
       const allowedPresentCountGeneric = allowedKeys.filter((key) => Object.prototype.hasOwnProperty.call(prunedPayload, key)).length;
       const synthesizedHeavyCritical =
+        !isKeywordExtractor &&
         criticalZeroGuardStages.includes(body.stageId.toLowerCase()) &&
         rawAllowedKeyCount > 0 &&
         rawAllowedKeyCount < Math.ceil(allowedPresentCountGeneric / 2);
 
       const synthesizedHeavyNonCritical =
+        !isKeywordExtractor &&
         !criticalZeroGuardStages.includes(body.stageId.toLowerCase()) &&
         !isSpellcastingStage &&
         allowedPresentCountGeneric > 0 &&
@@ -1564,4 +1647,4 @@ Make sure to include required fields: ${requiredFields.join(', ')}`;
   }
 });
 
-export { aiRouter };
+export { aiRouter, evaluateKeywordExtractorCompliance };
