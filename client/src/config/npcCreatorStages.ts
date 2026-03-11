@@ -22,6 +22,7 @@ import {
   RELATIONSHIPS_CONTRACT,
   EQUIPMENT_CONTRACT,
 } from './npcStageContracts';
+import type { RoutedNpcStageKey } from './npcStageRouter';
 
 const CLASS_SPELLCAST_ABILITY_MAP: Record<string, string> = {
   cleric: 'WIS',
@@ -498,7 +499,7 @@ export const NPC_CREATOR_STAGES = [
 /**
  * Map router keys to stage configs for smart routing
  */
-export const STAGE_ROUTER_MAP: Record<string, typeof NPC_CREATOR_BASIC_INFO> = {
+export const STAGE_ROUTER_MAP: Record<RoutedNpcStageKey, typeof NPC_CREATOR_BASIC_INFO> = {
   basicInfo: NPC_CREATOR_BASIC_INFO,
   coreDetails: NPC_CREATOR_CORE_DETAILS,
   stats: NPC_CREATOR_STATS,

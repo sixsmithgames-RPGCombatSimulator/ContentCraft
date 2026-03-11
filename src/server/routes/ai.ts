@@ -9,6 +9,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import Ajv, { type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
+import {
+  getWorkflowStageProxyAllowedKeys,
+  isWorkflowStageCriticalZeroGuard,
+  NPC_SPELLCASTING_PROXY_ALLOWED_KEYS,
+  normalizeWorkflowStageId,
+} from '../../shared/generation/workflowStageCatalog.js';
 
 /** Allowed error types for the AI proxy */
 type AiErrorType =
@@ -22,62 +28,17 @@ type AiErrorType =
   | 'BUDGET_EXCEEDED'
   | 'ABORTED';
 
-const SPELLCASTING_ALLOWED_KEYS = [
-  'spellcasting_ability',
-  'spell_save_dc',
-  'spell_attack_bonus',
-  'spell_slots',
-  'prepared_spells',
-  'always_prepared_spells',
-  'innate_spells',
-  'spells_known',
-  'spellcasting_focus',
-  // context helpers to enable deterministic derivation
-  'class_levels',
-  'ability_scores',
-  'proficiency_bonus',
-];
-
-const NPC_STAGE_ALLOWED_KEYS: Record<string, string[]> = {
-  keyword_extractor: ['keywords'],
-  basic_info: ['name', 'title', 'description', 'appearance', 'background', 'species', 'race', 'alignment', 'class_levels', 'location', 'affiliation'],
-  core_details: ['personality_traits', 'ideals', 'bonds', 'flaws', 'goals', 'fears', 'quirks', 'voice_mannerisms', 'hooks'],
-  stats: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
-  character_build: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
-  combat: ['actions', 'bonus_actions', 'reactions', 'multiattack', 'special_attacks', 'tactics', 'combat_tactics'],
-  spellcasting: SPELLCASTING_ALLOWED_KEYS,
-  legendary: ['legendary_actions', 'legendary_resistance', 'lair_actions', 'regional_effects'],
-  relationships: ['allies', 'enemies', 'foes', 'organizations', 'family', 'contacts'],
-  equipment: ['weapons', 'armor_and_shields', 'wondrous_items', 'consumables', 'other_gear', 'equipment'],
-};
+const SPELLCASTING_ALLOWED_KEYS = [...NPC_SPELLCASTING_PROXY_ALLOWED_KEYS];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 function getNormalizedStageKey(stageId: string): string {
-  const compact = stageId.toLowerCase().replace(/[^a-z]/g, '');
-
-  if (compact === 'keywordextractor') return 'keyword_extractor';
-  if (compact === 'planner') return 'planner';
-  if (compact === 'basicinfo' || compact === 'creatorbasicinfo') return 'basic_info';
-  if (compact === 'coredetails' || compact === 'creatorcoredetails') return 'core_details';
-  if (compact === 'characterbuild' || compact === 'creatorcharacterbuild') return 'character_build';
-  if (compact === 'combat' || compact === 'creatorcombat') return 'combat';
-  if (compact === 'spellcasting' || compact === 'creatorspellcasting') return 'spellcasting';
-  if (compact === 'legendary' || compact === 'creatorlegendary') return 'legendary';
-  if (compact === 'relationships' || compact === 'creatorrelationships') return 'relationships';
-  if (compact === 'equipment' || compact === 'creatorequipment') return 'equipment';
-  if (compact === 'stats' || compact === 'creatorstats') return 'stats';
-
-  return stageId.toLowerCase();
+  return normalizeWorkflowStageId(stageId) ?? stageId.toLowerCase();
 }
 
 function getStageAllowedKeys(stageId: string, registry: StageRegistryEntry): string[] {
-  const normalizedStageKey = getNormalizedStageKey(stageId);
-  if (normalizedStageKey in NPC_STAGE_ALLOWED_KEYS) {
-    return NPC_STAGE_ALLOWED_KEYS[normalizedStageKey];
-  }
-  return registry.allowedPaths;
+  return [...(getWorkflowStageProxyAllowedKeys(stageId) ?? registry.allowedPaths)];
 }
 
 function pruneToAllowedKeys(allowedKeys: string[], payload: Record<string, unknown>): Record<string, unknown> {
@@ -1372,9 +1333,9 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       });
       const isSpellcastingStage = stageKey === 'spellcasting';
       const isKeywordExtractor = stageKey === 'keyword_extractor';
-      const criticalZeroGuardStages = ['basic_info', 'core_details'];
+      const hasCriticalZeroGuard = isWorkflowStageCriticalZeroGuard(stageKey);
 
-      if (criticalZeroGuardStages.includes(stageKey) && rawAllowedKeyCount === 0) {
+      if (hasCriticalZeroGuard && rawAllowedKeyCount === 0) {
         console.warn(`[AI][VALIDATION][${body.stageId}] rejected: zero allowed keys in raw response`, {
           stageRunId: body.stageRunId,
         });
@@ -1529,13 +1490,13 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       const allowedPresentCountGeneric = allowedKeys.filter((key) => Object.prototype.hasOwnProperty.call(prunedPayload, key)).length;
       const synthesizedHeavyCritical =
         !isKeywordExtractor &&
-        criticalZeroGuardStages.includes(stageKey) &&
+        hasCriticalZeroGuard &&
         rawAllowedKeyCount > 0 &&
         rawAllowedKeyCount < Math.ceil(allowedPresentCountGeneric / 2);
 
       const synthesizedHeavyNonCritical =
         !isKeywordExtractor &&
-        !criticalZeroGuardStages.includes(stageKey) &&
+        !hasCriticalZeroGuard &&
         !isSpellcastingStage &&
         allowedPresentCountGeneric > 0 &&
         rawAllowedKeyCount < Math.ceil(allowedPresentCountGeneric / 2);

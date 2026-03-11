@@ -56,7 +56,7 @@ import { projectApi, API_BASE_URL } from '../services/api';
 import type { Project } from '../types';
 import { useAiAssistant } from '../contexts/AiAssistantContext';
 import type { AiCompiledStageRequest, AiStageMemorySummary, WorkflowType } from '../contexts/AiAssistantContext';
-import { pruneToAllowedKeys, STAGE_OUTPUT_CONTRACTS, validateStageOutput, type StageKey } from '../utils/stageOutputContracts';
+import { pruneToAllowedKeys, resolveStageContractKey, STAGE_OUTPUT_CONTRACTS, validateStageOutput, type StageKey } from '../utils/stageOutputContracts';
 import ModeSelectionDialog from '../components/ai-assistant/ModeSelectionDialog';
 
 type JsonRecord = Record<string, unknown>;
@@ -898,21 +898,6 @@ const shouldLogAiPayload = (): boolean => {
   } catch (_err) {
     return false;
   }
-};
-
-const getStageContractKey = (stageName: string): StageKey | null => {
-  if (stageName === 'Keyword Extractor') return 'keywordExtractor';
-  if (stageName === 'Planner') return 'planner';
-  if (stageName === 'Creator: Basic Info') return 'basicInfo';
-  if (stageName === 'Creator: Core Details') return 'coreDetails';
-  if (stageName === 'Creator: Stats') return 'stats';
-  if (stageName === 'Creator: Character Build') return 'characterBuild';
-  if (stageName === 'Creator: Combat') return 'combat';
-  if (stageName === 'Creator: Spellcasting') return 'spellcasting';
-  if (stageName === 'Creator: Legendary') return 'legendary';
-  if (stageName === 'Creator: Relationships') return 'relationships';
-  if (stageName === 'Creator: Equipment') return 'equipment';
-  return null;
 };
 
 const normalizeCoreDetailsStageOutput = (value: JsonRecord): JsonRecord => {
@@ -4416,21 +4401,41 @@ export default function ManualGenerator() {
     return deduplicateFactpack(merged);
   };
 
-  // Helper function to search canon with keywords
-  const searchCanonWithKeywords = async (keywords: string[]): Promise<Factpack> => {
-    try {
-      // Fetch all linked entities for this project (expands collections)
-      const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/entities`);
-
+  const fetchCanonEntitiesForSearch = async (): Promise<{ entities: CanonEntity[]; scope: 'project' | 'library' }> => {
+    const parseEntitiesResponse = async (url: string): Promise<CanonEntity[] | null> => {
+      const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`Failed to fetch entities: ${response.status} ${response.statusText}`);
+        return null;
       }
 
       const data = await response.json();
-
-      const relevantEntities: CanonEntity[] = Array.isArray(data)
+      return Array.isArray(data)
         ? data.filter((entity): entity is CanonEntity => Boolean(entity && typeof entity === 'object' && '_id' in entity))
         : [];
+    };
+
+    if (projectId && projectId !== 'default') {
+      const projectEntities = await parseEntitiesResponse(`${API_BASE_URL}/canon/projects/${projectId}/entities`);
+      if (Array.isArray(projectEntities) && projectEntities.length > 0) {
+        return { entities: projectEntities, scope: 'project' };
+      }
+
+      console.log('[ManualGenerator] Project canon search is empty. Falling back to library scope for retrieval.');
+    }
+
+    const libraryEntities = await parseEntitiesResponse(`${API_BASE_URL}/canon/entities?scope=lib`);
+    if (Array.isArray(libraryEntities)) {
+      return { entities: libraryEntities, scope: 'library' };
+    }
+
+    throw new Error('Failed to fetch canon entities from both project and library scopes.');
+  };
+
+  // Helper function to search canon with keywords
+  const searchCanonWithKeywords = async (keywords: string[]): Promise<Factpack> => {
+    try {
+      const { entities: relevantEntities, scope } = await fetchCanonEntitiesForSearch();
+      console.log(`[ManualGenerator] Searching canon in ${scope} scope (${relevantEntities.length} entities available)`);
 
       const slugify = (s: string) => s
         .toLowerCase()
@@ -4553,7 +4558,7 @@ export default function ManualGenerator() {
           return item.entity;
         });
 
-      console.log(`[ManualGenerator] Filtered to ${keywordMatches.length} relevant entities from ${relevantEntities.length} total`);
+      console.log(`[ManualGenerator] Filtered to ${keywordMatches.length} relevant entities from ${relevantEntities.length} total (${scope} scope)`);
       console.log(`[ManualGenerator] Keywords searched: ${keywords.join(', ')}`);
 
       // Build factpack with prioritized entities
@@ -6454,7 +6459,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         }
 
         // Prune to allowed keys for the current stage to prevent bleed-over
-        const contractKey = getStageContractKey(currentStage.name);
+        const contractKey = resolveStageContractKey(currentStage.name);
         if (contractKey) {
           parsed = pruneToAllowedKeys(parsed, STAGE_OUTPUT_CONTRACTS[contractKey].allowedKeys) as JsonRecord;
 

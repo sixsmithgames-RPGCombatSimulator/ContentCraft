@@ -13,6 +13,9 @@ export default defineConfig({
     sourcemap: true, // aid post-deploy debugging to pinpoint runtime errors
   },
   server: {
+    fs: {
+      allow: ['..'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

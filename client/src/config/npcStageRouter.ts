@@ -7,22 +7,16 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
+import type { LegacyStageContractKey } from '../../../src/shared/generation/workflowStageCatalog';
+
 export interface StageRequirement {
   required: boolean;
   reason?: string;
 }
 
-export interface StageRoutingDecision {
-  basicInfo: StageRequirement;
-  coreDetails: StageRequirement;
-  stats: StageRequirement;
-  characterBuild: StageRequirement;
-  combat: StageRequirement;
-  spellcasting: StageRequirement;
-  legendary: StageRequirement;
-  relationships: StageRequirement;
-  equipment: StageRequirement;
-}
+export type RoutedNpcStageKey = Exclude<LegacyStageContractKey, 'keywordExtractor' | 'planner'>;
+
+export type StageRoutingDecision = Record<RoutedNpcStageKey, StageRequirement>;
 
 interface BasicInfoOutput {
   challenge_rating?: number | string;

@@ -1,113 +1,52 @@
+import {
+  getLegacyStageContractKey,
+  getWorkflowStageDefinition,
+  type LegacyStageContractKey,
+} from '../../../src/shared/generation/workflowStageCatalog';
+
 // Local utility types
 export type JsonRecord = Record<string, unknown>;
-
-export type StageKey =
-  | 'keywordExtractor'
-  | 'planner'
-  | 'basicInfo'
-  | 'coreDetails'
-  | 'stats'
-  | 'characterBuild'
-  | 'combat'
-  | 'spellcasting'
-  | 'legendary'
-  | 'relationships'
-  | 'equipment';
+export type StageKey = LegacyStageContractKey;
 
 export interface StageContract {
   allowedKeys: readonly string[];
   requiredKeys: readonly string[];
 }
 
-export const STAGE_OUTPUT_CONTRACTS: Record<StageKey, StageContract> = {
-  keywordExtractor: { allowedKeys: ['keywords'], requiredKeys: ['keywords'] },
-  planner: {
-    allowedKeys: ['deliverable', 'retrieval_hints', 'proposals', 'assumptions', 'flags_echo'],
-    requiredKeys: ['deliverable', 'retrieval_hints', 'proposals', 'flags_echo'],
-  },
-  basicInfo: {
-    allowedKeys: ['name', 'title', 'description', 'appearance', 'background', 'species', 'race', 'alignment', 'class_levels', 'location', 'affiliation'],
-    requiredKeys: ['name', 'description', 'appearance', 'background', 'species', 'alignment', 'class_levels'],
-  },
-  coreDetails: {
-    allowedKeys: [
-      'personality_traits',
-      'ideals',
-      'bonds',
-      'flaws',
-      'goals',
-      'fears',
-      'quirks',
-      'voice_mannerisms',
-      'hooks',
-    ],
-    requiredKeys: [
-      'personality_traits',
-      'ideals',
-      'bonds',
-      'flaws',
-      'goals',
-      'fears',
-      'quirks',
-      'voice_mannerisms',
-      'hooks',
-    ],
-  },
-  stats: {
-    allowedKeys: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
-    requiredKeys: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
-  },
-  characterBuild: {
-    allowedKeys: [
-      'class_features',
-      'subclass_features',
-      'racial_features',
-      'feats',
-      'fighting_styles',
-      'skill_proficiencies',
-      'saving_throws',
-    ],
-    requiredKeys: [
-      'class_features',
-      'subclass_features',
-      'racial_features',
-      'feats',
-      'fighting_styles',
-      'skill_proficiencies',
-      'saving_throws',
-    ],
-  },
-  combat: {
-    allowedKeys: ['actions', 'bonus_actions', 'reactions', 'multiattack', 'special_attacks'],
-    requiredKeys: ['actions', 'bonus_actions', 'reactions'],
-  },
-  spellcasting: {
-    allowedKeys: [
-      'spellcasting_ability',
-      'spell_save_dc',
-      'spell_attack_bonus',
-      'spell_slots',
-      'prepared_spells',
-      'spellcasting_focus',
-      'spells_known',
-      'always_prepared_spells',
-      'innate_spells',
-    ],
-    requiredKeys: ['spellcasting_ability', 'spell_save_dc', 'spell_attack_bonus'],
-  },
-  legendary: {
-    allowedKeys: ['legendary_actions', 'legendary_resistance', 'lair_actions', 'regional_effects'],
-    requiredKeys: [],
-  },
-  relationships: {
-    allowedKeys: ['allies', 'enemies', 'organizations', 'family', 'contacts'],
-    requiredKeys: ['allies', 'enemies', 'organizations'],
-  },
-  equipment: {
-    allowedKeys: ['weapons', 'armor_and_shields', 'wondrous_items', 'consumables', 'other_gear'],
-    requiredKeys: ['weapons', 'armor_and_shields', 'wondrous_items', 'consumables', 'other_gear'],
-  },
-};
+const STAGE_KEY_ORDER: readonly StageKey[] = [
+  'keywordExtractor',
+  'planner',
+  'basicInfo',
+  'coreDetails',
+  'stats',
+  'characterBuild',
+  'combat',
+  'spellcasting',
+  'legendary',
+  'relationships',
+  'equipment',
+];
+
+export const STAGE_OUTPUT_CONTRACTS: Record<StageKey, StageContract> = Object.fromEntries(
+  STAGE_KEY_ORDER.map((stageKey) => {
+    const definition = getWorkflowStageDefinition(stageKey);
+    if (!definition?.contract) {
+      throw new Error(`Missing shared workflow contract for stage ${stageKey}`);
+    }
+
+    return [
+      stageKey,
+      {
+        allowedKeys: definition.contract.outputAllowedKeys,
+        requiredKeys: definition.contract.requiredKeys,
+      },
+    ];
+  }),
+) as Record<StageKey, StageContract>;
+
+export function resolveStageContractKey(stageIdOrName: string): StageKey | null {
+  return getLegacyStageContractKey(stageIdOrName);
+}
 
 export function pruneToAllowedKeys<T extends Record<string, unknown>>(obj: T, allowedKeys: readonly string[]): Partial<T> {
   const out: Partial<T> = {};

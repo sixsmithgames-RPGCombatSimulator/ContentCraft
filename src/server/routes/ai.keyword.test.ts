@@ -18,6 +18,21 @@ describe('evaluateKeywordExtractorCompliance', () => {
     expect(allowedKeys).not.toContain('speed');
   });
 
+  it('accepts display-name aliases and spellcasting helper fields', () => {
+    const registry = {
+      allowedPaths: ['spellcasting_ability', 'spell_save_dc'],
+      schemaVersion: 'v1.1-client',
+      schema: {},
+    } as any;
+
+    const allowedKeys = getStageAllowedKeys('Creator: Spellcasting', registry);
+
+    expect(allowedKeys).toContain('spellcasting_ability');
+    expect(allowedKeys).toContain('class_levels');
+    expect(allowedKeys).toContain('ability_scores');
+    expect(allowedKeys).toContain('proficiency_bonus');
+  });
+
   it('falls back to registry keys for unknown stages', () => {
     const registry = {
       allowedPaths: ['foo', 'bar'],

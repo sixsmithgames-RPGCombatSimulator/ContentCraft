@@ -8,6 +8,8 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
+import { getNpcPromptContractKey, type NpcPromptContractKey } from '../../../src/shared/generation/workflowStageCatalog';
+
 /**
  * Basic Info stage contract (stage-isolated, concise).
  */
@@ -179,25 +181,16 @@ Rules:
  * Stage contract map.
  * Maps stage IDs to their contracts.
  */
-export const STAGE_CONTRACTS: Record<string, string> = {
-  'basic_info': BASIC_INFO_CONTRACT,
-  'creator:_basic_info': BASIC_INFO_CONTRACT,
-  'core_details': CORE_DETAILS_CONTRACT,
-  'creator:_core_details': CORE_DETAILS_CONTRACT,
-  'stats': STATS_CONTRACT,
-  'creator:_stats': STATS_CONTRACT,
-  'character_build': CHARACTER_BUILD_CONTRACT,
-  'creator:_character_build': CHARACTER_BUILD_CONTRACT,
-  'combat': COMBAT_CONTRACT,
-  'creator:_combat': COMBAT_CONTRACT,
-  'equipment': EQUIPMENT_CONTRACT,
-  'creator:_equipment': EQUIPMENT_CONTRACT,
-  'spellcasting': SPELLCASTING_CONTRACT,
-  'creator:_spellcasting': SPELLCASTING_CONTRACT,
-  'legendary': LEGENDARY_CONTRACT,
-  'creator:_legendary': LEGENDARY_CONTRACT,
-  'relationships': RELATIONSHIPS_CONTRACT,
-  'creator:_relationships': RELATIONSHIPS_CONTRACT,
+export const STAGE_CONTRACTS: Record<NpcPromptContractKey, string> = {
+  basic_info: BASIC_INFO_CONTRACT,
+  core_details: CORE_DETAILS_CONTRACT,
+  stats: STATS_CONTRACT,
+  character_build: CHARACTER_BUILD_CONTRACT,
+  combat: COMBAT_CONTRACT,
+  equipment: EQUIPMENT_CONTRACT,
+  spellcasting: SPELLCASTING_CONTRACT,
+  legendary: LEGENDARY_CONTRACT,
+  relationships: RELATIONSHIPS_CONTRACT,
 };
 
 /**
@@ -207,19 +200,6 @@ export const STAGE_CONTRACTS: Record<string, string> = {
  * @returns Stage contract or null if not found
  */
 export function getStageContract(stageIdOrName: string): string | null {
-  // Normalize to lowercase with underscores
-  const normalized = stageIdOrName.toLowerCase().replace(/\s+/g, '_');
-  
-  // Try exact match
-  if (STAGE_CONTRACTS[normalized]) {
-    return STAGE_CONTRACTS[normalized];
-  }
-  
-  // Try with 'creator:_' prefix
-  const prefixed = `creator:_${normalized}`;
-  if (STAGE_CONTRACTS[prefixed]) {
-    return STAGE_CONTRACTS[prefixed];
-  }
-  
-  return null;
+  const contractKey = getNpcPromptContractKey(stageIdOrName);
+  return contractKey ? STAGE_CONTRACTS[contractKey] : null;
 }
