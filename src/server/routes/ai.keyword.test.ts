@@ -1,7 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateKeywordExtractorCompliance } from './ai.js';
+import { evaluateKeywordExtractorCompliance, getStageAllowedKeys } from './ai.js';
 
 describe('evaluateKeywordExtractorCompliance', () => {
+
+  it('uses stage-specific allowed keys for NPC basic info slices', () => {
+    const registry = {
+      allowedPaths: ['name', 'description', 'appearance', 'background', 'species', 'race', 'alignment', 'class_levels', 'location', 'affiliation', 'ability_scores', 'speed', 'saving_throws'],
+      schemaVersion: 'v1.1-client',
+      schema: {},
+    } as any;
+
+    const allowedKeys = getStageAllowedKeys('basicInfo', registry);
+
+    expect(allowedKeys).toContain('species');
+    expect(allowedKeys).toContain('race');
+    expect(allowedKeys).not.toContain('ability_scores');
+    expect(allowedKeys).not.toContain('speed');
+  });
+
+  it('falls back to registry keys for unknown stages', () => {
+    const registry = {
+      allowedPaths: ['foo', 'bar'],
+      schemaVersion: 'v1.1-client',
+      schema: {},
+    } as any;
+
+    expect(getStageAllowedKeys('unknown_stage', registry)).toEqual(['foo', 'bar']);
+  });
   it('passes when keywords array exists alongside junk fields', () => {
     const payload = {
       keywords: [

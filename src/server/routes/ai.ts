@@ -38,12 +38,45 @@ const SPELLCASTING_ALLOWED_KEYS = [
   'proficiency_bonus',
 ];
 
+const NPC_STAGE_ALLOWED_KEYS: Record<string, string[]> = {
+  keyword_extractor: ['keywords'],
+  basic_info: ['name', 'title', 'description', 'appearance', 'background', 'species', 'race', 'alignment', 'class_levels', 'location', 'affiliation'],
+  core_details: ['personality_traits', 'ideals', 'bonds', 'flaws', 'goals', 'fears', 'quirks', 'voice_mannerisms', 'hooks'],
+  stats: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
+  character_build: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
+  combat: ['actions', 'bonus_actions', 'reactions', 'multiattack', 'special_attacks', 'tactics', 'combat_tactics'],
+  spellcasting: SPELLCASTING_ALLOWED_KEYS,
+  legendary: ['legendary_actions', 'legendary_resistance', 'lair_actions', 'regional_effects'],
+  relationships: ['allies', 'enemies', 'foes', 'organizations', 'family', 'contacts'],
+  equipment: ['weapons', 'armor_and_shields', 'wondrous_items', 'consumables', 'other_gear', 'equipment'],
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
+function getNormalizedStageKey(stageId: string): string {
+  const compact = stageId.toLowerCase().replace(/[^a-z]/g, '');
+
+  if (compact === 'keywordextractor') return 'keyword_extractor';
+  if (compact === 'planner') return 'planner';
+  if (compact === 'basicinfo' || compact === 'creatorbasicinfo') return 'basic_info';
+  if (compact === 'coredetails' || compact === 'creatorcoredetails') return 'core_details';
+  if (compact === 'characterbuild' || compact === 'creatorcharacterbuild') return 'character_build';
+  if (compact === 'combat' || compact === 'creatorcombat') return 'combat';
+  if (compact === 'spellcasting' || compact === 'creatorspellcasting') return 'spellcasting';
+  if (compact === 'legendary' || compact === 'creatorlegendary') return 'legendary';
+  if (compact === 'relationships' || compact === 'creatorrelationships') return 'relationships';
+  if (compact === 'equipment' || compact === 'creatorequipment') return 'equipment';
+  if (compact === 'stats' || compact === 'creatorstats') return 'stats';
+
+  return stageId.toLowerCase();
+}
+
 function getStageAllowedKeys(stageId: string, registry: StageRegistryEntry): string[] {
-  const normalized = stageId.toLowerCase();
-  if (normalized.includes('spellcasting')) return SPELLCASTING_ALLOWED_KEYS;
+  const normalizedStageKey = getNormalizedStageKey(stageId);
+  if (normalizedStageKey in NPC_STAGE_ALLOWED_KEYS) {
+    return NPC_STAGE_ALLOWED_KEYS[normalizedStageKey];
+  }
   return registry.allowedPaths;
 }
 
@@ -492,6 +525,7 @@ function normalizeScalarStrings(container: Record<string, unknown>, fields: stri
  * Ensures schema compliance to avoid '/personality must be object' errors.
  */
 function normalizePersonality(container: Record<string, unknown>): void {
+  if (!Object.prototype.hasOwnProperty.call(container, 'personality')) return;
   const current = (container as any).personality;
   const toArray = (value: unknown): string[] => {
     if (Array.isArray(value)) return value.filter((v) => typeof v === 'string');
@@ -518,6 +552,7 @@ function normalizePersonality(container: Record<string, unknown>): void {
  */
 function normalizeStats(container: Record<string, unknown>): void {
   const ensureAbilityScores = () => {
+    if (!Object.prototype.hasOwnProperty.call(container, 'ability_scores')) return;
     const defaultScores: Record<'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha', number> = {
       str: 10,
       dex: 10,
@@ -542,6 +577,7 @@ function normalizeStats(container: Record<string, unknown>): void {
   };
 
   const ensureSpeed = () => {
+    if (!Object.prototype.hasOwnProperty.call(container, 'speed')) return;
     const defaultSpeed = { walk: '30 ft.' };
     const current = container.speed as Record<string, unknown> | undefined;
     if (!current || typeof current !== 'object' || Array.isArray(current)) {
@@ -564,6 +600,7 @@ function normalizeStats(container: Record<string, unknown>): void {
   };
 
   const ensureSavingThrows = () => {
+    if (!Object.prototype.hasOwnProperty.call(container, 'saving_throws')) return;
     const current = container.saving_throws;
     if (!Array.isArray(current)) {
       container.saving_throws = [];
@@ -619,6 +656,7 @@ function normalizeStringArrays(container: Record<string, unknown>, fields: strin
  * Normalize arrays that must contain objects with name/value to satisfy schema requirements.
  */
 function normalizeNameValueArray(container: Record<string, unknown>, field: string, defaultValue = '+0'): void {
+  if (!Object.prototype.hasOwnProperty.call(container, field)) return;
   const raw = (container as Record<string, unknown>)[field];
   const items = Array.isArray(raw) ? raw : [];
   const normalized = items
@@ -699,6 +737,7 @@ function normalizeHitPointsAndProficiency(container: Record<string, unknown>): v
  * Normalize arrays of objects requiring name/description (with optional notes/recharge/uses/source).
  */
 function normalizeNameDescriptionArray(container: Record<string, unknown>, field: string): void {
+  if (!Object.prototype.hasOwnProperty.call(container, field)) return;
   const raw = (container as Record<string, unknown>)[field];
   const items = Array.isArray(raw) ? raw : [];
   const normalized = items
@@ -729,6 +768,7 @@ function normalizeNameDescriptionArray(container: Record<string, unknown>, field
  * Ensure legendary_actions is an object with arrays inside; coerce strings/numbers to object with description.
  */
 function normalizeLegendaryActions(container: Record<string, unknown>): void {
+  if (!Object.prototype.hasOwnProperty.call(container, 'legendary_actions')) return;
   const current = (container as Record<string, unknown>).legendary_actions;
   if (!current || typeof current !== 'object' || Array.isArray(current)) {
     (container as Record<string, unknown>).legendary_actions = {
@@ -1291,8 +1331,10 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         } satisfies GeminiFailureResponse);
       }
 
+      const stageKey = getNormalizedStageKey(body.stageId);
+
       // Planner stage produces a Brief (no equipment field). Skip NPC validation and return as-is.
-      if (body.stageId === 'planner') {
+      if (stageKey === 'planner') {
         const successPayload: GeminiSuccessResponse = {
           ok: true,
           provider: 'gemini',
@@ -1328,11 +1370,11 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         rawAllowedKeyCount,
         keys: Object.keys(prunedPayload),
       });
-      const isSpellcastingStage = body.stageId.toLowerCase().includes('spellcasting');
-      const isKeywordExtractor = body.stageId === 'keyword_extractor';
-      const criticalZeroGuardStages = ['basic_info', 'creator:_basic_info', 'core_details', 'creator:_core_details'];
+      const isSpellcastingStage = stageKey === 'spellcasting';
+      const isKeywordExtractor = stageKey === 'keyword_extractor';
+      const criticalZeroGuardStages = ['basic_info', 'core_details'];
 
-      if (criticalZeroGuardStages.includes(body.stageId.toLowerCase()) && rawAllowedKeyCount === 0) {
+      if (criticalZeroGuardStages.includes(stageKey) && rawAllowedKeyCount === 0) {
         console.warn(`[AI][VALIDATION][${body.stageId}] rejected: zero allowed keys in raw response`, {
           stageRunId: body.stageRunId,
         });
@@ -1487,13 +1529,13 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       const allowedPresentCountGeneric = allowedKeys.filter((key) => Object.prototype.hasOwnProperty.call(prunedPayload, key)).length;
       const synthesizedHeavyCritical =
         !isKeywordExtractor &&
-        criticalZeroGuardStages.includes(body.stageId.toLowerCase()) &&
+        criticalZeroGuardStages.includes(stageKey) &&
         rawAllowedKeyCount > 0 &&
         rawAllowedKeyCount < Math.ceil(allowedPresentCountGeneric / 2);
 
       const synthesizedHeavyNonCritical =
         !isKeywordExtractor &&
-        !criticalZeroGuardStages.includes(body.stageId.toLowerCase()) &&
+        !criticalZeroGuardStages.includes(stageKey) &&
         !isSpellcastingStage &&
         allowedPresentCountGeneric > 0 &&
         rawAllowedKeyCount < Math.ceil(allowedPresentCountGeneric / 2);
@@ -1647,4 +1689,4 @@ Make sure to include required fields: ${requiredFields.join(', ')}`;
   }
 });
 
-export { aiRouter, evaluateKeywordExtractorCompliance };
+export { aiRouter, evaluateKeywordExtractorCompliance, getNormalizedStageKey, getStageAllowedKeys };
