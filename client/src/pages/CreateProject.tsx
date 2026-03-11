@@ -97,7 +97,7 @@ export const CreateProject: React.FC = () => {
           <select
             id="type"
             value={formData.type}
-            onChange={(e) => handleChange('type', e.target.value)}
+            onChange={(e) => handleChange('type', e.target.value as ProjectType)}
             className="input"
             required
           >
@@ -131,8 +131,9 @@ export const CreateProject: React.FC = () => {
           <select
             id="status"
             value={formData.status}
-            onChange={(e) => handleChange('status', e.target.value)}
+            onChange={(e) => handleChange('status', e.target.value as ProjectStatus)}
             className="input"
+            required
           >
             <option value={ProjectStatus.DRAFT}>Draft</option>
             <option value={ProjectStatus.IN_PROGRESS}>In Progress</option>

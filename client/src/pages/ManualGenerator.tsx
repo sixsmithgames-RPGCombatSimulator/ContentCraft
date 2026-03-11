@@ -943,7 +943,7 @@ const normalizeCoreDetailsStageOutput = (value: JsonRecord): JsonRecord => {
   return normalized;
 };
 
-const buildCoreDetailsRetrySnapshot = (value: JsonRecord | null): string | null => {
+const _buildCoreDetailsRetrySnapshot = (value: JsonRecord | null): string | null => {
   if (!value) {
     return null;
   }
@@ -3297,9 +3297,7 @@ export default function ManualGenerator() {
   const [accumulatedAnswers, setAccumulatedAnswers] = useState<Record<string, string>>({});
   const [showChunkingModal, setShowChunkingModal] = useState(false);
   const [factGroups, setFactGroups] = useState<FactGroup[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isMultiPartGeneration, setIsMultiPartGeneration] = useState(false);
   const [currentChunkInfo, setCurrentChunkInfo] = useState<{ isChunked: boolean; currentChunk: number; totalChunks: number; chunkLabel: string } | undefined>(undefined);
 

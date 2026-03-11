@@ -23,6 +23,73 @@ import {
   EQUIPMENT_CONTRACT,
 } from './npcStageContracts';
 
+const CLASS_SPELLCAST_ABILITY_MAP: Record<string, string> = {
+  cleric: 'WIS',
+  druid: 'WIS',
+  paladin: 'CHA',
+  ranger: 'WIS',
+  bard: 'CHA',
+  sorcerer: 'CHA',
+  warlock: 'CHA',
+  wizard: 'INT',
+  artificer: 'INT',
+};
+
+function extractClass(value: string | undefined): string {
+  if (!value) return '';
+  const match = value.match(/^(.*?)(?:\s*\(|\s*-\s*)([^)]*)\)?$/);
+  if (match && match[1]) return match[1].trim();
+  return value.trim();
+}
+
+function extractSubclass(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const match = value.match(/^(.*?)(?:\s*\(|\s*-\s*)([^)]*)\)?$/);
+  if (match && match[2]) {
+    const subclass = match[2].trim();
+    return subclass || undefined;
+  }
+  return undefined;
+}
+
+function inferSpellcastingAbility(className?: string, subclass?: string): string | undefined {
+  const normalized = className?.trim().toLowerCase() || '';
+  if (!normalized) return undefined;
+  if (normalized === 'paladin' && subclass?.toLowerCase().includes('devotion')) return 'CHA';
+  return CLASS_SPELLCAST_ABILITY_MAP[normalized];
+}
+
+function computeHalfCasterSlots(level?: number): Record<string, number> {
+  if (!Number.isFinite(level)) return {};
+  const table: Record<number, Record<string, number>> = {
+    1: { 1: 0 },
+    2: { 1: 2 },
+    3: { 1: 3 },
+    4: { 1: 3 },
+    5: { 1: 4, 2: 2 },
+    6: { 1: 4, 2: 2 },
+    7: { 1: 4, 2: 3 },
+    8: { 1: 4, 2: 3 },
+    9: { 1: 4, 2: 3, 3: 2 },
+    10: { 1: 4, 2: 3, 3: 2 },
+    11: { 1: 4, 2: 3, 3: 2, 4: 1 },
+    12: { 1: 4, 2: 3, 3: 2, 4: 1 },
+    13: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    14: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    15: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    16: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    17: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    18: { 1: 4, 2: 3, 3: 3, 4: 1, 5: 1 },
+    19: { 1: 4, 2: 3, 3: 3, 4: 2, 5: 1 },
+    20: { 1: 4, 2: 3, 3: 3, 4: 2, 5: 1 },
+  };
+  const nearest = Object.keys(table)
+    .map((k) => Number(k))
+    .filter((k) => k <= (level as number))
+    .sort((a, b) => b - a)[0];
+  return nearest ? table[nearest] : {};
+}
+
 interface StageContext {
   config: { prompt: string; type: string; flags: Record<string, unknown> };
   stageResults: Record<string, Record<string, unknown>>;
@@ -249,29 +316,50 @@ export const NPC_CREATOR_SPELLCASTING = {
   buildUserPrompt: (context: StageContext) => {
     const basicInfo = context.stageResults['creator:_basic_info'];
     const stats = context.stageResults['creator:_stats'];
-    const build = context.stageResults['creator:_character_build'];
+
+    const classLevels = Array.isArray(basicInfo?.class_levels) ? basicInfo?.class_levels : [];
+    const primaryClassRaw = (classLevels?.[0]?.class as string | undefined) || '';
+    const primaryLevel = Number.isFinite(classLevels?.[0]?.level as number) ? (classLevels?.[0]?.level as number) : basicInfo?.level;
+    const subclass = (classLevels?.[0]?.subclass as string | undefined) || extractSubclass(primaryClassRaw);
+    const className = subclass ? extractClass(primaryClassRaw) : primaryClassRaw;
+
+    const abilityScores = stats?.ability_scores || {};
+    const spellcastingAbility = inferSpellcastingAbility(className, subclass);
+    const abilityScore = typeof abilityScores?.[spellcastingAbility?.toLowerCase?.() || ''] === 'number'
+      ? (abilityScores as Record<string, number>)[spellcastingAbility.toLowerCase()]
+      : undefined;
+    const abilityModifier = abilityScore !== undefined ? Math.floor((abilityScore - 10) / 2) : undefined;
+    const proficiencyBonus = typeof stats?.proficiency_bonus === 'number' ? stats.proficiency_bonus : undefined;
+
+    const slotProgression = computeHalfCasterSlots(typeof primaryLevel === 'number' ? primaryLevel : undefined);
+    const derivedDc = abilityModifier !== undefined && proficiencyBonus !== undefined ? 8 + abilityModifier + proficiencyBonus : undefined;
+    const derivedAttack = abilityModifier !== undefined && proficiencyBonus !== undefined ? abilityModifier + proficiencyBonus : undefined;
+
+    const alwaysPreparedSpellSources = subclass ? [subclass] : [];
+
     const userPrompt: Record<string, unknown> = {
+      class_name: className || undefined,
+      subclass: subclass || undefined,
+      level: primaryLevel,
+      caster_type: 'prepared_half_caster',
+      spellcasting_ability: spellcastingAbility,
+      ability_modifier: abilityModifier,
+      proficiency_bonus: proficiencyBonus,
+      derived: {
+        spell_save_dc: derivedDc,
+        spell_attack_bonus: derivedAttack,
+        slot_progression: slotProgression,
+      },
+      always_prepared_spell_sources: alwaysPreparedSpellSources,
+      known_item_spell_sources: [],
+      compact_canon: context.stageResults.planner
+        ? 'Planner provided canon facts; reuse only spell names relevant to this NPC.'
+        : createMinimalFactpack(context.factpack),
+      previous_decisions: context.previousDecisions && Object.keys(context.previousDecisions).length > 0
+        ? context.previousDecisions
+        : undefined,
       original_user_request: context.config.prompt,
-      // Only carry forward the fields Spellcasting actually needs
-      name: basicInfo?.name,
-      species: basicInfo?.species || basicInfo?.race,
-      class_levels: basicInfo?.class_levels,
-      ability_scores: stats?.ability_scores,
-      proficiency_bonus: stats?.proficiency_bonus,
-      class_features: build?.class_features,
-      subclass_features: build?.subclass_features,
-      racial_features: build?.racial_features,
     };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for spellcasting details and spell lists.`;
-    } else {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
 
     return JSON.stringify(userPrompt, null, 2);
   },

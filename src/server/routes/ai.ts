@@ -4,7 +4,7 @@
  */
 
 import { Router, type Request, type Response as ExpressResponse } from 'express';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import Ajv, { type ValidateFunction } from 'ajv';
@@ -21,6 +21,167 @@ type AiErrorType =
   | 'PAYLOAD_TOO_LARGE'
   | 'BUDGET_EXCEEDED'
   | 'ABORTED';
+
+const SPELLCASTING_ALLOWED_KEYS = [
+  'spellcasting_ability',
+  'spell_save_dc',
+  'spell_attack_bonus',
+  'spell_slots',
+  'prepared_spells',
+  'always_prepared_spells',
+  'innate_spells',
+  'spells_known',
+  'spellcasting_focus',
+  // context helpers to enable deterministic derivation
+  'class_levels',
+  'ability_scores',
+  'proficiency_bonus',
+];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+function getStageAllowedKeys(stageId: string, registry: StageRegistryEntry): string[] {
+  const normalized = stageId.toLowerCase();
+  if (normalized.includes('spellcasting')) return SPELLCASTING_ALLOWED_KEYS;
+  return registry.allowedPaths;
+}
+
+function pruneToAllowedKeys(allowedKeys: string[], payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(payload).filter(([key]) => allowedKeys.includes(key)));
+}
+
+function hasNonEmptyStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.some((v) => typeof v === 'string' && v.trim().length > 0);
+}
+
+function hasNonEmptySpellMap(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return Object.values(value).some((entry) => hasNonEmptyStringArray(entry));
+}
+
+function sumSpellSlots(value: unknown): number {
+  if (!isRecord(value)) return 0;
+  return Object.values(value).reduce((total: number, slotCount) => {
+    if (typeof slotCount === 'number' && Number.isFinite(slotCount)) return total + slotCount;
+    const coerced = Number(slotCount);
+    return Number.isFinite(coerced) ? total + coerced : total;
+  }, 0);
+}
+
+function getAbilityModifier(score: unknown): number | undefined {
+  if (typeof score !== 'number' || !Number.isFinite(score)) return undefined;
+  return Math.floor((score - 10) / 2);
+}
+
+function computeHalfCasterSlots(level?: number): Record<string, number> {
+  if (!Number.isFinite(level)) return {};
+  const table: Record<number, Record<string, number>> = {
+    1: { 1: 0 },
+    2: { 1: 2 },
+    3: { 1: 3 },
+    4: { 1: 3 },
+    5: { 1: 4, 2: 2 },
+    6: { 1: 4, 2: 2 },
+    7: { 1: 4, 2: 3 },
+    8: { 1: 4, 2: 3 },
+    9: { 1: 4, 2: 3, 3: 2 },
+    10: { 1: 4, 2: 3, 3: 2 },
+    11: { 1: 4, 2: 3, 3: 2, 4: 1 },
+    12: { 1: 4, 2: 3, 3: 2, 4: 1 },
+    13: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    14: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    15: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    16: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    17: { 1: 4, 2: 3, 3: 2, 4: 1, 5: 1 },
+    18: { 1: 4, 2: 3, 3: 3, 4: 1, 5: 1 },
+    19: { 1: 4, 2: 3, 3: 3, 4: 2, 5: 1 },
+    20: { 1: 4, 2: 3, 3: 3, 4: 2, 5: 1 },
+  };
+  const nearest = Object.keys(table)
+    .map((k) => Number(k))
+    .filter((k) => k <= (level as number))
+    .sort((a, b) => b - a)[0];
+  return nearest ? table[nearest] : {};
+}
+
+function deriveSpellcastingFromContext(payload: Record<string, unknown>): Record<string, unknown> {
+  const classLevels = Array.isArray((payload as any).class_levels) ? (payload as any).class_levels : [];
+  const primaryClassEntry = classLevels[0] && typeof classLevels[0] === 'object' ? (classLevels[0] as any) : null;
+  const className = typeof primaryClassEntry?.class === 'string' ? primaryClassEntry.class : '';
+  const subclass = typeof primaryClassEntry?.subclass === 'string' ? primaryClassEntry.subclass : undefined;
+  const level = Number.isFinite(primaryClassEntry?.level as number) ? (primaryClassEntry?.level as number) : undefined;
+
+  const abilityScores = isRecord((payload as any).ability_scores) ? ((payload as any).ability_scores as Record<string, unknown>) : {};
+  const proficiencyBonus = typeof (payload as any).proficiency_bonus === 'number' ? (payload as any).proficiency_bonus : undefined;
+
+  const normalizedClass = className.toLowerCase();
+  const abilityKey =
+    normalizedClass === 'wizard' || normalizedClass === 'artificer'
+      ? 'int'
+      : normalizedClass === 'cleric' || normalizedClass === 'druid' || normalizedClass === 'ranger'
+      ? 'wis'
+      : 'cha';
+  const abilityScore = abilityScores[abilityKey];
+  const abilityMod = getAbilityModifier(abilityScore);
+
+  const derivedDc = abilityMod !== undefined && proficiencyBonus !== undefined ? 8 + abilityMod + proficiencyBonus : undefined;
+  const derivedAttack = abilityMod !== undefined && proficiencyBonus !== undefined ? abilityMod + proficiencyBonus : undefined;
+  const derivedSlots = normalizedClass === 'paladin' || normalizedClass === 'ranger' ? computeHalfCasterSlots(level) : {};
+
+  const derivedPayload: Record<string, unknown> = {};
+  if (!payload.spellcasting_ability && abilityKey) derivedPayload.spellcasting_ability = abilityKey.toUpperCase();
+  if (!payload.spell_save_dc && derivedDc !== undefined) derivedPayload.spell_save_dc = derivedDc;
+  if (!payload.spell_attack_bonus && derivedAttack !== undefined) derivedPayload.spell_attack_bonus = derivedAttack;
+  if (!payload.spell_slots && Object.keys(derivedSlots).length > 0) derivedPayload.spell_slots = derivedSlots;
+  if (!payload.always_prepared_spells && subclass) derivedPayload.always_prepared_spells = { [subclass]: [] };
+
+  return derivedPayload;
+}
+
+function validateSpellcastingSemantic(
+  payload: Record<string, unknown>,
+  rawAllowedKeyCount: number,
+): { issues: string[]; synthesizedFieldCount: number } {
+  const issues: string[] = [];
+
+  const ability = payload.spellcasting_ability;
+  if (typeof ability !== 'string' || ability.trim().length === 0) {
+    issues.push('spellcasting_ability missing');
+  }
+
+  const saveDc = payload.spell_save_dc;
+  if (typeof saveDc !== 'number' || !Number.isFinite(saveDc) || saveDc < 10) {
+    issues.push('spell_save_dc must be a number >= 10');
+  }
+
+  const attackBonus = payload.spell_attack_bonus;
+  if (typeof attackBonus !== 'number' || !Number.isFinite(attackBonus) || attackBonus < 1) {
+    issues.push('spell_attack_bonus must be a number >= 1');
+  }
+
+  const hasPrepared = hasNonEmptySpellMap(payload.prepared_spells);
+  const hasAlwaysPrepared = hasNonEmptySpellMap(payload.always_prepared_spells);
+  const hasInnate = hasNonEmptySpellMap(payload.innate_spells);
+  const hasKnown = hasNonEmptyStringArray(payload.spells_known);
+
+  if (!hasPrepared && !hasAlwaysPrepared && !hasInnate && !hasKnown) {
+    issues.push('No spells provided (prepared, always_prepared, innate, or spells_known).');
+  }
+
+  const totalSlots = sumSpellSlots(payload.spell_slots);
+  const isSlotCaster = hasPrepared || hasAlwaysPrepared || hasKnown;
+  if (isSlotCaster && totalSlots <= 0) {
+    issues.push('spell_slots must include at least one slot for slot-based casters.');
+  }
+
+  const normalizedAllowedCount = SPELLCASTING_ALLOWED_KEYS.filter(
+    (key) => Object.prototype.hasOwnProperty.call(payload, key),
+  ).length;
+  const synthesizedFieldCount = Math.max(0, normalizedAllowedCount - rawAllowedKeyCount);
+
+  return { issues, synthesizedFieldCount };
+}
 
 interface GeminiRequestBody {
   projectId: string;
@@ -173,6 +334,7 @@ const idempotencyCache: Map<
   string,
   { status: number; payload: GeminiSuccessResponse | GeminiFailureResponse; expiresAt: number }
 > = new Map();
+const retrySignatureCache: Map<string, { signature: string; expiresAt: number }> = new Map();
 const lastRequestByProject: Map<string, number> = new Map();
 
 type GeminiHttpResponse = {
@@ -196,6 +358,32 @@ function getCachedResponse(key: string): { status: number; payload: GeminiSucces
 
 function setCachedResponse(key: string, status: number, payload: GeminiSuccessResponse | GeminiFailureResponse): void {
   idempotencyCache.set(key, { status, payload, expiresAt: Date.now() + IDEMPOTENCY_TTL_MS });
+}
+
+function computeRetrySignature(body: GeminiRequestBody): string {
+  const hash = createHash('sha256');
+  hash.update(body.stageId || '');
+  hash.update('|');
+  hash.update(body.prompt || '');
+  if (body.clientContext?.generatorType) hash.update(body.clientContext.generatorType);
+  if (body.clientContext?.stageKey) hash.update(body.clientContext.stageKey);
+  return hash.digest('hex');
+}
+
+function isDuplicateRetry(body: GeminiRequestBody, signature: string): boolean {
+  const key = `${body.projectId}:${body.stageId}`;
+  const cached = retrySignatureCache.get(key);
+  if (!cached) return false;
+  if (Date.now() > cached.expiresAt) {
+    retrySignatureCache.delete(key);
+    return false;
+  }
+  return cached.signature === signature;
+}
+
+function storeRetrySignature(body: GeminiRequestBody, signature: string): void {
+  const key = `${body.projectId}:${body.stageId}`;
+  retrySignatureCache.set(key, { signature, expiresAt: Date.now() + IDEMPOTENCY_TTL_MS });
 }
 
 function loadSchemaForGenerator(generatorType: string): StageRegistryEntry | null {
@@ -807,6 +995,39 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
     return res.status(cached.status).json(cached.payload);
   }
 
+  if (body.stageId.toLowerCase() === 'planner' && (body.clientContext as any)?.openProposalCount === 0) {
+    return res.status(409).json({
+      ok: false,
+      requestId,
+      stageRunId: body.stageRunId,
+      error: {
+        type: 'ABORTED',
+        message: 'Planner rerun skipped: no open proposals to resolve.',
+        retryable: false,
+      },
+    } satisfies GeminiFailureResponse);
+  }
+
+  const retrySignature = computeRetrySignature(body);
+  if (isDuplicateRetry(body, retrySignature)) {
+    console.warn('[AI][Gemini] Duplicate retry signature detected; blocking auto-retry', {
+      stageId: body.stageId,
+      stageRunId: body.stageRunId,
+      projectId: body.projectId,
+    });
+    return res.status(409).json({
+      ok: false,
+      requestId,
+      stageRunId: body.stageRunId,
+      error: {
+        type: 'ABORTED',
+        message: 'Duplicate retry signature detected; review required before retrying.',
+        retryable: false,
+      },
+    } satisfies GeminiFailureResponse);
+  }
+  storeRetrySignature(body, retrySignature);
+
   const validate = getValidatorForGenerator(generatorType, registry);
   if (!validate) {
     return res.status(500).json({
@@ -1040,16 +1261,60 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       }
 
       const payload = extraction.patch[body.stageId] as Record<string, unknown>;
-      const payloadKeys = Object.keys(payload || {});
+      const allowedKeys = getStageAllowedKeys(body.stageId, registry);
+      const prunedPayload = pruneToAllowedKeys(allowedKeys, payload);
+      const rawAllowedKeyCount = Object.keys(prunedPayload).length;
+      console.log(`[AI][PRUNED][${body.stageId}]`, {
+        stageRunId: body.stageRunId,
+        rawAllowedKeyCount,
+        keys: Object.keys(prunedPayload),
+      });
+      const isSpellcastingStage = body.stageId.toLowerCase().includes('spellcasting');
+      const criticalZeroGuardStages = ['basic_info', 'creator:_basic_info', 'core_details', 'creator:_core_details'];
+
+      if (criticalZeroGuardStages.includes(body.stageId.toLowerCase()) && rawAllowedKeyCount === 0) {
+        console.warn(`[AI][VALIDATION][${body.stageId}] rejected: zero allowed keys in raw response`, {
+          stageRunId: body.stageRunId,
+        });
+        return res.status(422).json({
+          ok: false,
+          requestId,
+          stageRunId: body.stageRunId,
+          error: {
+            type: 'INVALID_RESPONSE',
+            message: `Model returned zero allowed keys for ${body.stageId}`,
+            retryable: false,
+          },
+        } satisfies GeminiFailureResponse);
+      }
+
+      if (isSpellcastingStage && rawAllowedKeyCount === 0) {
+        console.warn('[AI][VALIDATION][spellcasting] rejected: zero allowed keys in raw response', {
+          stageId: body.stageId,
+          stageRunId: body.stageRunId,
+        });
+        return res.status(422).json({
+          ok: false,
+          requestId,
+          stageRunId: body.stageRunId,
+          error: {
+            type: 'INVALID_RESPONSE',
+            message: 'Model returned zero allowed spellcasting keys',
+            retryable: false,
+          },
+        } satisfies GeminiFailureResponse);
+      }
+
+      const payloadKeys = Object.keys(prunedPayload || {});
 
       // Coerce stringified JSON fields into objects/arrays when possible.
       for (const key of payloadKeys) {
-        const value = (payload as Record<string, unknown>)[key];
+        const value = (prunedPayload as Record<string, unknown>)[key];
         if (typeof value === 'string') {
           try {
             const parsed = JSON.parse(value);
             if (typeof parsed === 'object' && parsed !== null) {
-              (payload as Record<string, unknown>)[key] = parsed;
+              (prunedPayload as Record<string, unknown>)[key] = parsed;
             }
           } catch (_) {
             // leave as-is
@@ -1058,32 +1323,47 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       }
 
       // Coerce personality if stringified JSON; drop if invalid or wrong type
-      if (typeof (payload as any)['personality'] === 'string') {
+      if (typeof (prunedPayload as any)['personality'] === 'string') {
         try {
-          const parsed = JSON.parse((payload as any)['personality']);
+          const parsed = JSON.parse((prunedPayload as any)['personality']);
           if (typeof parsed === 'object' && parsed !== null) {
-            (payload as any)['personality'] = parsed;
+            (prunedPayload as any)['personality'] = parsed;
           } else {
-            delete (payload as any)['personality'];
+            delete (prunedPayload as any)['personality'];
           }
         } catch (_) {
-          delete (payload as any)['personality'];
+          delete (prunedPayload as any)['personality'];
         }
       }
 
       if (
-        (payload as any).hasOwnProperty('personality') &&
-        (typeof (payload as any)['personality'] !== 'object' || (payload as any)['personality'] === null)
+        (prunedPayload as any).hasOwnProperty('personality') &&
+        (typeof (prunedPayload as any)['personality'] !== 'object' || (prunedPayload as any)['personality'] === null)
       ) {
-        delete (payload as any)['personality'];
+        delete (prunedPayload as any)['personality'];
       }
 
       // Normalize personality to ensure object/arrays shape
-      normalizePersonality(payload);
+      normalizePersonality(prunedPayload);
+
+      // Normalize class_levels: split subclass embedded in class string
+      if (Array.isArray((prunedPayload as any).class_levels)) {
+        (prunedPayload as any).class_levels = (prunedPayload as any).class_levels.map((entry: any) => {
+          if (!entry || typeof entry !== 'object') return entry;
+          const cls = typeof entry.class === 'string' ? entry.class : typeof entry.name === 'string' ? entry.name : '';
+          if (cls && cls.includes('(')) {
+            const match = cls.match(/^(.*?)(?:\s*\(|\s*-\s*)([^)]*)\)?$/);
+            if (match && match[1]) {
+              return { ...entry, class: match[1].trim(), subclass: entry.subclass || match[2]?.trim() };
+            }
+          }
+          return entry;
+        });
+      }
 
       // Normalize stats and required arrays (equipment, items, relationships)
-      normalizeStats(payload);
-      normalizeArrays(payload, [
+      normalizeStats(prunedPayload);
+      normalizeArrays(prunedPayload, [
         'equipment',
         'attuned_items',
         'magic_items',
@@ -1093,14 +1373,14 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         'minions',
         'senses',
       ]);
-      normalizeStringArrays(payload, ['equipment', 'attuned_items', 'magic_items']);
-      normalizeStringList(payload, 'languages');
-      normalizeStringList(payload, 'damage_resistances');
-      normalizeStringList(payload, 'damage_immunities');
-      normalizeStringList(payload, 'damage_vulnerabilities');
-      normalizeStringList(payload, 'condition_immunities');
-      normalizeArmorClass(payload);
-      normalizeScalarStrings(payload, [
+      normalizeStringArrays(prunedPayload, ['equipment', 'attuned_items', 'magic_items']);
+      normalizeStringList(prunedPayload, 'languages');
+      normalizeStringList(prunedPayload, 'damage_resistances');
+      normalizeStringList(prunedPayload, 'damage_immunities');
+      normalizeStringList(prunedPayload, 'damage_vulnerabilities');
+      normalizeStringList(prunedPayload, 'condition_immunities');
+      normalizeArmorClass(prunedPayload);
+      normalizeScalarStrings(prunedPayload, [
         'challenge_rating',
         'size',
         'creature_type',
@@ -1109,187 +1389,137 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         'race',
         'class_levels',
       ]);
-      normalizeNameValueArray(payload, 'saving_throws');
-      normalizeNameValueArray(payload, 'skill_proficiencies');
-      normalizeNameDescriptionArray(payload, 'abilities');
-      normalizeNameDescriptionArray(payload, 'fighting_styles');
-      normalizeNameDescriptionArray(payload, 'additional_traits');
-      normalizeHitPointsAndProficiency(payload);
-      normalizeLegendaryActions(payload);
-      normalizeLairAndRegional(payload);
+      normalizeNameValueArray(prunedPayload, 'saving_throws');
+      normalizeNameValueArray(prunedPayload, 'skill_proficiencies');
+      normalizeNameDescriptionArray(prunedPayload, 'abilities');
+      normalizeNameDescriptionArray(prunedPayload, 'fighting_styles');
+      normalizeNameDescriptionArray(prunedPayload, 'additional_traits');
+      normalizeHitPointsAndProficiency(prunedPayload);
+      normalizeLegendaryActions(prunedPayload);
+      normalizeLairAndRegional(prunedPayload);
+
+      const allowedPresentCountGeneric = allowedKeys.filter((key) => Object.prototype.hasOwnProperty.call(prunedPayload, key)).length;
+      const synthesizedHeavyCritical =
+        criticalZeroGuardStages.includes(body.stageId.toLowerCase()) &&
+        rawAllowedKeyCount > 0 &&
+        rawAllowedKeyCount < Math.ceil(allowedPresentCountGeneric / 2);
+
+      const synthesizedHeavyNonCritical =
+        !criticalZeroGuardStages.includes(body.stageId.toLowerCase()) &&
+        !isSpellcastingStage &&
+        allowedPresentCountGeneric > 0 &&
+        rawAllowedKeyCount < Math.ceil(allowedPresentCountGeneric / 2);
+
+      if (synthesizedHeavyCritical) {
+        console.warn(`[AI][VALIDATION][${body.stageId}] rejected: payload too synthesized`, {
+          stageRunId: body.stageRunId,
+          rawAllowedKeyCount,
+          allowedPresentCount: allowedPresentCountGeneric,
+        });
+        return res.status(422).json({
+          ok: false,
+          requestId,
+          stageRunId: body.stageRunId,
+          error: {
+            type: 'INVALID_RESPONSE',
+            message: `${body.stageId} output too synthesized (insufficient raw fields).`,
+            retryable: false,
+          },
+        } satisfies GeminiFailureResponse);
+      }
+
+      if (synthesizedHeavyNonCritical) {
+        console.warn(`[AI][VALIDATION][${body.stageId}] rejected: payload too synthesized`, {
+          stageRunId: body.stageRunId,
+          rawAllowedKeyCount,
+          allowedPresentCount: allowedPresentCountGeneric,
+        });
+        return res.status(422).json({
+          ok: false,
+          requestId,
+          stageRunId: body.stageRunId,
+          error: {
+            type: 'INVALID_RESPONSE',
+            message: `${body.stageId} output too synthesized (insufficient raw fields).`,
+            retryable: false,
+          },
+        } satisfies GeminiFailureResponse);
+      }
+
+      if (isSpellcastingStage) {
+        const derived = deriveSpellcastingFromContext(prunedPayload);
+        if (Object.keys(derived).length > 0) {
+          console.log(`[AI][DERIVED][${body.stageId}]`, { stageRunId: body.stageRunId, keys: Object.keys(derived) });
+          Object.assign(prunedPayload, derived);
+        }
+
+        const { issues, synthesizedFieldCount } = validateSpellcastingSemantic(prunedPayload, rawAllowedKeyCount);
+        const allowedPresentCount = SPELLCASTING_ALLOWED_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(prunedPayload, key)).length;
+        const synthesizedHeavy = rawAllowedKeyCount === 0 || rawAllowedKeyCount < Math.ceil(allowedPresentCount / 2);
+        console.log(`[AI][VALIDATION][${body.stageId}]`, {
+          stageRunId: body.stageRunId,
+          rawAllowedKeyCount,
+          synthesizedFieldCount,
+          allowedPresentCount,
+          synthesizedHeavy,
+          issues,
+        });
+
+        if (issues.length > 0 || synthesizedHeavy) {
+          return res.status(422).json({
+            ok: false,
+            requestId,
+            stageRunId: body.stageRunId,
+            error: {
+              type: 'INVALID_RESPONSE',
+              message: issues.length > 0
+                ? `Spellcasting validation failed: ${issues.join('; ')}`
+                : 'Spellcasting output too synthesized (insufficient raw fields).',
+              retryable: false,
+            },
+          } satisfies GeminiFailureResponse);
+        }
+      }
 
       // Strip disallowed top-level fields for this stage.
       for (const key of payloadKeys) {
         if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
           console.warn(`[AI][Gemini] Stripping disallowed field '${key}' from stage '${body.stageId}'`);
-          delete payload[key];
+          delete prunedPayload[key];
         }
       }
 
-      const isValid = validate(payload);
+      console.log(`[AI][NORMALIZED][${body.stageId}]`, prunedPayload);
+      const isValid = validate(prunedPayload);
+      console.log(`[AI][VALIDATION_SCHEMA][${body.stageId}]`, {
+        stageRunId: body.stageRunId,
+        valid: isValid,
+        errors: validate.errors,
+      });
       if (!isValid) {
         const validationErrors = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
         const requiredFields = (validate.schema as any)?.required || [];
-        
+
         // Build minimal patch prompt (much smaller than full regeneration)
         const correctionPrompt = `Output ONLY valid JSON. NO markdown. NO prose.
 
 Your previous response was incomplete. Fix ONLY these missing/invalid fields:
 ${validationErrors}
 
-Required fields: ${JSON.stringify(requiredFields)}
+Make sure to include required fields: ${requiredFields.join(', ')}`;
 
-Return the COMPLETE corrected JSON with all fields from your previous response, plus the missing fields.
-
-Previous JSON (minified):
-${JSON.stringify(payload)}`;
-
-        // Retry with correction prompt (max 2 validation retries)
-        for (let validationAttempt = 0; validationAttempt < 2; validationAttempt += 1) {
-          console.warn(`[AI][Gemini] Validation retry ${validationAttempt + 1}/2 for stage ${body.stageId}`);
-          
-          const retryResponse = (await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-            {
-              method: 'POST',
-              signal: controller.signal,
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: correctionPrompt }] }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
-              }),
-            }
-          )) as unknown as GeminiHttpResponse;
-
-          if (!retryResponse || !retryResponse.ok) continue;
-
-          const retryData = (await retryResponse.json()) as GeminiApiResponse;
-          const retryRawText = retryData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-          if (!retryRawText) continue;
-
-          const retryExtraction = extractJsonPatch(retryRawText);
-          if (!retryExtraction.ok || !retryExtraction.patch || !retryExtraction.patch[body.stageId]) continue;
-
-          const retryPayload = retryExtraction.patch[body.stageId] as Record<string, unknown>;
-          const retryPayloadKeys = Object.keys(retryPayload || {});
-
-          // Coerce stringified fields
-          for (const key of retryPayloadKeys) {
-            const value = (retryPayload as Record<string, unknown>)[key];
-            if (typeof value === 'string') {
-              try {
-                const parsed = JSON.parse(value);
-                if (typeof parsed === 'object' && parsed !== null) {
-                  (retryPayload as Record<string, unknown>)[key] = parsed;
-                }
-              } catch (_) {}
-            }
-          }
-
-          // Coerce personality
-          if (typeof (retryPayload as any)['personality'] === 'string') {
-            try {
-              const parsed = JSON.parse((retryPayload as any)['personality']);
-              if (typeof parsed === 'object' && parsed !== null) {
-                (retryPayload as any)['personality'] = parsed;
-              } else {
-                delete (retryPayload as any)['personality'];
-              }
-            } catch (_) {
-              delete (retryPayload as any)['personality'];
-            }
-          }
-
-          if (
-            (retryPayload as any).hasOwnProperty('personality') &&
-            (typeof (retryPayload as any)['personality'] !== 'object' || (retryPayload as any)['personality'] === null)
-          ) {
-            delete (retryPayload as any)['personality'];
-          }
-
-          normalizePersonality(retryPayload);
-
-          // Normalize stats and arrays on retry as well
-          normalizeStats(retryPayload);
-          normalizeArrays(retryPayload, [
-            'equipment',
-            'attuned_items',
-            'magic_items',
-            'relationships',
-            'allies_friends',
-            'factions',
-            'minions',
-            'senses',
-          ]);
-          normalizeStringArrays(retryPayload, ['equipment', 'attuned_items', 'magic_items']);
-          normalizeStringList(retryPayload, 'languages');
-          normalizeStringList(retryPayload, 'damage_resistances');
-          normalizeStringList(retryPayload, 'damage_immunities');
-          normalizeStringList(retryPayload, 'damage_vulnerabilities');
-          normalizeStringList(retryPayload, 'condition_immunities');
-          normalizeArmorClass(retryPayload);
-          normalizeScalarStrings(retryPayload, [
-            'challenge_rating',
-            'size',
-            'creature_type',
-            'subtype',
-            'alignment',
-            'race',
-            'class_levels',
-          ]);
-          normalizeNameValueArray(retryPayload, 'saving_throws');
-          normalizeNameValueArray(retryPayload, 'skill_proficiencies');
-          normalizeNameDescriptionArray(retryPayload, 'abilities');
-          normalizeNameDescriptionArray(retryPayload, 'fighting_styles');
-          normalizeNameDescriptionArray(retryPayload, 'additional_traits');
-          normalizeHitPointsAndProficiency(retryPayload);
-          normalizeLegendaryActions(retryPayload);
-          normalizeLairAndRegional(retryPayload);
-
-          // Strip disallowed fields
-          for (const key of retryPayloadKeys) {
-            if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
-              delete retryPayload[key];
-            }
-          }
-
-          const retryValid = validate(retryPayload);
-          if (retryValid) {
-            // Success! Use the corrected payload
-            const successPayload: GeminiSuccessResponse = {
-              ok: true,
-              provider: 'gemini',
-              model: GEMINI_MODEL,
-              requestId,
-              stageRunId: body.stageRunId,
-              rawText: retryRawText,
-              jsonPatch: retryExtraction.patch,
-              parse: {
-                foundJsonBlock: retryExtraction.foundJsonBlock,
-                parseWarnings: retryExtraction.warnings,
-              },
-              usage: {
-                inputTokens: Number(retryData.usageMetadata?.promptTokenCount ?? 0),
-                outputTokens: Number(retryData.usageMetadata?.candidatesTokenCount ?? 0),
-              },
-              safety: {
-                patchSizeBytes: JSON.stringify(retryExtraction.patch).length,
-                appliedPathsCandidateCount: Object.keys(retryExtraction.patch).length,
-              },
-            } satisfies GeminiSuccessResponse;
-            setCachedResponse(idempotencyKey, 200, successPayload);
-            return res.json(successPayload);
-          }
-        }
-
-        // All retries exhausted, return 422
         return res.status(422).json({
           ok: false,
           requestId,
           stageRunId: body.stageRunId,
-          error: { type: 'INVALID_RESPONSE', message: validationErrors || 'Schema validation failed after retries.', retryable: false },
+          error: { type: 'INVALID_RESPONSE', message: correctionPrompt, retryable: false },
         } satisfies GeminiFailureResponse);
       }
+
+      console.log(`[AI][VALIDATION_PASSED][${body.stageId}]`, {
+        stageRunId: body.stageRunId,
+        keys: Object.keys(prunedPayload),
+      });
 
       const successPayload: GeminiSuccessResponse = {
         ok: true,
