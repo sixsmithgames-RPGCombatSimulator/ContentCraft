@@ -62,11 +62,16 @@ function hasNonEmptySpellMap(value: unknown): boolean {
 
 function sumSpellSlots(value: unknown): number {
   if (!isRecord(value)) return 0;
-  return Object.values(value).reduce((total: number, slotCount) => {
-    if (typeof slotCount === 'number' && Number.isFinite(slotCount)) return total + slotCount;
+  let total = 0;
+  for (const slotCount of Object.values(value)) {
+    if (typeof slotCount === 'number' && Number.isFinite(slotCount)) {
+      total += slotCount;
+      continue;
+    }
     const coerced = Number(slotCount);
-    return Number.isFinite(coerced) ? total + coerced : total;
-  }, 0);
+    if (Number.isFinite(coerced)) total += coerced;
+  }
+  return total;
 }
 
 function getAbilityModifier(score: unknown): number | undefined {
