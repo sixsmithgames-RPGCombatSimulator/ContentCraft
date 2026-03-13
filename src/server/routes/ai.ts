@@ -11,33 +11,53 @@ import Ajv, { type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import {
   getWorkflowStageProxyAllowedKeys,
+  getWorkflowStageDefinition,
   isWorkflowStageCriticalZeroGuard,
-  NPC_SPELLCASTING_PROXY_ALLOWED_KEYS,
   normalizeWorkflowStageId,
-} from '../../shared/generation/workflowStageCatalog.js';
+} from '../../shared/generation/workflowRegistry.js';
+import { resolveWorkflowContentType } from '../../shared/generation/workflowContentType.js';
+import { validateWorkflowStageContractPayload as validateSharedWorkflowStageContractPayload } from '../../shared/generation/workflowStageValidation.js';
+import {
+  createWorkflowChatFailure,
+  createWorkflowChatSuccess,
+  createWorkflowExecutionFailure,
+  createWorkflowExecutionSuccess,
+  type WorkflowExecutionErrorType as AiErrorType,
+  type WorkflowExecutionOutcome,
+  type WorkflowExecutionRetryContext,
+  type WorkflowChatFailureResponse,
+  type WorkflowChatRequestBody,
+  type WorkflowChatSuccessResponse,
+  type WorkflowExecutionFailureResponse as GeminiFailureResponse,
+  type WorkflowExecutionRequestBody as GeminiRequestBody,
+  type WorkflowExecutionSuccessResponse as GeminiSuccessResponse,
+} from '../services/workflowExecutionService.js';
 
-/** Allowed error types for the AI proxy */
-type AiErrorType =
-  | 'RATE_LIMIT'
-  | 'PROVIDER_ERROR'
-  | 'INVALID_RESPONSE'
-  | 'TIMEOUT'
-  | 'SCHEMA_MISMATCH'
-  | 'FORBIDDEN_PATH'
-  | 'PAYLOAD_TOO_LARGE'
-  | 'BUDGET_EXCEEDED'
-  | 'ABORTED';
-
-const SPELLCASTING_ALLOWED_KEYS = [...NPC_SPELLCASTING_PROXY_ALLOWED_KEYS];
+const SPELLCASTING_ALLOWED_KEYS = [...(getWorkflowStageProxyAllowedKeys('spellcasting') ?? [])];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
-function getNormalizedStageKey(stageId: string): string {
+function getNormalizedStageKey(stageId: string, workflowType?: string): string {
+  if (workflowType) {
+    const scopedDefinition = getWorkflowStageDefinition(resolveWorkflowContentType(workflowType), stageId);
+    if (scopedDefinition) {
+      return scopedDefinition.key;
+    }
+  }
+
   return normalizeWorkflowStageId(stageId) ?? stageId.toLowerCase();
 }
 
-function getStageAllowedKeys(stageId: string, registry: StageRegistryEntry): string[] {
+function getStageAllowedKeys(stageId: string, registry: StageRegistryEntry, workflowType?: string): string[] {
+  if (workflowType) {
+    const scopedDefinition = getWorkflowStageDefinition(resolveWorkflowContentType(workflowType), stageId);
+    const scopedContract = scopedDefinition?.contract;
+    if (scopedContract) {
+      return [...(scopedContract.proxyAllowedKeys ?? scopedContract.outputAllowedKeys)];
+    }
+  }
+
   return [...(getWorkflowStageProxyAllowedKeys(stageId) ?? registry.allowedPaths)];
 }
 
@@ -236,23 +256,6 @@ function validateSpellcastingSemantic(
   return { issues, synthesizedFieldCount };
 }
 
-interface GeminiRequestBody {
-  projectId: string;
-  stageId: string;
-  stageRunId: string;
-  prompt: string;
-  schemaVersion: string;
-  responseFormat?: string;
-  clientContext?: {
-    appVersion?: string;
-    stageKey?: string;
-    generatorType?: string;
-    userSelectedMode?: string;
-    promptMode?: string;
-    measuredChars?: number;
-  };
-}
-
 function normalizeArmorClass(container: Record<string, unknown>): void {
   const ac = (container as Record<string, unknown>).armor_class as unknown;
   const coerceEntry = (entry: unknown): { type: string; value: number } | null => {
@@ -333,40 +336,6 @@ function validateScope(stageId: string, patch: Record<string, unknown>): { ok: t
     return { ok: false, message: 'Stage payload failed object validation.' };
   }
   return { ok: true };
-}
-
-interface GeminiSuccessResponse {
-  ok: true;
-  provider: 'gemini';
-  model: string;
-  requestId: string;
-  stageRunId: string;
-  rawText: string;
-  jsonPatch?: Record<string, unknown>;
-  parse: {
-    foundJsonBlock: boolean;
-    parseWarnings: string[];
-  };
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-  };
-  safety: {
-    patchSizeBytes: number;
-    appliedPathsCandidateCount: number;
-  };
-}
-
-interface GeminiFailureResponse {
-  ok: false;
-  requestId: string;
-  stageRunId: string;
-  error: {
-    type: AiErrorType;
-    message: string;
-    retryable: boolean;
-    retryAfterMs?: number;
-  };
 }
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
@@ -881,6 +850,30 @@ function parseRequestBody(body: unknown): { valid: true; data: GeminiRequestBody
   };
 }
 
+function parseChatRequestBody(body: unknown): { valid: true; data: WorkflowChatRequestBody } | { valid: false; message: string } {
+  if (!body || typeof body !== 'object') return { valid: false, message: 'Invalid request payload' };
+  const {
+    systemPrompt,
+    userMessage,
+  } = body as Record<string, unknown>;
+
+  if (typeof userMessage !== 'string' || userMessage.trim() === '') {
+    return { valid: false, message: 'userMessage is required' };
+  }
+
+  if (systemPrompt !== undefined && typeof systemPrompt !== 'string') {
+    return { valid: false, message: 'systemPrompt must be a string when provided' };
+  }
+
+  return {
+    valid: true,
+    data: {
+      systemPrompt: typeof systemPrompt === 'string' ? systemPrompt : undefined,
+      userMessage,
+    },
+  };
+}
+
 /** Find the first balanced top-level JSON object in text. */
 function findBalancedJson(text: string): string | null {
   let depth = 0;
@@ -966,66 +959,99 @@ function buildIdempotencyKey(body: GeminiRequestBody): string {
 }
 
 /**
- * POST /api/ai/gemini/generate
- * Proxies stage prompt to Gemini, extracts JSON patch, and returns structured results.
- * This route keeps the Gemini key server-side and never exposes it to clients.
+ * Shared workflow-stage execution handler.
+ * Gemini remains the current transport provider, but both the legacy Gemini route
+ * and the new generic workflow route delegate through this function.
  */
-aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => {
+const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressResponse) => {
   const parsed = parseRequestBody(req.body);
   if (!parsed.valid) {
     const failure = parsed as { valid: false; message: string };
-    return res.status(400).json({
-      ok: false,
+    return res.status(400).json(createWorkflowExecutionFailure({
       requestId: 'n/a',
       stageRunId: 'n/a',
-      error: { type: 'INVALID_RESPONSE', message: failure.message, retryable: false },
-    } satisfies GeminiFailureResponse);
+      type: 'INVALID_RESPONSE',
+      message: failure.message,
+      retryable: false,
+    }) satisfies GeminiFailureResponse);
   }
 
   const body = parsed.data;
   const requestId = randomUUID();
 
   const generatorType = body.clientContext?.generatorType;
+  const requestedStageKey = getNormalizedStageKey(body.stageId, typeof generatorType === 'string' ? generatorType : undefined);
+
+  const buildWorkflowFailure = (input: {
+    type: AiErrorType;
+    message: string;
+    retryable: boolean;
+    retryAfterMs?: number;
+    outcome?: WorkflowExecutionOutcome;
+    allowedKeyCount?: number;
+    rawAllowedKeyCount?: number;
+    retryContext?: WorkflowExecutionRetryContext;
+  }): GeminiFailureResponse => createWorkflowExecutionFailure({
+    requestId,
+    stageRunId: body.stageRunId,
+    stageId: body.stageId,
+    stageKey: requestedStageKey,
+    workflowType: typeof generatorType === 'string' ? generatorType : undefined,
+    ...input,
+  });
+
+  const respondWithWorkflowFailure = (
+    status: number,
+    input: {
+      type: AiErrorType;
+      message: string;
+      retryable: boolean;
+      retryAfterMs?: number;
+      outcome?: WorkflowExecutionOutcome;
+      allowedKeyCount?: number;
+      rawAllowedKeyCount?: number;
+      retryContext?: WorkflowExecutionRetryContext;
+    },
+  ) => res.status(status).json(buildWorkflowFailure(input));
+
   if (!generatorType || typeof generatorType !== 'string') {
-    return res.status(400).json({
-      ok: false,
-      requestId,
-      stageRunId: body.stageRunId,
-      error: { type: 'SCHEMA_MISMATCH', message: 'generatorType is required.', retryable: false },
-    } satisfies GeminiFailureResponse);
+    return respondWithWorkflowFailure(400, {
+      type: 'SCHEMA_MISMATCH',
+      message: 'generatorType is required.',
+      retryable: false,
+    });
   }
 
   const registry = loadSchemaForGenerator(generatorType);
   if (!registry) {
-    return res.status(500).json({
-      ok: false,
-      requestId,
-      stageRunId: body.stageRunId,
-      error: { type: 'PROVIDER_ERROR', message: `Schema not available for generator ${generatorType}.`, retryable: false },
-    } satisfies GeminiFailureResponse);
+    return respondWithWorkflowFailure(500, {
+      type: 'PROVIDER_ERROR',
+      message: `Schema not available for generator ${generatorType}.`,
+      retryable: false,
+    });
   }
 
   if (body.schemaVersion !== registry.schemaVersion) {
-    return res.status(400).json({
-      ok: false,
-      requestId,
-      stageRunId: body.stageRunId,
-      error: { type: 'SCHEMA_MISMATCH', message: `Expected schemaVersion ${registry.schemaVersion}`, retryable: false },
-    } satisfies GeminiFailureResponse);
+    return respondWithWorkflowFailure(400, {
+      type: 'SCHEMA_MISMATCH',
+      message: `Expected schemaVersion ${registry.schemaVersion}`,
+      retryable: false,
+    });
   }
 
   if (shouldShortCircuitRateLimit()) {
-    return res.status(429).json({
-      ok: false,
-      requestId,
-      stageRunId: body.stageRunId,
-      error: {
-        type: 'RATE_LIMIT',
-        message: 'Gemini temporarily rate limited. Please retry shortly.',
+    return respondWithWorkflowFailure(429, {
+      type: 'RATE_LIMIT',
+      message: 'Gemini temporarily rate limited. Please retry shortly.',
+      retryable: true,
+      retryAfterMs: RATE_LIMIT_COOLDOWN_MS,
+      outcome: 'retry_required',
+      retryContext: {
+        reason: 'provider_rate_limit',
         retryable: true,
         retryAfterMs: RATE_LIMIT_COOLDOWN_MS,
       },
-    } satisfies GeminiFailureResponse);
+    });
   }
 
   // Per-project throttle to prevent bursts (configurable spacing)
@@ -1034,17 +1060,18 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
     const lastProjectRequest = lastRequestByProject.get(body.projectId);
     if (lastProjectRequest && now - lastProjectRequest < MIN_REQUEST_SPACING_MS) {
       const retryAfterMs = MIN_REQUEST_SPACING_MS - (now - lastProjectRequest) + 100; // small cushion
-      return res.status(429).json({
-        ok: false,
-        requestId,
-        stageRunId: body.stageRunId,
-        error: {
-          type: 'RATE_LIMIT',
-          message: 'Too many requests in a short window. Please retry shortly.',
+      return respondWithWorkflowFailure(429, {
+        type: 'RATE_LIMIT',
+        message: 'Too many requests in a short window. Please retry shortly.',
+        retryable: true,
+        retryAfterMs,
+        outcome: 'retry_required',
+        retryContext: {
+          reason: 'project_throttle',
           retryable: true,
           retryAfterMs,
         },
-      } satisfies GeminiFailureResponse);
+      });
     }
     lastRequestByProject.set(body.projectId, now);
   }
@@ -1056,16 +1083,16 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
   }
 
   if (body.stageId.toLowerCase() === 'planner' && (body.clientContext as any)?.openProposalCount === 0) {
-    return res.status(409).json({
-      ok: false,
-      requestId,
-      stageRunId: body.stageRunId,
-      error: {
-        type: 'ABORTED',
-        message: 'Planner rerun skipped: no open proposals to resolve.',
+    return respondWithWorkflowFailure(409, {
+      type: 'ABORTED',
+      message: 'Planner rerun skipped: no open proposals to resolve.',
+      retryable: false,
+      outcome: 'review_required',
+      retryContext: {
+        reason: 'planner_no_open_proposals',
         retryable: false,
       },
-    } satisfies GeminiFailureResponse);
+    });
   }
 
   const retrySignature = computeRetrySignature(body);
@@ -1075,36 +1102,35 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       stageRunId: body.stageRunId,
       projectId: body.projectId,
     });
-    return res.status(409).json({
-      ok: false,
-      requestId,
-      stageRunId: body.stageRunId,
-      error: {
-        type: 'ABORTED',
-        message: 'Duplicate retry signature detected; review required before retrying.',
+    return respondWithWorkflowFailure(409, {
+      type: 'ABORTED',
+      message: 'Duplicate retry signature detected; review required before retrying.',
+      retryable: false,
+      outcome: 'review_required',
+      retryContext: {
+        reason: 'duplicate_retry_signature',
         retryable: false,
+        duplicateRetryBlocked: true,
       },
-    } satisfies GeminiFailureResponse);
+    });
   }
   storeRetrySignature(body, retrySignature);
 
   const validate = getValidatorForGenerator(generatorType, registry);
   if (!validate) {
-    return res.status(500).json({
-      ok: false,
-      requestId,
-      stageRunId: body.stageRunId,
-      error: { type: 'PROVIDER_ERROR', message: 'Validator could not be created.', retryable: false },
-    } satisfies GeminiFailureResponse);
+    return respondWithWorkflowFailure(500, {
+      type: 'PROVIDER_ERROR',
+      message: 'Validator could not be created.',
+      retryable: false,
+    });
   }
 
   if (!GEMINI_API_KEY) {
-    return res.status(503).json({
-      ok: false,
-      requestId,
-      stageRunId: body.stageRunId,
-      error: { type: 'PROVIDER_ERROR', message: 'Gemini API key not configured on server.', retryable: false },
-    } satisfies GeminiFailureResponse);
+    return respondWithWorkflowFailure(503, {
+      type: 'PROVIDER_ERROR',
+      message: 'Gemini API key not configured on server.',
+      retryable: false,
+    });
   }
 
   const controller = new AbortController();
@@ -1138,16 +1164,11 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
 
   // Fail-fast if prompt exceeds safety ceiling
   if (sizeBreakdown.overflow > 0) {
-    return res.status(400).json({
-      ok: false,
-      requestId,
-      stageRunId: body.stageRunId,
-      error: {
-        type: 'PAYLOAD_TOO_LARGE',
-        message: `Prompt exceeds safety ceiling by ${sizeBreakdown.overflow} chars. Total: ${promptSize}, Limit: ${SAFETY_CEILING}`,
-        retryable: false,
-      },
-    } satisfies GeminiFailureResponse);
+    return respondWithWorkflowFailure(400, {
+      type: 'PAYLOAD_TOO_LARGE',
+      message: `Prompt exceeds safety ceiling by ${sizeBreakdown.overflow} chars. Total: ${promptSize}, Limit: ${SAFETY_CEILING}`,
+      retryable: false,
+    });
   }
 
   try {
@@ -1178,12 +1199,16 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       if (geminiResponse && geminiResponse.ok) break;
 
       if (!geminiResponse) {
-        const payload: GeminiFailureResponse = {
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: { type: 'PROVIDER_ERROR', message: 'Gemini response missing.', retryable: true },
-        };
+        const payload = buildWorkflowFailure({
+          type: 'PROVIDER_ERROR',
+          message: 'Gemini response missing.',
+          retryable: true,
+          outcome: 'retry_required',
+          retryContext: {
+            reason: 'provider_response_missing',
+            retryable: true,
+          },
+        });
         setCachedResponse(idempotencyKey, 502, payload);
         return res.status(502).json(payload);
       }
@@ -1202,17 +1227,20 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         });
         markRateLimit();
       }
-      const failurePayload: GeminiFailureResponse = {
-        ok: false,
-        requestId,
-        stageRunId: body.stageRunId,
-        error: {
-          type,
-          message: `Gemini request failed (${geminiResponse.status})`,
-          retryable,
-          retryAfterMs,
-        },
-      } satisfies GeminiFailureResponse;
+      const failurePayload = buildWorkflowFailure({
+        type,
+        message: `Gemini request failed (${geminiResponse.status})`,
+        retryable,
+        retryAfterMs,
+        outcome: retryable ? 'retry_required' : 'invalid_response',
+        retryContext: retryable
+          ? {
+              reason: geminiResponse.status === 429 ? 'provider_rate_limit' : `provider_http_${geminiResponse.status}`,
+              retryable,
+              retryAfterMs,
+            }
+          : undefined,
+      });
       if (geminiResponse.status !== 429) {
         setCachedResponse(idempotencyKey, geminiResponse.status, failurePayload);
       }
@@ -1223,12 +1251,16 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       const status = lastError ? 502 : 500;
       const payload =
         lastError ||
-        ({
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: { type: 'PROVIDER_ERROR', message: 'Gemini request failed.', retryable: true },
-        } satisfies GeminiFailureResponse);
+        buildWorkflowFailure({
+          type: 'PROVIDER_ERROR',
+          message: 'Gemini request failed.',
+          retryable: true,
+          outcome: 'retry_required',
+          retryContext: {
+            reason: 'provider_request_failed',
+            retryable: true,
+          },
+        });
       setCachedResponse(idempotencyKey, status, payload);
       return res.status(status).json(payload);
     }
@@ -1237,23 +1269,21 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
     if (!rawText) {
-      return res.status(502).json({
-        ok: false,
-        requestId,
-        stageRunId: body.stageRunId,
-        error: { type: 'INVALID_RESPONSE', message: 'Empty response from Gemini.', retryable: false },
-      } satisfies GeminiFailureResponse);
+      return respondWithWorkflowFailure(502, {
+        type: 'INVALID_RESPONSE',
+        message: 'Empty response from Gemini.',
+        retryable: false,
+      });
     }
 
     const extraction = extractJsonPatch(rawText);
     if (!extraction.ok) {
       const failure = extraction as { ok: false; message: string };
-      return res.status(422).json({
-        ok: false,
-        requestId,
-        stageRunId: body.stageRunId,
-        error: { type: 'INVALID_RESPONSE', message: failure.message, retryable: false },
-      } satisfies GeminiFailureResponse);
+      return respondWithWorkflowFailure(422, {
+        type: 'INVALID_RESPONSE',
+        message: failure.message,
+        retryable: false,
+      });
     }
 
     if (extraction.patch) {
@@ -1268,12 +1298,11 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       } else {
         const patchKeys = Object.keys(extraction.patch);
         if (patchKeys.length === 0) {
-          return res.status(422).json({
-            ok: false,
-            requestId,
-            stageRunId: body.stageRunId,
-            error: { type: 'INVALID_RESPONSE', message: 'Empty patch returned from provider.', retryable: false },
-          } satisfies GeminiFailureResponse);
+          return respondWithWorkflowFailure(422, {
+            type: 'INVALID_RESPONSE',
+            message: 'Empty patch returned from provider.',
+            retryable: false,
+          });
         }
 
         // Coerce bare patch into the expected stageId container for robustness
@@ -1284,46 +1313,17 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
       const scopeResult = validateScope(body.stageId, extraction.patch);
       if (!scopeResult.ok) {
         const failure = scopeResult as { ok: false; message: string };
-        return res.status(422).json({
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: { type: 'FORBIDDEN_PATH', message: failure.message, retryable: false },
-        } satisfies GeminiFailureResponse);
+        return respondWithWorkflowFailure(422, {
+          type: 'FORBIDDEN_PATH',
+          message: failure.message,
+          retryable: false,
+        });
       }
 
-      const stageKey = getNormalizedStageKey(body.stageId);
-
-      // Planner stage produces a Brief (no equipment field). Skip NPC validation and return as-is.
-      if (stageKey === 'planner') {
-        const successPayload: GeminiSuccessResponse = {
-          ok: true,
-          provider: 'gemini',
-          model: GEMINI_MODEL,
-          requestId,
-          stageRunId: body.stageRunId,
-          rawText,
-          jsonPatch: extraction.patch,
-          parse: {
-            foundJsonBlock: extraction.foundJsonBlock,
-            parseWarnings: extraction.warnings,
-          },
-          usage: {
-            inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
-            outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
-          },
-          safety: {
-            patchSizeBytes: Buffer.byteLength(JSON.stringify(extraction.patch)),
-            appliedPathsCandidateCount: Object.keys(extraction.patch || {}).length,
-          },
-        } satisfies GeminiSuccessResponse;
-
-        setCachedResponse(idempotencyKey, 200, successPayload);
-        return res.status(200).json(successPayload);
-      }
+      const stageKey = getNormalizedStageKey(body.stageId, generatorType);
 
       const payload = extraction.patch[body.stageId] as Record<string, unknown>;
-      const allowedKeys = getStageAllowedKeys(body.stageId, registry);
+      const allowedKeys = getStageAllowedKeys(body.stageId, registry, generatorType);
       const prunedPayload = pruneToAllowedKeys(allowedKeys, payload);
       let rawAllowedKeyCount = Object.keys(prunedPayload).length;
       console.log(`[AI][PRUNED][${body.stageId}]`, {
@@ -1339,16 +1339,13 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         console.warn(`[AI][VALIDATION][${body.stageId}] rejected: zero allowed keys in raw response`, {
           stageRunId: body.stageRunId,
         });
-        return res.status(422).json({
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: {
-            type: 'INVALID_RESPONSE',
-            message: `Model returned zero allowed keys for ${body.stageId}`,
-            retryable: false,
-          },
-        } satisfies GeminiFailureResponse);
+        return respondWithWorkflowFailure(422, {
+          type: 'INVALID_RESPONSE',
+          message: `Model returned zero allowed keys for ${body.stageId}`,
+          retryable: false,
+          allowedKeyCount: allowedKeys.length,
+          rawAllowedKeyCount,
+        });
       }
 
       if (isSpellcastingStage && rawAllowedKeyCount === 0) {
@@ -1356,16 +1353,13 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
           stageId: body.stageId,
           stageRunId: body.stageRunId,
         });
-        return res.status(422).json({
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: {
-            type: 'INVALID_RESPONSE',
-            message: 'Model returned zero allowed spellcasting keys',
-            retryable: false,
-          },
-        } satisfies GeminiFailureResponse);
+        return respondWithWorkflowFailure(422, {
+          type: 'INVALID_RESPONSE',
+          message: 'Model returned zero allowed spellcasting keys',
+          retryable: false,
+          allowedKeyCount: allowedKeys.length,
+          rawAllowedKeyCount,
+        });
       }
 
       const payloadKeys = Object.keys(prunedPayload || {});
@@ -1471,16 +1465,14 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         });
 
         if (!compliance.ok) {
-          return res.status(422).json({
-            ok: false,
-            requestId,
-            stageRunId: body.stageRunId,
-            error: {
-              type: 'INVALID_RESPONSE',
-              message: 'message' in compliance ? compliance.message : 'keyword_extractor returned no usable keywords.',
-              retryable: false,
-            },
-          } satisfies GeminiFailureResponse);
+          const complianceMessage = 'message' in compliance ? compliance.message : 'keyword_extractor returned no usable keywords.';
+          return respondWithWorkflowFailure(422, {
+            type: 'INVALID_RESPONSE',
+            message: complianceMessage,
+            retryable: false,
+            allowedKeyCount: allowedKeys.length,
+            rawAllowedKeyCount,
+          });
         }
 
         prunedPayload.keywords = compliance.normalizedKeywords;
@@ -1507,16 +1499,13 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
           rawAllowedKeyCount,
           allowedPresentCount: allowedPresentCountGeneric,
         });
-        return res.status(422).json({
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: {
-            type: 'INVALID_RESPONSE',
-            message: `${body.stageId} output too synthesized (insufficient raw fields).`,
-            retryable: false,
-          },
-        } satisfies GeminiFailureResponse);
+        return respondWithWorkflowFailure(422, {
+          type: 'INVALID_RESPONSE',
+          message: `${body.stageId} output too synthesized (insufficient raw fields).`,
+          retryable: false,
+          allowedKeyCount: allowedKeys.length,
+          rawAllowedKeyCount,
+        });
       }
 
       if (synthesizedHeavyNonCritical) {
@@ -1525,16 +1514,13 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
           rawAllowedKeyCount,
           allowedPresentCount: allowedPresentCountGeneric,
         });
-        return res.status(422).json({
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: {
-            type: 'INVALID_RESPONSE',
-            message: `${body.stageId} output too synthesized (insufficient raw fields).`,
-            retryable: false,
-          },
-        } satisfies GeminiFailureResponse);
+        return respondWithWorkflowFailure(422, {
+          type: 'INVALID_RESPONSE',
+          message: `${body.stageId} output too synthesized (insufficient raw fields).`,
+          retryable: false,
+          allowedKeyCount: allowedKeys.length,
+          rawAllowedKeyCount,
+        });
       }
 
       if (isSpellcastingStage) {
@@ -1557,19 +1543,54 @@ aiRouter.post('/gemini/generate', async (req: Request, res: ExpressResponse) => 
         });
 
         if (issues.length > 0 || synthesizedHeavy) {
-          return res.status(422).json({
-            ok: false,
-            requestId,
-            stageRunId: body.stageRunId,
-            error: {
-              type: 'INVALID_RESPONSE',
-              message: issues.length > 0
-                ? `Spellcasting validation failed: ${issues.join('; ')}`
-                : 'Spellcasting output too synthesized (insufficient raw fields).',
-              retryable: false,
-            },
-          } satisfies GeminiFailureResponse);
+          return respondWithWorkflowFailure(422, {
+            type: 'INVALID_RESPONSE',
+            message: issues.length > 0
+              ? `Spellcasting validation failed: ${issues.join('; ')}`
+              : 'Spellcasting output too synthesized (insufficient raw fields).',
+            retryable: false,
+            allowedKeyCount: allowedKeys.length,
+            rawAllowedKeyCount,
+          });
         }
+      }
+
+      const contractValidation = validateSharedWorkflowStageContractPayload(body.stageId, prunedPayload, generatorType);
+      if (contractValidation.ok === false) {
+        const failure = contractValidation;
+        return respondWithWorkflowFailure(422, {
+          type: 'INVALID_RESPONSE',
+          message: failure.error,
+          retryable: false,
+          allowedKeyCount: allowedKeys.length,
+          rawAllowedKeyCount,
+        });
+      }
+
+      if (stageKey === 'planner') {
+        extraction.patch[body.stageId] = prunedPayload;
+        const successPayload: GeminiSuccessResponse = createWorkflowExecutionSuccess({
+          provider: 'gemini',
+          model: GEMINI_MODEL,
+          requestId,
+          stageRunId: body.stageRunId,
+          stageId: body.stageId,
+          stageKey,
+          workflowType: generatorType,
+          allowedKeyCount: allowedKeys.length,
+          rawAllowedKeyCount,
+          rawText,
+          jsonPatch: extraction.patch,
+          foundJsonBlock: extraction.foundJsonBlock,
+          parseWarnings: extraction.warnings,
+          inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
+          outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+          patchSizeBytes: Buffer.byteLength(JSON.stringify(extraction.patch)),
+          appliedPathsCandidateCount: Object.keys(extraction.patch || {}).length,
+        });
+
+        setCachedResponse(idempotencyKey, 200, successPayload);
+        return res.status(200).json(successPayload);
       }
 
       // Strip disallowed top-level fields for this stage.
@@ -1599,12 +1620,13 @@ ${validationErrors}
 
 Make sure to include required fields: ${requiredFields.join(', ')}`;
 
-        return res.status(422).json({
-          ok: false,
-          requestId,
-          stageRunId: body.stageRunId,
-          error: { type: 'INVALID_RESPONSE', message: correctionPrompt, retryable: false },
-        } satisfies GeminiFailureResponse);
+        return respondWithWorkflowFailure(422, {
+          type: 'INVALID_RESPONSE',
+          message: correctionPrompt,
+          retryable: false,
+          allowedKeyCount: allowedKeys.length,
+          rawAllowedKeyCount,
+        });
       }
 
       console.log(`[AI][VALIDATION_PASSED][${body.stageId}]`, {
@@ -1612,42 +1634,176 @@ Make sure to include required fields: ${requiredFields.join(', ')}`;
         keys: Object.keys(prunedPayload),
       });
 
-      const successPayload: GeminiSuccessResponse = {
-        ok: true,
+      const successPayload: GeminiSuccessResponse = createWorkflowExecutionSuccess({
         provider: 'gemini',
         model: GEMINI_MODEL,
         requestId,
         stageRunId: body.stageRunId,
+        stageId: body.stageId,
+        stageKey,
+        workflowType: generatorType,
+        allowedKeyCount: allowedKeys.length,
+        rawAllowedKeyCount,
         rawText,
         jsonPatch: extraction.patch,
-        parse: {
-          foundJsonBlock: extraction.foundJsonBlock,
-          parseWarnings: extraction.warnings,
-        },
-        usage: {
-          inputTokens: Number(data.usageMetadata?.promptTokenCount ?? 0),
-          outputTokens: Number(data.usageMetadata?.candidatesTokenCount ?? 0),
-        },
-        safety: {
-          patchSizeBytes: extraction.patch ? JSON.stringify(extraction.patch).length : 0,
-          appliedPathsCandidateCount: extraction.patch ? Object.keys(extraction.patch).length : 0,
-        },
-      } satisfies GeminiSuccessResponse;
+        foundJsonBlock: extraction.foundJsonBlock,
+        parseWarnings: extraction.warnings,
+        inputTokens: Number(data.usageMetadata?.promptTokenCount ?? 0),
+        outputTokens: Number(data.usageMetadata?.candidatesTokenCount ?? 0),
+        patchSizeBytes: extraction.patch ? JSON.stringify(extraction.patch).length : 0,
+        appliedPathsCandidateCount: extraction.patch ? Object.keys(extraction.patch).length : 0,
+      });
 
       setCachedResponse(idempotencyKey, 200, successPayload);
       return res.json(successPayload);
     }
 
     // If we get here, no patch was extracted for the requested stage.
-    return res.status(502).json({
-      ok: false,
+    return respondWithWorkflowFailure(502, {
+      type: 'INVALID_RESPONSE',
+      message: 'No JSON patch found in model response.',
+      retryable: true,
+      outcome: 'retry_required',
+      retryContext: {
+        reason: 'missing_json_patch',
+        retryable: true,
+      },
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+/**
+ * POST /api/ai/gemini/generate
+ * Legacy Gemini-specific stage execution route.
+ */
+aiRouter.post('/gemini/generate', handleGeminiWorkflowStageRequest);
+
+/**
+ * POST /api/ai/workflow/execute-stage
+ * Provider-agnostic workflow execution entrypoint.
+ * Gemini is currently the backing implementation during migration.
+ */
+aiRouter.post('/workflow/execute-stage', handleGeminiWorkflowStageRequest);
+
+/**
+ * POST /api/ai/workflow/chat
+ * Text-only Gemini chat adapter for the assistant panel when the user has no client-side key.
+ * This bypasses stage/schema validation and keeps server-managed Gemini chat usable.
+ */
+aiRouter.post('/workflow/chat', async (req: Request, res: ExpressResponse) => {
+  const parsed = parseChatRequestBody(req.body);
+  const requestId = randomUUID();
+
+  if (!parsed.valid) {
+    const failure = parsed as { valid: false; message: string };
+    return res.status(400).json(createWorkflowChatFailure({
       requestId,
-      stageRunId: body.stageRunId,
-      error: { type: 'INVALID_RESPONSE', message: 'No JSON patch found in model response.', retryable: true },
-    } satisfies GeminiFailureResponse);
+      type: 'INVALID_RESPONSE',
+      message: failure.message,
+      retryable: false,
+    }) satisfies WorkflowChatFailureResponse);
+  }
+
+  if (!GEMINI_API_KEY) {
+    return res.status(503).json(createWorkflowChatFailure({
+      requestId,
+      type: 'PROVIDER_ERROR',
+      message: 'Gemini API key not configured on server.',
+      retryable: false,
+    }) satisfies WorkflowChatFailureResponse);
+  }
+
+  if (shouldShortCircuitRateLimit()) {
+    return res.status(429).json(createWorkflowChatFailure({
+      requestId,
+      type: 'RATE_LIMIT',
+      message: 'Gemini temporarily rate limited. Please retry shortly.',
+      retryable: true,
+      retryAfterMs: RATE_LIMIT_COOLDOWN_MS,
+    }) satisfies WorkflowChatFailureResponse);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+
+  try {
+    const response = (await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: parsed.data.systemPrompt
+            ? { parts: [{ text: parsed.data.systemPrompt }] }
+            : undefined,
+          contents: [
+            {
+              parts: [{ text: parsed.data.userMessage }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 8192,
+          },
+        }),
+      }
+    )) as unknown as GeminiHttpResponse;
+
+    if (!response.ok) {
+      const { type, retryable, retryAfterMs } = mapError(response.status);
+      if (response.status === 429) {
+        markRateLimit();
+      }
+      return res.status(response.status).json(createWorkflowChatFailure({
+        requestId,
+        type,
+        message: `Gemini request failed (${response.status})`,
+        retryable,
+        retryAfterMs,
+      }) satisfies WorkflowChatFailureResponse);
+    }
+
+    const data = (await response.json()) as GeminiApiResponse;
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+
+    if (!text) {
+      return res.status(502).json(createWorkflowChatFailure({
+        requestId,
+        type: 'INVALID_RESPONSE',
+        message: 'Empty response from Gemini.',
+        retryable: false,
+      }) satisfies WorkflowChatFailureResponse);
+    }
+
+    return res.status(200).json(createWorkflowChatSuccess({
+      provider: 'gemini',
+      model: GEMINI_MODEL,
+      requestId,
+      text,
+      inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
+      outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+    }) satisfies WorkflowChatSuccessResponse);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Gemini chat request failed.';
+    const isAbort = error instanceof Error && error.name === 'AbortError';
+    return res.status(isAbort ? 504 : 502).json(createWorkflowChatFailure({
+      requestId,
+      type: isAbort ? 'TIMEOUT' : 'PROVIDER_ERROR',
+      message,
+      retryable: isAbort,
+    }) satisfies WorkflowChatFailureResponse);
   } finally {
     clearTimeout(timeout);
   }
 });
 
-export { aiRouter, evaluateKeywordExtractorCompliance, getNormalizedStageKey, getStageAllowedKeys };
+export {
+  aiRouter,
+  evaluateKeywordExtractorCompliance,
+  getNormalizedStageKey,
+  getStageAllowedKeys,
+  validateSharedWorkflowStageContractPayload as validateWorkflowStageContractPayload,
+};

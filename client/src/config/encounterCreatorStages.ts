@@ -16,45 +16,14 @@ import {
   getRewardsSchema,
   formatEncounterSchemaForPrompt,
 } from '../utils/encounterSchemaExtractor';
-
-interface StageContext {
-  config: { prompt: string; type: string; flags: Record<string, unknown> };
-  stageResults: Record<string, Record<string, unknown>>;
-  factpack: unknown;
-  chunkInfo?: {
-    isChunked: boolean;
-    currentChunk: number;
-    totalChunks: number;
-    chunkLabel: string;
-  };
-  previousDecisions?: Record<string, string>;
-  unansweredProposals?: unknown[];
-}
-
-/**
- * Helper to strip internal pipeline fields from stage output
- */
-function stripStageOutput(result: Record<string, unknown>): Record<string, unknown> {
-  if (!result) return {};
-  const content = { ...result } as Record<string, unknown>;
-  delete content.sources_used;
-  delete content.assumptions;
-  delete content.proposals;
-  delete content.retrieval_hints;
-  delete content.canon_update;
-  return content;
-}
-
-/**
- * Create a minimal factpack reference for prompts
- */
-function createMinimalFactpack(factpack: unknown, maxChars: number = 8000): unknown {
-  if (!factpack) return null;
-  const serialized = JSON.stringify(factpack);
-  if (serialized.length <= maxChars) return factpack;
-  // Truncate if too large
-  return JSON.parse(serialized.substring(0, maxChars) + '"}]');
-}
+import { type GeneratorStagePromptContext as StageContext } from '../services/stagePromptShared';
+import {
+  buildEncounterConceptPrompt,
+  buildEncounterEnemiesPrompt,
+  buildEncounterRewardsPrompt,
+  buildEncounterTacticsPrompt,
+  buildEncounterTerrainPrompt,
+} from '../services/encounterStagePrompt';
 
 const BASE_ENCOUNTER_SYSTEM_PROMPT = `You are a D&D 5e Encounter Creator — a specialist in designing tactically interesting, balanced, and narratively engaging combat encounters.
 
@@ -113,22 +82,7 @@ D&D 5E ENCOUNTER BUDGET REFERENCE:
 - Apply encounter multiplier for multiple monsters (2 = ×1.5, 3-6 = ×2, 7-10 = ×2.5, 11-14 = ×3, 15+ = ×4)`,
 
   buildUserPrompt: (context: StageContext) => {
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'encounter',
-      stage: 'concept',
-      flags: context.config.flags,
-    };
-
-    if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildEncounterConceptPrompt(context);
   },
 };
 
@@ -164,27 +118,7 @@ CR-TO-XP REFERENCE:
 14=11500, 15=13000, 16=15000, 17=18000, 18=20000, 19=22000, 20=25000`,
 
   buildUserPrompt: (context: StageContext) => {
-    const concept = stripStageOutput(context.stageResults['encounter_concept'] || {});
-
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'encounter',
-      stage: 'enemies',
-      concept,
-      instructions: `Select enemies for this encounter. XP budget: ${concept.xp_budget || 'see concept'}. Difficulty: ${concept.difficulty_tier || 'medium'}.`,
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for monster/NPC details.`;
-    } else if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildEncounterEnemiesPrompt(context);
   },
 };
 
@@ -218,33 +152,7 @@ CRITICAL TERRAIN DESIGN PRINCIPLES:
 - Map dimensions should accommodate the number of combatants`,
 
   buildUserPrompt: (context: StageContext) => {
-    const concept = stripStageOutput(context.stageResults['encounter_concept'] || {});
-    const enemies = stripStageOutput(context.stageResults['encounter_enemies'] || {});
-
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'encounter',
-      stage: 'terrain',
-      concept: { location: concept.location, description: concept.description, setting_context: concept.setting_context },
-      enemies_summary: {
-        monster_count: Array.isArray(enemies.monsters) ? enemies.monsters.length : 0,
-        has_ranged: 'Check enemy key_abilities for ranged attacks',
-        has_flyers: 'Check enemy speed for fly speeds',
-      },
-      instructions: 'Design terrain that creates interesting tactical decisions. Terrain should interact with enemy abilities.',
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for location details.`;
-    } else if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildEncounterTerrainPrompt(context);
   },
 };
 
@@ -283,25 +191,7 @@ EVENT CLOCK PRINCIPLES:
 - 3-5 phases is typical for a dynamic encounter`,
 
   buildUserPrompt: (context: StageContext) => {
-    const concept = stripStageOutput(context.stageResults['encounter_concept'] || {});
-    const enemies = stripStageOutput(context.stageResults['encounter_enemies'] || {});
-    const terrain = stripStageOutput(context.stageResults['encounter_terrain'] || {});
-
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'encounter',
-      stage: 'tactics',
-      concept: { difficulty_tier: concept.difficulty_tier, objectives: concept.objectives, expected_duration_rounds: concept.expected_duration_rounds },
-      enemies,
-      terrain,
-      instructions: 'Design enemy tactics and an event clock that makes this encounter dynamic and escalating.',
-    };
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildEncounterTacticsPrompt(context);
   },
 };
 
@@ -341,32 +231,7 @@ TREASURE REFERENCE (per-encounter, not full hoard):
 - Level 17-20: 5000-50000 gp equivalent, very rare/legendary items`,
 
   buildUserPrompt: (context: StageContext) => {
-    const concept = stripStageOutput(context.stageResults['encounter_concept'] || {});
-    const enemies = stripStageOutput(context.stageResults['encounter_enemies'] || {});
-
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'encounter',
-      stage: 'rewards',
-      concept: { difficulty_tier: concept.difficulty_tier, party_level: concept.party_level, party_size: concept.party_size, objectives: concept.objectives },
-      enemies_summary: {
-        monster_count: Array.isArray(enemies.monsters) ? enemies.monsters.length : 0,
-        total_xp: concept.xp_budget,
-      },
-      instructions: 'Design rewards, consequences, and scaling guidance appropriate for the encounter difficulty and party level.',
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for treasure and story context.`;
-    } else if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildEncounterRewardsPrompt(context);
   },
 };
 

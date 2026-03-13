@@ -9,6 +9,8 @@
 
 import type { LiveMapSpace } from '../types/liveMapTypes';
 import { API_BASE_URL } from '../services/api';
+import type { AiCompiledStageRequest } from '../contexts/AiAssistantContext';
+import type { GenerationRunState, WorkflowContentType, WorkflowRetrySource } from '../../../src/shared/generation/workflowTypes';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -27,6 +29,10 @@ export interface ProgressEntry {
   timestamp: string;
   status: 'pending' | 'completed' | 'error';
   errorMessage?: string;
+  retrySource?: WorkflowRetrySource;
+  confirmedStageId?: string;
+  confirmedStageKey?: string;
+  confirmedWorkflowType?: WorkflowContentType;
 }
 
 export interface MultiChunkState {
@@ -66,6 +72,71 @@ export interface GenerationProgress {
   currentStageIndex: number;
   liveMapSpaces?: JsonRecord[]; // Top-level live map spaces for backward compatibility
   accumulatedChunkResults?: JsonRecord[]; // Top-level accumulated results for backward compatibility
+  workflowType?: WorkflowContentType;
+  workflowStageSequence?: string[];
+  workflowRunState?: GenerationRunState;
+  compiledStageRequest?: AiCompiledStageRequest;
+}
+
+export interface PersistedWorkflowSessionMetadata {
+  workflowType: WorkflowContentType;
+  workflowStageSequence: string[];
+  workflowRunState?: GenerationRunState | null;
+  compiledStageRequest?: AiCompiledStageRequest | null;
+}
+
+function areStringArraysEqual(left: string[] | undefined, right: string[]): boolean {
+  return Array.isArray(left) && left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function areWorkflowRunStatesEqual(
+  left: GenerationRunState | undefined,
+  right: GenerationRunState | null | undefined,
+): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function areCompiledStageRequestsEqual(
+  left: AiCompiledStageRequest | undefined,
+  right: AiCompiledStageRequest | null | undefined,
+): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+export function attachWorkflowSessionMetadata(
+  session: GenerationProgress,
+  metadata: PersistedWorkflowSessionMetadata,
+): GenerationProgress {
+  const nextStageSequence = [...metadata.workflowStageSequence];
+  const nextWorkflowRunState = metadata.workflowRunState ?? undefined;
+  const nextCompiledStageRequest = metadata.compiledStageRequest ?? undefined;
+  const sameWorkflowType = session.workflowType === metadata.workflowType;
+  const sameStageSequence = areStringArraysEqual(session.workflowStageSequence, nextStageSequence);
+  const sameWorkflowRunState = areWorkflowRunStatesEqual(session.workflowRunState, nextWorkflowRunState);
+  const sameCompiledStageRequest = areCompiledStageRequestsEqual(session.compiledStageRequest, nextCompiledStageRequest);
+
+  if (sameWorkflowType && sameStageSequence && sameWorkflowRunState && sameCompiledStageRequest) {
+    return session;
+  }
+
+  return {
+    ...session,
+    workflowType: metadata.workflowType,
+    workflowStageSequence: nextStageSequence,
+    workflowRunState: nextWorkflowRunState,
+    compiledStageRequest: nextCompiledStageRequest,
+  };
+}
+
+export interface ProgressHistorySummaryEntry {
+  stage: string;
+  status: ProgressEntry['status'];
+  timestamp: string;
+  chunkIndex: number | null;
+  retrySource?: WorkflowRetrySource;
+  confirmedStageId?: string;
+  confirmedStageKey?: string;
+  confirmedWorkflowType?: WorkflowContentType;
 }
 
 /**
@@ -132,7 +203,8 @@ export function addProgressEntry(
   session: GenerationProgress,
   stage: string,
   chunkIndex: number | null,
-  prompt: string
+  prompt: string,
+  retrySource?: WorkflowRetrySource,
 ): GenerationProgress {
   const entry: ProgressEntry = {
     stage,
@@ -141,6 +213,7 @@ export function addProgressEntry(
     response: null,
     timestamp: new Date().toISOString(),
     status: 'pending',
+    retrySource,
   };
 
   return {
@@ -157,7 +230,12 @@ export function updateProgressResponse(
   session: GenerationProgress,
   response: string,
   status: 'completed' | 'error' = 'completed',
-  errorMessage?: string
+  errorMessage?: string,
+  metadata?: {
+    confirmedStageId?: string;
+    confirmedStageKey?: string;
+    confirmedWorkflowType?: WorkflowContentType;
+  }
 ): GenerationProgress {
   const progress = [...session.progress];
   const lastEntry = progress[progress.length - 1];
@@ -168,6 +246,15 @@ export function updateProgressResponse(
     lastEntry.timestamp = new Date().toISOString();
     if (errorMessage) {
       lastEntry.errorMessage = errorMessage;
+    }
+    if (metadata?.confirmedStageId) {
+      lastEntry.confirmedStageId = metadata.confirmedStageId;
+    }
+    if (metadata?.confirmedStageKey) {
+      lastEntry.confirmedStageKey = metadata.confirmedStageKey;
+    }
+    if (metadata?.confirmedWorkflowType) {
+      lastEntry.confirmedWorkflowType = metadata.confirmedWorkflowType;
     }
   }
 
@@ -294,6 +381,16 @@ export async function listProgressFiles(): Promise<Array<{
   createdAt: string;
   lastUpdatedAt: string;
   config: GenerationConfig;
+  currentStageIndex?: number;
+  progressCount?: number;
+  totalStages?: number;
+  retrySource?: WorkflowRetrySource | null;
+  retryStage?: string;
+  hasPendingRetry?: boolean;
+  lastConfirmedStageId?: string;
+  lastConfirmedStageKey?: string;
+  lastConfirmedWorkflowType?: WorkflowContentType;
+  recentProgress?: ProgressHistorySummaryEntry[];
 }>> {
   try {
     const response = await fetch(`${API_BASE_URL}/list-progress`);

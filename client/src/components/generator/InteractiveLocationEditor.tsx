@@ -18,6 +18,12 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useLocationEditor, Space } from '../../contexts/LocationEditorContext';
 import { Undo2, Redo2, Grid3x3, Eye, EyeOff, Download, Save } from 'lucide-react';
 import RoomPropertiesPanel from './RoomPropertiesPanel';
+import {
+  getDoorCenterFt,
+  getDoorRenderRectPx,
+  getEffectiveWallThicknessFt,
+  getSpaceOuterBoundsFt,
+} from '../../utils/locationMapGeometry';
 
 interface InteractiveLocationEditorProps {
   locationName?: string;
@@ -406,13 +412,7 @@ export default function InteractiveLocationEditor({
     const isCorridor = space.space_type === 'corridor';
 
     // Get wall thickness - use room-specific value or fall back to global settings
-    let wallThicknessFt: number;
-    if (typeof space.wall_thickness_ft === 'number') {
-      wallThicknessFt = space.wall_thickness_ft;
-    } else {
-      // Use global default (this is normal, not an error)
-      wallThicknessFt = state.globalWallSettings?.thickness_ft || 10;
-    }
+    const wallThicknessFt = getEffectiveWallThicknessFt(space, state.globalWallSettings);
 
     // Get wall material - use room-specific value or fall back to global settings
     let wallMaterial: string;
@@ -425,18 +425,19 @@ export default function InteractiveLocationEditor({
 
     const wallThickness = wallThicknessFt * PIXELS_PER_FOOT;
     const halfWallThickness = wallThickness / 2;
+    const outerBoundsFt = getSpaceOuterBoundsFt(space, state.globalWallSettings);
 
     // Room interior bounds (matches size_ft exactly - this is the usable space)
-    const interiorX = ftToPx(space.position.x);
-    const interiorY = ftToPx(space.position.y);
-    const interiorW = ftToPx(space.size_ft.width);
-    const interiorH = ftToPx(space.size_ft.height);
+    const interiorX = ftToPx(outerBoundsFt.interiorX);
+    const interiorY = ftToPx(outerBoundsFt.interiorY);
+    const interiorW = ftToPx(outerBoundsFt.interiorWidth);
+    const interiorH = ftToPx(outerBoundsFt.interiorHeight);
 
     // Outer bounds including walls (walls extend halfWallThickness outward, meeting adjacent rooms in middle)
-    const x = interiorX - halfWallThickness;
-    const y = interiorY - halfWallThickness;
-    const w = interiorW + wallThickness;
-    const h = interiorH + wallThickness;
+    const x = ftToPx(outerBoundsFt.x);
+    const y = ftToPx(outerBoundsFt.y);
+    const w = ftToPx(outerBoundsFt.width);
+    const h = ftToPx(outerBoundsFt.height);
 
     // Different fill colors for different space types
     const getFillColor = () => {
@@ -744,7 +745,6 @@ export default function InteractiveLocationEditor({
 
         {/* Doors visualization */}
         {space.doors && space.doors.map((door, doorIdx) => {
-          const doorWidthPx = ftToPx(door.width_ft || 4);
           const doorThickness = 6; // pixels
 
           // Check if this door has validation errors
@@ -786,58 +786,24 @@ export default function InteractiveLocationEditor({
             doorProps.strokeWidth = 2.5;
           }
 
-          // Get door position as 0-1 ratio along wall for rendering
-          // SINGLE SOURCE OF TRUTH: Only position_on_wall_ft is supported
-          const getDoorPositionRatio = (): number => {
-            const wall = door.wall?.toLowerCase();
-
-            if (typeof door.position_on_wall_ft !== 'number') {
-              throw new Error(
-                `Door rendering failed: "${space.name}" on ${wall} wall has no position_on_wall_ft. ` +
-                `Every door must have "position_on_wall_ft" (absolute feet representing door center).`
-              );
-            }
-
-            // Convert absolute feet to 0-1 ratio for rendering
-            const wallLengthFt = (wall === 'north' || wall === 'south')
-              ? space.size_ft.width
-              : space.size_ft.height;
-
-            return door.position_on_wall_ft / wallLengthFt;
-          };
-
-          const wallPosition = getDoorPositionRatio();
-
-          let doorX = 0, doorY = 0, doorW = 0, doorH = 0;
-
-          switch (door.wall?.toLowerCase()) {
-            case 'north':
-              doorX = x + (w * wallPosition) - (doorWidthPx / 2);
-              doorY = y + halfWallThickness / 2 - doorThickness / 2; // Center in north wall
-              doorW = doorWidthPx;
-              doorH = doorThickness;
-              break;
-            case 'south':
-              doorX = x + (w * wallPosition) - (doorWidthPx / 2);
-              doorY = y + h - halfWallThickness / 2 - doorThickness / 2; // Center in south wall
-              doorW = doorWidthPx;
-              doorH = doorThickness;
-              break;
-            case 'east':
-              doorX = x + w - halfWallThickness / 2 - doorThickness / 2; // Center in east wall
-              doorY = y + (h * wallPosition) - (doorWidthPx / 2);
-              doorW = doorThickness;
-              doorH = doorWidthPx;
-              break;
-            case 'west':
-              doorX = x + halfWallThickness / 2 - doorThickness / 2; // Center in west wall
-              doorY = y + (h * wallPosition) - (doorWidthPx / 2);
-              doorW = doorThickness;
-              doorH = doorWidthPx;
-              break;
-            default:
-              return null;
+          if (typeof door.position_on_wall_ft !== 'number') {
+            throw new Error(
+              `Door rendering failed: "${space.name}" on ${door.wall} wall has no position_on_wall_ft. ` +
+              `Every door must have "position_on_wall_ft" (absolute feet representing door center).`
+            );
           }
+
+          const doorRect = getDoorRenderRectPx(
+            space,
+            door,
+            state.globalWallSettings,
+            PIXELS_PER_FOOT,
+            doorThickness
+          );
+          const doorX = doorRect.x;
+          const doorY = doorRect.y;
+          const doorW = doorRect.width;
+          const doorH = doorRect.height;
           
           // Calculate badge position (next to door)
           const badgeOffsetX = door.wall === 'east' ? 12 : door.wall === 'west' ? -12 : 0;
@@ -956,57 +922,12 @@ export default function InteractiveLocationEditor({
             return null; // No reciprocal door found
           }
 
-          // Calculate door center positions for source door
-          const wallPosition = door.position_on_wall_ft / ((door.wall === 'north' || door.wall === 'south') ? space.size_ft.width : space.size_ft.height);
-          let doorCenterX = 0, doorCenterY = 0;
-
-          switch (door.wall) {
-            case 'north':
-              doorCenterX = x + (w * wallPosition);
-              doorCenterY = y;
-              break;
-            case 'south':
-              doorCenterX = x + (w * wallPosition);
-              doorCenterY = y + h;
-              break;
-            case 'east':
-              doorCenterX = x + w;
-              doorCenterY = y + (h * wallPosition);
-              break;
-            case 'west':
-              doorCenterX = x;
-              doorCenterY = y + (h * wallPosition);
-              break;
-          }
-
-          // Calculate door center positions for reciprocal door
-          const targetWallPosition = reciprocalDoor.position_on_wall_ft / ((reciprocalDoor.wall === 'north' || reciprocalDoor.wall === 'south') ? targetSpace.size_ft.width : targetSpace.size_ft.height);
-          const targetWallThickness = targetSpace.wall_thickness_ft || state.globalWallSettings.thickness_ft;
-          const targetW = ftToPx(targetSpace.size_ft.width + targetWallThickness);
-          const targetH = ftToPx(targetSpace.size_ft.height + targetWallThickness);
-          const targetX = ftToPx(targetSpace.position.x);
-          const targetY = ftToPx(targetSpace.position.y);
-
-          let reciprocalCenterX = 0, reciprocalCenterY = 0;
-
-          switch (reciprocalDoor.wall) {
-            case 'north':
-              reciprocalCenterX = targetX + (targetW * targetWallPosition);
-              reciprocalCenterY = targetY;
-              break;
-            case 'south':
-              reciprocalCenterX = targetX + (targetW * targetWallPosition);
-              reciprocalCenterY = targetY + targetH;
-              break;
-            case 'east':
-              reciprocalCenterX = targetX + targetW;
-              reciprocalCenterY = targetY + (targetH * targetWallPosition);
-              break;
-            case 'west':
-              reciprocalCenterX = targetX;
-              reciprocalCenterY = targetY + (targetH * targetWallPosition);
-              break;
-          }
+          const doorCenter = getDoorCenterFt(space, door, state.globalWallSettings);
+          const reciprocalCenter = getDoorCenterFt(targetSpace, reciprocalDoor, state.globalWallSettings);
+          const doorCenterX = ftToPx(doorCenter.x);
+          const doorCenterY = ftToPx(doorCenter.y);
+          const reciprocalCenterX = ftToPx(reciprocalCenter.x);
+          const reciprocalCenterY = ftToPx(reciprocalCenter.y);
 
           // Draw connection line
           return (

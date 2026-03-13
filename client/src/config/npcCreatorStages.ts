@@ -23,6 +23,12 @@ import {
   EQUIPMENT_CONTRACT,
 } from './npcStageContracts';
 import type { RoutedNpcStageKey } from './npcStageRouter';
+import {
+  buildWorkflowStagePrompt,
+  createWorkflowStagePromptPayload,
+  stripStageOutput,
+  type GeneratorStagePromptContext as StageContext,
+} from '../services/stagePromptShared';
 
 const CLASS_SPELLCAST_ABILITY_MAP: Record<string, string> = {
   cleric: 'WIS',
@@ -91,44 +97,6 @@ function computeHalfCasterSlots(level?: number): Record<string, number> {
   return nearest ? table[nearest] : {};
 }
 
-interface StageContext {
-  config: { prompt: string; type: string; flags: Record<string, unknown> };
-  stageResults: Record<string, Record<string, unknown>>;
-  factpack: unknown;
-  chunkInfo?: {
-    isChunked: boolean;
-    currentChunk: number;
-    totalChunks: number;
-    chunkLabel: string;
-  };
-  previousDecisions?: Record<string, string>;
-  unansweredProposals?: unknown[];
-}
-
-/**
- * Helper to create minimal factpack reference
- */
-function createMinimalFactpack(factpack: unknown): unknown {
-  if (!factpack) return null;
-  // Simplified - actual implementation in ManualGenerator
-  return factpack;
-}
-
-/**
- * Helper to strip internal pipeline fields from stage output.
- * Produces a compact summary of prior-stage output for context.
- */
-function stripStageOutput(result: Record<string, unknown>): Record<string, unknown> {
-  if (!result) return {};
-  const content = { ...result } as Record<string, unknown>;
-  delete content.sources_used;
-  delete content.assumptions;
-  delete content.proposals;
-  delete content.retrieval_hints;
-  delete content.canon_update;
-  return content;
-}
-
 /**
  * Stage 1: NPC Basic Information
  */
@@ -138,36 +106,20 @@ export const NPC_CREATOR_BASIC_INFO = {
   systemPrompt: BASIC_INFO_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      type: context.config.type,
-    };
-
-    // Include planner brief if available (compact)
     const planner = context.stageResults.planner;
-    if (planner) {
-      userPrompt.brief = stripStageOutput(planner);
-    }
-
-    // Include purpose if available (compact)
     const purpose = context.stageResults.purpose;
-    if (purpose) {
-      userPrompt.purpose = stripStageOutput(purpose);
-    }
 
-    // Canon reference
-    if (planner) {
-      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Use them to inform your creation.`;
-    } else {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    // Previous decisions
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildWorkflowStagePrompt({
+      context,
+      deliverable: context.config.type,
+      stage: 'basic_info',
+      payload: {
+        type: context.config.type,
+        brief: planner ? stripStageOutput(planner) : undefined,
+        purpose: purpose ? stripStageOutput(purpose) : undefined,
+      },
+      plannerReferenceMessage: 'Canon facts were provided in the Planner stage. Use them to inform your creation.',
+    });
   },
 };
 
@@ -180,22 +132,15 @@ export const NPC_CREATOR_CORE_DETAILS = {
   systemPrompt: CORE_DETAILS_CONTRACT,
 
   buildUserPrompt: (context: StageContext) => {
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for personality and relationship details.`;
-    } else {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildWorkflowStagePrompt({
+      context,
+      deliverable: 'npc',
+      stage: 'core_details',
+      payload: {
+        basic_info: stripStageOutput(context.stageResults['creator:_basic_info'] as Record<string, unknown>),
+      },
+      plannerReferenceMessage: 'Canon facts were provided in the Planner stage. Review them for personality and relationship details.',
+    });
   },
 };
 
@@ -210,26 +155,18 @@ export const NPC_CREATOR_STATS = {
   buildUserPrompt: (context: StageContext) => {
     const basicInfo = context.stageResults['creator:_basic_info'];
     const coreDetails = context.stageResults['creator:_core_details'];
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      // Only carry forward the fields Stats actually needs
-      name: basicInfo?.name,
-      species: basicInfo?.species || basicInfo?.race,
-      class_levels: basicInfo?.class_levels || coreDetails?.class_levels,
-      challenge_rating: basicInfo?.challenge_rating,
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for racial stats and mechanical details.`;
-    } else {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildWorkflowStagePrompt({
+      context,
+      deliverable: 'npc',
+      stage: 'stats',
+      payload: {
+        name: basicInfo?.name,
+        species: basicInfo?.species || basicInfo?.race,
+        class_levels: basicInfo?.class_levels || coreDetails?.class_levels,
+        challenge_rating: basicInfo?.challenge_rating,
+      },
+      plannerReferenceMessage: 'Canon facts were provided in the Planner stage. Review them for racial stats and mechanical details.',
+    });
   },
 };
 
@@ -244,27 +181,19 @@ export const NPC_CREATOR_CHARACTER_BUILD = {
   buildUserPrompt: (context: StageContext) => {
     const basicInfo = context.stageResults['creator:_basic_info'];
     const stats = context.stageResults['creator:_stats'];
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      // Only carry forward the fields Character Build actually needs
-      species: basicInfo?.species || basicInfo?.race,
-      background: basicInfo?.background,
-      class_levels: basicInfo?.class_levels,
-      ability_scores: stats?.ability_scores,
-      proficiency_bonus: stats?.proficiency_bonus,
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for class features, racial traits, feats, and background details.`;
-    } else {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildWorkflowStagePrompt({
+      context,
+      deliverable: 'npc',
+      stage: 'character_build',
+      payload: {
+        species: basicInfo?.species || basicInfo?.race,
+        background: basicInfo?.background,
+        class_levels: basicInfo?.class_levels,
+        ability_scores: stats?.ability_scores,
+        proficiency_bonus: stats?.proficiency_bonus,
+      },
+      plannerReferenceMessage: 'Canon facts were provided in the Planner stage. Review them for class features, racial traits, feats, and background details.',
+    });
   },
 };
 
@@ -280,29 +209,21 @@ export const NPC_CREATOR_COMBAT = {
     const stats = context.stageResults['creator:_stats'];
     const build = context.stageResults['creator:_character_build'];
     const basicInfo = context.stageResults['creator:_basic_info'];
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      // Only carry forward the fields Combat actually needs
-      ability_scores: stats?.ability_scores,
-      proficiency_bonus: stats?.proficiency_bonus,
-      armor_class: stats?.armor_class,
-      hit_points: stats?.hit_points,
-      class_features: build?.class_features,
-      fighting_styles: build?.fighting_styles,
-      class_levels: basicInfo?.class_levels,
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for special abilities and combat mechanics.`;
-    } else {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildWorkflowStagePrompt({
+      context,
+      deliverable: 'npc',
+      stage: 'combat',
+      payload: {
+        ability_scores: stats?.ability_scores,
+        proficiency_bonus: stats?.proficiency_bonus,
+        armor_class: stats?.armor_class,
+        hit_points: stats?.hit_points,
+        class_features: build?.class_features,
+        fighting_styles: build?.fighting_styles,
+        class_levels: basicInfo?.class_levels,
+      },
+      plannerReferenceMessage: 'Canon facts were provided in the Planner stage. Review them for special abilities and combat mechanics.',
+    });
   },
 };
 
@@ -338,31 +259,30 @@ export const NPC_CREATOR_SPELLCASTING = {
 
     const alwaysPreparedSpellSources = subclass ? [subclass] : [];
 
-    const userPrompt: Record<string, unknown> = {
-      class_name: className || undefined,
-      subclass: subclass || undefined,
-      level: primaryLevel,
-      caster_type: 'prepared_half_caster',
-      spellcasting_ability: spellcastingAbility,
-      ability_modifier: abilityModifier,
-      proficiency_bonus: proficiencyBonus,
-      derived: {
-        spell_save_dc: derivedDc,
-        spell_attack_bonus: derivedAttack,
-        slot_progression: slotProgression,
+    return JSON.stringify(createWorkflowStagePromptPayload({
+      context,
+      deliverable: 'npc',
+      stage: 'spellcasting',
+      payload: {
+        class_name: className || undefined,
+        subclass: subclass || undefined,
+        level: primaryLevel,
+        caster_type: 'prepared_half_caster',
+        spellcasting_ability: spellcastingAbility,
+        ability_modifier: abilityModifier,
+        proficiency_bonus: proficiencyBonus,
+        derived: {
+          spell_save_dc: derivedDc,
+          spell_attack_bonus: derivedAttack,
+          slot_progression: slotProgression,
+        },
+        always_prepared_spell_sources: alwaysPreparedSpellSources,
+        known_item_spell_sources: [],
       },
-      always_prepared_spell_sources: alwaysPreparedSpellSources,
-      known_item_spell_sources: [],
-      compact_canon: context.stageResults.planner
-        ? 'Planner provided canon facts; reuse only spell names relevant to this NPC.'
-        : createMinimalFactpack(context.factpack),
-      previous_decisions: context.previousDecisions && Object.keys(context.previousDecisions).length > 0
-        ? context.previousDecisions
-        : undefined,
-      original_user_request: context.config.prompt,
-    };
-
-    return JSON.stringify(userPrompt, null, 2);
+      plannerReferenceMessage: 'Planner provided canon facts; reuse only spell names relevant to this NPC.',
+      plannerReferenceKey: 'compact_canon',
+      factpackKey: 'compact_canon',
+    }), null, 2);
   },
 };
 
@@ -377,26 +297,18 @@ export const NPC_CREATOR_LEGENDARY = {
   buildUserPrompt: (context: StageContext) => {
     const basicInfo = context.stageResults['creator:_basic_info'];
     const combat = context.stageResults['creator:_combat'];
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      // Only carry forward the fields Legendary actually needs
-      name: basicInfo?.name,
-      species: basicInfo?.species || basicInfo?.race,
-      class_levels: basicInfo?.class_levels,
-      actions: combat?.actions,
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for legendary abilities and lair information.`;
-    } else {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildWorkflowStagePrompt({
+      context,
+      deliverable: 'npc',
+      stage: 'legendary',
+      payload: {
+        name: basicInfo?.name,
+        species: basicInfo?.species || basicInfo?.race,
+        class_levels: basicInfo?.class_levels,
+        actions: combat?.actions,
+      },
+      plannerReferenceMessage: 'Canon facts were provided in the Planner stage. Review them for legendary abilities and lair information.',
+    });
   },
 };
 
@@ -411,34 +323,26 @@ export const NPC_CREATOR_RELATIONSHIPS = {
   buildUserPrompt: (context: StageContext) => {
     const basicInfo = context.stageResults['creator:_basic_info'];
     const coreDetails = context.stageResults['creator:_core_details'];
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      // Only carry forward the fields Relationships actually needs
-      name: basicInfo?.name,
-      species: basicInfo?.species || basicInfo?.race,
-      background: basicInfo?.background,
-      alignment: basicInfo?.alignment,
-      personality_traits: coreDetails?.personality_traits,
-      ideals: coreDetails?.ideals,
-      bonds: coreDetails?.bonds,
-      flaws: coreDetails?.flaws,
-      goals: coreDetails?.goals,
-      hooks: coreDetails?.hooks,
-      affiliation: basicInfo?.affiliation,
-      location: basicInfo?.location,
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for related NPCs, factions, and relationships.`;
-    } else {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildWorkflowStagePrompt({
+      context,
+      deliverable: 'npc',
+      stage: 'relationships',
+      payload: {
+        name: basicInfo?.name,
+        species: basicInfo?.species || basicInfo?.race,
+        background: basicInfo?.background,
+        alignment: basicInfo?.alignment,
+        personality_traits: coreDetails?.personality_traits,
+        ideals: coreDetails?.ideals,
+        bonds: coreDetails?.bonds,
+        flaws: coreDetails?.flaws,
+        goals: coreDetails?.goals,
+        hooks: coreDetails?.hooks,
+        affiliation: basicInfo?.affiliation,
+        location: basicInfo?.location,
+      },
+      plannerReferenceMessage: 'Canon facts were provided in the Planner stage. Review them for related NPCs, factions, and relationships.',
+    });
   },
 };
 
@@ -454,30 +358,22 @@ export const NPC_CREATOR_EQUIPMENT = {
     const basicInfo = context.stageResults['creator:_basic_info'];
     const stats = context.stageResults['creator:_stats'];
     const build = context.stageResults['creator:_character_build'];
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      // Only carry forward the fields Equipment actually needs
-      name: basicInfo?.name,
-      species: basicInfo?.species || basicInfo?.race,
-      class_levels: basicInfo?.class_levels,
-      proficiency_bonus: stats?.proficiency_bonus,
-      skill_proficiencies: build?.skill_proficiencies,
-      fighting_styles: build?.fighting_styles,
-      background: basicInfo?.background,
-      armor_class: stats?.armor_class,
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `Canon facts were provided in the Planner stage. Review them for equipment, treasure, and magic items.`;
-    } else {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildWorkflowStagePrompt({
+      context,
+      deliverable: 'npc',
+      stage: 'equipment',
+      payload: {
+        name: basicInfo?.name,
+        species: basicInfo?.species || basicInfo?.race,
+        class_levels: basicInfo?.class_levels,
+        proficiency_bonus: stats?.proficiency_bonus,
+        skill_proficiencies: build?.skill_proficiencies,
+        fighting_styles: build?.fighting_styles,
+        background: basicInfo?.background,
+        armor_class: stats?.armor_class,
+      },
+      plannerReferenceMessage: 'Canon facts were provided in the Planner stage. Review them for equipment, treasure, and magic items.',
+    });
   },
 };
 

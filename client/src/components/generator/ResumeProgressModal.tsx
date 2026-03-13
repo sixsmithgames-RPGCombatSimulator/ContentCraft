@@ -4,10 +4,17 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Clock, FileText, Trash2 } from 'lucide-react';
+import { X, Clock, FileText, RotateCcw, Trash2 } from 'lucide-react';
 import { API_BASE_URL } from '../../services/api';
-import { listProgressFiles, loadProgressFromFile, type GenerationProgress } from '../../utils/generationProgress';
+import {
+  listProgressFiles,
+  loadProgressFromFile,
+  type GenerationProgress,
+  type ProgressHistorySummaryEntry,
+} from '../../utils/generationProgress';
+import { getWorkflowRetryBadgeLabel, getWorkflowRetryDetail } from '../../services/workflowRetryNotice';
 import ConfirmationModal from '../common/ConfirmationModal';
+import type { WorkflowRetrySource } from '../../../../src/shared/generation/workflowTypes';
 
 interface ResumeProgressModalProps {
   isOpen: boolean;
@@ -30,6 +37,13 @@ interface ProgressFileSummary {
   currentStageIndex: number;
   progressCount: number;
   totalStages?: number; // Total number of stages (8)
+  retrySource?: WorkflowRetrySource | null;
+  retryStage?: string;
+  hasPendingRetry?: boolean;
+  lastConfirmedStageId?: string;
+  lastConfirmedStageKey?: string;
+  lastConfirmedWorkflowType?: string;
+  recentProgress?: ProgressHistorySummaryEntry[];
 }
 
 export default function ResumeProgressModal({
@@ -115,6 +129,12 @@ export default function ResumeProgressModal({
     return date.toLocaleDateString();
   };
 
+  const getHistoryStatusClasses = (status: ProgressHistorySummaryEntry['status']) => {
+    if (status === 'completed') return 'bg-green-100 text-green-700';
+    if (status === 'error') return 'bg-red-100 text-red-700';
+    return 'bg-blue-100 text-blue-700';
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -197,12 +217,110 @@ export default function ResumeProgressModal({
                         <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-700 rounded">
                           Stage {file.currentStageIndex + 1}/{file.totalStages || 8}
                         </span>
+                        {file.retrySource && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-medium ${
+                              file.hasPendingRetry
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-orange-50 text-orange-700'
+                            }`}
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            {file.hasPendingRetry ? 'Pending Retry' : 'Last Retry'}
+                          </span>
+                        )}
                       </div>
                       {/* Show prompt excerpt if no sessionName but has prompt */}
                       {!file.sessionName && file.config.prompt && (
                         <p className="text-sm text-gray-700 mt-1 line-clamp-1">
                           "{file.config.prompt.slice(0, 50)}{file.config.prompt.length > 50 ? '...' : ''}"
                         </p>
+                      )}
+                      {file.retrySource && (
+                        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-medium text-amber-900">
+                              {getWorkflowRetryBadgeLabel(file.retrySource)}
+                            </span>
+                            {file.retryStage && (
+                              <span className="text-xs text-amber-700">
+                                Stage: {file.retryStage}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs text-amber-800">
+                            {getWorkflowRetryDetail(file.retrySource, 150)}
+                          </p>
+                        </div>
+                      )}
+                      {(file.lastConfirmedStageId || file.lastConfirmedStageKey) && (
+                        <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-medium text-emerald-900">
+                              Server Confirmed
+                            </span>
+                            {file.lastConfirmedWorkflowType && (
+                              <span className="text-xs text-emerald-700">
+                                Workflow: {file.lastConfirmedWorkflowType}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs text-emerald-800">
+                            {file.lastConfirmedStageId || file.lastConfirmedStageKey}
+                            {file.lastConfirmedStageKey && file.lastConfirmedStageId !== file.lastConfirmedStageKey
+                              ? ` (${file.lastConfirmedStageKey})`
+                              : ''}
+                          </p>
+                        </div>
+                      )}
+                      {file.recentProgress && file.recentProgress.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Recent Activity
+                          </p>
+                          <div className="mt-2 space-y-2">
+                            {file.recentProgress.map((entry, index) => (
+                              <div
+                                key={`${file.filename}-history-${index}`}
+                                className="rounded-md border border-gray-200 bg-white px-3 py-2"
+                              >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${getHistoryStatusClasses(entry.status)}`}
+                                  >
+                                    {entry.status}
+                                  </span>
+                                  <span className="text-xs font-medium text-gray-800">
+                                    {entry.stage}
+                                  </span>
+                                  {entry.chunkIndex !== null && (
+                                    <span className="text-[11px] text-gray-500">
+                                      Chunk {entry.chunkIndex + 1}
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] text-gray-500">
+                                    {formatDate(entry.timestamp)}
+                                  </span>
+                                </div>
+                                {entry.retrySource && (
+                                  <p className="mt-1 text-xs text-amber-700">
+                                    Retry: {getWorkflowRetryBadgeLabel(entry.retrySource)}.{' '}
+                                    {getWorkflowRetryDetail(entry.retrySource, 120)}
+                                  </p>
+                                )}
+                                {(entry.confirmedStageId || entry.confirmedStageKey) && (
+                                  <p className="mt-1 text-xs text-emerald-700">
+                                    Confirmed: {entry.confirmedStageId || entry.confirmedStageKey}
+                                    {entry.confirmedStageKey && entry.confirmedStageId !== entry.confirmedStageKey
+                                      ? ` (${entry.confirmedStageKey})`
+                                      : ''}
+                                    {entry.confirmedWorkflowType ? ` • ${entry.confirmedWorkflowType}` : ''}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                       <div className="mt-2 space-y-1">
                         <p className="text-xs text-gray-500">

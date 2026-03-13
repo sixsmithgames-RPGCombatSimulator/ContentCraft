@@ -23,11 +23,11 @@ import { parseAIResponse, formatParseError } from '../utils/jsonParser';
 import {
   createProgressSession,
   addProgressEntry,
+  attachWorkflowSessionMetadata,
   updateProgressResponse,
   saveProgressToFile,
   type GenerationProgress,
   type StageChunkState,
-  type ProgressEntry,
 } from '../utils/generationProgress';
 import {
   buildSafePrompt,
@@ -37,30 +37,177 @@ import {
 } from '../utils/promptLimits';
 import { buildPackedPrompt, formatSizeBreakdown, PROMPT_SAFETY_CEILING, type PromptPackConfig } from '../utils/promptPacker';
 import { reduceStageInputs } from '../utils/stageInputReducer';
-import { validateNpcStageOutput } from '../utils/npcStageValidator';
-import { mergeNpcStages } from '../utils/npcStageMerger';
-import { getStageContract } from '../config/npcStageContracts';
-import { NPC_CREATOR_STAGES, STAGE_ROUTER_MAP } from '../config/npcCreatorStages';
-import { determineRequiredStages, getRoutingSummary, type StageRoutingDecision } from '../config/npcStageRouter';
-import { MONSTER_CREATOR_STAGES } from '../config/monsterCreatorStages';
-import { LOCATION_CREATOR_STAGES } from '../config/locationCreatorStages';
-import { ENCOUNTER_CREATOR_STAGES } from '../config/encounterCreatorStages';
-import { ITEM_CREATOR_STAGES } from '../config/itemCreatorStages';
-import { STORY_ARC_CREATOR_STAGES } from '../config/storyArcCreatorStages';
+import { getStageContract as getNpcStageContract } from '../config/npcStageContracts';
 import { getNpcSectionChunks, type NpcSectionChunk } from '../config/npcSectionChunks';
-import { validateSpaceGeometry } from '../utils/locationGeometry';
-import { validateIncomingLocationSpace } from '../utils/locationSpaceValidation';
-import type { LiveMapSpace, LiveMapDimensions } from '../types/liveMapTypes';
+import type { LiveMapSpace } from '../types/liveMapTypes';
 import { synchronizeReciprocalDoors, type SpaceLike } from '../utils/doorSync';
 import { projectApi, API_BASE_URL } from '../services/api';
 import type { Project } from '../types';
 import { useAiAssistant } from '../contexts/AiAssistantContext';
-import type { AiCompiledStageRequest, AiStageMemorySummary, WorkflowType } from '../contexts/AiAssistantContext';
-import { pruneToAllowedKeys, resolveStageContractKey, STAGE_OUTPUT_CONTRACTS, validateStageOutput, type StageKey } from '../utils/stageOutputContracts';
+import type {
+  AiCompiledStageRequest,
+  AiStageMemorySummary,
+  SubmitPipelineStageMetadata,
+} from '../contexts/AiAssistantContext';
+import {
+  buildWorkflowRunDefinitionFromStages,
+  getCurrentWorkflowStageIdentity,
+  getGeneratorStages,
+  getWorkflowLabel,
+  resolveWorkflowSessionMetadata,
+  resolveWorkflowStageIdentity,
+  resolveWorkflowTypeFromConfigType,
+  shouldShowLocationMapForStage,
+  type GeneratorStage,
+  type NpcDynamicStagePlan,
+  type StageRoutingDecision,
+} from '../services/generatorWorkflow';
+import { applyLocationEditorUpdates } from '../services/locationEditorWorkflow';
+import {
+  buildAcceptedLocationSpaceProgress,
+  extractLocationSpaceForMap,
+  syncLocationLiveMapSpaces,
+} from '../services/locationSpaceProgression';
+import { buildLocationSpaceRetryGuidance } from '../services/locationSpaceRetry';
+import type { WorkflowPromptNotice } from '../types/workflowUi';
+import { MANUAL_GENERATOR_STAGE_CATALOG } from '../services/manualGeneratorStageCatalog';
+import { buildWorkflowRetryPromptNotice } from '../services/workflowRetryNotice';
+import {
+  assembleFinalWorkflowContent,
+  resolveCompletedWorkflowOutput,
+  restoreUploadedWorkflowContent,
+} from '../services/workflowContentAssembler';
+import {
+  buildResolvedWorkflowFinalContent,
+  buildWorkflowCompletionAlertMessage,
+  getWorkflowCompletionTitle,
+  logWorkflowCompletionResult,
+} from '../services/workflowCompletionPresentation';
+import {
+  extractRetrievalHintKeywords,
+  searchWorkflowCanonByKeywords,
+  type CanonFact,
+  type Factpack,
+} from '../services/workflowCanonRetrieval';
+import {
+  buildWorkflowFilteredFactpack,
+  createEmptyWorkflowCanonNarrowingState,
+  isWorkflowRetrievalHintNarrowing,
+  openInitialWorkflowCanonNarrowing,
+  openRetrievalHintWorkflowCanonNarrowing,
+  updateWorkflowCanonNarrowingSearch,
+  type WorkflowCanonFactSelection,
+  type WorkflowCanonNarrowingState,
+} from '../services/workflowCanonNarrowing';
+import {
+  deduplicateWorkflowFactpack as deduplicateFactpack,
+  formatWorkflowCanonFacts as formatCanonFacts,
+  groupWorkflowFacts as groupFactsIntelligently,
+  mergeWorkflowFactpacks as mergeFactpacks,
+  type WorkflowFactGroup as FactGroup,
+} from '../services/workflowFactpack';
+import {
+  buildWorkflowChunkInfo,
+  buildWorkflowFactGroupFactpack,
+  closeWorkflowChunkingModal,
+  createEmptyWorkflowChunkingState,
+  isNpcSectionWorkflowChunking,
+  openFactWorkflowChunking,
+  openNpcSectionWorkflowChunking,
+  resetWorkflowChunkingState,
+  type WorkflowChunkInfo,
+  type WorkflowChunkingState,
+} from '../services/workflowChunking';
+import {
+  getNextWorkflowFactChunkStep,
+  getNextWorkflowNpcSectionStep,
+  mergeWorkflowChunkOutputs,
+  mergeWorkflowNpcSections,
+} from '../services/workflowMultiPartRuntime';
+import { buildWorkflowStageChunkProgress } from '../services/workflowStageChunkProgress';
+import {
+  buildWorkflowStageChunkInfoForIndex,
+  getNextWorkflowStageChunkStep,
+  mergeWorkflowStageChunks,
+} from '../services/workflowStageChunkRuntime';
+import {
+  buildWorkflowStageErrorOutput,
+  filterAnsweredWorkflowProposals,
+  prepareWorkflowStageForReview,
+  type WorkflowStageProposal,
+} from '../services/workflowStageReview';
+import {
+  buildWorkflowCompletionResult,
+  getWorkflowStageProgression,
+} from '../services/workflowStageTransition';
+import { resolveWorkflowStageContinuation } from '../services/workflowStageContinuation';
+import {
+  buildWorkflowAdvancePlan,
+  buildWorkflowCanonContinuationPlan,
+  type WorkflowStageNavigationPlan,
+} from '../services/workflowStageNavigation';
+import {
+  buildWorkflowCompletedLaunchPlan,
+  buildWorkflowFactChunkRestartLaunchPlan,
+  buildWorkflowFactChunkStartLaunchPlan,
+  buildWorkflowJumpToStageLaunchPlan,
+  buildWorkflowNpcSectionStartLaunchPlan,
+  buildWorkflowPromptLaunchPlan,
+  buildWorkflowResumeLaunchPlan,
+  buildWorkflowSameStageLaunchPlan,
+  type WorkflowStageLaunchPlan,
+} from '../services/workflowStageLaunch';
+import {
+  buildWorkflowAdvanceUiTransition,
+  buildWorkflowCompletionUiTransition,
+  buildWorkflowErrorUiTransition,
+  buildWorkflowRetryUiTransition,
+  type WorkflowUiTransitionPlan,
+} from '../services/workflowUiTransition';
+import { resolveWorkflowResumeAction } from '../services/workflowResume';
+import {
+  buildWorkflowHomebrewCompletionAlertMessage,
+  buildWorkflowHomebrewStageResults,
+  getCurrentWorkflowHomebrewChunk,
+  getWorkflowHomebrewChunks,
+  resolveWorkflowHomebrewChunkProgress,
+} from '../services/workflowHomebrewRuntime';
+import {
+  inferSpecies,
+  parseAndNormalizeWorkflowStageResponse,
+  type NormalizeWorkflowStageResponseResult,
+} from '../services/workflowStageResponse';
+import type { ParentStructure } from '../utils/locationGeometry';
+import { restoreWorkflowStageChunkState } from '../services/workflowStageChunkRestore';
+import {
+  getStageContract as getWorkflowStageContract,
+} from '../utils/stageOutputContracts';
 import ModeSelectionDialog from '../components/ai-assistant/ModeSelectionDialog';
+import { buildManualStagePrompt } from '../services/workflowTransport';
+import {
+  markRunAwaitingUserDecisions,
+  markRunComplete,
+  markStageAccepted,
+  markStageError,
+  syncCurrentStage,
+  syncGenerationRunDefinition,
+  updateRetrievalStatus,
+} from '../../../src/shared/generation/workflowRunState';
+import type { ExecutionMode, GenerationRunState, WorkflowContentType, WorkflowRetrySource } from '../../../src/shared/generation/workflowTypes';
 
 type JsonRecord = Record<string, unknown>;
 type StageResults = Record<string, JsonRecord>;
+type StagePromptOverrides = {
+  flags?: Record<string, unknown>;
+  promptNotice?: WorkflowPromptNotice | null;
+  retrySource?: WorkflowRetrySource | null;
+};
+
+function isNormalizedStageResponseFailure(
+  result: NormalizeWorkflowStageResponseResult,
+): result is Extract<NormalizeWorkflowStageResponseResult, { ok: false }> {
+  return result.ok === false;
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -85,811 +232,13 @@ interface StageContext {
   };
 }
 
-type SpellSlots = Record<string, number>;
-
-type SpellListByKey = Record<string, string[]>;
-
-type SpellcastingNormalized = {
-  spellcasting_ability: string;
-  spell_save_dc: number;
-  spell_attack_bonus: number;
-  spell_slots: SpellSlots;
-  prepared_spells?: SpellListByKey;
-  always_prepared_spells?: SpellListByKey;
-  innate_spells?: SpellListByKey;
-  spellcasting_focus?: string;
-  spells_known?: string[];
-};
-
-type ResolvedMechanics = {
-  spellcasting?: {
-    has_spellcasting: boolean;
-    caster_mode: 'prepared' | 'known' | 'innate' | 'hybrid';
-    has_slots: boolean;
-    has_innate: boolean;
-    spellcasting_ability?: string;
-    spell_save_dc?: number;
-    spell_attack_bonus?: number;
-    spellcasting_focus?: string;
-  };
-  combat?: {
-    has_combat_actions: boolean;
-    has_bonus_actions: boolean;
-    has_reactions: boolean;
-  };
-  legendary?: {
-    has_legendary: boolean;
-  };
-};
-
-const buildCombatCapabilities = (combat: JsonRecord): ResolvedMechanics['combat'] => {
-  const hasActions = Array.isArray(combat.actions) && combat.actions.length > 0;
-  const hasBonus = Array.isArray(combat.bonus_actions) && combat.bonus_actions.length > 0;
-  const hasReactions = Array.isArray(combat.reactions) && combat.reactions.length > 0;
-  return {
-    has_combat_actions: hasActions,
-    has_bonus_actions: hasBonus,
-    has_reactions: hasReactions,
-  };
-};
-
-const buildLegendaryCapabilities = (legendary: JsonRecord): ResolvedMechanics['legendary'] => {
-  const hasLegendaryActions = isRecord(legendary.legendary_actions)
-    || (Array.isArray(legendary.legendary_actions) && legendary.legendary_actions.length > 0);
-  const hasLegendaryResistance = isRecord(legendary.legendary_resistance);
-  return {
-    has_legendary: Boolean(hasLegendaryActions || hasLegendaryResistance),
-  };
-};
-
-const resolveCombat = (context: JsonRecord, existing: JsonRecord): JsonRecord => {
-  // If AI provided actions, keep them; otherwise scaffold a basic attack from STR/DEX/proficiency
-  const hasActions = Array.isArray(existing.actions) && existing.actions.length > 0;
-  if (hasActions) return existing;
-
-  const abilities = context.ability_scores as JsonRecord | undefined;
-  const prof = typeof context.proficiency_bonus === 'number' ? context.proficiency_bonus : 0;
-  const str = abilities && typeof abilities.str === 'number' ? abilities.str : 10;
-  const dex = abilities && typeof abilities.dex === 'number' ? abilities.dex : 10;
-  const mod = Math.max(Math.floor((str - 10) / 2), Math.floor((dex - 10) / 2));
-  const attackBonus = prof + mod;
-
-  return {
-    ...existing,
-    actions: [
-      {
-        name: 'Weapon Attack',
-        description: 'A basic attack with the wielded weapon.',
-        attack_bonus: attackBonus,
-        damage: '1d8 + mod',
-        range: 'melee or 30 ft.',
-      },
-    ],
-    bonus_actions: Array.isArray(existing.bonus_actions) ? existing.bonus_actions : [],
-    reactions: Array.isArray(existing.reactions) ? existing.reactions : [],
-  } as JsonRecord;
-};
-
-const PALADIN_SLOTS_BY_LEVEL: Record<number, SpellSlots> = {
-  1: { '1': 0 },
-  2: { '1': 2 },
-  3: { '1': 3 },
-  4: { '1': 3 },
-  5: { '1': 4, '2': 2 },
-  6: { '1': 4, '2': 2 },
-  7: { '1': 4, '2': 3 },
-  8: { '1': 4, '2': 3 },
-  9: { '1': 4, '2': 3, '3': 2 },
-  10: { '1': 4, '2': 3, '3': 2 },
-  11: { '1': 4, '2': 3, '3': 3 },
-  12: { '1': 4, '2': 3, '3': 3 },
-  13: { '1': 4, '2': 3, '3': 3, '4': 1 },
-  14: { '1': 4, '2': 3, '3': 3, '4': 1 },
-  15: { '1': 4, '2': 3, '3': 3, '4': 2 },
-  16: { '1': 4, '2': 3, '3': 3, '4': 2 },
-  17: { '1': 4, '2': 3, '3': 3, '4': 3 },
-  18: { '1': 4, '2': 3, '3': 3, '4': 3 },
-  19: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 1 },
-  20: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 1 },
-};
-
-const FULL_CASTER_SLOTS: Record<number, SpellSlots> = {
-  1: { '1': 2 },
-  2: { '1': 3 },
-  3: { '1': 4, '2': 2 },
-  4: { '1': 4, '2': 3 },
-  5: { '1': 4, '2': 3, '3': 2 },
-  6: { '1': 4, '2': 3, '3': 3 },
-  7: { '1': 4, '2': 3, '3': 3, '4': 1 },
-  8: { '1': 4, '2': 3, '3': 3, '4': 2 },
-  9: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 1 },
-  10: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2 },
-  11: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1 },
-  12: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1 },
-  13: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1 },
-  14: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1 },
-  15: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1, '8': 1 },
-  16: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1, '8': 1 },
-  17: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2, '6': 1, '7': 1, '8': 1, '9': 1 },
-  18: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 3, '6': 1, '7': 1, '8': 1, '9': 1 },
-  19: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 3, '6': 2, '7': 1, '8': 1, '9': 1 },
-  20: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 3, '6': 2, '7': 2, '8': 1, '9': 1 },
-};
-
-const DEFAULT_PREPARED_SPELLS: Record<string, SpellListByKey> = {
-  cleric: { '1': ['cure wounds', 'guiding bolt', 'bless'], '2': ['lesser restoration', 'spiritual weapon'] },
-  druid: { '1': ['entangle', 'faerie fire', 'cure wounds'], '2': ['heat metal', 'pass without trace'] },
-  wizard: { '1': ['magic missile', 'shield', 'mage armor'], '2': ['misty step', 'mirror image'] },
-  artificer: { '1': ['cure wounds', 'faerie fire'], '2': ['invisibility', 'see invisibility'] },
-  paladin: { '1': ['bless', 'cure wounds'], '2': ['lesser restoration'] },
-  ranger: { '1': ['hunter\'s mark', 'cure wounds'], '2': ['pass without trace'] },
-};
-
-const DEFAULT_KNOWN_SPELLS: Record<string, string[]> = {
-  bard: ['vicious mockery', 'healing word', 'dissonant whispers'],
-  sorcerer: ['fire bolt', 'magic missile', 'shield'],
-  warlock: ['eldritch blast', 'hex'],
-};
-
-const getAbilityMod = (score: number | undefined): number => {
-  if (typeof score !== 'number') return 0;
-  return Math.floor((score - 10) / 2);
-};
-
-const resolveSpellcasting = (context: JsonRecord): SpellcastingNormalized | null => {
-  const classLevels = context.class_levels as JsonRecord[] | undefined;
-  const abilityScores = context.ability_scores as JsonRecord | undefined;
-  const proficiency = context.proficiency_bonus as number | undefined;
-
-  if (!classLevels || !Array.isArray(classLevels) || classLevels.length === 0) return null;
-
-  const casterInfo = classLevels
-    .filter((cl) => isRecord(cl) && typeof cl.class === 'string')
-    .map((cl) => {
-      const rawLevel = (cl as JsonRecord).level;
-      const parsedLevel = typeof rawLevel === 'number' ? rawLevel : Number.parseInt(String(rawLevel ?? '0'), 10) || 0;
-      return {
-        name: String((cl as JsonRecord).class).toLowerCase(),
-        level: parsedLevel,
-        subclass: isRecord((cl as JsonRecord)) && typeof (cl as JsonRecord).subclass === 'string' ? String((cl as JsonRecord).subclass).toLowerCase() : undefined,
-      };
-    });
-
-  const totalLevel = casterInfo.reduce((acc: number, cl) => acc + (cl.level ?? 0), 0);
-  const isPrepared = casterInfo.some((c) => ['cleric', 'druid', 'wizard', 'artificer', 'paladin'].includes(c.name));
-  const isKnown = casterInfo.some((c) => ['bard', 'sorcerer', 'warlock'].includes(c.name));
-  const isHalf = casterInfo.some((c) => ['paladin', 'ranger'].includes(c.name));
-
-  if (!isPrepared && !isKnown && !isHalf) return null;
-
-  const highest = [...casterInfo].sort((a, b) => (b.level ?? 0) - (a.level ?? 0))[0];
-  const abilityMap: Record<string, string> = {
-    cleric: 'WIS',
-    druid: 'WIS',
-    paladin: 'CHA',
-    ranger: 'WIS',
-    wizard: 'INT',
-    artificer: 'INT',
-    bard: 'CHA',
-    sorcerer: 'CHA',
-    warlock: 'CHA',
-  };
-  const abilityKey = abilityMap[highest?.name] || 'CHA';
-  const abilityScore = abilityScores && typeof abilityScores[abilityKey.toLowerCase() as keyof typeof abilityScores] === 'number'
-    ? (abilityScores[abilityKey.toLowerCase() as keyof typeof abilityScores] as number)
-    : undefined;
-  const mod = getAbilityMod(abilityScore);
-  const prof = typeof proficiency === 'number' ? proficiency : 0;
-
-  const casterLevel = Math.max(1, Math.min(20, highest?.level || totalLevel || 1));
-  const slots = isPrepared || (!isKnown && !isHalf)
-    ? (FULL_CASTER_SLOTS[casterLevel] || FULL_CASTER_SLOTS[1])
-    : (PALADIN_SLOTS_BY_LEVEL[casterLevel] || PALADIN_SLOTS_BY_LEVEL[1]);
-
-  const preparedSeeds = DEFAULT_PREPARED_SPELLS[highest?.name] || {};
-  const prepared: SpellListByKey = {};
-  Object.keys(slots).forEach((lvl) => {
-    const seedList = preparedSeeds[lvl] || preparedSeeds['1'] || ['bless'];
-    prepared[lvl] = seedList;
-  });
-
-  const alwaysPrepared: SpellListByKey = {};
-  const paladinOaths: Record<string, string[]> = {
-    devotion: ['protection from evil and good', 'sanctuary', 'lesser restoration', 'zone of truth'],
-  };
-  const paladinSubclass = casterInfo.find((c) => c.name === 'paladin')?.subclass;
-  const oathList = paladinSubclass ? paladinOaths[paladinSubclass] : undefined;
-  if (oathList && oathList.length > 0) {
-    alwaysPrepared.oath = oathList;
-  }
-
-  const knownSpells = isKnown ? (DEFAULT_KNOWN_SPELLS[highest?.name] || ['eldritch blast']) : [];
-
-  return {
-    spellcasting_ability: abilityKey,
-    spell_save_dc: 8 + prof + mod,
-    spell_attack_bonus: prof + mod,
-    spell_slots: slots,
-    prepared_spells: isPrepared || isHalf ? prepared : {},
-    always_prepared_spells: alwaysPrepared,
-    innate_spells: {},
-    spells_known: isKnown ? knownSpells : [],
-    spellcasting_focus: highest?.name === 'cleric' || highest?.name === 'paladin' ? 'holy symbol' : highest?.name === 'wizard' ? 'arcane focus' : 'focus',
-  };
-};
-
-const buildSpellcastingCapabilities = (spellcasting: SpellcastingNormalized | null): ResolvedMechanics['spellcasting'] => {
-  if (!spellcasting) return undefined;
-  const hasSlots = isRecord(spellcasting.spell_slots) && Object.keys(spellcasting.spell_slots).length > 0;
-  const hasPrepared = isRecord(spellcasting.prepared_spells) && Object.keys(spellcasting.prepared_spells).length > 0;
-  const hasKnown = Array.isArray(spellcasting.spells_known) && spellcasting.spells_known.length > 0;
-  const hasInnate = isRecord(spellcasting.innate_spells) && Object.keys(spellcasting.innate_spells).length > 0;
-
-  let casterMode: 'prepared' | 'known' | 'innate' | 'hybrid' = 'innate';
-  if (hasPrepared && hasKnown) casterMode = 'hybrid';
-  else if (hasPrepared || hasSlots) casterMode = 'prepared';
-  else if (hasKnown) casterMode = 'known';
-
-  return {
-    has_spellcasting: hasPrepared || hasKnown || hasInnate || hasSlots,
-    caster_mode: casterMode,
-    has_slots: hasSlots,
-    has_innate: hasInnate,
-    spellcasting_ability: spellcasting.spellcasting_ability,
-    spell_save_dc: spellcasting.spell_save_dc,
-    spell_attack_bonus: spellcasting.spell_attack_bonus,
-    spellcasting_focus: spellcasting.spellcasting_focus,
-  };
-};
-
-const SPELLCASTING_ALLOWED_KEYS: (keyof SpellcastingNormalized)[] = [
-  'spellcasting_ability',
-  'spell_save_dc',
-  'spell_attack_bonus',
-  'spell_slots',
-  'prepared_spells',
-  'always_prepared_spells',
-  'innate_spells',
-  'spellcasting_focus',
-  'spells_known',
-];
-
-const normalizeSpellcasting = (raw: JsonRecord, resolver: SpellcastingNormalized | null): SpellcastingNormalized => {
-  const pruned: Partial<SpellcastingNormalized> = {};
-
-  const mapSpellListRecord = (value: unknown): SpellListByKey => {
-    if (!isRecord(value)) return {};
-    return Object.fromEntries(
-      Object.entries(value)
-        .map(([lvl, spells]) => {
-          const arr = Array.isArray(spells)
-            ? spells.filter((x) => typeof x === 'string' && x.trim().length > 0).map((x) => x.trim())
-            : [];
-          return [lvl, arr];
-        })
-        .filter(([, arr]) => (arr as string[]).length > 0)
-    );
-  };
-
-  for (const key of SPELLCASTING_ALLOWED_KEYS) {
-    const v = raw[key as keyof JsonRecord];
-
-    if (key === 'spell_slots' && isRecord(v)) {
-      pruned[key] = Object.fromEntries(Object.entries(v).map(([lvl, val]) => [lvl, Number(val) || 0])) as SpellSlots;
-      continue;
-    }
-
-    if (key === 'prepared_spells' || key === 'innate_spells' || key === 'always_prepared_spells') {
-      pruned[key] = mapSpellListRecord(v);
-      continue;
-    }
-
-    if (key === 'spells_known' && Array.isArray(v)) {
-      pruned[key] = v.filter((x) => typeof x === 'string' && x.trim().length > 0).map((x) => x.trim());
-      continue;
-    }
-
-    if (key === 'spellcasting_ability' || key === 'spellcasting_focus') {
-      if (typeof v === 'string' && v.trim().length > 0) {
-        pruned[key] = v.trim();
-      }
-      continue;
-    }
-
-    if (key === 'spell_save_dc' || key === 'spell_attack_bonus') {
-      if (typeof v === 'number' && Number.isFinite(v)) {
-        pruned[key] = v;
-      }
-      continue;
-    }
-  }
-
-  const base = resolver ?? {
-    spellcasting_ability: 'CHA',
-    spell_save_dc: 0,
-    spell_attack_bonus: 0,
-    spell_slots: {},
-    prepared_spells: {},
-    always_prepared_spells: {},
-    innate_spells: {},
-    spells_known: [],
-  };
-
-  return {
-    spellcasting_ability: typeof pruned.spellcasting_ability === 'string' && pruned.spellcasting_ability.trim().length > 0
-      ? pruned.spellcasting_ability
-      : base.spellcasting_ability,
-    spell_save_dc: typeof pruned.spell_save_dc === 'number' && Number.isFinite(pruned.spell_save_dc)
-      ? pruned.spell_save_dc
-      : base.spell_save_dc,
-    spell_attack_bonus: typeof pruned.spell_attack_bonus === 'number' && Number.isFinite(pruned.spell_attack_bonus)
-      ? pruned.spell_attack_bonus
-      : base.spell_attack_bonus,
-    spell_slots: (pruned.spell_slots && Object.keys(pruned.spell_slots).length > 0
-      ? pruned.spell_slots
-      : base.spell_slots) as SpellSlots,
-    prepared_spells: pruned.prepared_spells ?? base.prepared_spells,
-    always_prepared_spells: pruned.always_prepared_spells ?? base.always_prepared_spells,
-    innate_spells: pruned.innate_spells ?? base.innate_spells,
-    spells_known: Array.isArray(pruned.spells_known)
-      ? pruned.spells_known
-      : Array.isArray(resolver?.spells_known)
-        ? resolver?.spells_known
-        : base.spells_known,
-    spellcasting_focus: typeof pruned.spellcasting_focus === 'string' && pruned.spellcasting_focus.trim().length > 0
-      ? pruned.spellcasting_focus.trim()
-      : base.spellcasting_focus,
-  };
-};
-
-function deduplicateConflictIssues(conflicts: unknown[]): unknown[] {
-  const seen = new Set<string>();
-  const deduped: unknown[] = [];
-
-  for (const conflict of conflicts) {
-    if (!isRecord(conflict)) {
-      deduped.push(conflict);
-      continue;
-    }
-
-    const keySource = typeof conflict.description === 'string' && conflict.description.trim().length > 0
-      ? conflict.description
-      : typeof conflict.new_claim === 'string' && conflict.new_claim.trim().length > 0
-        ? conflict.new_claim
-        : typeof conflict.summary === 'string'
-          ? conflict.summary
-          : JSON.stringify(conflict);
-    const key = keySource.trim().toLowerCase();
-
-    if (!key || seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    deduped.push(conflict);
-  }
-
-  return deduped;
-}
-
-interface CanonEntityClaim {
-  text?: string;
-}
-
-interface CanonEntity {
-  _id: string;
-  canonical_name?: string;
-  aliases?: string[];
-  type?: string;
-  region?: string;
-  era?: string;
-  claims?: CanonEntityClaim[];
-  [key: string]: unknown;
-}
-
-interface CanonFact {
-  chunk_id: string;
-  text: string;
-  entity_id: string;
-  entity_name: string;
-  entity_type?: string;
-  type?: string;
-  region?: string;
-  era?: string;
-  tags?: string[];
-}
-
-interface Factpack {
-  facts: CanonFact[];
-  entities: string[];
-  gaps: string[];
-}
-
-// Fact Checker structures (typed for proposal mapping)
-interface FactCheckAmbiguityOut {
-  field_path: string;
-  text?: string;
-  clarification_needed?: string;
-  recommended_revision?: string;
-}
-
-interface FactCheckUnassociatedOut {
-  field_path: string;
-  text?: string;
-  reason?: string;
-  suggested_action?: 'ask_user' | 'discard' | 'keep';
-}
-
-interface FactCheckOutput {
-  user_questions?: string[];
-  ambiguities?: FactCheckAmbiguityOut[];
-  unassociated?: FactCheckUnassociatedOut[];
-  revision_prompt?: string;
-  conflicts?: unknown[];
-  summary?: string;
-  proposals?: Proposal[];
-}
-
-interface Stage {
-  name: string;
-  routerKey?: string;
-  systemPrompt: string;
-  buildUserPrompt: (context: StageContext) => string;
-}
+type Stage = GeneratorStage;
 
 // Types aligned with CanonDeltaModal's onApprove callback
-interface Proposal {
-  id?: string;
-  topic?: string;
-  question?: string;
-  default?: string;
-  required?: boolean;
-  options?: (string | { choice: string; description: string })[];
-  rule_impact?: string;
-  field_path?: string;
-  current_value?: string;
-  reason?: string;
-  clarification_needed?: string;
-  recommended_revision?: string;
-};
+type Proposal = WorkflowStageProposal;
 
 const toStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-
-const toObjectArray = (value: unknown): JsonRecord[] =>
-  Array.isArray(value) ? value.filter(isRecord) : [];
-
-const slugifyProposalKey = (value: string): string =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-    .slice(0, 48);
-
-const normalizeProposal = (p: any, index: number): JsonRecord | null => {
-  if (p === null || p === undefined) return null;
-
-  if (typeof p === 'string') {
-    const q = p.trim();
-    if (q.length === 0) return null;
-    return {
-      id: slugifyProposalKey(q || `proposal-${index}`),
-      topic: `Decision ${index + 1}`,
-      question: q,
-      options: [q],
-      default: q,
-      required: false,
-    };
-  }
-
-  if (!isRecord(p)) return null;
-
-  const topic = typeof p.topic === 'string' && p.topic.trim().length > 0
-    ? p.topic.trim()
-    : typeof p.question === 'string'
-      ? p.question.trim()
-      : `Decision ${index + 1}`;
-  const question = typeof p.question === 'string' && p.question.trim().length > 0
-    ? p.question.trim()
-    : topic;
-
-  if (question.length === 0) return null;
-
-  const choices = Array.isArray(p.choices)
-    ? p.choices
-      .map((c) => {
-        if (typeof c === 'string') {
-          const trimmed = c.trim();
-          return trimmed.length > 0 ? trimmed : null;
-        }
-        if (isRecord(c) && typeof c.choice === 'string' && c.choice.trim().length > 0) {
-          return c.choice.trim();
-        }
-        return null;
-      })
-      .filter((c): c is string => c !== null)
-    : [];
-
-  const optionsRaw = Array.isArray(p.options)
-    ? p.options
-      .map((o) => {
-        if (typeof o === 'string') {
-          const trimmed = o.trim();
-          return trimmed.length > 0 ? trimmed : null;
-        }
-        if (isRecord(o) && typeof o.choice === 'string' && o.choice.trim().length > 0) {
-          return o.choice.trim();
-        }
-        return null;
-      })
-      .filter((o): o is string => o !== null)
-    : [];
-
-  const options = optionsRaw.length > 0 ? optionsRaw : choices;
-  if (!options || options.length === 0) return null;
-
-  const def = (() => {
-    if (typeof p.default === 'string' && p.default.trim().length > 0) {
-      const candidate = p.default.trim();
-      if (options.includes(candidate)) return candidate;
-    }
-    return options[0];
-  })();
-
-  let proposalId = typeof p.id === 'string' && p.id.trim().length > 0
-    ? p.id.trim()
-    : slugifyProposalKey(topic || question || `proposal-${index}`);
-
-  // Normalize known ID variants to keep dedup stable
-  if (proposalId === 'prayer-bead-type') {
-    proposalId = 'prayer-beads-type';
-  }
-
-  return {
-    id: proposalId,
-    topic,
-    question,
-    options,
-    default: def,
-    required: Boolean(p.required ?? false),
-    rule_impact: typeof p.rule_impact === 'string' ? p.rule_impact : undefined,
-    field_path: typeof p.field_path === 'string' ? p.field_path : undefined,
-    current_value: typeof p.current_value === 'string' ? p.current_value : undefined,
-    reason: typeof p.reason === 'string' ? p.reason : undefined,
-    clarification_needed: typeof p.clarification_needed === 'string' ? p.clarification_needed : undefined,
-    recommended_revision: typeof p.recommended_revision === 'string' ? p.recommended_revision : undefined,
-  };
-};
-
-const sanitizeProposalsValue = (value: unknown): JsonRecord[] => {
-  if (!Array.isArray(value)) return [];
-
-  const normalized = value
-    .map((item, index) => normalizeProposal(item, index))
-    .filter((p): p is JsonRecord => p !== null)
-    .filter((p) => Array.isArray(p.options) && p.options.length > 0);
-
-  return normalized;
-};
-
-const SPECIES_CANON = [
-  'Aasimar',
-  'Human',
-  'Elf',
-  'Dwarf',
-  'Halfling',
-  'Gnome',
-  'Tiefling',
-  'Dragonborn',
-  'Half-Elf',
-  'Half-Orc',
-  'Goliath',
-] as const;
-
-const levenshtein = (a: string, b: string): number => {
-  const n = a.length;
-  const m = b.length;
-  const dp = Array.from({ length: m + 1 }, (_, i) => i);
-  for (let i = 1; i <= n; i++) {
-    let prev = dp[0];
-    dp[0] = i;
-    for (let j = 1; j <= m; j++) {
-      const temp = dp[j];
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + cost);
-      prev = temp;
-    }
-  }
-  return dp[m];
-};
-
-const tokenizeLower = (text: string): string[] =>
-  (text || '')
-    .toLowerCase()
-    .replace(/[^a-z\s-]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
-
-const inferSpecies = (input: { original_user_request?: string; previous_decisions?: Record<string, string> }): string | null => {
-  const text = input.original_user_request || '';
-  const decisions = input.previous_decisions || {};
-
-  // Heritage/subrace hints
-  const heritage = String(decisions['aasimar-heritage'] ?? decisions['Aasimar Subrace'] ?? '').toLowerCase();
-  if (heritage.includes('aasimar')) return 'Aasimar';
-
-  const tokens = tokenizeLower(text);
-  for (const tok of tokens) {
-    for (const sp of SPECIES_CANON) {
-      const target = sp.toLowerCase();
-      if (tok === target) return sp;
-      if (tok.length >= 5 && Math.abs(tok.length - target.length) <= 2 && levenshtein(tok, target) <= 1) return sp;
-    }
-  }
-
-  return null;
-};
-
-const coerceSpeedNumbers = (speed: unknown): Record<string, number> | null => {
-  if (!isRecord(speed)) return null;
-  const result: Record<string, number> = {};
-  for (const key of Object.keys(speed)) {
-    const value = (speed as Record<string, unknown>)[key];
-    if (typeof value === 'number') {
-      result[key] = value;
-      continue;
-    }
-    if (typeof value === 'string') {
-      const parsed = parseInt(value, 10);
-      if (!Number.isNaN(parsed)) {
-        result[key] = parsed;
-      }
-    }
-  }
-  return Object.keys(result).length > 0 ? result : null;
-};
-
-const CORE_DETAILS_ALLOWED_KEYS = [
-  'personality_traits',
-  'ideals',
-  'bonds',
-  'flaws',
-  'goals',
-  'fears',
-  'quirks',
-  'voice_mannerisms',
-  'hooks',
-] as const;
-
-type CoreDetails = Record<(typeof CORE_DETAILS_ALLOWED_KEYS)[number], string[]>;
-
-const normalizeStringArray = (v: unknown): string[] => {
-  if (!Array.isArray(v)) return [];
-  return v.map((x) => String(x ?? '').trim()).filter((x) => x.length > 0);
-};
-
-const clampMin3 = (arr: string[], fallback: string[]): string[] => {
-  const out = arr.filter(Boolean);
-  if (out.length >= 3) return out.slice(0, 6);
-  const needed = 3 - out.length;
-  return out.concat(fallback.slice(0, needed));
-};
-
-const buildCoreDetailsFallback = (ctx: {
-  name: string;
-  alignment?: string;
-  oath?: string;
-  location?: string;
-  tone?: string;
-}): Omit<CoreDetails, 'hooks'> => ({
-  personality_traits: [
-    'stoic under pressure',
-    'measured, disciplined presence',
-    'vigilant and hard to distract',
-    'quietly protective of innocents',
-  ],
-  ideals: [
-    "duty to the Moonmaiden’s light",
-    'honor and truth in word and deed',
-    'sacrifice for the greater good',
-    'order as a shield against darkness',
-  ],
-  bonds: [
-    `sworn to uphold the ${ctx.oath ?? 'Oath of Devotion'}`,
-    'devoted to the faithful of Selûne',
-    `protects travelers who venture near ${ctx.location ?? 'the Tears of Selûne'}`,
-    'keeps a personal vow tied to a fallen comrade',
-  ],
-  flaws: [
-    'unbending once committed',
-    'judges moral compromise harshly',
-    'suppresses emotion until it erupts',
-    'reluctant to ask for help',
-  ],
-  goals: [
-    'eradicate a growing shadow presence',
-    'recover a relic stolen from Selûne’s faithful',
-    'strengthen protections around sacred sites',
-    'prove worthy of her celestial heritage',
-  ],
-  fears: [
-    'failing her oath at a decisive moment',
-    'the light within her being extinguished',
-    'innocents harmed because she hesitated',
-    'corruption taking root in sacred ground',
-  ],
-  quirks: [
-    'counts prayer beads while thinking',
-    'speaks in short, deliberate sentences',
-    'polishes armor and blade as a nightly ritual',
-    'pauses to observe the sky before acting',
-  ],
-  voice_mannerisms: [
-    'low, calm voice with clipped phrasing',
-    'rarely raises volume; intensity comes from stillness',
-    'uses formal address even under stress',
-    'makes brief Selûnite blessings before combat',
-  ],
-});
-
-const normalizeCoreDetails = (
-  raw: JsonRecord,
-  ctx: { name: string; alignment?: string; oath?: string; location?: string; tone?: string }
-): CoreDetails => {
-  const pruned: Partial<CoreDetails> = {};
-  for (const k of CORE_DETAILS_ALLOWED_KEYS) {
-    pruned[k] = normalizeStringArray(raw?.[k]);
-  }
-
-  const legacyHooks = normalizeStringArray(raw?.hooks);
-  const hooks = legacyHooks.length ? legacyHooks : [];
-
-  const fb = buildCoreDetailsFallback(ctx);
-
-  return {
-    personality_traits: clampMin3(pruned.personality_traits ?? [], fb.personality_traits),
-    ideals: clampMin3(pruned.ideals ?? [], fb.ideals),
-    bonds: clampMin3(pruned.bonds ?? [], fb.bonds),
-    flaws: clampMin3(pruned.flaws ?? [], fb.flaws),
-    goals: clampMin3(pruned.goals ?? [], fb.goals),
-    fears: clampMin3(pruned.fears ?? [], fb.fears),
-    quirks: clampMin3(pruned.quirks ?? [], fb.quirks),
-    voice_mannerisms: clampMin3(pruned.voice_mannerisms ?? [], fb.voice_mannerisms),
-    hooks: clampMin3(hooks, [
-      `${ctx.name} needs allies to cleanse a defiled Selûnite site`,
-      `${ctx.name} is tracking a void-touched entity seen near the Tears`,
-      `${ctx.name} seeks a missing shard tied to a celestial omen`,
-    ]),
-  };
-};
-
-const normalizePlannerOutput = (value: JsonRecord, inputFlags?: JsonRecord): JsonRecord => {
-  const retrievalHints = isRecord(value.retrieval_hints) ? value.retrieval_hints : {};
-
-  return {
-    deliverable: typeof value.deliverable === 'string' && value.deliverable.trim().length > 0
-      ? value.deliverable.trim()
-      : 'npc',
-    retrieval_hints: {
-      entities: toStringArray(retrievalHints.entities),
-      regions: toStringArray(retrievalHints.regions),
-      eras: toStringArray(retrievalHints.eras),
-      keywords: toStringArray(retrievalHints.keywords),
-    },
-    proposals: sanitizeProposalsValue(value.proposals),
-    assumptions: toStringArray(value.assumptions),
-    flags_echo: isRecord(value.flags_echo)
-      ? value.flags_echo
-      : {
-          allow_invention: value.allow_invention ?? inputFlags?.allow_invention,
-          tone: value.tone ?? inputFlags?.tone,
-          rule_base: value.rule_base ?? inputFlags?.rule_base,
-          mode: value.mode ?? inputFlags?.mode ?? 'GM',
-          difficulty: value.difficulty ?? inputFlags?.difficulty,
-          realism: value.realism ?? inputFlags?.realism,
-        },
-  };
-};
 
 const shouldLogAiPayload = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -898,66 +247,6 @@ const shouldLogAiPayload = (): boolean => {
   } catch (_err) {
     return false;
   }
-};
-
-const normalizeCoreDetailsStageOutput = (value: JsonRecord): JsonRecord => {
-  const normalized: JsonRecord = { ...value };
-  const personality = isRecord(value.personality) ? value.personality : null;
-
-  const assignIfMissing = (targetKey: string, sourceValue: unknown) => {
-    if (targetKey in normalized) {
-      return;
-    }
-
-    const entries = toStringArray(sourceValue).map((item) => item.trim()).filter((item) => item.length > 0);
-    if (entries.length > 0) {
-      normalized[targetKey] = entries;
-    }
-  };
-
-  assignIfMissing('personality_traits', personality?.traits);
-  assignIfMissing('ideals', personality?.ideals);
-  assignIfMissing('bonds', personality?.bonds);
-  assignIfMissing('flaws', personality?.flaws);
-  assignIfMissing('goals', personality?.goals ?? value.motivations);
-  assignIfMissing('fears', personality?.fears);
-  assignIfMissing('quirks', personality?.quirks);
-  assignIfMissing('voice_mannerisms', personality?.voice_mannerisms ?? personality?.mannerisms ?? value.mannerisms);
-  assignIfMissing('hooks', personality?.hooks);
-
-  return normalized;
-};
-
-const _buildCoreDetailsRetrySnapshot = (value: JsonRecord | null): string | null => {
-  if (!value) {
-    return null;
-  }
-
-  const normalized = normalizeCoreDetailsStageOutput(value);
-  const snapshot: JsonRecord = {};
-  const fields = [
-    'role',
-    'personality_traits',
-    'ideals',
-    'bonds',
-    'flaws',
-    'goals',
-    'fears',
-    'quirks',
-    'voice_mannerisms',
-    'hooks',
-    'proposals',
-    'conflicts',
-  ];
-
-  for (const field of fields) {
-    if (field in normalized) {
-      snapshot[field] = normalized[field];
-    }
-  }
-
-  const serialized = JSON.stringify(snapshot, null, 2);
-  return serialized.length > 1600 ? `${serialized.slice(0, 1597)}...` : serialized;
 };
 
 const getString = (source: JsonRecord | null | undefined, key: string): string | undefined => {
@@ -980,6 +269,17 @@ const getStageObject = (source: StageResults | null | undefined, key: string): J
   return isRecord(value) ? value : undefined;
 };
 
+const getLocationParentStructure = (source: StageResults | null | undefined): ParentStructure | undefined => {
+  const foundation = getStageObject(source, 'foundation');
+  if (!foundation) return undefined;
+
+  return {
+    total_floors: typeof foundation.total_floors === 'number' ? foundation.total_floors : undefined,
+    total_area: typeof foundation.total_area === 'number' ? foundation.total_area : undefined,
+    layout: typeof foundation.layout === 'string' ? foundation.layout : undefined,
+  };
+};
+
 const getEmbeddedObject = (source: JsonRecord | null | undefined, key: string, nestedKey: string): JsonRecord | undefined => {
   const parent = getObject(source, key);
   if (!parent) return undefined;
@@ -996,27 +296,7 @@ const getJsonRecordList = (value: unknown): JsonRecord[] => {
   return [];
 };
 
-const getHomebrewChunks = (value: unknown): HomebrewChunk[] => {
-  if (isRecord(value) && Array.isArray(value.items)) {
-    return asHomebrewChunks(value.items);
-  }
-  return asHomebrewChunks(value);
-};
-
 const setStageArrayValue = <T extends JsonRecord>(items: T[]): JsonRecord => ({ items });
-
-type HomebrewChunk = { index: number; title: string; content: string; prompt: string };
-
-const asHomebrewChunks = (value: unknown): HomebrewChunk[] =>
-  Array.isArray(value)
-    ? value.filter((item): item is HomebrewChunk =>
-      isRecord(item)
-      && typeof item.index === 'number'
-      && typeof item.title === 'string'
-      && typeof item.content === 'string'
-      && typeof item.prompt === 'string'
-    )
-    : [];
 
 const getObject = (source: JsonRecord | null | undefined, key: string): JsonRecord | undefined => {
   if (!source) return undefined;
@@ -1030,6 +310,9 @@ const asJsonRecordArray = (value: unknown): JsonRecord[] =>
 const getStageStorageKey = (stage: Stage): string => stage.name.toLowerCase().replace(/\s+/g, '_');
 
 const getStageLookupKey = (stage: Stage): string => {
+  if (typeof stage.workflowStageKey === 'string' && stage.workflowStageKey.trim().length > 0) {
+    return stage.workflowStageKey;
+  }
   if (typeof stage.routerKey === 'string' && stage.routerKey.trim().length > 0) {
     return stage.routerKey;
   }
@@ -1037,20 +320,6 @@ const getStageLookupKey = (stage: Stage): string => {
 };
 
 const isPositionRecord = (value: unknown): value is { x?: number; y?: number } => isRecord(value);
-
-const getDimensionObject = (value: LiveMapDimensions | undefined): { width: number; height: number; unit?: string } | undefined => {
-  if (!value || typeof value === 'string') {
-    return undefined;
-  }
-  if (typeof value.width === 'number' && typeof value.height === 'number') {
-    return {
-      width: value.width,
-      height: value.height,
-      unit: value.unit,
-    };
-  }
-  return undefined;
-};
 
 const summarizeForAiMemory = (value: unknown, depth = 0): unknown => {
   if (value === null || value === undefined) return null;
@@ -1143,2027 +412,7 @@ const logLiveMapSpacePosition = (space: LiveMapSpace): string => {
   return `${space.name}: (${x},${y}) locked=${String(space.position_locked)}`;
 };
 
-/**
- * Merges multiple homebrew chunk results into a single combined result
- */
-const mergeHomebrewChunks = (chunks: JsonRecord[]): JsonRecord => {
-  const merged: JsonRecord = {
-    entries: [],
-    races: [],
-    classes: [],
-    spells: [],
-    items: [],
-    creatures: [],
-    rules: [],
-    lore: [],
-    backgrounds: [],
-    feats: [],
-    subraces: [],
-    subclasses: [],
-    unparsed: [],
-    notes: '',
-  };
-
-  chunks.forEach((chunk, index) => {
-    // Handle newest structure with entities array (AI extraction with claims)
-    if (Array.isArray(chunk.entities)) {
-      const entities = chunk.entities as Array<{
-        type: string;
-        canonical_name: string;
-        claims?: Array<{ text: string; source: string }>;
-        homebrew_metadata?: {
-          homebrew_type?: string;
-          tags?: string[];
-          short_summary?: string;
-          full_description?: string;
-          assumptions?: string[];
-          notes?: string[];
-        };
-      }>;
-
-      // Convert entities to entries format
-      const entries = entities.map(entity => {
-        const metadata = entity.homebrew_metadata || {};
-        return {
-          type: metadata.homebrew_type || entity.type,
-          title: entity.canonical_name,
-          short_summary: metadata.short_summary || (entity.claims?.[0]?.text || ''),
-          long_description: metadata.full_description || (entity.claims?.map(c => c.text).join(' ') || ''),
-          tags: metadata.tags || [],
-          assumptions: metadata.assumptions || [],
-          notes: metadata.notes || [],
-          claims: entity.claims || [], // Preserve AI-extracted claims
-        };
-      });
-
-      // Add all entries to the main entries array
-      (merged.entries as unknown[]).push(...entries);
-
-      // Also group by type for backward compatibility
-      entries.forEach((entry) => {
-        const type = entry.type;
-        if (type === 'race') {
-          (merged.races as unknown[]).push(entry);
-        } else if (type === 'subrace') {
-          (merged.subraces as unknown[]).push(entry);
-        } else if (type === 'class') {
-          (merged.classes as unknown[]).push(entry);
-        } else if (type === 'subclass') {
-          (merged.subclasses as unknown[]).push(entry);
-        } else if (type === 'spell') {
-          (merged.spells as unknown[]).push(entry);
-        } else if (type === 'item') {
-          (merged.items as unknown[]).push(entry);
-        } else if (type === 'creature') {
-          (merged.creatures as unknown[]).push(entry);
-        } else if (type === 'rule') {
-          (merged.rules as unknown[]).push(entry);
-        } else if (type === 'lore') {
-          (merged.lore as unknown[]).push(entry);
-        } else if (type === 'background') {
-          (merged.backgrounds as unknown[]).push(entry);
-        } else if (type === 'feat') {
-          (merged.feats as unknown[]).push(entry);
-        }
-      });
-    }
-    // Handle new structure with entries array (auto-parser output)
-    else if (Array.isArray(chunk.entries)) {
-      const entries = chunk.entries as Array<{
-        type: string;
-        title: string;
-        short_summary?: string;
-        long_description?: string;
-        tags?: string[];
-        assumptions?: string[];
-        notes?: string[];
-        claims?: Array<{ text: string; source: string }>;
-      }>;
-
-      // Add all entries to the main entries array
-      (merged.entries as unknown[]).push(...entries);
-
-      // Also group by type for backward compatibility
-      entries.forEach((entry) => {
-        const type = entry.type;
-        if (type === 'race') {
-          (merged.races as unknown[]).push(entry);
-        } else if (type === 'subrace') {
-          (merged.subraces as unknown[]).push(entry);
-        } else if (type === 'class') {
-          (merged.classes as unknown[]).push(entry);
-        } else if (type === 'subclass') {
-          (merged.subclasses as unknown[]).push(entry);
-        } else if (type === 'spell') {
-          (merged.spells as unknown[]).push(entry);
-        } else if (type === 'item') {
-          (merged.items as unknown[]).push(entry);
-        } else if (type === 'creature') {
-          (merged.creatures as unknown[]).push(entry);
-        } else if (type === 'rule') {
-          (merged.rules as unknown[]).push(entry);
-        } else if (type === 'lore') {
-          (merged.lore as unknown[]).push(entry);
-        } else if (type === 'background') {
-          (merged.backgrounds as unknown[]).push(entry);
-        } else if (type === 'feat') {
-          (merged.feats as unknown[]).push(entry);
-        }
-      });
-    }
-
-    // Handle old structure with separate arrays (backward compatibility)
-    const categories = ['races', 'classes', 'spells', 'items', 'creatures', 'rules', 'lore', 'unparsed'];
-    categories.forEach((category) => {
-      const chunkData = chunk[category];
-      if (Array.isArray(chunkData) && chunkData.length > 0) {
-        const existing = merged[category] as unknown[];
-        merged[category] = [...existing, ...chunkData];
-      }
-    });
-
-    // Merge unparsed sections
-    if (Array.isArray(chunk.unparsed)) {
-      (merged.unparsed as unknown[]).push(...chunk.unparsed);
-    }
-
-    // Combine notes
-    const chunkNotes = getString(chunk, 'notes');
-    if (chunkNotes) {
-      merged.notes = (merged.notes as string) + `\n\nChunk ${index + 1}: ${chunkNotes}`;
-    }
-  });
-
-  // Trim notes
-  merged.notes = (merged.notes as string).trim();
-
-  return merged;
-};
-
-const matchDeliverable = (value: string | undefined): GenerationConfig['type'] | null => {
-  if (!value) return null;
-  const lower = value.toLowerCase();
-  if (lower.includes('story arc') || lower.includes('story-arc') || lower.includes('story_arc') || lower.includes('plot arc')) {
-    return 'story_arc';
-  }
-  if (lower.includes('npc') || lower.includes('character')) return 'npc';
-  if (lower.includes('monster') || lower.includes('creature')) return 'monster';
-  if (lower.includes('encounter') || lower.includes('combat')) return 'encounter';
-  if (lower.includes('scene') || lower.includes('narrative')) return 'scene';
-  if (lower.includes('item') || lower.includes('artifact') || lower.includes('treasure')) return 'item';
-  if (lower.includes('adventure') || lower.includes('quest') || lower.includes('campaign')) return 'adventure';
-  if (lower.includes('nonfiction') || lower.includes('non-fiction') || lower.includes('non fiction')) return 'nonfiction';
-  return null;
-};
-
-const inferDeliverableType = (
-  data: JsonRecord,
-  fallback: GenerationConfig['type'],
-): GenerationConfig['type'] => {
-  const direct = matchDeliverable(typeof data.deliverable === 'string' ? data.deliverable : undefined);
-  if (direct) return direct;
-
-  const typeHint = matchDeliverable(typeof data.type === 'string' ? data.type : undefined);
-  if (typeHint) return typeHint;
-
-  const draft = isRecord(data.draft) ? (data.draft as JsonRecord) : undefined;
-  if (draft) {
-    const draftDeliverable = matchDeliverable(typeof draft.deliverable === 'string' ? draft.deliverable : undefined);
-    if (draftDeliverable) return draftDeliverable;
-
-    if (isRecord(draft.story_arc) || isRecord(draft.storyArc)) return 'story_arc';
-    if (isRecord(draft.npc)) return 'npc';
-    if (isRecord(draft.monster)) return 'monster';
-    if (isRecord(draft.encounter) || isRecord(draft.encounter_details)) return 'encounter';
-    if (isRecord(draft.item)) return 'item';
-    if (isRecord(draft.scene)) return 'scene';
-  }
-
-  if (isRecord(data.story_arc) || isRecord(data.storyArc) || isRecord(data.arc)) return 'story_arc';
-  if (isRecord(data.npc)) return 'npc';
-  if (isRecord(data.monster)) return 'monster';
-  if (isRecord(data.encounter) || isRecord(data.encounter_details)) return 'encounter';
-  if (isRecord(data.item)) return 'item';
-
-  return fallback;
-};
-
-// Minimal fact for AI - only what's needed
-interface MinimalFact {
-  text: string;
-  source?: string; // entity name for attribution
-}
-
-// Helper function to create minimal factpack for AI (strips unnecessary metadata)
-// Optionally limits facts to stay under maxChars to avoid exceeding prompt limits
-const createMinimalFactpack = (factpack: Factpack | null, maxChars?: number): { facts: MinimalFact[] } => {
-  if (!factpack) return { facts: [] };
-
-  const allFacts = factpack.facts.map(fact => ({
-    text: fact.text,
-    source: fact.entity_name, // Just entity name for attribution
-  }));
-
-  // If no limit specified, return all facts
-  if (!maxChars) {
-    return { facts: allFacts };
-  }
-
-  // Limit facts to stay under maxChars
-  const limitedFacts: MinimalFact[] = [];
-  let currentChars = 0;
-
-  for (const fact of allFacts) {
-    const factLength = fact.text.length + (fact.source?.length || 0);
-    if (currentChars + factLength > maxChars && limitedFacts.length > 0) {
-      // Would exceed limit, stop here
-      console.log(`[createMinimalFactpack] Limited to ${limitedFacts.length}/${allFacts.length} facts (${currentChars}/${maxChars} chars)`);
-      break;
-    }
-    limitedFacts.push(fact);
-    currentChars += factLength;
-  }
-
-  return { facts: limitedFacts };
-};
-
-// Helper function to strip unnecessary data from stage outputs before passing to next stage
-const stripStageOutput = (stageOutput: JsonRecord): JsonRecord => {
-  const cleaned = { ...stageOutput };
-
-  // Remove retrieval_hints - only needed once to fetch facts, wastes tokens after that
-  delete cleaned.retrieval_hints;
-
-  // Remove keywords - only needed in keyword_extractor stage
-  delete cleaned.keywords;
-
-  return cleaned;
-};
-
-const toNumber = (value: unknown): number | null => (typeof value === 'number' ? value : null);
-
-const toLiveMapSpace = (space: JsonRecord): LiveMapSpace | null => {
-  if (!space || typeof space !== 'object') {
-    console.error('[extractSpaceForMap] Invalid space payload (not an object)');
-    return null;
-  }
-
-  const width = toNumber((space.size_ft as Record<string, unknown> | undefined)?.width)
-    ?? toNumber((space.dimensions as Record<string, unknown> | undefined)?.width);
-  const height = toNumber((space.size_ft as Record<string, unknown> | undefined)?.height)
-    ?? toNumber((space.dimensions as Record<string, unknown> | undefined)?.height);
-
-  if (width === null || height === null) {
-    console.error('[extractSpaceForMap] Missing size_ft/dimensions width/height for space:', space.name);
-    return null;
-  }
-
-  const pos = (space as Record<string, unknown>).position;
-  const position =
-    pos && typeof pos === 'object' &&
-      typeof (pos as Record<string, unknown>).x === 'number' &&
-      typeof (pos as Record<string, unknown>).y === 'number'
-      ? { x: (pos as Record<string, number>).x, y: (pos as Record<string, number>).y }
-      : undefined;
-
-  return {
-    name: String(space.name || 'Unnamed Space'),
-    code: typeof space.code === 'string' ? space.code : undefined,
-    id: typeof space.id === 'string' ? space.id : undefined,
-    position,
-    dimensions: space.dimensions as LiveMapDimensions | undefined,
-    size_ft: { width, height },
-    purpose: space.purpose ? String(space.purpose) : undefined,
-    function: space.function ? String(space.function) : undefined,
-    description: space.description ? String(space.description) : undefined,
-    floor: space.floor as unknown,
-    walls: space.walls as unknown,
-    doors: Array.isArray(space.doors) ? (space.doors as LiveMapSpace['doors']) : undefined,
-    features: space.features as unknown[] | undefined,
-    lighting: space.lighting as unknown,
-    ambient_color: space.ambient_color as unknown,
-    connections: Array.isArray(space.connections)
-      ? space.connections.filter((c): c is string => typeof c === 'string')
-      : undefined,
-    shape: space.shape as string | undefined,
-    space_type: space.space_type as string | undefined,
-    stair_type: space.stair_type as string | undefined,
-    z_direction: space.z_direction as string | undefined,
-    z_connects_to: space.z_connects_to as string | undefined,
-    l_cutout_corner: space.l_cutout_corner as string | undefined,
-    polygon_points: space.polygon_points as unknown,
-    wall_thickness_ft: toNumber(space.wall_thickness_ft) ?? undefined,
-    wall_material: space.wall_material as string | undefined,
-    floor_height: toNumber(space.floor_height) ?? undefined,
-    position_locked: (space as Record<string, unknown>).position_locked as boolean | undefined,
-  } satisfies LiveMapSpace;
-};
-
-const syncDoorsIntoLiveMapSpaces = (spaces: LiveMapSpace[]): LiveMapSpace[] => {
-  const spaceLikes = spaces
-    .map<SpaceLike | null>((space) => {
-      const width = toNumber(space.size_ft?.width);
-      const height = toNumber(space.size_ft?.height);
-      if (width === null || height === null) {
-        console.error('[syncDoors] Missing size_ft on space:', space.name);
-        return null;
-      }
-      return {
-        name: space.name,
-        code: space.code,
-        size_ft: { width, height },
-        doors: Array.isArray(space.doors) ? (space.doors as any) : [],
-      } satisfies SpaceLike;
-    })
-    .filter((s): s is SpaceLike => Boolean(s));
-
-  const synced = synchronizeReciprocalDoors(spaceLikes);
-
-  return spaces.map((space) => {
-    const match = synced.find((s) => s.name === space.name || (space.code && s.code === space.code));
-    return match ? { ...space, doors: match.doors } : space;
-  });
-};
-
-const mapAndSyncSpaces = (spaces: Array<LiveMapSpace | null>): LiveMapSpace[] =>
-  syncDoorsIntoLiveMapSpaces(spaces.filter((s): s is LiveMapSpace => Boolean(s)));
-
-/**
- * Extracts space data from a stage chunk result for live map display
- */
-const extractSpaceForMap = (chunkResult: JsonRecord): LiveMapSpace | null => {
-  const normalize = (space: Record<string, unknown>): LiveMapSpace | null => toLiveMapSpace(space as JsonRecord);
-
-  // Check if there's a 'space' object (single space per chunk)
-  if (chunkResult.space && typeof chunkResult.space === 'object') {
-    return normalize(chunkResult.space as Record<string, unknown>);
-  }
-
-  // Check if there's a 'spaces' array with at least one space
-  if (Array.isArray(chunkResult.spaces) && chunkResult.spaces.length > 0) {
-    const first = chunkResult.spaces.find((s) => s && typeof s === 'object') as Record<string, unknown> | undefined;
-    return first ? normalize(first) : null;
-  }
-
-  // Try to extract from top-level fields (space data directly in chunk result)
-  if (chunkResult.name) {
-    return normalize(chunkResult as Record<string, unknown>);
-  }
-
-  return null;
-};
-
-/**
- * Merges multiple stage chunk results into a single combined result
- * Handles different stage types appropriately (e.g., Spaces = collect into array)
- */
-const mergeStageChunks = (chunks: JsonRecord[], stageName: string): JsonRecord => {
-  if (chunks.length === 0) return {};
-  if (chunks.length === 1) return chunks[0];
-
-  // For Spaces stage: collect all generated spaces into a single array
-  if (stageName === 'Spaces') {
-    const allSpaces: unknown[] = [];
-    const firstChunk = chunks[0];
-
-    // Collect all spaces from all chunks
-    chunks.forEach(chunk => {
-      // Each chunk might have a 'space' object or 'spaces' array
-      if (chunk.space && typeof chunk.space === 'object') {
-        allSpaces.push(chunk.space);
-      } else if (Array.isArray(chunk.spaces)) {
-        allSpaces.push(...chunk.spaces);
-      }
-    });
-
-    console.log(`[mergeStageChunks] Merged ${chunks.length} chunks into ${allSpaces.length} spaces`);
-
-    // Return structure with all spaces plus metadata from first chunk
-    return {
-      ...firstChunk,
-      spaces: allSpaces,
-      total_spaces: allSpaces.length,
-    };
-  }
-
-  // For other stages: merge fields, preferring later chunks for scalars, concatenating arrays
-  const merged: JsonRecord = { ...chunks[0] };
-
-  for (let i = 1; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    for (const key in chunk) {
-      const value = chunk[key];
-      if (Array.isArray(value) && Array.isArray(merged[key])) {
-        // Concatenate arrays
-        (merged[key] as unknown[]).push(...value);
-      } else {
-        // Overwrite with latest value
-        merged[key] = value;
-      }
-    }
-  }
-
-  return merged;
-};
-
-// Helper function to normalize output for final content
-const normalizeOutput = (content: JsonRecord, contentType: string): JsonRecord => {
-  // Special handling for locations - flatten nested structure
-  if (contentType === 'location') {
-    return normalizeLocationData(content);
-  }
-
-  return {
-    ...content,
-    deliverable: contentType,
-    type: contentType,
-    content_type: contentType,
-  };
-};
-
-/**
- * Normalizes location data by flattening nested stageResults structure
- * Merges location_purpose, location_foundation, location_spaces, location_details into single object
- */
-const normalizeLocationData = (stageResults: JsonRecord): JsonRecord => {
-  // NOTE: Stage results are stored by stage.name, not stage.id
-  // So "Purpose" stage -> stageResults.purpose, "Foundation" -> stageResults.foundation, etc.
-  const purpose = isRecord(stageResults.purpose) ? (stageResults.purpose as JsonRecord) : null;
-  const foundation = isRecord(stageResults.foundation) ? (stageResults.foundation as JsonRecord) : null;
-  const spacesStage = stageResults.spaces;
-  const spaces = isRecord(spacesStage) ? (spacesStage as JsonRecord) : null;
-  const details = isRecord(stageResults.details) ? (stageResults.details as JsonRecord) : null;
-  const accuracy = isRecord(stageResults.accuracy_refinement) ? (stageResults.accuracy_refinement as JsonRecord) : null;
-
-  const extraStageResults: JsonRecord = { ...stageResults };
-  delete extraStageResults.purpose;
-  delete extraStageResults.foundation;
-  delete extraStageResults.spaces;
-  delete extraStageResults.details;
-  delete extraStageResults.accuracy_refinement;
-
-  // Extract spaces array
-  const spacesArray =
-    spaces && Array.isArray(spaces.spaces)
-      ? (spaces.spaces as unknown[])
-      : Array.isArray(spacesStage)
-        ? (spacesStage as unknown[])
-        : null;
-
-  // Merge all fields into flat structure
-  const normalized: JsonRecord = {
-    deliverable: 'location',
-    type: 'location',
-    content_type: 'location',
-
-    // From Purpose stage
-    name: (purpose?.name as string | undefined) || (stageResults.name as string | undefined),
-    location_type: (purpose?.location_type as string | undefined) || (stageResults.location_type as string | undefined),
-    description: (purpose?.description as string | undefined) || (stageResults.description as string | undefined),
-    purpose: purpose?.purpose,
-    scale: purpose?.scale,
-    estimated_spaces: purpose?.estimated_spaces,
-    architectural_style:
-      (purpose?.architectural_style as string | undefined) || (foundation?.architectural_style as string | undefined),
-    setting: purpose?.setting,
-    key_features: purpose?.key_features,
-
-    // From Foundation stage
-    total_floors: foundation?.total_floors,
-    total_area: foundation?.total_area,
-    layout: foundation?.layout,
-    spatial_organization: foundation?.spatial_organization,
-    primary_materials: foundation?.primary_materials,
-    defensive_features: foundation?.defensive_features,
-    access_points: foundation?.access_points,
-
-    // From Spaces stage
-    spaces: spacesArray,
-    total_spaces:
-      spaces && typeof spaces.total_spaces === 'number'
-        ? spaces.total_spaces
-        : Array.isArray(spacesArray)
-          ? spacesArray.length
-          : null,
-
-    // From Details stage
-    atmosphere: details?.atmosphere,
-    sensory_details: details?.sensory_details,
-    npcs: details?.npcs,
-    encounters: details?.encounters,
-    treasure: details?.treasure,
-    secrets: details?.secrets,
-    hooks: details?.hooks,
-    history: details?.history,
-
-    // From Accuracy stage (if present)
-    accuracy_report: accuracy?.accuracy_report,
-    refined_spaces: accuracy?.refined_spaces,
-    refined_details: accuracy?.refined_details,
-    gm_notes: accuracy?.gm_notes,
-    tactical_summary: accuracy?.tactical_summary,
-
-    // Preserve any additional fields
-    ...extraStageResults,
-  };
-
-  return normalized;
-};
-
-const NONFICTION_BOOK_STAGES: Stage[] = [
-  {
-    name: 'Purpose',
-    systemPrompt: `You are the Purpose Analyzer for non-fiction book generation.
-
-⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.
-Start your response with { and end with }. Nothing before or after.
-
-Your job is to analyze the user's request and determine the PURPOSE and CONSTRAINTS for writing a non-fiction book.
-
-IMPORTANT: Audiobooks are structured differently than print books.
-- Print books: chapters/sections, headings, visuals/figures (if any), references/endnotes.
-- Audiobooks: spoken flow, narration-friendly language, avoidance of heavy visual references, and segment-based structure.
-
-Output a JSON object with:
-- deliverable: "nonfiction"
-- keywords: string[] (5-15 significant nouns/proper nouns/key concepts for canon/library search)
-- medium: "print" | "audiobook" | "both" (infer; if truly ambiguous, create a proposal)
-- audience: who this is for
-- goal: what the reader should achieve
-- key_topics: array of major topics
-- tone: descriptive tone guidance (e.g., "authoritative but warm")
-- detail_level: "brief" | "standard" | "detailed" | "comprehensive"
-- special_requirements: array of constraints
-- proposals: array of questions only if needed
-
-If the request implies an audiobook (e.g., "for listening", "narration", "audio"), set medium="audiobook".
-If it implies a printed book (e.g., "print", "illustrations", "figures", "footnotes"), set medium="print".
-If it implies both or a repurposable manuscript, set medium="both".`,
-    buildUserPrompt: (context) => JSON.stringify({
-      user_request: context.config.prompt,
-      type: context.config.type,
-      flags: context.config.flags,
-    }, null, 2),
-  },
-  {
-    name: 'Outline & Structure',
-    systemPrompt: `You are the Outliner for non-fiction book generation.
-
-⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.
-Start your response with { and end with }. Nothing before or after.
-
-Your job is to produce a clear, usable outline and structure that matches the user's request and the Purpose stage decisions.
-
-Output a JSON with:
-- deliverable: "nonfiction"
-- working_title: string
-- subtitle: string (optional)
-- medium: "print" | "audiobook" | "both" (from Purpose)
-- thesis: the core promise/idea in 1-2 sentences
-- audience: from Purpose
-- voice: guidance for the writing voice
-- structure:
-  - if medium includes print: parts/chapters with titles and bullet-point key_takeaways
-  - if medium includes audiobook: episodes/segments with titles and listener_takeaways
-- retrieval_hints: { keywords: [], entities: [], regions: [], eras: [] } (use keywords for concepts/sources to find)
-- proposals: questions only for missing requirements that materially affect the structure
-
-Use relevant_canon as a reference pool for existing facts; do not invent citations you don't have.`,
-    buildUserPrompt: (context) => {
-      const userPrompt: any = {
-        prompt: context.config.prompt,
-        type: context.config.type,
-        flags: context.config.flags,
-        purpose: context.stageResults.purpose ? stripStageOutput(context.stageResults.purpose as JsonRecord) : undefined,
-        relevant_canon: createMinimalFactpack(context.factpack),
-      };
-
-      if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-        userPrompt.previous_decisions = context.previousDecisions;
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-  {
-    name: 'Draft',
-    systemPrompt: `You are the Writer for non-fiction book generation.
-
-⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.
-Start your response with { and end with }. Nothing before or after.
-
-Your job is to create a reader-facing draft that matches the Outline & Structure and the medium selected in the Purpose stage.
-
-CRITICAL:
-- If medium includes audiobook: write in a narration-friendly style (spoken language, fewer visual-only references).
-- If medium includes print: you may include references to figures/tables, but keep them optional.
-
-Output JSON with:
-- deliverable: "nonfiction"
-- title: string
-- subtitle: string (optional)
-- medium: "print" | "audiobook" | "both"
-- table_of_contents: array of chapter/segment titles
-- chapters: array of { title: string, summary: string, key_points: string[], draft_text: string }
-- formatted_manuscript: string (human-readable manuscript with headings; this will be shown to the user)
-- sources_used: string[] (if you used canon facts)
-- assumptions: string[]
-- proposals: array of unresolved questions
-- canon_update: string
-
-Use canon_reference if provided; otherwise use relevant_canon. Do NOT fabricate sources.`,
-    buildUserPrompt: (context) => {
-      const userPrompt: any = {
-        original_user_request: context.config.prompt,
-        type: context.config.type,
-        flags: context.config.flags,
-        purpose: context.stageResults.purpose ? stripStageOutput(context.stageResults.purpose as JsonRecord) : undefined,
-        outline: context.stageResults['outline_&_structure'] ? stripStageOutput(context.stageResults['outline_&_structure'] as JsonRecord) : undefined,
-      };
-
-      if (context.stageResults['outline_&_structure']) {
-        userPrompt.canon_reference = `Relevant canon facts were already provided earlier in this conversation. Review them if needed.`;
-      } else {
-        userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-      }
-
-      if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-        userPrompt.previous_decisions = context.previousDecisions;
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-  {
-    name: 'Editor & Style',
-    systemPrompt: `You are the Editor for non-fiction book generation.
-
-Evaluate the Draft against the Relevant Canon/Library facts and identify what needs to be clarified or revised.
-
-CRITICAL TASKS:
-1. Conflicts: cite any draft claims that contradict provided facts.
-2. Ambiguities: list vague statements needing clarification.
-3. Unassociated: flag claims that need sourcing or are unsupported by provided facts.
-4. Revision Prompt: craft a JSON-safe string instructing the Writer what to revise.
-5. User Questions: gather concrete questions for each ask_user item.
-6. Summary: short recap.
-
-Output STRICT JSON:
-{
-  "conflicts": [...],
-  "ambiguities": [...],
-  "unassociated": [...],
-  "revision_prompt": string,
-  "user_questions": string[],
-  "summary": string
-}
-
-Do NOT rewrite the manuscript here; only analyze and provide actionable guidance.`,
-    buildUserPrompt: (context) => {
-      const draft = stripStageOutput(context.stageResults.draft as JsonRecord);
-      const userPrompt: any = {
-        draft,
-        deliverable: context.config.type,
-        purpose: context.stageResults.purpose ? stripStageOutput(context.stageResults.purpose as JsonRecord) : undefined,
-        outline: context.stageResults['outline_&_structure'] ? stripStageOutput(context.stageResults['outline_&_structure'] as JsonRecord) : undefined,
-        relevant_canon: createMinimalFactpack(context.factpack, 6000),
-      };
-
-      if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-        userPrompt.previous_decisions = context.previousDecisions;
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-  {
-    name: 'Finalizer',
-    systemPrompt: `You are the Finalizer for non-fiction book generation.
-
-⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks. NO explanations. NO tables. NO prose.
-Start your response with { and end with }. Nothing before or after.
-
-Your job is to incorporate the Editor findings and the user's clarifications, and produce the final manuscript output.
-
-CRITICAL RULES:
-1. Do NOT add, remove, or change factual claims.
-2. Incorporate clarifications from the Editor report and the user's previous_decisions.
-3. Ensure the output remains usable for the selected medium:
-   - Print: clean headings, chapter structure, optional callouts.
-   - Audiobook: narration-friendly phrasing, avoid heavy visual-only references.
-4. Ensure formatted_manuscript is human-readable and complete.
-5. Preserve sources_used, assumptions, proposals, and canon_update fields.
-
-Output JSON matching the Draft stage structure, with final prose and formatting.`,
-    buildUserPrompt: (context) => {
-      const fullDraft = stripStageOutput(context.stageResults.draft as JsonRecord);
-      const fullEditor = stripStageOutput(context.stageResults['editor_&_style'] as JsonRecord);
-
-      const userPrompt: any = {
-        draft: fullDraft,
-        editor_report: fullEditor,
-        deliverable_type: context.config.type,
-        purpose: context.stageResults.purpose ? stripStageOutput(context.stageResults.purpose as JsonRecord) : undefined,
-        outline: context.stageResults['outline_&_structure'] ? stripStageOutput(context.stageResults['outline_&_structure'] as JsonRecord) : undefined,
-      };
-
-      if (context.stageResults['outline_&_structure']) {
-        userPrompt.canon_reference = `Relevant facts were provided earlier in this conversation. Review them if needed.`;
-      } else {
-        userPrompt.relevant_canon = createMinimalFactpack(context.factpack, 6000);
-      }
-
-      if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-        userPrompt.previous_decisions = context.previousDecisions;
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-];
-
-const GENERIC_STAGES: Stage[] = [
-  {
-    name: 'Purpose',
-    routerKey: 'purpose',
-    systemPrompt: `You are the Purpose Analyzer for content generation.
-
-⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.
-Start your response with { and end with }. Nothing before or after.
-
-Your job is to analyze the user's request and determine the PURPOSE and CONSTRAINTS for generation.
-
-Output a JSON with:
-- content_type: "npc" | "location" | "item" | "encounter" | "adventure" | "scene" | "organization" | "other"
-- generation_mode: "mechanical" (stat block/rules) | "narrative" (story/description) | "hybrid" (both)
-- game_system: "D&D 5e" | "Pathfinder" | "system-agnostic" | "other" (extract from user prompt or infer)
-- detail_level: "brief" | "standard" | "detailed" | "comprehensive"
-- special_requirements: array of special constraints (e.g., ["homebrew allowed", "must have stat block", "narrative focus", "specific race", "specific class"])
-- interpretation: brief explanation of what you understand the user wants
-
-Examples:
-- User: "Create a level 9 vampire NPC" → game_system: "D&D 5e", generation_mode: "mechanical"
-- User: "Describe an ancient elven queen" → game_system: "system-agnostic", generation_mode: "narrative"
-- User: "A haunted tavern for my campaign" → content_type: "location", generation_mode: "hybrid"`,
-    buildUserPrompt: (context) => JSON.stringify({
-      user_request: context.config.prompt,
-      flags: context.config.flags,
-    }, null, 2),
-  },
-  {
-    name: 'Keyword Extractor',
-    routerKey: 'keyword_extractor',
-    systemPrompt: `You are a Keyword Extraction specialist.
-Your ONLY job is to identify significant keywords from the user's prompt that should be used to search the canon database.
-
-CRITICAL RULES:
-1. Extract ONLY significant nouns, proper nouns, and key concepts
-2. EXCLUDE common words: and, is, they, that, what, are, the, a, an, in, on, at, to, for, of, with, by, from, etc.
-3. Include: character names, location names, item names, ability/power names, entity types, regions, eras, events
-4. If a multi-word phrase is clearly a proper noun or title, keep it together (e.g., "Night City", "Corporate Tower", "Vault of Secrets")
-5. Return 5-15 keywords maximum - be selective and relevant
-
-TAKE YOUR TIME. Read the prompt carefully. Think about what concepts are mentioned that would exist in the setting's canon database.
-
-Output ONLY valid JSON with this structure:
-{
-  "keywords": ["keyword1", "keyword2", ...]
-}`,
-    buildUserPrompt: (context) => JSON.stringify({
-      user_prompt: context.config.prompt,
-    }, null, 2),
-  },
-  {
-    name: 'Planner',
-    routerKey: 'planner',
-    systemPrompt: `You are the Planner for game content generation.
-
-⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks (no \`\`\`json). NO explanations. NO tables. NO prose.
-Start your response with { and end with }. Nothing before or after.
-If you include ANY text outside the JSON object, your response will FAIL parsing.
-
-⚠️ CRITICAL: CHARACTER IDENTITY ⚠️
-The user prompt specifies the EXACT character/content to create (e.g., "Goran Varus").
-Canon facts are PROVIDED FOR REFERENCE to inform the design - they describe the world, setting, and related entities.
-DO NOT substitute or confuse the requested character with other characters mentioned in canon.
-Example: If user requests "Goran Varus" and canon mentions "Sir Darris Gorran", you are creating GORAN VARUS (not Sir Darris Gorran).
-Your proposals should be about the REQUESTED character only, using their name from the prompt.
-
-⚠️ CRITICAL: NEVER REPEAT QUESTIONS ⚠️
-If the user input includes a "previous_decisions" object, those topics have ALREADY been decided.
-DO NOT create proposals for ANY topic mentioned in previous_decisions.
-DO NOT ask about topics that are semantically similar to previously decided topics.
-Asking duplicate questions wastes the user's time and will be considered a critical failure.
-
-Analyze the user prompt and produce a Design Brief JSON with:
-- deliverable: type of content ("scene"|"encounter"|"npc"|"item"|"adventure")
-- story_clock: narrative timing/urgency (optional)
-- threads: story threads to weave in (optional)
-- retrieval_hints: { entities: [], regions: [], eras: [], keywords: [] }
-- proposals: array of questions for the user
-  - Each proposal object MUST use these fields only:
-    - id (string, slug)
-    - topic (string)
-    - question (string)
-    - options (string[])
-    - default (string, MUST equal one of options)
-    - required (boolean)
-  - Forbidden fields: choices, selection, any other keys
-- allow_invention: from flags
-- rule_base: from flags
-- tone: from flags
-- mode: from flags ("GM"|"player")
-- difficulty: from flags
-- realism: from flags
-
-CRITICAL INSTRUCTIONS FOR ACCURACY:
-1. READ ALL provided canon facts THOROUGHLY - do not skip or skim
-2. Do NOT invent ANY facts that are not in the Relevant Canon provided
-3. If canon mentions a location, character, or item - USE IT EXACTLY as described
-4. If information is not in the canon - note it in retrieval_hints, do NOT make it up
-5. Be 100% ACCURATE and 100% PRECISE with canon facts
-6. Take your time - accuracy is more important than speed
-
-CANON FACTS ARE YOUR DEFAULTS:
-7. If canon provides a fact (e.g., "Androids have INT 16"), USE IT as the default value
-8. DO NOT ask about information that canon explicitly provides unless there's genuine ambiguity
-9. Example: If canon says "Int 16", set Int 16. Don't ask "should it be 16, 18, or 20?"
-10. Example: If canon describes a power's mechanics (e.g., "Cyber-reflex at rank 3 grants +2 AC"), USE those exact mechanics
-
-PROPOSALS - ONLY FOR TRUE AMBIGUITY:
-11. ONLY create proposals[] for:
-    - Information NOT in canon (custom items, specific tactics, narrative choices)
-    - Genuine ambiguity where canon has conflicting information
-    - Design choices where multiple valid interpretations exist
-    - Information the user didn't specify (e.g., what effect does "sleep arrow" cause?)
-12. DO NOT create proposals for information canon explicitly provides
-13. DO NOT create proposals for basic stat calculations you can do yourself
-
-The Relevant Canon below contains ALL facts from the database that relate to the keywords in this request.
-If you need a fact and it's not listed - it does not exist in canon yet.
-
-Choose conservative defaults. Output ONLY valid JSON.`,
-    buildUserPrompt: (context) => {
-      // For chunk 1 with large prompts, truncate to fit since detailed prompts are less critical in intro chunks
-      let promptToUse = context.config.prompt;
-      let flagsToUse = context.config.flags;
-
-      if (context.chunkInfo?.currentChunk === 1) {
-        // Truncate prompt if too large
-        if (promptToUse && promptToUse.length > 1500) {
-          console.log(`[Planner Chunk 1] Truncating prompt from ${promptToUse.length} to 1500 chars`);
-          promptToUse = promptToUse.substring(0, 1500) + '\n\n[... remainder in subsequent chunks ...]';
-        }
-
-        // Simplify flags for chunk 1 if they're huge
-        const flagsJson = JSON.stringify(flagsToUse);
-        if (flagsJson.length > 500) {
-          console.log(`[Planner Chunk 1] Simplifying flags from ${flagsJson.length} to minimal set`);
-          flagsToUse = {
-            allow_invention: flagsToUse?.allow_invention,
-            rule_base: flagsToUse?.rule_base,
-            mode: flagsToUse?.mode,
-            tone: flagsToUse?.tone || 'balanced',
-            difficulty: flagsToUse?.difficulty || 'standard',
-            realism: flagsToUse?.realism || 'cinematic',
-          };
-        }
-      }
-
-      const userPrompt: any = {
-        prompt: promptToUse,
-        type: context.config.type,
-        flags: flagsToUse,
-        relevant_canon: createMinimalFactpack(context.factpack),
-      };
-
-      // Add chunk information if this is a multi-part generation
-      if (context.chunkInfo?.isChunked) {
-        const isFirstChunk = context.chunkInfo.currentChunk === 1;
-        const isLastChunk = context.chunkInfo.currentChunk === context.chunkInfo.totalChunks;
-
-        userPrompt.chunk_info = {
-          message: isLastChunk
-            ? `⚠️ FINAL CHUNK (${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks}): All canon has been provided. This is your last chance to refine.`
-            : `📦 CHUNK ${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks} (${context.chunkInfo.chunkLabel}): More canon will come in subsequent parts.`,
-          current_chunk: context.chunkInfo.currentChunk,
-          total_chunks: context.chunkInfo.totalChunks,
-          data_status: isFirstChunk
-            ? "Initial draft - no previous corrections"
-            : "⚠️ UPDATED WITH CORRECTIONS from previous chunk(s). This incorporates your latest decisions and refinements.",
-        };
-      }
-
-      // Include unanswered proposals from previous chunk for AI to attempt answering
-      if (context.unansweredProposals && context.unansweredProposals.length > 0) {
-        userPrompt.unanswered_questions_from_previous_chunk = context.unansweredProposals;
-        userPrompt.ANSWER_QUESTIONS_INSTRUCTION = `⚠️ CRITICAL: The above unanswered_questions_from_previous_chunk contains ${context.unansweredProposals.length} questions from the previous chunk that you could not answer with those facts. NOW, with the NEW facts in relevant_canon, ATTEMPT TO ANSWER these questions. If you can definitively answer a question using the new facts, DO NOT include it in your proposals[] array. ONLY include questions in proposals[] that you STILL cannot answer with the combined facts from all chunks so far. This reduces the burden on the user.`;
-      }
-
-      // Include previous decisions to avoid asking the same questions again
-      if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-        userPrompt.previous_decisions = context.previousDecisions;
-        userPrompt.CRITICAL_INSTRUCTION = `⚠️ FORBIDDEN: The previous_decisions object contains ${Object.keys(context.previousDecisions).length} decisions already made in previous chunks or stages. You MUST NOT create proposals[] entries for these topics. You MUST NOT ask similar or related questions. Repeating questions is a critical error.`;
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-  {
-    name: 'Creator',
-    systemPrompt: `You are the Creator for D&D content generation.
-
-⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks. NO explanations. NO prose.
-Start your response with { and end with }. Nothing before or after.
-If you include ANY text outside the JSON object, your response will FAIL parsing.
-
-Output STRICTLY valid JSON matching the requested schema.
-
-⚠️ MOST CRITICAL: IDENTITY & PURPOSE ⚠️
-The original_user_request field contains the EXACT character/content to create (e.g., "Captain Sarah Chen, a cyberpunk netrunner...").
-This is THE PRIMARY SOURCE OF TRUTH about what to create.
-Canon facts are PROVIDED FOR REFERENCE to inform design - they describe the world, setting, mechanics, and related entities.
-DO NOT substitute or confuse the requested subject with other subjects mentioned in canon facts.
-Example: If original_user_request says "Goran Varus" and canon mentions "Sir Darris Gorran", you MUST create GORAN VARUS (not Sir Darris Gorran).
-Read the original_user_request FIRST before looking at canon facts.
-Use the EXACT name, level/rank, class/role, species/race, and details from original_user_request.
-Adapt your output format based on the PURPOSE stage results (mechanical stat block vs narrative description vs hybrid).
-
-⚠️ CRITICAL: NEVER REPEAT QUESTIONS ⚠️
-If the user input includes a "previous_decisions" object, those topics have ALREADY been decided in a previous stage.
-DO NOT create proposals[] for ANY topic mentioned in previous_decisions.
-DO NOT ask questions that are semantically similar to previously decided topics.
-USE the decisions from previous_decisions directly in your output.
-Asking duplicate questions wastes the user's time and will be considered a critical failure.
-
-CRITICAL RULES FOR ACCURACY AND THOROUGHNESS:
-1. READ EVERY SINGLE FACT in the Relevant Canon below - do NOT skip any
-2. Use ONLY facts from the Relevant Canon provided - NEVER invent new facts
-3. Every claim you make MUST be traceable to a chunk_id in sources_used[]
-4. Be 100% ACCURATE - verify each fact against the Relevant Canon
-5. Be 100% PRECISE - use exact names, descriptions, and details from canon
-6. TAKE YOUR TIME - accuracy is more important than speed
-7. If a location, NPC, item, or creature is mentioned in canon - USE ONLY that information
-8. If something is NOT in the Relevant Canon - add it to proposals[], do NOT make it up
-
-USE CANON AS FOUNDATION - DO NOT ASK ABOUT WHAT CANON PROVIDES:
-9. If canon explicitly states values (e.g., "Androids have STR 10, DEX 16, CON 14..."), USE them in the output
-10. If canon describes mechanics (e.g., "Cyber-reflex at rank 3: +2 AC, advantage on initiative"), implement EXACTLY as described
-11. If canon lists features/abilities (e.g., "Telepaths gain Mind Link ability"), include them in the appropriate section
-12. DO NOT ask about information canon provides - just use it (e.g., if canon says "INT 16", set INT 16)
-13. DO NOT ask about abilities/powers that canon fully describes - just implement them
-14. Examples of what NOT to propose:
-    - "What are the base ability scores?" (if canon provides this for the race/species/template)
-    - "What does [ability name] do at level X?" (if canon describes this)
-    - "Does [character type] have [common ability]?" (if canon lists standard abilities)
-
-PROPOSALS - ONLY FOR GENUINE UNKNOWNS:
-15. ONLY create proposals[] for:
-    - Information NOT in canon (custom items the user mentioned, specific tactics, narrative details)
-    - Genuine ambiguity where canon has multiple conflicting interpretations
-    - Details user mentioned but didn't specify (e.g., "sleep arrow" - what's the effect?)
-    - Creative choices beyond canon (personality details, specific motivations)
-16. DO NOT propose for:
-    - Stats/mechanics canon explicitly provides
-    - Powers/abilities canon fully describes
-    - Calculations you can do (HP from hit dice, proficiency bonus from level)
-
-Required fields in ALL outputs:
-- rule_base: the rule base being used
-- sources_used: array of chunk_ids
-- assumptions: array of reasonable assumptions made
-- proposals: array of questions for unknowns (USE THIS LIBERALLY!)
-- retrieval_hints: optional { entities[], regions[], eras[], keywords[] } if you need more canon
-- canon_update: one-line summary of canon changes
-
-ADAPT OUTPUT BASED ON GENERATION MODE (from PURPOSE stage):
-- If generation_mode is "mechanical": Include complete mechanical data (stat blocks, rules mechanics, numerical values)
-  - For NPCs: ability scores, armor class, hit points, speed, proficiency/skill bonuses, saving throws, senses
-  - For NPCs: class/career levels, features, actions, bonus actions, reactions, legendary/mythic/lair actions if applicable
-  - For NPCs: weapon/attack options with damage, equipment, spellcasting details (if applicable)
-- If generation_mode is "narrative": Focus on descriptive content (appearance, personality, background, motivations, relationships)
-  - For NPCs: physical description, personality traits, background story, goals, fears, relationships, distinctive features
-  - Include special abilities/powers as prose descriptions rather than mechanical stat blocks
-- If generation_mode is "hybrid": Include BOTH mechanical stats AND narrative descriptions
-- Always adapt terminology to the game_system (e.g., D&D uses "class levels", Cyberpunk uses "roles", generic uses "archetype")
-
-CRITICAL MULTICLASS/TEMPLATE LEVELING RULES (for game systems that use them):
-- When a prompt says "level X [template] (previous level Y [class])", interpret this as [Template] level X (NOT total level X)
-- Example: "level 9 vampire (previous level 5 fighter)" = Fighter 5 / Vampire 9 (total level 14)
-- Example: "level 3 lycanthrope (previous level 8 ranger)" = Ranger 8 / Lycanthrope 3 (total level 11)
-- Characters RETAIN their class/career levels from before gaining the template and ADD template levels
-- Each special ability description may specify the template level required (e.g., "At 9th level...")
-- Use the template level (not total level) to determine which special abilities are available
-
-CRITICAL SPECIAL ABILITIES RULES (for characters with unique powers):
-- If the prompt lists specific abilities (e.g., "celerity, misty escape, shape changer"), you MUST include ALL of them
-- For EACH ability mentioned, find the corresponding canon fact and include the FULL description based on the character's level/rank
-- Example: "Celerity" at level 9 should include the 9th level upgrades if canon describes them
-- Do NOT omit any powers, weaknesses, or abilities listed in the prompt
-- If the prompt says "5 powers beyond base traits", count them and ensure all 5 are present
-- Include abilities in appropriate sections based on generation_mode:
-  - Mechanical: traits[], actions[], bonus_actions[], reactions[], weaknesses[]
-  - Narrative: special_abilities[], distinctive_traits[], vulnerabilities[]
-  - Hybrid: both formats
-
-For any missing or uncertain data, add a proposals[] entry with options.
-
-The Relevant Canon below is filtered to only include facts related to this request.
-If you need information and it's not here - it doesn't exist in canon yet.
-
-Output ONLY valid JSON. No prose, no explanations outside the JSON structure.`,
-    buildUserPrompt: (context) => {
-      const userPrompt: any = {
-        original_user_request: context.config.prompt,  // CRITICAL: Include original prompt so AI knows what to create
-        type: context.config.type,
-        brief: stripStageOutput(context.stageResults.planner as JsonRecord),
-        flags: context.config.flags,
-        // Include Purpose stage results for format adaptation
-        purpose: context.stageResults.purpose ? stripStageOutput(context.stageResults.purpose as JsonRecord) : undefined,
-      };
-
-      // NPC SECTION-BASED CHUNKING: Inject section-specific instructions
-      if (context.npcSectionContext?.isNpcSectionChunking && context.npcSectionContext.currentSection) {
-        const section = context.npcSectionContext.currentSection;
-        const sectionIndex = context.npcSectionContext.currentSectionIndex;
-        const accumulated = context.npcSectionContext.accumulatedSections;
-
-        userPrompt.NPC_SECTION_INSTRUCTIONS = section.instructions;
-        userPrompt.SECTION_NUMBER = `Section ${sectionIndex + 1} of ${context.chunkInfo?.totalChunks || 1}`;
-        userPrompt.SECTION_NAME = section.chunkLabel;
-
-        // Include accumulated sections from previous chunks for context
-        if (section.includePreviousSections && Object.keys(accumulated).length > 0) {
-          userPrompt.previous_sections = accumulated;
-          userPrompt.SECTION_BUILD_INSTRUCTION = `⚠️ CRITICAL: The previous_sections field contains the NPC data created in earlier sections. Build upon this foundation. DO NOT re-output these fields - only output the NEW fields for this section (${section.outputFields.join(', ')}). The system will merge them automatically.`;
-        }
-
-        console.log(`[NPC Section Chunking] Injecting instructions for section: ${section.chunkLabel}`);
-      }
-
-      // OPTIMIZATION: Don't resend canon if Planner already provided it in same AI session
-      // In copy-paste workflow, all prompts go to SAME AI chat session, so AI remembers previous canon
-      if (context.stageResults.planner) {
-        // Planner already ran and provided canon facts
-        // Reference them instead of resending (saves token usage, stays within limits)
-        userPrompt.canon_reference = `⚠️ CRITICAL: Canon facts were already provided in the Planner stage above in this conversation. REVIEW those facts from your conversation history. Use them to inform your creation. If you need ADDITIONAL canon not already provided, indicate that in your retrieval_hints[] field.`;
-      } else {
-        // No Planner results yet, send all facts
-        userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-      }
-
-      // Add chunk information
-      if (context.chunkInfo?.isChunked) {
-        const isFirstChunk = context.chunkInfo.currentChunk === 1;
-        const isLastChunk = context.chunkInfo.currentChunk === context.chunkInfo.totalChunks;
-
-        userPrompt.chunk_info = {
-          message: isLastChunk
-            ? `⚠️ FINAL CHUNK (${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks}): All canon provided. Finalize your work.`
-            : `📦 CHUNK ${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks} (${context.chunkInfo.chunkLabel}): More canon coming in next chunk.`,
-          current_chunk: context.chunkInfo.currentChunk,
-          total_chunks: context.chunkInfo.totalChunks,
-          data_status: isFirstChunk
-            ? "Initial creation - working from Design Brief"
-            : "⚠️ UPDATED CONTENT from previous chunk(s). The 'brief' field contains your latest corrections and decisions. Build upon this updated version, don't revert to original.",
-        };
-      }
-
-      // Include unanswered proposals from previous chunk for AI to attempt answering
-      if (context.unansweredProposals && context.unansweredProposals.length > 0) {
-        userPrompt.unanswered_questions_from_previous_chunk = context.unansweredProposals;
-        userPrompt.ANSWER_QUESTIONS_INSTRUCTION = `⚠️ CRITICAL: The above unanswered_questions_from_previous_chunk contains ${context.unansweredProposals.length} questions from the previous chunk that could not be answered with those facts. NOW, with the NEW facts in relevant_canon, ATTEMPT TO ANSWER these questions. If you can definitively answer a question using the new facts, DO NOT include it in your proposals[] array. ONLY include questions in proposals[] that you STILL cannot answer with the combined facts from all chunks so far. This reduces the burden on the user.`;
-      }
-
-      // Include previous decisions
-      if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-        userPrompt.previous_decisions = context.previousDecisions;
-        userPrompt.CRITICAL_INSTRUCTION = `⚠️ MANDATORY: The previous_decisions object contains ${Object.keys(context.previousDecisions).length} decisions already made by the user. You MUST:
-1. INCORPORATE these decisions into your stat block/content (e.g., if user answered "AC 19", set armor_class: 19)
-2. UPDATE relevant fields based on these answers (e.g., if user chose "Option B: Blueblood Charm", include that ability)
-3. NOT create proposals[] entries for ANY of these topics
-4. NOT ask similar or related questions
-Failing to incorporate user decisions is a critical error - the user already answered these questions!`;
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-  {
-    name: 'Fact Checker',
-    systemPrompt: `You are the Canon Fact Checker for game content generation.
-Evaluate the Creator draft against the Relevant Canon facts.
-
-CRITICAL TASKS:
-1. Conflicts: cite any draft claims that contradict canon. Provide field_path, summary, details, severity (critical|major|minor), chunk_id, canon_fact, suggested_fix.
-2. Ambiguities: list vague statements needing clarification with field_path, text, clarification_needed, recommended_revision.
-3. Unassociated: flag claims lacking canon support with field_path, text, reason, suggested_action (ask_user|discard|keep).
-4. Revision Prompt: craft a JSON-safe string instructing the Authoring AI to resolve conflicts, harden ambiguous text, and consult the user on unassociated content.
-5. User Questions: gather concrete questions for each "ask_user" item.
-6. Summary: short recap of counts and critical findings.
-
-Output STRICT JSON:
-{
-  "conflicts": [...],
-  "ambiguities": [...],
-  "unassociated": [...],
-  "revision_prompt": string,
-  "user_questions": string[],
-  "summary": string
-}`,
-    buildUserPrompt: (context) => {
-      // Get full draft
-      const fullDraft = stripStageOutput(context.stageResults.creator as JsonRecord);
-
-      // For chunk 1 with large content, send minimal summary to fit in prompt limits
-      let draftToUse = fullDraft;
-      if (context.chunkInfo?.currentChunk === 1) {
-        const draftJson = JSON.stringify(fullDraft);
-        if (draftJson.length > 5000) {
-          console.log(`[Fact Checker Chunk 1] Draft is large (${draftJson.length} chars). Sending minimal summary.`);
-
-          // Create minimal summary with just metadata and basic info
-          draftToUse = {
-            name: fullDraft.name,
-            type: context.config.type,
-            schema_version: fullDraft.schema_version,
-            challenge_rating: fullDraft.challenge_rating,
-            _summary: `[Large draft - ${draftJson.length} chars. Full fact-checking in chunk 2. For now, minimal validation only.]`,
-            _field_count: Object.keys(fullDraft).length,
-          };
-        }
-      }
-
-      const userPrompt: any = {
-        draft: draftToUse,
-        deliverable: context.config.type,
-        flags: context.config.flags,
-      };
-
-      // Reference canon from Planner stage instead of resending
-      if (context.stageResults.planner) {
-        userPrompt.canon_reference = `⚠️ Canon facts were already provided in the Planner stage earlier in this conversation. Review those facts to validate the draft.`;
-      } else {
-        userPrompt.relevant_canon = createMinimalFactpack(context.factpack, 6000);
-      }
-
-      // Add chunk information
-      if (context.chunkInfo?.isChunked) {
-        userPrompt.chunk_info = {
-          message: context.chunkInfo.currentChunk < context.chunkInfo.totalChunks
-            ? `Processing part ${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks} (${context.chunkInfo.chunkLabel}). Additional canon will be provided in subsequent parts. ${context.chunkInfo.currentChunk === 1 ? 'Full draft will be provided in next chunk for detailed fact-checking.' : ''}`
-            : `Final part (${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks}). All canon and full draft provided. Perform thorough fact-checking now.`,
-          current_chunk: context.chunkInfo.currentChunk,
-          total_chunks: context.chunkInfo.totalChunks,
-        };
-      }
-
-      // Include previous decisions for context
-      if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-        userPrompt.previous_decisions = context.previousDecisions;
-        userPrompt.note = "Previous decisions were already made. Do NOT flag these as issues.";
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-  {
-    name: 'Stylist',
-    systemPrompt: `You are the Stylist for game content generation.
-Your job is to improve prose, apply tone, AND normalize the JSON structure to match our standard schema.
-
-⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
-Output ONLY valid JSON. NO markdown code blocks. NO explanations. NO tables. NO prose.
-Start your response with { and end with }. Nothing before or after.
-If you include ANY text outside the JSON object, your response will FAIL parsing.
-
-CRITICAL RULES FOR ACCURACY:
-1. Do NOT add, remove, or change ANY facts
-2. Do NOT modify sources_used, assumptions, proposals, retrieval_hints, or canon_update
-3. Apply the specified tone to narrative/description fields only
-4. Integrate clarifications from the Fact Check report without introducing new facts
-5. If mode="player", remove GM-only information (secrets, hidden DCs) from narration fields ONLY
-6. Improve readability and flow of descriptions while preserving meaning
-7. TAKE YOUR TIME - read carefully to ensure no facts are altered
-
-PROPOSALS - CRITICAL FORMAT REQUIREMENTS:
-8. Copy existing proposals[] EXACTLY as-is - do NOT modify them
-9. If adding NEW proposals, they MUST use this EXACT format:
-   {
-     "question": "Clear question asking the user to decide something",
-     "options": ["Option 1", "Option 2", "Option 3"],
-     "rule_impact": "How this choice affects game balance or rules"
-   }
-10. NEVER create proposals with fields like "summary", "details", or "suggested_action"
-11. NEVER document resolved conflicts or changes in proposals[] - those go in validation_notes
-12. ONLY add proposals for UNRESOLVED questions that need user input
-13. If you fix an issue, document it in validation_notes, NOT in proposals[]
-
-NORMALIZATION - CRITICAL FOR ALL CONTENT TYPES:
-11. Transform the draft JSON to match the normalized schema below based on deliverable type
-12. ADAPT field names and structure based on the game_system and generation_mode from the Purpose stage:
-    - For D&D/Pathfinder: use fields like "armor_class", "challenge_rating", "proficiency_bonus", "saving_throws"
-    - For Cyberpunk/sci-fi: use fields like "armor_rating", "threat_level", "skill_bonuses", "resistances"
-    - For narrative-only (generation_mode: "narrative"): OMIT mechanical fields, focus on description/personality/background
-    - For system-agnostic: use generic field names like "defense", "difficulty", "bonuses"
-13. Map all fields intelligently (e.g., physical_appearance → appearance, saving_throws → saving_throws array, etc.)
-14. Ensure ALL data from the draft is preserved, just with standardized field names
-15. If a field exists in the draft but not in the schema, include it anyway (better to have extra than missing)
-
-CRITICAL MULTICLASS/TEMPLATE LEVELING RULES (DO NOT "CORRECT" THIS):
-- Characters with templates/prestige classes RETAIN their base class levels and ADD template levels
-- "level X [template] (previous level Y [class])" means [Template] level X, NOT total level X
-- Example: "level 9 vampire (previous level 5 fighter)" = Fighter 5 / Vampire 9 (total level 14)
-- Example: "level 3 lycanthrope (previous level 8 ranger)" = Ranger 8 / Lycanthrope 3 (total level 11)
-- Example: "rank 4 cyborg (previous rank 6 operative)" = Operative 6 / Cyborg 4 (total rank 10)
-- DO NOT reduce template levels to make the total level match the stated number
-- Use the template level/rank (not total level) to determine which special abilities are available
-- DO NOT omit any special abilities/powers/weaknesses from the draft - preserve ALL of them
-- Ensure traits[], actions[], bonus_actions[], reactions[], special_abilities[], and weaknesses[] contain ALL abilities from the draft
-
-=== NORMALIZED SCHEMAS (TEMPLATES TO ADAPT) ===
-The schemas below are DEFAULT TEMPLATES optimized for D&D-like game systems.
-ADAPT these schemas based on the game_system and generation_mode from the Purpose stage:
-- Change field names to match the game system's terminology
-- Omit mechanical fields for narrative-only generation
-- Add custom fields needed for specific game systems
-- The schemas show the STRUCTURE, not rigid requirements
-
-=== NORMALIZED SCHEMA FOR NPC DELIVERABLES (v1.1) ===
-For deliverable="npc", output should match this structure (adapted as needed):
-{
-  "schema_version": "1.1",  // REQUIRED: Always "1.1" for new NPCs
-  "genre": string,  // "D&D", "Pathfinder", "Sci-Fi", "Modern", "Fantasy", etc.
-  "type": "npc",
-  "deliverable": "npc",
-  "name": string,  // canonical_name → name (v1.1 uses 'name' as primary field)
-  "title": string,
-  "aliases": string[],
-  "description": string,
-  "appearance": string,  // NOT physical_appearance
-  "background": string,
-  "race": string,
-  "alignment": string,
-  "role": string,
-  "affiliation": string,
-  "location": string,
-  "era": string,
-  "class_levels": string | Array<{ class: string, level: number, subclass?: string, notes?: string }>,  // Can be string OR array
-  "multiclass_features": Array<{ name: string, source_classes: string[], description: string }>,  // For hybrid class mechanics
-  "class_features": Array<{ name: string, description: string, level?: number, source?: string, uses?: string, notes?: string }>,  // ALL base class features (e.g., Arcane Recovery, Extra Attack, Spell Mastery)
-  "subclass_features": Array<{ name: string, description: string, level?: number, source?: string, uses?: string, notes?: string }>,  // ALL subclass/archetype features (e.g., Portent, Expert Divination)
-  "racial_features": Array<{ name: string, description: string, source?: string, notes?: string }>,  // ALL racial traits (e.g., Darkvision, Fey Ancestry, Relentless Endurance)
-  "feats": Array<{ name: string, description: string, source?: string, prerequisite?: string, notes?: string }>,  // ALL feats (from ASI, background origin feat, racial bonus)
-  "asi_choices": Array<{ level: number, choice: string, details?: string, source_class?: string }>,  // ASI/feat choices at each ASI level
-  "background_feature": { background_name: string, feature_name: string, description: string, origin_feat?: string, skill_proficiencies?: string[], tool_proficiencies?: string[], languages_granted?: string[], equipment_granted?: string[] },  // Background details
-  "challenge_rating": string,  // Include XP like "10 (5,900 XP)"
-  "ability_scores": { "str": number, "dex": number, "con": number, "int": number, "wis": number, "cha": number },  // lowercase keys
-  "armor_class": number | Array<{ value: number, type?: string, notes?: string }>,
-  "hit_points": number | { average: number, formula: string, notes?: string },
-  "hit_dice": string,
-  "speed": { "walk": string, "climb"?: string, "fly"?: string, "swim"?: string, "burrow"?: string, "hover"?: string },
-  "proficiency_bonus": number,
-  "saving_throws": Array<{ name: string, value: string, notes?: string }> | string[],  // Can be objects or strings
-  "skill_proficiencies": Array<{ name: string, value: string, notes?: string }> | string[],
-  "senses": string[],
-  "passive_perception": number,
-  "languages": string[],
-  "damage_resistances": string[],
-  "damage_immunities": string[],
-  "damage_vulnerabilities": string[],
-  "condition_immunities": string[],
-  "abilities": Array<{ name: string, description: string, uses?: string, recharge?: string, notes?: string, source?: string }>,  // Use 'abilities' NOT 'traits'
-  "vampire_traits"?: {  // Optional: For vampire template NPCs
-    "vampire_level": number,
-    "regeneration": { "hit_points_per_turn": number, "disable_conditions": string[] },
-    "weaknesses": Array<{ type: string, effect: string }>,
-    "blood_requirements": { "frequency": string, "amount": string, "consequences": string },
-    "shapechanger_forms": string[]
-  },
-  "spellcasting"?: {  // Enhanced with Artificer support
-    "type": string,  // "Innate", "Prepared", "Known", "Artificer"
-    "ability": string,  // "INT", "WIS", "CHA"
-    "save_dc": number,
-    "attack_bonus": number,
-    "cantrips": string[],  // Separate from known_spells
-    "spellcasting_focus": string,  // e.g., "arcane focus", "component pouch"
-    "spell_storing_items": Array<{ item: string, spell: string, level: number, uses: number }>,  // Artificer mechanic
-    "spell_slots": { "1st": number, "2nd": number, ... },
-    "prepared_spells": { "1st": string[], "2nd": string[], ... },
-    "innate_spells": { "At will": string[], "3/day": string[], ... },
-    "known_spells": string[]
-  },
-  "actions": Array<{ name: string, description: string, uses?: string, recharge?: string, notes?: string }>,
-  "bonus_actions": Array<{ name: string, description: string, uses?: string, recharge?: string, notes?: string }>,
-  "reactions": Array<{ name: string, description: string, uses?: string, recharge?: string, notes?: string }>,
-  "legendary_actions"?: {  // Enhanced with reset tracking
-    "summary": string,
-    "count": number,  // Number of legendary actions per round
-    "reset": string,  // When they reset (e.g., "start of turn", "short rest")
-    "options": Array<{ name: string, description: string, cost?: number, uses?: string, notes?: string }>
-  },
-  "mythic_actions"?: {
-    "summary": string,
-    "trigger": string,  // What triggers mythic actions
-    "options": Array<{ name: string, description: string, uses?: string, notes?: string }>
-  },
-  "lair_description": string,  // Where the creature lives
-  "lair_actions": Array<string> | Array<{ initiative: number, action: string, description: string }>,  // Simple or enhanced
-  "regional_effects": Array<string> | Array<{ radius: string, effect: string, description: string, duration?: string }>,
-  "equipment": string[],  // Mundane items
-  "attuned_items": Array<{ name: string, rarity: string, requires_attunement: boolean, attuned: boolean, description: string, properties?: string[], charges?: { current: number, maximum: number, recharge: string } }>,
-  "magic_items": Array<{ name: string, rarity: string, description: string }>,  // Non-attuned magic items
-  "treasure"?: { coinage: string, art_objects: string[], notes: string },
-  "relationships": Array<{ entity: string, relationship: string, notes?: string }>,
-  "allies_friends": Array<{ name: string, type: string, relationship: string, location?: string, stat_summary?: string, stat_block_ref?: string, notes?: string }>,  // Detailed allies
-  "factions": Array<{ name: string, role: string, standing?: string, notes?: string }>,
-  "minions": Array<{ name: string, type: string, quantity?: number, loyalty?: string, notes?: string }>,
-  "personality": { "traits": string[], "ideals": string[], "bonds": string[], "flaws": string[] },
-  "motivations": string[],
-  "tactics": string,
-  "hooks": string[],
-  "notes": string[],
-  "rule_base": string,  // "2024RAW", "2014RAW", or "HouseRules:..."
-  "sources_used": string[],
-  "assumptions": string[],
-  "proposals": Array<{ question: string, options: string[], rule_impact: string, recommendation?: string }>,
-  "canon_update": string,
-  "generation_metadata"?: {  // Tracks AI generation quality
-    "generated_date": string,
-    "ai_model": string,
-    "validation_notes": string[],
-    "conflicts": Array<{ field: string, issue: string, severity: string }>,
-    "canon_alignment_score": number  // 0-100
-  }
-}
-
-=== NORMALIZED SCHEMA FOR ENCOUNTER DELIVERABLES ===
-For deliverable="encounter", output MUST match this structure:
-{
-  "type": "encounter",
-  "deliverable": "encounter",
-  "title": string,
-  "description": string,
-  "encounter_type": string,  // "combat", "social", "exploration", "puzzle", "mixed"
-  "difficulty": string,  // "easy", "standard", "deadly", "boss"
-  "party_level_range": string,  // e.g., "5-7"
-  "estimated_duration": string,  // e.g., "30-45 minutes"
-  "environment": {
-    "location": string,
-    "terrain": string,
-    "lighting": string,
-    "weather": string,
-    "special_conditions": string[]
-  },
-  "enemies": Array<{
-    "name": string,
-    "count": number,
-    "cr": string,
-    "role": string,  // "boss", "elite", "minion", "support"
-    "tactics": string
-  }>,
-  "objectives": {
-    "primary": string[],
-    "secondary": string[],
-    "failure_conditions": string[]
-  },
-  "encounter_map": {
-    "description": string,
-    "dimensions": string,
-    "key_features": string[],
-    "cover_terrain": string[]
-  },
-  "tactics": {
-    "enemy_strategy": string,
-    "reinforcements": string,
-    "retreat_conditions": string,
-    "special_phases": string[]
-  },
-  "rewards": {
-    "treasure": string[],
-    "experience": string,
-    "story_rewards": string[]
-  },
-  "hooks": string[],
-  "escalation": string[],  // How encounter can become more difficult
-  "era": string,
-  "region": string,
-  "rule_base": string,
-  "sources_used": string[],
-  "assumptions": string[],
-  "proposals": array,
-  "canon_update": string
-}
-
-=== NORMALIZED SCHEMA FOR ITEM DELIVERABLES ===
-For deliverable="item", output MUST match this structure:
-{
-  "type": "item",
-  "deliverable": "item",
-  "title": string,
-  "canonical_name": string,
-  "aliases": string[],
-  "description": string,
-  "item_type": string,  // "weapon", "armor", "wondrous_item", "potion", "scroll", "ring", "rod", "staff", "wand", etc.
-  "subtype": string,  // e.g., "longsword", "plate armor", "cloak"
-  "rarity": string,  // "common", "uncommon", "rare", "very_rare", "legendary", "artifact"
-  "requires_attunement": boolean,
-  "attunement_requirements": string,  // e.g., "by a spellcaster", "by a paladin"
-  "appearance": string,
-  "history": string,
-  "properties": {
-    "magical_bonus": string,  // e.g., "+2 to attack and damage"
-    "special_abilities": Array<{
-      "name": string,
-      "description": string,
-      "uses": string,  // e.g., "3 charges per day"
-      "recharge": string
-    }>,
-    "passive_effects": string[],
-    "activation": string,  // "action", "bonus action", "reaction", "passive"
-    "cursed": boolean,
-    "curse_description": string
-  },
-  "mechanics": {
-    "damage": string,  // For weapons
-    "armor_class": string,  // For armor
-    "spell_save_dc": string,
-    "attack_bonus": string,
-    "weight": string,
-    "cost_gp": number
-  },
-  "lore": {
-    "creator": string,
-    "origin_story": string,
-    "famous_wielders": string[],
-    "current_location": string,
-    "legends": string[]
-  },
-  "era": string,
-  "region": string,
-  "rule_base": string,
-  "sources_used": string[],
-  "assumptions": string[],
-  "proposals": array,
-  "canon_update": string
-}
-
-=== NORMALIZED SCHEMA FOR SCENE DELIVERABLES ===
-For deliverable="scene", output MUST match this structure:
-{
-  "type": "scene",
-  "deliverable": "scene",
-  "title": string,
-  "description": string,
-  "scene_type": string,  // "roleplay", "investigation", "exploration", "social", "revelation", "cinematic"
-  "setting": {
-    "location": string,
-    "time_of_day": string,
-    "atmosphere": string,
-    "sensory_details": {
-      "sights": string,
-      "sounds": string,
-      "smells": string,
-      "tactile": string
-    },
-    "mood": string
-  },
-  "narration": {
-    "opening": string,  // GM reads this to set the scene
-    "player_perspective": string,  // What players observe/experience
-    "gm_secrets": string[]  // Hidden information only GM knows
-  },
-  "npcs_present": Array<{
-    "name": string,
-    "role": string,
-    "disposition": string,  // "friendly", "neutral", "hostile", "suspicious"
-    "goals": string[],
-    "secrets": string[]
-  }>,
-  "events": Array<{
-    "trigger": string,  // What causes this event
-    "description": string,
-    "outcomes": string[]  // Possible results
-  }>,
-  "skill_checks": Array<{
-    "skill": string,
-    "dc": number,
-    "purpose": string,
-    "success_result": string,
-    "failure_result": string
-  }>,
-  "branching_paths": Array<{
-    "player_choice": string,
-    "consequence": string,
-    "leads_to": string  // Next scene or encounter
-  }>,
-  "clues_information": string[],
-  "hooks": string[],
-  "transitions": {
-    "from_previous": string,
-    "to_next": string[]  // Possible next scenes
-  },
-  "estimated_duration": string,
-  "era": string,
-  "region": string,
-  "rule_base": string,
-  "sources_used": string[],
-  "assumptions": string[],
-  "proposals": array,
-  "canon_update": string
-}
-
-=== NORMALIZED SCHEMA FOR STORY_ARC DELIVERABLES ===
-For deliverable="story_arc", output MUST match this structure:
-{
-  "type": "story_arc",
-  "deliverable": "story_arc",
-  "title": string,
-  "description": string,
-  "premise": string,  // Core concept in 1-2 sentences
-  "themes": string[],  // "betrayal", "redemption", "mystery", etc.
-  "scope": {
-    "estimated_sessions": number,
-    "level_range": string,  // "5-7"
-    "geographic_scope": string,  // "single city", "regional", "continental"
-    "stakes": string  // "personal", "regional", "world-ending"
-  },
-  "hook": {
-    "initial_hook": string,
-    "personal_connections": string[],  // Ties to PC backgrounds
-    "urgency": string
-  },
-  "acts": Array<{
-    "act_number": number,
-    "title": string,
-    "summary": string,
-    "key_events": string[],
-    "major_npcs": string[],
-    "locations": string[],
-    "estimated_sessions": number,
-    "act_climax": string
-  }>,
-  "major_npcs": Array<{
-    "name": string,
-    "role": string,  // "villain", "ally", "mentor", "rival"
-    "motivation": string,
-    "arc": string  // Their character development
-  }>,
-  "key_locations": Array<{
-    "name": string,
-    "significance": string,
-    "when_visited": string  // Which act
-  }>,
-  "central_conflict": {
-    "antagonist": string,
-    "goal": string,
-    "methods": string[],
-    "weakness": string
-  },
-  "climax": {
-    "description": string,
-    "location": string,
-    "stakes": string,
-    "victory_conditions": string[],
-    "failure_outcomes": string[]
-  },
-  "resolution_options": Array<{
-    "outcome": string,
-    "requirements": string[],
-    "consequences": string
-  }>,
-  "subplots": Array<{
-    "title": string,
-    "description": string,
-    "resolution": string
-  }>,
-  "pacing": {
-    "introduction": string,
-    "rising_action": string,
-    "climax": string,
-    "falling_action": string
-  },
-  "era": string,
-  "region": string,
-  "rule_base": string,
-  "sources_used": string[],
-  "assumptions": string[],
-  "proposals": array,
-  "canon_update": string
-}
-
-=== NORMALIZED SCHEMA FOR ADVENTURE DELIVERABLES ===
-For deliverable="adventure", output MUST match this structure:
-{
-  "type": "adventure",
-  "deliverable": "adventure",
-  "title": string,
-  "subtitle": string,
-  "description": string,
-  "premise": string,
-  "scope": {
-    "estimated_sessions": number,
-    "level_range": string,
-    "player_count": string,  // "3-5 players"
-    "difficulty": string
-  },
-  "adventure_structure": {
-    "introduction": {
-      "hook": string,
-      "starting_location": string,
-      "initial_scenes": string[]
-    },
-    "acts": Array<{
-      "act_number": number,
-      "title": string,
-      "summary": string,
-      "encounters": string[],  // References to encounter titles
-      "scenes": string[],  // References to scene titles
-      "key_npcs": string[],
-      "locations": string[],
-      "act_objective": string
-    }>,
-    "climax": {
-      "title": string,
-      "description": string,
-      "final_encounter": string,
-      "resolution_options": string[]
-    },
-    "conclusion": {
-      "epilogue": string,
-      "rewards": string[],
-      "sequel_hooks": string[]
-    }
-  },
-  "major_npcs": Array<{
-    "name": string,
-    "role": string,
-    "brief_stats": string,  // Or reference to full NPC
-    "key_motivations": string[]
-  }>,
-  "key_locations": Array<{
-    "name": string,
-    "description": string,
-    "encounters": string[],
-    "points_of_interest": string[]
-  }>,
-  "magic_items": Array<{
-    "name": string,
-    "where_found": string,
-    "brief_description": string
-  }>,
-  "appendices": {
-    "npcs": string,  // "See NPC appendix"
-    "items": string,  // "See magic items appendix"
-    "maps": string[],
-    "handouts": string[]
-  },
-  "gm_guidance": {
-    "preparation_notes": string[],
-    "pacing_tips": string[],
-    "common_pitfalls": string[],
-    "improvisation_tips": string[]
-  },
-  "themes": string[],
-  "era": string,
-  "region": string,
-  "rule_base": string,
-  "sources_used": string[],
-  "assumptions": string[],
-  "proposals": array,
-  "canon_update": string
-}
-
-FIELD MAPPING INTELLIGENCE (applies to ALL content types):
-- "physical_appearance" OR "appearance" → "appearance"
-- "saving_throws" OR "saves" → "saving_throws" (as string array)
-- "skill_proficiencies" OR "skills" → "skill_proficiencies" (as string array)
-- "personality" object with traits/ideals/bonds/flaws → flatten to personality_traits[], ideals, flaws
-- "hit_points" number OR string OR object → string formula like "112 (15d8 + 45)"
-- "class_levels" array OR string → simple string representation
-- Any nested npc.* OR encounter.* OR item.* OR scene.* fields → flatten to root level
-- "environment_details" OR "setting_details" → normalize to appropriate structure (environment for encounters, setting for scenes)
-- "treasure" OR "loot" OR "rewards" → "rewards" with consistent structure
-- "location" OR "place" OR "venue" → use appropriate context-specific field name
-
-Output the normalized, polished JSON matching the schema for the deliverable type.`,
-    buildUserPrompt: (context) => {
-      // Get full content
-      const fullDraft = stripStageOutput(context.stageResults.creator as JsonRecord);
-      const fullFactCheck = stripStageOutput(context.stageResults.fact_checker as JsonRecord);
-
-      // For chunk 1 with large content, send minimal summary to fit in prompt limits
-      let draftToUse = fullDraft;
-      let factCheckToUse = fullFactCheck;
-
-      if (context.chunkInfo?.currentChunk === 1) {
-        const draftJson = JSON.stringify(fullDraft);
-        if (draftJson.length > 5000) {
-          console.log(`[Stylist Chunk 1] Draft is large (${draftJson.length} chars). Sending minimal summary.`);
-
-          // Create minimal summary with just metadata and basic info
-          draftToUse = {
-            name: fullDraft.name,
-            type: context.config.type,
-            schema_version: fullDraft.schema_version,
-            challenge_rating: fullDraft.challenge_rating,
-            _summary: `[Large draft - ${draftJson.length} chars. Full styling/normalization in chunk 2. For now, pass through as-is.]`,
-            _field_count: Object.keys(fullDraft).length,
-          };
-        }
-
-        const factCheckJson = JSON.stringify(fullFactCheck);
-        if (factCheckJson.length > 3000) {
-          console.log(`[Stylist Chunk 1] Fact check is large (${factCheckJson.length} chars). Sending minimal summary.`);
-          factCheckToUse = {
-            _summary: `[Large fact check - ${factCheckJson.length} chars. Full details in chunk 2.]`,
-          };
-        }
-      }
-
-      const userPrompt: any = {
-        draft: draftToUse,
-        tone: context.config.flags.tone,
-        mode: context.config.flags.mode,
-        fact_check: factCheckToUse,
-        deliverable_type: context.config.type,
-        // Include Purpose stage results for schema adaptation
-        purpose: context.stageResults.purpose ? stripStageOutput(context.stageResults.purpose as JsonRecord) : undefined,
-      };
-
-      // Reference canon from Planner stage instead of resending
-      if (context.stageResults.planner) {
-        userPrompt.canon_reference = `⚠️ Canon facts were already provided in the Planner stage earlier in this conversation. Review those facts if needed for styling/normalization.`;
-      } else {
-        userPrompt.relevant_canon = createMinimalFactpack(context.factpack, 6000);
-      }
-
-      // Add chunk information
-      if (context.chunkInfo?.isChunked) {
-        userPrompt.chunk_info = {
-          message: context.chunkInfo.currentChunk < context.chunkInfo.totalChunks
-            ? `Processing part ${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks} (${context.chunkInfo.chunkLabel}). Additional canon will be provided in subsequent parts. ${context.chunkInfo.currentChunk === 1 ? 'Full draft will be provided in next chunk for detailed styling/normalization.' : ''}`
-            : `Final part (${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks}). All canon and full draft provided. Apply thorough styling and normalization now.`,
-          current_chunk: context.chunkInfo.currentChunk,
-          total_chunks: context.chunkInfo.totalChunks,
-        };
-      }
-
-      // Include previous decisions so they can be incorporated during styling/normalization
-      if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-        userPrompt.previous_decisions = context.previousDecisions;
-        userPrompt.CRITICAL_INSTRUCTION = `⚠️ MANDATORY: The previous_decisions object contains ${Object.keys(context.previousDecisions).length} user decisions. While normalizing:
-1. INCORPORATE these decisions into the normalized output (e.g., if user chose "AC 19", ensure armor_class: 19)
-2. PRESERVE all details from user answers (e.g., if user specified ability details, include them)
-3. DO NOT create new proposals for these topics
-Failing to incorporate user decisions during normalization is a critical error!`;
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-  {
-    name: 'Canon Validator',
-    systemPrompt: `You are the Canon Validator for game content generation.
-Your job is to detect conflicts between the generated content and existing canon facts.
-
-CRITICAL RULES FOR THOROUGHNESS:
-1. READ EVERY SINGLE FACT in the Relevant Canon below - do NOT skip any
-2. Compare ALL claims in the generated content against EVERY fact in the Relevant Canon
-3. TAKE YOUR TIME - be thorough and meticulous in your analysis
-4. Detect contradictions in:
-   - Entity states (alive vs dead, friendly vs hostile, etc.)
-   - Locations (destroyed vs intact, abandoned vs inhabited, etc.)
-   - Temporal consistency (events in wrong era, anachronisms)
-   - Relationship contradictions (enemy vs ally, etc.)
-   - Physical descriptions (appearance, size, abilities)
-   - Historical events (timeline, causality)
-5. For each conflict found, provide:
-   - new_claim: what the generated content says
-   - existing_claim: what canon says (quote the exact fact)
-   - entity_name: which entity is affected
-   - conflict_type: type of contradiction
-   - severity: "critical" (breaks canon) | "minor" (questionable but acceptable)
-6. Add validation metadata to the content:
-   - conflicts: array of detected conflicts
-   - canon_alignment_score: 0-100 (100 = perfect alignment, deduct points for each conflict)
-   - validation_notes: any additional observations
-7. Be 100% ACCURATE in identifying conflicts - false positives waste user time
-8. Be 100% PRECISE - quote exact facts from canon when noting conflicts
-
-The Relevant Canon below contains all facts that relate to this content.
-Read them ALL carefully before validating.
-
-⚠️ CRITICAL: DO NOT CREATE OR MODIFY PROPOSALS ⚠️
-You are a VALIDATOR, not a question-asker. Do NOT add to proposals[].
-Document resolved conflicts and corrections in validation_notes, NOT in proposals[].
-Copy the existing proposals[] array EXACTLY as-is if present.
-
-Output the SAME JSON content with added fields:
-- conflicts: [...]
-- canon_alignment_score: number
-- validation_notes: string`,
-    buildUserPrompt: (context) => {
-      // Get full content
-      const fullContent = stripStageOutput(context.stageResults.stylist as JsonRecord);
-
-      // For chunk 1 with large content, send minimal summary to fit in prompt limits
-      let contentToUse = fullContent;
-      if (context.chunkInfo?.currentChunk === 1) {
-        const contentJson = JSON.stringify(fullContent);
-        if (contentJson.length > 5000) {
-          console.log(`[Canon Validator Chunk 1] Content is large (${contentJson.length} chars). Sending minimal summary.`);
-
-          // Create minimal summary with just metadata and basic info
-          contentToUse = {
-            name: fullContent.name,
-            type: context.config.type,
-            schema_version: fullContent.schema_version,
-            challenge_rating: fullContent.challenge_rating,
-            _summary: `[Large content - ${contentJson.length} chars. Full validation in chunk 2. For now, perform basic metadata validation only.]`,
-            _field_count: Object.keys(fullContent).length,
-          };
-        }
-      }
-
-      const userPrompt: any = {
-        content: contentToUse,
-        relevant_canon: createMinimalFactpack(context.factpack, 5000), // Limit to 5000 chars for canon validation
-      };
-
-      // Add chunk information
-      if (context.chunkInfo?.isChunked) {
-        userPrompt.chunk_info = {
-          message: context.chunkInfo.currentChunk < context.chunkInfo.totalChunks
-            ? `Processing part ${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks} (${context.chunkInfo.chunkLabel}). Additional canon will be provided in subsequent parts. ${context.chunkInfo.currentChunk === 1 ? 'Full content will be provided in next chunk for detailed validation.' : ''}`
-            : `Final part (${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks}). All canon and full content provided. Perform thorough validation now.`,
-          current_chunk: context.chunkInfo.currentChunk,
-          total_chunks: context.chunkInfo.totalChunks,
-        };
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-  {
-    name: 'Physics Validator',
-    systemPrompt: `You are the Physics & Logic Validator for game content generation.
-Your job is to ensure the content is internally consistent and follows game physics/logic.
-
-CRITICAL RULES FOR THOROUGHNESS:
-1. READ the entire generated content carefully - do NOT skip sections
-2. TAKE YOUR TIME - be thorough in checking every detail
-3. Check for logical inconsistencies:
-   - Impossible actions (walking through walls without magic, etc.)
-   - Rule violations (wrong spell levels, incorrect damage types, etc.)
-   - Timeline contradictions (events in wrong order)
-   - Geography violations (impossible distances, wrong terrain types)
-   - Power level mismatches (CR too low/high for described abilities)
-   - Internal contradictions (content contradicts itself)
-4. For each issue found, provide:
-   - issue_type: "rule_violation" | "logic_error" | "balance_issue" | "impossibility"
-   - description: what's wrong (be specific)
-   - location: where in the content (e.g., "encounter_details.enemies[0]")
-   - severity: "critical" | "moderate" | "minor"
-   - suggestion: how to fix it
-5. Validate against the specified rule_base (5e, PF2e, etc.)
-6. Add validation metadata:
-   - physics_issues: array of detected issues
-   - logic_score: 0-100 (100 = perfectly consistent, deduct points for each issue)
-   - balance_notes: observations about game balance
-7. Be 100% ACCURATE - false positives waste user time
-8. Be 100% PRECISE - cite specific rules or logic principles when identifying issues
-
-The Relevant Canon is provided for context about the world's established facts.
-
-⚠️ CRITICAL: DO NOT CREATE OR MODIFY PROPOSALS ⚠️
-You are a VALIDATOR, not a question-asker. Do NOT add to proposals[].
-Document issues and corrections in balance_notes, NOT in proposals[].
-Copy the existing proposals[] array EXACTLY as-is if present.
-
-Output the SAME JSON content with added fields:
-- physics_issues: [...]
-- logic_score: number
-- balance_notes: string`,
-    buildUserPrompt: (context) => {
-      // Get full content
-      const fullContent = stripStageOutput(context.stageResults.canon_validator as JsonRecord);
-
-      // For chunk 1 with large content, send minimal summary to fit in prompt limits
-      let contentToUse = fullContent;
-      if (context.chunkInfo?.currentChunk === 1) {
-        const contentJson = JSON.stringify(fullContent);
-        if (contentJson.length > 5000) {
-          console.log(`[Physics Validator Chunk 1] Content is large (${contentJson.length} chars). Sending minimal summary.`);
-
-          // Create minimal summary with just metadata and basic info
-          contentToUse = {
-            name: fullContent.name,
-            type: context.config.type,
-            schema_version: fullContent.schema_version,
-            challenge_rating: fullContent.challenge_rating,
-            _summary: `[Large content - ${contentJson.length} chars. Full validation in chunk 2. For now, perform basic metadata validation only.]`,
-            _field_count: Object.keys(fullContent).length,
-          };
-        }
-      }
-
-      const userPrompt: any = {
-        content: contentToUse,
-        relevant_canon: createMinimalFactpack(context.factpack, 4000), // Limit to 4000 chars for physics validation
-        rule_base: context.config.flags.rule_base,
-        difficulty: context.config.flags.difficulty,
-      };
-
-      // Add chunk information
-      if (context.chunkInfo?.isChunked) {
-        userPrompt.chunk_info = {
-          message: context.chunkInfo.currentChunk < context.chunkInfo.totalChunks
-            ? `Processing part ${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks} (${context.chunkInfo.chunkLabel}). Additional canon will be provided in subsequent parts. ${context.chunkInfo.currentChunk === 1 ? 'Full content will be provided in next chunk for detailed validation.' : ''}`
-            : `Final part (${context.chunkInfo.currentChunk} of ${context.chunkInfo.totalChunks}). All canon and full content provided. Perform thorough validation now.`,
-          current_chunk: context.chunkInfo.currentChunk,
-          total_chunks: context.chunkInfo.totalChunks,
-        };
-      }
-
-      return JSON.stringify(userPrompt, null, 2);
-    },
-  },
-];
-
-/**
- * Get appropriate stages based on content type
- */
-function getStages(config: GenerationConfig | null, dynamicNpcStages?: Stage[] | null): Stage[] {
-  if (!config) return GENERIC_STAGES;
-
-  if (config.type === 'nonfiction') {
-    return NONFICTION_BOOK_STAGES;
-  }
-
-  // Use specialized monster stages for monster generation
-  if (config.type === 'monster') {
-    return MONSTER_CREATOR_STAGES;
-  }
-
-  // Use specialized encounter stages for encounter generation
-  if (config.type === 'encounter') {
-    return ENCOUNTER_CREATOR_STAGES;
-  }
-
-  // Use specialized item stages for magic item generation
-  if (config.type === 'item') {
-    return ITEM_CREATOR_STAGES;
-  }
-
-  // Use specialized story arc stages for story arc generation
-  if (config.type === 'story_arc') {
-    return STORY_ARC_CREATOR_STAGES;
-  }
-
-  // Use specialized NPC stages for NPC generation
-  if (config.type === 'npc') {
-    const prefixStages: Stage[] = [GENERIC_STAGES[1], GENERIC_STAGES[2]];
-    if (dynamicNpcStages && dynamicNpcStages.length > 0) {
-      return dynamicNpcStages;
-    }
-    return [...prefixStages, ...NPC_CREATOR_STAGES];
-  }
-
-  // Use specialized location stages for location generation
-  if (config.type === 'location') {
-    return LOCATION_CREATOR_STAGES;
-  }
-
-  // Default to generic stages for all other types
-  return GENERIC_STAGES;
-}
-
-/**
- * Determine if map should be visible for the current stage
- * Map is shown for location-type generation during Spaces, Details, and Accuracy Refinement stages
- */
-function shouldShowMapForStage(
-  config: GenerationConfig | null,
-  currentStageIndex: number
-): boolean {
-  if (config?.type !== 'location') return false;
-
-  const stages = getStages(config);
-  const stageName = stages[currentStageIndex]?.name;
-
-  // Show map for Spaces (Stage 3), Details (Stage 4), Accuracy Refinement (Stage 5)
-  return stageName === 'Spaces' ||
-    stageName === 'Details' ||
-    stageName === 'Accuracy Refinement';
-}
+const STAGE_CATALOG = MANUAL_GENERATOR_STAGE_CATALOG;
 
 /**
  * Limit accumulated answers to prevent exceeding character limits in prompts
@@ -3195,54 +444,6 @@ function limitAccumulatedAnswers(
   return limited;
 }
 
-/**
- * Deduplicate proposals against already-answered questions
- * This prevents asking the user the same question multiple times when retrying stages
- *
- * Proposals typically have this structure:
- * { id: "custom_item_effect_sleep_arrow", topic: "custom_item_effect_sleep_arrow", question: "What is the effect...", options: [...] }
- *
- * Accumulated answers are stored as:
- * { "question text": "answer", ... } OR { "topic": "answer", ... }
- */
-function deduplicateProposals(
-  proposals: unknown[],
-  accumulatedAnswers: Record<string, string>
-): unknown[] {
-  if (!Array.isArray(proposals) || proposals.length === 0) {
-    return proposals;
-  }
-
-  const answered = new Set(Object.keys(accumulatedAnswers));
-  const seen = new Set<string>();
-  const deduped: unknown[] = [];
-
-  proposals.forEach((p, index) => {
-    if (!isRecord(p)) {
-      deduped.push(p);
-      return;
-    }
-
-    const id = typeof p.id === 'string' && p.id.trim().length > 0
-      ? p.id.trim()
-      : slugifyProposalKey(typeof p.topic === 'string' ? p.topic : typeof p.question === 'string' ? p.question : `proposal-${index}`);
-    const question = typeof p.question === 'string' ? p.question.trim() : '';
-    const topic = typeof p.topic === 'string' ? p.topic.trim() : '';
-
-    const dedupKey = id || topic || question;
-
-    if (dedupKey && answered.has(dedupKey)) return;
-    if (question && answered.has(question)) return;
-    if (topic && answered.has(topic)) return;
-    if (dedupKey && seen.has(dedupKey)) return;
-    if (dedupKey) seen.add(dedupKey);
-
-    deduped.push({ ...p, id });
-  });
-
-  return deduped;
-}
-
 export default function ManualGenerator() {
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('projectId') || 'default';
@@ -3252,9 +453,12 @@ export default function ManualGenerator() {
   const [currentStageIndex, setCurrentStageIndex] = useState(-1);
   const [modalMode, setModalMode] = useState<'output' | 'input' | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
+  const [currentPromptNotice, setCurrentPromptNotice] = useState<WorkflowPromptNotice | null>(null);
+  const [currentStageRetrySource, setCurrentStageRetrySource] = useState<WorkflowRetrySource | null>(null);
   const [compiledStageRequest, setCompiledStageRequest] = useState<AiCompiledStageRequest | null>(null);
   const [stageResults, setStageResults] = useState<StageResults>({});
   const [factpack, setFactpack] = useState<Factpack | null>(null);
+  const [retrievalGroundingStatus, setRetrievalGroundingStatus] = useState<'project' | 'library' | 'ungrounded'>('ungrounded');
   const [error, setError] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
   const [_sessionStatus, setSessionStatus] = useState<'idle' | 'running' | 'awaiting_user_decisions' | 'error' | 'complete'>('idle');
@@ -3273,23 +477,192 @@ export default function ManualGenerator() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [skipMode, _setSkipMode] = useState(false);
-  const [showNarrowingModal, _setShowNarrowingModal] = useState(false);
-  const [currentKeywords, setCurrentKeywords] = useState<string[]>([]);
-  const [pendingFactpack, setPendingFactpack] = useState<Factpack | null>(null);
-  const [pendingStageResults, setPendingStageResults] = useState<StageResults | null>(null);
-  const [processingRetrievalHints, setProcessingRetrievalHints] = useState(false);
-  const [retrievalHintsContext, setRetrievalHintsContext] = useState<{ stageName: string; requestedEntities: string[] } | null>(null);
+  const [canonNarrowingState, setCanonNarrowingState] = useState<WorkflowCanonNarrowingState<StageResults>>(
+    createEmptyWorkflowCanonNarrowingState<StageResults>(),
+  );
+  const [chunkingState, setChunkingState] = useState<WorkflowChunkingState>(createEmptyWorkflowChunkingState());
   const [accumulatedAnswers, setAccumulatedAnswers] = useState<Record<string, string>>({});
-  const [showChunkingModal, setShowChunkingModal] = useState(false);
-  const [factGroups, setFactGroups] = useState<FactGroup[]>([]);
   const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
   const [isMultiPartGeneration, setIsMultiPartGeneration] = useState(false);
-  const [currentChunkInfo, setCurrentChunkInfo] = useState<{ isChunked: boolean; currentChunk: number; totalChunks: number; chunkLabel: string } | undefined>(undefined);
+  const [currentChunkInfo, setCurrentChunkInfo] = useState<WorkflowChunkInfo | undefined>(undefined);
+  const clearCanonNarrowingState = () => setCanonNarrowingState(createEmptyWorkflowCanonNarrowingState<StageResults>());
+  const clearWorkflowChunkingState = () => setChunkingState(resetWorkflowChunkingState());
+  const applyWorkflowUiTransition = (plan: WorkflowUiTransitionPlan) => {
+    if (plan.modalMode !== undefined) {
+      setModalMode(plan.modalMode);
+    }
+    if (plan.skipMode !== undefined) {
+      _setSkipMode(plan.skipMode);
+    }
+    if (plan.showReviewModal !== undefined) {
+      setShowReviewModal(plan.showReviewModal);
+    }
+    if (plan.sessionStatus !== undefined) {
+      setSessionStatus(plan.sessionStatus);
+    }
+    if (plan.clearCompiledStageRequest) {
+      setCompiledStageRequest(null);
+    }
+    if (plan.promptNotice !== undefined) {
+      setCurrentPromptNotice(plan.promptNotice);
+    }
+    if (plan.retrySource !== undefined) {
+      setCurrentStageRetrySource(plan.retrySource);
+    }
+    if (plan.clearCanonNarrowing) {
+      clearCanonNarrowingState();
+    }
+    if (plan.clearWorkflowChunking) {
+      clearWorkflowChunkingState();
+    }
+    if (plan.isMultiPartGeneration !== undefined) {
+      setIsMultiPartGeneration(plan.isMultiPartGeneration);
+    }
+    if (plan.currentGroupIndex !== undefined) {
+      setCurrentGroupIndex(plan.currentGroupIndex);
+    }
+    if (plan.isStageChunking !== undefined) {
+      setIsStageChunking(plan.isStageChunking);
+    }
+    if (plan.currentStageChunk !== undefined) {
+      setCurrentStageChunk(plan.currentStageChunk);
+    }
+    if (plan.totalStageChunks !== undefined) {
+      setTotalStageChunks(plan.totalStageChunks);
+    }
+    if (plan.clearAccumulatedChunkResults) {
+      setAccumulatedChunkResults([]);
+    }
+  };
+  const executeWorkflowStageNavigation = (
+    plan: WorkflowStageNavigationPlan,
+    options?: {
+      chunkInfo?: {
+        isChunked: boolean;
+        currentChunk: number;
+        totalChunks: number;
+        chunkLabel: string;
+      };
+    },
+  ) => {
+    setStageResults(plan.stageResults);
+    setFactpack(plan.factpack);
+    if (plan.resetCurrentGroupIndex) {
+      setCurrentGroupIndex(0);
+    }
+    if (plan.kind === 'advance') {
+      setCurrentStageIndex(plan.nextIndex);
+      setTimeout(() => {
+        showStageOutput(plan.nextIndex, config!, plan.stageResults, plan.factpack, options?.chunkInfo);
+      }, 100);
+    }
+  };
+  const executeWorkflowStageLaunch = (
+    plan: WorkflowStageLaunchPlan,
+    options?: {
+      runtimeConfig?: GenerationConfig;
+      unansweredProposals?: unknown[];
+      overrideDecisions?: Record<string, string>;
+      additionalGuidance?: string;
+      promptOverrides?: StagePromptOverrides;
+    },
+  ) => {
+    const runtimeConfig = options?.runtimeConfig ?? config;
+
+    if (plan.kind === 'show_prompt') {
+      setStageResults(plan.stageResults);
+      setFactpack(plan.factpack);
+      setCurrentStageIndex(plan.stageIndex);
+      setCompiledStageRequest(plan.compiledStageRequest ?? null);
+      setCurrentPromptNotice(plan.promptNotice);
+      setCurrentStageRetrySource(plan.retrySource);
+      setCurrentPrompt(plan.prompt);
+      setModalMode(plan.modalMode);
+      if (plan.alertMessage) {
+        alert(plan.alertMessage);
+      }
+      return;
+    }
+
+    if (plan.kind === 'show_completed') {
+      applyWorkflowUiTransition(buildWorkflowCompletionUiTransition());
+      setIsComplete(true);
+      setFinalOutput(plan.finalOutput);
+      if (plan.alertMessage) {
+        alert(plan.alertMessage);
+      }
+      return;
+    }
+
+    if (!runtimeConfig) {
+      console.warn('[Workflow Launch] Missing runtime config for stage launch:', plan.stageIndex);
+      if (plan.alertMessage) {
+        alert(plan.alertMessage);
+      }
+      return;
+    }
+
+    setStageResults(plan.stageResults);
+    setFactpack(plan.factpack);
+    setCurrentStageIndex(plan.stageIndex);
+    if (plan.isComplete !== undefined) {
+      setIsComplete(plan.isComplete);
+    }
+    if (plan.finalOutput !== undefined) {
+      setFinalOutput(plan.finalOutput);
+    }
+    if (plan.sessionStatus !== undefined) {
+      setSessionStatus(plan.sessionStatus);
+    }
+    if (plan.currentGroupIndex !== undefined) {
+      setCurrentGroupIndex(plan.currentGroupIndex);
+    }
+    if (plan.currentNpcSectionIndex !== undefined) {
+      setCurrentNpcSectionIndex(plan.currentNpcSectionIndex);
+    }
+    if (plan.accumulatedNpcSections !== undefined) {
+      setAccumulatedNpcSections(plan.accumulatedNpcSections);
+    }
+
+    setTimeout(() => {
+      showStageOutput(
+        plan.stageIndex,
+        runtimeConfig,
+        plan.stageResults,
+        plan.factpack,
+        plan.chunkInfo,
+        options?.unansweredProposals,
+        options?.overrideDecisions,
+        options?.additionalGuidance,
+        options?.promptOverrides,
+      );
+    }, 100);
+
+    if (plan.alertMessage) {
+      alert(plan.alertMessage);
+    }
+  };
+  const applyNpcDynamicRoutingPlan = (routingPlan?: NpcDynamicStagePlan) => {
+    if (!routingPlan) {
+      return;
+    }
+
+    setStageRoutingDecision(routingPlan.routingDecision);
+    console.log('[Smart Routing] Stage routing decision:', routingPlan.routingDecision);
+    console.log('[Smart Routing] Summary:\n' + routingPlan.summary);
+    setDynamicNpcStages(routingPlan.dynamicStages);
+    console.log(`[Smart Routing] Dynamic stages built: ${routingPlan.dynamicStages.map((stage) => stage.name).join(', ')}`);
+    console.log(`[Smart Routing] Skipped ${routingPlan.skippedStageCount} stages`);
+  };
+  const isProcessingRetrievalHints = isWorkflowRetrievalHintNarrowing(canonNarrowingState);
+  const showChunkingModal = chunkingState.isModalOpen;
+  const factGroups = chunkingState.factGroups;
+  const npcSectionChunks = chunkingState.npcSections;
+  const pendingChunkingFactpack = chunkingState.pendingFactpack;
+  const isNpcSectionChunking = isNpcSectionWorkflowChunking(chunkingState);
 
   // NPC Section-based chunking state
-  const [npcSectionChunks, setNpcSectionChunks] = useState<NpcSectionChunk[]>([]);
   const [currentNpcSectionIndex, setCurrentNpcSectionIndex] = useState(0);
-  const [isNpcSectionChunking, setIsNpcSectionChunking] = useState(false);
   const [accumulatedNpcSections, setAccumulatedNpcSections] = useState<JsonRecord>({});
 
   // Stage-based chunking state (for Location Spaces iteration)
@@ -3305,8 +678,7 @@ export default function ManualGenerator() {
   // Space approval workflow state (for Location Spaces stage)
   const [showSpaceApprovalModal, setShowSpaceApprovalModal] = useState(false);
   const [pendingSpace, setPendingSpace] = useState<JsonRecord | null>(null);
-  const [_rejectedSpaces, setRejectedSpaces] = useState<Array<{ space: JsonRecord; reason?: string }>>([]);
-  const [rejectionFeedback, setRejectionFeedback] = useState<string | null>(null);
+  const [_rejectedSpaces, setRejectedSpaces] = useState<Array<{ space: JsonRecord; reason?: string; retrySource?: WorkflowRetrySource }>>([]);
   const [reviewingSpaceIndex, setReviewingSpaceIndex] = useState<number>(-1); // Index in accumulatedChunkResults, -1 = new space
   const [savedNewSpace, setSavedNewSpace] = useState<JsonRecord | null>(null); // Save new space when navigating away
   const [mapUpdateCounter, setMapUpdateCounter] = useState(0); // Force map re-renders
@@ -3323,7 +695,7 @@ export default function ManualGenerator() {
   const [stageRoutingDecision, setStageRoutingDecision] = useState<StageRoutingDecision | null>(null);
 
   // Get appropriate stages based on content type
-  const STAGES = getStages(config, dynamicNpcStages);
+  const STAGES = getGeneratorStages(config?.type, STAGE_CATALOG, dynamicNpcStages);
 
   // Track previous values to avoid unnecessary context updates
   const prevStageResultsRef = useRef<StageResults | null>(null);
@@ -3331,10 +703,15 @@ export default function ManualGenerator() {
   const prevConfigKeyRef = useRef<string | null>(null);
   const prevFactpackKeyRef = useRef<string | null>(null);
   const prevCompiledStageRequestKeyRef = useRef<string | null>(null);
+  const dynamicNpcStagesRef = useRef<Stage[] | null>(null);
 
   useEffect(() => {
     setCompiledStageRequest(null);
   }, [currentStageIndex, config?.type, config?.prompt]);
+
+  useEffect(() => {
+    dynamicNpcStagesRef.current = dynamicNpcStages;
+  }, [dynamicNpcStages]);
 
   useEffect(() => {
     if (!projectId || projectId === 'default') {
@@ -3371,6 +748,7 @@ export default function ManualGenerator() {
     setWorkflowContext,
     registerApplyChanges,
     registerSubmitPipelineResponse,
+    registerWorkflowRunStateDispatcher,
     assistMode,
     setAssistMode,
     openPanel,
@@ -3378,27 +756,121 @@ export default function ManualGenerator() {
   } = useAiAssistant();
   const [showModeSelection, setShowModeSelection] = useState(false);
   const [pendingGenerationConfig, setPendingGenerationConfig] = useState<GenerationConfig | null>(null);
+  const [workflowRunState, setWorkflowRunState] = useState<GenerationRunState | null>(null);
 
-  // Map GenerationConfig type to WorkflowType
-  const configTypeToWorkflow = (type: GenerationConfig['type'] | undefined): WorkflowType => {
-    if (!type) return 'unknown';
-    const map: Record<string, WorkflowType> = {
-      npc: 'npc', monster: 'monster', encounter: 'encounter', location: 'location',
-      item: 'item', story_arc: 'story_arc', scene: 'scene', adventure: 'adventure',
-      homebrew: 'homebrew', nonfiction: 'nonfiction', outline: 'outline', chapter: 'chapter',
-      memoir: 'memoir', journal_entry: 'journal_entry', other_writing: 'other_writing',
-    };
-    return map[type] || 'unknown';
-  };
+  const getWorkflowExecutionMode = (): ExecutionMode => (assistMode === 'integrated' ? 'integrated' : 'manual');
 
-  const workflowLabelMap: Record<string, string> = {
-    npc: 'NPC Creator', monster: 'Monster Creator', encounter: 'Encounter Builder',
-    location: 'Location Builder', item: 'Item Creator', story_arc: 'Story Arc',
-    scene: 'Scene Writer', adventure: 'Adventure Planner', homebrew: 'Homebrew Parser',
-    nonfiction: 'Non-Fiction Writer', outline: 'Outline Generator', chapter: 'Chapter Writer',
-    memoir: 'Memoir Writer', journal_entry: 'Journal Entry', other_writing: 'Writing Assistant',
-    unknown: 'Content Generator',
-  };
+  useEffect(() => {
+    if (!config) {
+      setWorkflowRunState(null);
+      return;
+    }
+
+    const workflowType = resolveWorkflowTypeFromConfigType(config.type);
+    const definition = buildWorkflowRunDefinitionFromStages({
+      workflowType,
+      stages: STAGES,
+      executionMode: getWorkflowExecutionMode(),
+      projectId: projectId !== 'default' ? projectId : undefined,
+    });
+    setWorkflowRunState((prev) => syncGenerationRunDefinition(prev, definition));
+  }, [config, STAGES, assistMode, projectId]);
+
+  useEffect(() => {
+    if (!config) return;
+    const workflowType = resolveWorkflowTypeFromConfigType(config.type);
+    const factsFound = factpack?.facts.length ?? 0;
+    const groundingStatus = factsFound > 0 ? retrievalGroundingStatus : 'ungrounded';
+    const resourceCheckTarget = buildWorkflowRunDefinitionFromStages({
+      workflowType,
+      stages: STAGES,
+      executionMode: getWorkflowExecutionMode(),
+      projectId: projectId !== 'default' ? projectId : undefined,
+    }).resourceCheckTarget;
+
+    setWorkflowRunState((prev) => updateRetrievalStatus(prev, workflowType, groundingStatus, factsFound, {
+      resourceCheckTarget,
+    }));
+  }, [config, factpack, retrievalGroundingStatus, STAGES, assistMode, projectId]);
+
+  const previousAcceptedStageIndexRef = useRef(-1);
+
+  useEffect(() => {
+    if (!config) {
+      previousAcceptedStageIndexRef.current = -1;
+      return;
+    }
+
+    const workflowType = resolveWorkflowTypeFromConfigType(config.type);
+    const currentStage = STAGES[currentStageIndex];
+    const runStage = getCurrentWorkflowStageIdentity(workflowType, currentStage);
+
+    if (!compiledStageRequest || !runStage) {
+      return;
+    }
+
+    setWorkflowRunState((prev) => syncCurrentStage(
+      prev,
+      runStage.stageKey,
+      runStage.stageLabel,
+      compiledStageRequest.requestId,
+      {
+        transport: getWorkflowExecutionMode(),
+        retrySource: currentStageRetrySource || undefined,
+      },
+    ));
+  }, [compiledStageRequest, config, currentStageIndex, STAGES, assistMode, currentStageRetrySource]);
+
+  useEffect(() => {
+    if (!config) {
+      previousAcceptedStageIndexRef.current = -1;
+      return;
+    }
+
+    const previousStageIndex = previousAcceptedStageIndexRef.current;
+    if (currentStageIndex <= previousStageIndex || previousStageIndex < 0) {
+      previousAcceptedStageIndexRef.current = currentStageIndex;
+      return;
+    }
+
+    const workflowType = resolveWorkflowTypeFromConfigType(config.type);
+    const previousStage = STAGES[previousStageIndex];
+    const previousRunStage = getCurrentWorkflowStageIdentity(workflowType, previousStage);
+
+    if (previousRunStage) {
+      setWorkflowRunState((prev) => markStageAccepted(prev, previousRunStage.stageKey, previousRunStage.stageLabel));
+    }
+
+    previousAcceptedStageIndexRef.current = currentStageIndex;
+  }, [config, currentStageIndex, STAGES]);
+
+  useEffect(() => {
+    if (!config) return;
+
+    const workflowType = resolveWorkflowTypeFromConfigType(config.type);
+    const terminalStageIndex = currentStageIndex >= 0 && currentStageIndex < STAGES.length
+      ? currentStageIndex
+      : STAGES.length - 1;
+    const terminalStage = terminalStageIndex >= 0 ? STAGES[terminalStageIndex] : undefined;
+    const currentRunStage = getCurrentWorkflowStageIdentity(workflowType, terminalStage);
+
+    if ((_sessionStatus === 'error' || error) && currentRunStage && error) {
+      setWorkflowRunState((prev) => markStageError(prev, currentRunStage.stageKey, currentRunStage.stageLabel, error));
+      return;
+    }
+
+    if (_sessionStatus === 'awaiting_user_decisions' && currentRunStage) {
+      setWorkflowRunState((prev) => markRunAwaitingUserDecisions(prev, currentRunStage.stageKey, currentRunStage.stageLabel));
+      return;
+    }
+
+    if ((_sessionStatus === 'complete' || isComplete) && currentRunStage) {
+      setWorkflowRunState((prev) => {
+        const accepted = markStageAccepted(prev, currentRunStage.stageKey, currentRunStage.stageLabel);
+        return markRunComplete(accepted);
+      });
+    }
+  }, [config, _sessionStatus, error, isComplete, currentStageIndex, STAGES]);
 
   // Push workflow context into AI Assistant whenever relevant state changes
   useEffect(() => {
@@ -3446,15 +918,16 @@ export default function ManualGenerator() {
     prevFactpackKeyRef.current = factpackKey;
     prevCompiledStageRequestKeyRef.current = compiledStageRequestKey;
 
-    const wfType = configTypeToWorkflow(config.type);
+    const wfType = resolveWorkflowTypeFromConfigType(config.type);
     const currentStage = STAGES[currentStageIndex];
+    const currentRunStage = getCurrentWorkflowStageIdentity(wfType, currentStage);
     const isWorkflowComplete = isComplete || currentStageIndex >= STAGES.length;
 
     setWorkflowContext({
       workflowType: wfType,
-      workflowLabel: workflowLabelMap[wfType] || 'Content Generator',
+      workflowLabel: getWorkflowLabel(wfType),
       currentStage: isWorkflowComplete ? undefined : currentStage?.name,
-      stageRouterKey: isWorkflowComplete ? undefined : currentStage ? getStageLookupKey(currentStage) : undefined,
+      stageRouterKey: isWorkflowComplete ? undefined : currentRunStage?.stageKey,
       stageProgress: currentStageIndex >= 0
         ? { current: currentStageIndex + 1, total: STAGES.length }
         : undefined,
@@ -3471,8 +944,9 @@ export default function ManualGenerator() {
       generatorType: config.type,
       schemaVersion: 'v1.1-client',
       projectId: projectId !== 'default' ? projectId : undefined,
+      runState: workflowRunState || undefined,
     });
-  }, [compiledStageRequest, config, currentStageIndex, stageResults, factpack, STAGES, projectId, setWorkflowContext, isComplete]);
+  }, [compiledStageRequest, config, currentStageIndex, stageResults, factpack, STAGES, projectId, setWorkflowContext, isComplete, workflowRunState]);
 
   // Register applyChanges callback so the AI panel can merge changes back
   useEffect(() => {
@@ -3508,21 +982,32 @@ export default function ManualGenerator() {
     };
   }, [registerApplyChanges, setWorkflowContext]);
 
+  useEffect(() => {
+    registerWorkflowRunStateDispatcher(setWorkflowRunState);
+    return () => {
+      registerWorkflowRunStateDispatcher(null);
+    };
+  }, [registerWorkflowRunStateDispatcher]);
+
   // Register submitPipelineResponse callback so the AI panel can trigger the pipeline
   // Initialize with a no-op to avoid TDZ issues before handleSubmit is defined
-  const handleSubmitRef = useRef<(aiResponse: string) => Promise<void>>(async () => { });
+  const handleSubmitRef = useRef<(aiResponse: string, metadata?: SubmitPipelineStageMetadata) => Promise<void>>(async () => { });
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
 
   useEffect(() => {
-    const handlePipelineSubmit = async (rawText: string, parsedJson?: Record<string, unknown>) => {
+    const handlePipelineSubmit = async (
+      rawText: string,
+      parsedJson?: Record<string, unknown>,
+      metadata?: SubmitPipelineStageMetadata,
+    ) => {
       console.log('[AI Assistant] Submitting response to pipeline');
       // We just pass the raw text to handleSubmit, which will parse it or we can construct a JSON string
       if (parsedJson) {
-        await handleSubmitRef.current(JSON.stringify(parsedJson));
+        await handleSubmitRef.current(JSON.stringify(parsedJson), metadata);
       } else {
-        await handleSubmitRef.current(rawText);
+        await handleSubmitRef.current(rawText, metadata);
       }
     };
 
@@ -3543,94 +1028,131 @@ export default function ManualGenerator() {
     setModalMode(null);
     _setSkipMode(false);
     setStageResults({});
+    setFactpack(null);
+    setRetrievalGroundingStatus('ungrounded');
     setError(null);
     setLastStageError(null);
     setSessionStatus('idle');
     setIsComplete(false);
     setFinalOutput(null);
     setCompiledStageRequest(null);
+    setCurrentPromptNotice(null);
+    setCurrentStageRetrySource(null);
     setShowReviewModal(false);
-    _setShowNarrowingModal(false);
-    setCurrentKeywords([]);
-    setPendingFactpack(null);
-    setPendingStageResults(null);
-    setProcessingRetrievalHints(false);
+    clearCanonNarrowingState();
+    clearWorkflowChunkingState();
     setAccumulatedAnswers({});
-    setShowChunkingModal(false);
-    setFactGroups([]);
     setCurrentGroupIndex(0);
     setIsMultiPartGeneration(false);
     setCurrentChunkInfo(undefined);
     setDynamicNpcStages(null);
     setStageRoutingDecision(null);
-  };
-
-  function inferLegendaryPreference(prompt: string): 'yes' | 'no' | 'unknown' {
-    const lower = prompt.toLowerCase();
-    const negativePatterns = [
-      /no\s+legendary/i,
-      /not\s+legendary/i,
-      /without\s+legendary/i,
-      /skip\s+legendary/i,
-      /non-legendary/i,
-      /no\s+mythic/i,
-    ];
-    if (negativePatterns.some((re) => re.test(prompt))) return 'no';
-
-    const positivePatterns = [
-      /legendary\s+actions?/i,
-      /mythic\s+actions?/i,
-      /has\s+legendary/i,
-      /is\s+legendary/i,
-      /legendary\s+creature/i,
-    ];
-    if (positivePatterns.some((re) => re.test(prompt))) return 'yes';
-
-    if (lower.includes('cr 0') || lower.includes('cr 1/') || lower.includes('cr 1 ')) return 'unknown';
-
-    return 'unknown';
-  }
-
-  const deduplicateFactpack = (factpack: Factpack): Factpack => {
-    const seenChunkIds = new Set<string>();
-    const seenTexts = new Set<string>();
-    const uniqueFacts: CanonFact[] = [];
-
-    // Deduplicate facts by chunk_id AND text content
-    factpack.facts.forEach(fact => {
-      const normalizedText = fact.text.trim().toLowerCase();
-
-      // Skip if we've seen this chunk_id OR this exact text
-      if (seenChunkIds.has(fact.chunk_id) || seenTexts.has(normalizedText)) {
-        return;
-      }
-
-      seenChunkIds.add(fact.chunk_id);
-      seenTexts.add(normalizedText);
-      uniqueFacts.push(fact);
-    });
-
-    // Deduplicate entities
-    const uniqueEntities = Array.from(new Set(factpack.entities));
-
-    // Deduplicate gaps
-    const uniqueGaps = Array.from(new Set(factpack.gaps));
-
-    console.log(`[Deduplication] Reduced from ${factpack.facts.length} to ${uniqueFacts.length} facts (removed ${factpack.facts.length - uniqueFacts.length} duplicates)`);
-
-    return {
-      facts: uniqueFacts,
-      entities: uniqueEntities,
-      gaps: uniqueGaps,
-    };
+    setWorkflowRunState(null);
   };
 
   // Helper function to auto-save progress
+  const attachWorkflowMetadataToSession = (session: GenerationProgress): GenerationProgress => {
+    const { workflowType, workflowStageSequence } = resolveWorkflowSessionMetadata({
+      sessionWorkflowType: session.workflowType,
+      sessionConfigType: typeof session.config?.type === 'string' ? session.config.type : undefined,
+      currentConfigType: config?.type,
+      sessionWorkflowStageSequence: session.workflowStageSequence,
+      stages: STAGES,
+    });
+    const persistedWorkflowRunState = workflowRunState ?? session.workflowRunState ?? null;
+    const persistedCompiledStageRequest = compiledStageRequest ?? session.compiledStageRequest ?? null;
+
+    return attachWorkflowSessionMetadata(session, {
+      workflowType,
+      workflowStageSequence,
+      workflowRunState: persistedWorkflowRunState,
+      compiledStageRequest: persistedCompiledStageRequest,
+    });
+  };
+
+  const savePendingPromptSession = async (input: {
+    baseSession: GenerationProgress;
+    stageIndex: number;
+    stageName: string;
+    chunkIndex: number | null;
+    prompt: string;
+    retrySource?: WorkflowRetrySource;
+    compiledStageRequest?: AiCompiledStageRequest | null;
+  }) => {
+    let updatedSession = addProgressEntry(
+      input.baseSession,
+      input.stageName,
+      input.chunkIndex,
+      input.prompt,
+      input.retrySource,
+    );
+    const persistedMetadata = resolveWorkflowSessionMetadata({
+      sessionWorkflowType: input.baseSession.workflowType,
+      sessionConfigType: typeof input.baseSession.config?.type === 'string' ? input.baseSession.config.type : undefined,
+      currentConfigType: config?.type,
+      sessionWorkflowStageSequence: input.baseSession.workflowStageSequence,
+      stages: STAGES,
+    });
+    updatedSession = attachWorkflowSessionMetadata(
+      {
+        ...updatedSession,
+        currentStageIndex: input.stageIndex,
+      },
+      {
+        workflowType: persistedMetadata.workflowType,
+        workflowStageSequence: persistedMetadata.workflowStageSequence,
+        workflowRunState,
+        compiledStageRequest: input.compiledStageRequest ?? null,
+      },
+    );
+    setProgressSession(updatedSession);
+    await saveProgress(updatedSession);
+  };
+
+  const persistDirectPromptLaunchSession = async (input: {
+    baseSession: GenerationProgress | null;
+    runtimeConfig: GenerationConfig;
+    plan: WorkflowStageLaunchPlan;
+  }) => {
+    if (!autoSaveEnabled || !input.baseSession || input.plan.kind !== 'show_prompt') {
+      return;
+    }
+
+    const runtimeStages = getGeneratorStages(input.runtimeConfig.type, STAGE_CATALOG, dynamicNpcStagesRef.current);
+    const stageName = runtimeStages[input.plan.stageIndex]?.name ?? STAGES[input.plan.stageIndex]?.name;
+    if (!stageName) {
+      return;
+    }
+
+    const currentHomebrewChunk = input.runtimeConfig.type === 'homebrew'
+      ? getCurrentWorkflowHomebrewChunk(input.plan.stageResults)?.index ?? null
+      : null;
+
+    await savePendingPromptSession({
+      baseSession: attachWorkflowMetadataToSession({
+        ...input.baseSession,
+        lastUpdatedAt: new Date().toISOString(),
+        currentStageIndex: input.plan.stageIndex,
+        stageResults: input.plan.stageResults as unknown as Record<string, unknown>,
+      }),
+      stageIndex: input.plan.stageIndex,
+      stageName,
+      chunkIndex: currentHomebrewChunk,
+      prompt: input.plan.prompt,
+      retrySource: input.plan.retrySource ?? undefined,
+      compiledStageRequest: input.plan.compiledStageRequest ?? null,
+    });
+  };
+
   const saveProgress = async (session: GenerationProgress) => {
     if (!autoSaveEnabled || !session) return;
 
     try {
-      await saveProgressToFile(session);
+      const sessionToPersist = attachWorkflowMetadataToSession(session);
+      if (sessionToPersist !== session) {
+        setProgressSession((prev) => (prev?.sessionId === sessionToPersist.sessionId ? sessionToPersist : prev));
+      }
+      await saveProgressToFile(sessionToPersist);
       setLastSaveTime(new Date().toISOString());
     } catch (error) {
       console.error('[Auto-Save] Failed to save progress:', error);
@@ -3642,17 +1164,24 @@ export default function ManualGenerator() {
     const idx = STAGES.findIndex((s) => s.name === stageName);
     if (idx < 0) return;
 
-    setModalMode(null);
-    _setSkipMode(false);
-    setCurrentStageIndex(idx);
+    const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+      stageIndex: idx,
+      stageResults,
+      factpack,
+    });
+
+    applyWorkflowUiTransition({
+      modalMode: null,
+      skipMode: false,
+    });
 
     await saveStateAndSession({
       currentStageIndex: idx,
     });
 
-    setTimeout(() => {
-      showStageOutput(idx, config, stageResults, factpack);
-    }, 100);
+    executeWorkflowStageLaunch(launchPlan, {
+      runtimeConfig: config,
+    });
   };
 
   const locationSoftWarning = (() => {
@@ -3702,18 +1231,27 @@ export default function ManualGenerator() {
     return undefined;
   })();
 
+  const manualStagePrompt = buildManualStagePrompt({
+    workflowType: config ? resolveWorkflowTypeFromConfigType(config.type) : 'unknown',
+    workflowLabel: config ? getWorkflowLabel(resolveWorkflowTypeFromConfigType(config.type)) : 'Content Generator',
+    currentData: stageResults,
+    compiledStageRequest: compiledStageRequest || undefined,
+    projectId: projectId !== 'default' ? projectId : undefined,
+    runState: workflowRunState || undefined,
+  });
+
   // Helper function to update and save stage results
   const saveStageResults = async (results: StageResults, stageIndex: number) => {
     if (!autoSaveEnabled || !progressSession) return;
 
     try {
       // Update the session with the latest stage results and stage index
-      const updatedSession: GenerationProgress = {
+      const updatedSession: GenerationProgress = attachWorkflowMetadataToSession({
         ...progressSession,
         lastUpdatedAt: new Date().toISOString(),
         stageResults: results as unknown as Record<string, unknown>,
         currentStageIndex: stageIndex,
-      };
+      });
 
       setProgressSession(updatedSession);
       await saveProgress(updatedSession);
@@ -3739,13 +1277,13 @@ export default function ManualGenerator() {
     if (!autoSaveEnabled || !progressSession) return;
 
     try {
-      const updatedSession: GenerationProgress = {
+      const updatedSession: GenerationProgress = attachWorkflowMetadataToSession({
         ...progressSession,
         lastUpdatedAt: new Date().toISOString(),
         currentStageIndex: updates.currentStageIndex ?? currentStageIndex,
         stageResults: (updates.stageResults ?? stageResults) as unknown as Record<string, unknown>,
         stageChunkState: updates.stageChunkState ?? progressSession.stageChunkState,
-      };
+      });
 
       setProgressSession(updatedSession);
       await saveProgress(updatedSession);
@@ -3761,6 +1299,11 @@ export default function ManualGenerator() {
     console.log('[Resume] Session currentStageIndex:', session.currentStageIndex);
     console.log('[Resume] Session stageChunkState:', session.stageChunkState);
     console.log('[Resume] Progress entries count:', session.progress?.length || 0);
+
+    const restoredExecutionMode = session.workflowRunState?.executionMode;
+    if (restoredExecutionMode === 'integrated' || restoredExecutionMode === 'manual') {
+      setAssistMode(restoredExecutionMode);
+    }
 
     // Restore configuration (with type conversion)
     setConfig(session.config as unknown as GenerationConfig);
@@ -3778,103 +1321,45 @@ export default function ManualGenerator() {
       setIsMultiPartGeneration(true);
       setCurrentGroupIndex(session.multiChunkState.currentGroupIndex);
       if (session.multiChunkState.factGroups) {
-        setFactGroups(session.multiChunkState.factGroups as unknown as FactGroup[]);
+        setChunkingState((prev) => ({
+          ...prev,
+          factGroups: session.multiChunkState.factGroups as unknown as FactGroup[],
+          mode: 'facts',
+        }));
       }
     }
 
-    // Restore stage chunking state (for iterative location generation)
-    // PRIMARY: Load from stageChunkState (single source of truth)
-    // FALLBACK: Load from top-level fields for old sessions, then migrate
-    let accumulatedChunks: JsonRecord[] = [];
-    let savedLiveMapSpaces: LiveMapSpace[] = [];
-    let needsMigration = false;
+    const restoredChunkState = restoreWorkflowStageChunkState(session);
+    const accumulatedChunks = restoredChunkState.accumulatedChunks;
+    const savedLiveMapSpaces = restoredChunkState.savedLiveMapSpaces;
+    const needsMigration = restoredChunkState.needsMigration;
 
-    if (session.stageChunkState?.liveMapSpaces || session.stageChunkState?.accumulatedChunkResults) {
-      // Modern format: Load from stageChunkState
+    if (restoredChunkState.restoreSource === 'stageChunkState') {
       console.log('[Resume] Loading from stageChunkState (modern format)');
-      accumulatedChunks = asJsonRecordArray(session.stageChunkState.accumulatedChunkResults);
-      savedLiveMapSpaces = Array.isArray(session.stageChunkState.liveMapSpaces)
-        ? session.stageChunkState.liveMapSpaces.filter((space): space is LiveMapSpace => Boolean(space && typeof space.name === 'string'))
-        : [];
-    } else if (session.liveMapSpaces || session.accumulatedChunkResults) {
-      // Legacy format: Load from top-level, mark for migration
+    } else if (restoredChunkState.restoreSource === 'legacy') {
       console.log('[Resume] Loading from top-level fields (legacy format) - will migrate to stageChunkState');
-      accumulatedChunks = asJsonRecordArray(session.accumulatedChunkResults);
-      savedLiveMapSpaces = Array.isArray(session.liveMapSpaces)
-        ? session.liveMapSpaces.filter((space): space is LiveMapSpace => Boolean(space && typeof space.name === 'string'))
-        : [];
-      needsMigration = true;
+    } else if (restoredChunkState.restoreSource === 'progress') {
+      console.log(`[Resume] Reconstructed ${accumulatedChunks.length} spaces from saved progress entries`);
+    } else if (restoredChunkState.restoreSource === 'derived') {
+      console.log('[Resume] Derived location chunk metadata from accumulated spaces and purpose data');
     }
 
-    // If no accumulated chunks but we have progress entries for Spaces stage, reconstruct from progress
-    let reconstructedChunkingMetadata: { isStageChunking: boolean; currentStageChunk: number; totalStageChunks: number } | null = null;
-    if (accumulatedChunks.length === 0 && session.progress?.length > 0) {
-      const spacesEntries = session.progress.filter((entry: ProgressEntry) =>
-        entry.stage === 'Spaces' && entry.status === 'completed' && entry.response
-      );
-
-      if (spacesEntries.length > 0) {
-        console.log(`[Resume] Reconstructing ${spacesEntries.length} spaces from saved progress...`);
-        const reconstructedSpaces: JsonRecord[] = [];
-        let totalChunks = 0;
-
-        for (const entry of spacesEntries) {
-          try {
-            const spaceData = JSON.parse(entry.response || '{}');
-            reconstructedSpaces.push(spaceData);
-          } catch (error) {
-            console.warn('[Resume] Failed to parse space entry:', error);
-          }
-        }
-
-        // Try to determine total chunks from the last entry's prompt
-        const lastEntry = spacesEntries[spacesEntries.length - 1];
-        if (lastEntry?.prompt) {
-          const match = lastEntry.prompt.match(/Space (\d+)\/(\d+)/);
-          if (match) {
-            totalChunks = parseInt(match[2], 10);
-          }
-        }
-
-        accumulatedChunks = reconstructedSpaces;
-
-        // Also rebuild live map spaces
-        const rebuiltMapSpaces = mapAndSyncSpaces(reconstructedSpaces.map(space => extractSpaceForMap(space)));
-        savedLiveMapSpaces = rebuiltMapSpaces;
-
-        // Store chunking metadata for later use
-        if (totalChunks > 0) {
-          reconstructedChunkingMetadata = {
-            isStageChunking: true,
-            currentStageChunk: reconstructedSpaces.length, // Next chunk to generate
-            totalStageChunks: totalChunks,
-          };
-        }
-
-        console.log(`[Resume] ✓ Reconstructed ${reconstructedSpaces.length} of ${totalChunks} spaces with live map`);
-      }
-    }
-
-    if (session.stageChunkState) {
-      console.log('[Resume] Restoring stageChunkState:', {
-        isStageChunking: session.stageChunkState.isStageChunking,
-        currentStageChunk: session.stageChunkState.currentStageChunk,
-        totalStageChunks: session.stageChunkState.totalStageChunks,
+    if (restoredChunkState.normalizedStageChunkState) {
+      console.log('[Resume] Restoring normalized stageChunkState:', {
+        isStageChunking: restoredChunkState.normalizedStageChunkState.isStageChunking,
+        currentStageChunk: restoredChunkState.normalizedStageChunkState.currentStageChunk,
+        totalStageChunks: restoredChunkState.normalizedStageChunkState.totalStageChunks,
         accumulatedChunks: accumulatedChunks.length,
         liveMapSpaces: savedLiveMapSpaces.length,
+        source: restoredChunkState.restoreSource,
       });
-      setIsStageChunking(session.stageChunkState.isStageChunking);
-      setCurrentStageChunk(session.stageChunkState.currentStageChunk);
-      setTotalStageChunks(session.stageChunkState.totalStageChunks);
+
+      setIsStageChunking(restoredChunkState.normalizedStageChunkState.isStageChunking);
+      setCurrentStageChunk(restoredChunkState.normalizedStageChunkState.currentStageChunk);
+      setTotalStageChunks(restoredChunkState.normalizedStageChunkState.totalStageChunks);
       setAccumulatedChunkResults(accumulatedChunks);
 
-      // Rebuild live map from accumulated chunks if empty but chunks exist
-      if (savedLiveMapSpaces.length === 0 && accumulatedChunks.length > 0) {
-        const rebuiltSpaces = mapAndSyncSpaces(accumulatedChunks.map((chunk: any) => extractSpaceForMap(chunk)));
-        console.log('[Resume] Synchronized reciprocal doors for', rebuiltSpaces.length, 'rebuilt spaces');
-        setLiveMapSpaces(rebuiltSpaces);
-        setShowLiveMap(true);
-      } else {
+      if (savedLiveMapSpaces.length > 0) {
         console.log('[Resume] Loading savedLiveMapSpaces - sample positions:',
           savedLiveMapSpaces.slice(0, 3).map(s => ({
             name: s.name,
@@ -3883,89 +1368,17 @@ export default function ManualGenerator() {
           }))
         );
         console.log('[Resume] FULL savedLiveMapSpaces:', savedLiveMapSpaces.map(logLiveMapSpacePosition));
-        // Synchronize reciprocal doors before setting live map spaces
-        const syncedSpaces = mapAndSyncSpaces(savedLiveMapSpaces);
+        const syncedSpaces = syncLocationLiveMapSpaces(savedLiveMapSpaces);
         console.log('[Resume] Synchronized reciprocal doors for', syncedSpaces.length, 'saved spaces');
         setLiveMapSpaces(syncedSpaces);
-        setShowLiveMap(session.stageChunkState.showLiveMap || savedLiveMapSpaces.length > 0);
+        setShowLiveMap(restoredChunkState.normalizedStageChunkState.showLiveMap);
         console.log('[Resume] ✓ setLiveMapSpaces called with', syncedSpaces.length, 'spaces');
-      }
-    } else if (accumulatedChunks.length > 0 || savedLiveMapSpaces.length > 0) {
-      // Fallback: restore from top-level fields or reconstructed data if stageChunkState doesn't exist
-      console.log('[Resume] Using fallback restoration (no stageChunkState)');
-      console.log('[Resume] Fallback - savedLiveMapSpaces count:', savedLiveMapSpaces.length);
-      console.log('[Resume] Fallback - sample positions:', savedLiveMapSpaces.slice(0, 3).map(logLiveMapSpacePosition));
-      setAccumulatedChunkResults(accumulatedChunks);
-
-      // If we reconstructed chunking metadata, apply it
-      if (reconstructedChunkingMetadata) {
-        console.log('[Resume] Applying reconstructed chunking metadata:', reconstructedChunkingMetadata);
-        setIsStageChunking(reconstructedChunkingMetadata.isStageChunking);
-        setCurrentStageChunk(reconstructedChunkingMetadata.currentStageChunk);
-        setTotalStageChunks(reconstructedChunkingMetadata.totalStageChunks);
-      } else if (accumulatedChunks.length > 0 && session.config.type === 'location') {
-        // ============================================================================
-        // CRITICAL FIX: For location generation with accumulated spaces but no chunk
-        // metadata, derive totalStageChunks from stageResults.purpose.estimated_spaces.
-        // This ensures the chunking workflow continues properly after resume.
-        // ============================================================================
-        console.log('[Resume] Deriving chunking state from accumulated spaces + purpose data');
-
-        // Try to get estimated_spaces from purpose stage result
-        const purposeData = session.stageResults?.purpose as Record<string, unknown> | undefined;
-        let estimatedSpaces: number = accumulatedChunks.length + 1; // Default: assume at least one more space
-
-        if (purposeData?.estimated_spaces) {
-          if (typeof purposeData.estimated_spaces === 'number') {
-            estimatedSpaces = purposeData.estimated_spaces;
-          } else if (typeof purposeData.estimated_spaces === 'string') {
-            estimatedSpaces = parseInt(purposeData.estimated_spaces, 10) || estimatedSpaces;
-          }
-          console.log(`[Resume] Found estimated_spaces in purpose: ${estimatedSpaces}`);
-        } else {
-          // Fallback: infer from scale if available
-          const scale = String(purposeData?.scale || '').toLowerCase();
-          if (scale.includes('simple')) estimatedSpaces = Math.max(4, accumulatedChunks.length + 1);
-          else if (scale.includes('moderate')) estimatedSpaces = Math.max(12, accumulatedChunks.length + 1);
-          else if (scale.includes('complex')) estimatedSpaces = Math.max(30, accumulatedChunks.length + 1);
-          else if (scale.includes('massive')) estimatedSpaces = Math.max(50, accumulatedChunks.length + 1);
-          console.log(`[Resume] Inferred estimated_spaces from scale "${scale}": ${estimatedSpaces}`);
-        }
-
-        // Only set chunking state if we have spaces to generate beyond what's accumulated
-        if (accumulatedChunks.length < estimatedSpaces) {
-          console.log(`[Resume] ✓ Setting chunking state: ${accumulatedChunks.length}/${estimatedSpaces} spaces complete`);
-          setIsStageChunking(true);
-          setCurrentStageChunk(accumulatedChunks.length); // 0-indexed, so length = next chunk index
-          setTotalStageChunks(estimatedSpaces);
-
-          // Also create the reconstructedChunkingMetadata for later use
-          reconstructedChunkingMetadata = {
-            isStageChunking: true,
-            currentStageChunk: accumulatedChunks.length,
-            totalStageChunks: estimatedSpaces,
-          };
-        } else {
-          console.log(`[Resume] All ${accumulatedChunks.length} spaces already complete (estimated: ${estimatedSpaces})`);
-        }
-      } else {
-        console.warn('[Resume] No reconstructed chunking metadata - totalStageChunks may be 0');
-      }
-
-      if (savedLiveMapSpaces.length > 0) {
-        console.log('[Resume] Fallback - Loading', savedLiveMapSpaces.length, 'spaces into liveMapSpaces');
-        console.log('[Resume] Fallback - First 3 spaces being loaded:', savedLiveMapSpaces.slice(0, 3).map(logLiveMapSpacePosition));
-        // Synchronize reciprocal doors before setting live map spaces
-        const syncedSpaces = mapAndSyncSpaces(savedLiveMapSpaces);
-        console.log('[Resume] Fallback - Synchronized reciprocal doors for', syncedSpaces.length, 'spaces');
-        setLiveMapSpaces(syncedSpaces);
-        setShowLiveMap(true);
-        console.log('[Resume] Fallback - ✓ setLiveMapSpaces called');
-      } else if (accumulatedChunks.length > 0) {
-        console.log('[Resume] Fallback - No savedLiveMapSpaces, rebuilding from accumulatedChunks');
-        const rebuiltSpaces = mapAndSyncSpaces(accumulatedChunks.map((chunk: any) => extractSpaceForMap(chunk)));
-        console.log('[Resume] Fallback - Rebuilt', rebuiltSpaces.length, 'spaces');
-        console.log('[Resume] Fallback - Synchronized reciprocal doors for', rebuiltSpaces.length, 'rebuilt spaces');
+      } else if (restoredChunkState.shouldRebuildLiveMapFromChunks) {
+        console.log('[Resume] Rebuilding live map from accumulated chunks');
+        const rebuiltSpaces = syncLocationLiveMapSpaces(
+          accumulatedChunks.map((chunk: any) => extractLocationSpaceForMap(chunk))
+        );
+        console.log('[Resume] Synchronized reciprocal doors for', rebuiltSpaces.length, 'rebuilt spaces');
         setLiveMapSpaces(rebuiltSpaces);
         setShowLiveMap(true);
       }
@@ -3977,360 +1390,74 @@ export default function ManualGenerator() {
     }
 
     // Restore the session itself
-    setProgressSession(session);
+    setWorkflowRunState(session.workflowRunState ?? null);
+    setProgressSession(attachWorkflowMetadataToSession(session));
 
     // MIGRATION: If loaded from legacy top-level fields, migrate to stageChunkState
-    if (needsMigration && (savedLiveMapSpaces.length > 0 || accumulatedChunks.length > 0)) {
+    if (needsMigration && restoredChunkState.normalizedStageChunkState) {
       console.log('[Resume] Migrating legacy session to stageChunkState format...');
       const migratedSession: GenerationProgress = {
         ...session,
         lastUpdatedAt: new Date().toISOString(),
-        stageChunkState: {
-          isStageChunking: session.stageChunkState?.isStageChunking ?? false,
-          currentStageChunk: session.stageChunkState?.currentStageChunk ?? 0,
-          totalStageChunks: session.stageChunkState?.totalStageChunks ?? 0,
-          showLiveMap: savedLiveMapSpaces.length > 0,
-          liveMapSpaces: savedLiveMapSpaces,
-          accumulatedChunkResults: accumulatedChunks,
-        },
+        stageChunkState: restoredChunkState.normalizedStageChunkState,
       };
 
       // Save migrated format
-      saveProgressToFile(migratedSession)
+      saveProgress(attachWorkflowMetadataToSession(migratedSession))
         .then(() => {
           console.log('[Resume] ✓ Migration complete - session now uses stageChunkState');
-          setProgressSession(migratedSession);
+          setProgressSession(attachWorkflowMetadataToSession(migratedSession));
         })
         .catch(err => console.error('[Resume] Migration save failed:', err));
     }
 
-    // Find the last incomplete entry to determine what to show
-    const incompleteEntry = session.progress.find(
-      entry => entry.status === 'pending' && entry.response === null
-    );
-
     // Build effective chunk state from session OR reconstructed metadata
-    const effectiveChunkState = session.stageChunkState || (reconstructedChunkingMetadata ? {
-      isStageChunking: reconstructedChunkingMetadata.isStageChunking,
-      currentStageChunk: reconstructedChunkingMetadata.currentStageChunk,
-      totalStageChunks: reconstructedChunkingMetadata.totalStageChunks,
-      liveMapSpaces: savedLiveMapSpaces,
-      accumulatedChunkResults: accumulatedChunks,
-    } : null);
-
-    // Check if we're mid-chunking and have more spaces to generate
-    const hasMoreSpacesToGenerate = effectiveChunkState &&
-      effectiveChunkState.isStageChunking &&
-      effectiveChunkState.currentStageChunk < effectiveChunkState.totalStageChunks;
-
-    // Find the Spaces stage index for location generation
-    const spacesStageIndex = STAGES.findIndex(s => s.name === 'Spaces');
-
-    if (incompleteEntry) {
-      // CRITICAL FIX: Verify currentStageIndex matches the incomplete entry's stage name
-      const stageNameFromEntry = incompleteEntry.stage;
-      const expectedStageIndex = STAGES.findIndex(s => s.name === stageNameFromEntry);
-
-      if (expectedStageIndex !== -1 && expectedStageIndex !== session.currentStageIndex) {
-        console.warn(`[Resume] Stage mismatch! Session currentStageIndex: ${session.currentStageIndex}, Entry stage: ${stageNameFromEntry} (index ${expectedStageIndex}). Correcting to ${expectedStageIndex}.`);
-        setCurrentStageIndex(expectedStageIndex);
-      }
-
-      // Show the prompt that was waiting for a response
-      setCompiledStageRequest(null);
-      setCurrentPrompt(incompleteEntry.prompt);
-      setModalMode('input');
-      console.log('[Resume] Resuming at pending prompt for stage:', incompleteEntry.stage);
-      alert(`✅ Session Resumed!\n\nResuming at an incomplete prompt.\nCurrent stage: ${incompleteEntry.stage}\nTotal stages: ${STAGES.length}\n\nYou can continue from where you left off.`);
-    } else if (hasMoreSpacesToGenerate && spacesStageIndex !== -1) {
-      // PRIORITY: Resume mid-chunking for Spaces stage even if session.currentStageIndex advanced
-      const nextChunkIndex = effectiveChunkState.currentStageChunk + 1;
-      const chunkInfo = {
-        isChunked: true,
-        currentChunk: nextChunkIndex,
-        totalChunks: effectiveChunkState.totalStageChunks,
-        chunkLabel: `Space ${nextChunkIndex} of ${effectiveChunkState.totalStageChunks}`,
-      };
-
-      // Correct the stage index to Spaces if it was wrongly advanced
-      if (session.currentStageIndex !== spacesStageIndex) {
-        console.warn(`[Resume] Correcting stage from ${session.currentStageIndex} to ${spacesStageIndex} (Spaces) - more spaces to generate`);
-        setCurrentStageIndex(spacesStageIndex);
-      }
-
-      console.log(`[Resume] Continuing stage chunking from chunk ${nextChunkIndex}/${effectiveChunkState.totalStageChunks}`);
-      showStageOutput(
-        spacesStageIndex,
-        session.config as unknown as GenerationConfig,
-        session.stageResults as unknown as StageResults,
-        session.factpack as unknown as Factpack || null,
-        chunkInfo
-      );
-      alert(`✅ Session Resumed!\n\nResumed at Spaces stage\nGenerating Space ${nextChunkIndex} of ${effectiveChunkState.totalStageChunks}\n\n${effectiveChunkState.liveMapSpaces?.length || 0} spaces already generated.`);
-    } else if (session.currentStageIndex < STAGES.length - 1) {
-      // Normal stage resume (no chunking or chunking complete)
-      showStageOutput(
-        session.currentStageIndex,
-        session.config as unknown as GenerationConfig,
-        session.stageResults as unknown as StageResults,
-        session.factpack as unknown as Factpack || null
-      );
-      console.log('[Resume] Showing stage output for index:', session.currentStageIndex);
-      alert(`✅ Session Resumed!\n\nResumed at Stage ${session.currentStageIndex + 1} of ${STAGES.length}\n\nYou can continue from where you left off.`);
-    } else {
-      // Generation was complete or at final stage
-      console.log('[Resume] Session was already complete or at final stage');
-
-      // Check if we have final output in stageResults
-      const finalStageResults = session.stageResults as StageResults;
-      const physicsValidator = getStageObject(finalStageResults, 'physics_validator');
-      const hasPhysicsValidator = getEmbeddedObject(physicsValidator, 'content', 'content') || physicsValidator;
-
-      if (hasPhysicsValidator) {
-        // Session was fully complete - restore the final output
-        setIsComplete(true);
-        setFinalOutput(isRecord(hasPhysicsValidator) ? hasPhysicsValidator : {});
-        alert(`⚠️ Session Was Already Complete!\n\nThis generation finished all ${STAGES.length} stages.\n\nThe completed content is shown below. You cannot resume a completed session, but you can view and save the results.`);
-      } else {
-        // At final stage but not complete - show the stage
-        showStageOutput(
-          session.currentStageIndex,
-          session.config as unknown as GenerationConfig,
-          finalStageResults,
-          session.factpack as unknown as Factpack || null
-        );
-        alert(`✅ Session Resumed!\n\nResumed at final stage (${STAGES[session.currentStageIndex].name})\nStage ${session.currentStageIndex + 1} of ${STAGES.length}\n\nComplete this stage to finish generation.`);
-      }
-    }
-  };
-
-  // Interface for fact group (used for chunking large factpacks)
-  interface FactGroup {
-    id: string;
-    label: string;
-    facts: CanonFact[];
-    characterCount: number;
-    entityTypes: string[];
-    regions: string[];
-  }
-
-  // Helper function to intelligently group facts when total exceeds character limit
-  const groupFactsIntelligently = (factpack: Factpack, maxCharsPerGroup: number = 8000): FactGroup[] => {
-    const facts = factpack.facts;
-
-    // Calculate total character count
-    const totalChars = facts.reduce((sum, fact) => sum + fact.text.length, 0);
-
-    console.log(`[Fact Grouping] Total facts: ${facts.length}, Total chars: ${totalChars}, Limit: ${maxCharsPerGroup}`);
-
-    // If under limit, return single group
-    if (totalChars <= maxCharsPerGroup) {
-      return [{
-        id: 'all',
-        label: 'All Facts',
-        facts,
-        characterCount: totalChars,
-        entityTypes: Array.from(new Set(facts.map(f => f.entity_type || 'unknown'))),
-        regions: Array.from(new Set(facts.map(f => f.region || 'unspecified').filter(Boolean))),
-      }];
-    }
-
-    // Group by entity type first, then by region within each type
-    const typeGroups = new Map<string, Map<string, CanonFact[]>>();
-
-    facts.forEach(fact => {
-      const type = fact.entity_type || 'unknown';
-      const region = fact.region || 'unspecified';
-
-      if (!typeGroups.has(type)) {
-        typeGroups.set(type, new Map());
-      }
-
-      const regionMap = typeGroups.get(type)!;
-      if (!regionMap.has(region)) {
-        regionMap.set(region, []);
-      }
-
-      regionMap.get(region)!.push(fact);
+    const effectiveChunkState = restoredChunkState.effectiveChunkState;
+    const finalStageResults = session.stageResults as StageResults;
+    const restoredFinal = resolveCompletedWorkflowOutput({
+      workflowType: (session.config as unknown as GenerationConfig | undefined)?.type || 'unknown',
+      fallbackType: (session.config as unknown as GenerationConfig | undefined)?.type || 'unknown',
+      stageResults: finalStageResults,
+      ruleBase:
+        typeof (session.config as unknown as GenerationConfig | undefined)?.flags?.rule_base === 'string'
+          ? String((session.config as unknown as GenerationConfig).flags.rule_base)
+          : undefined,
     });
 
-    // Convert to flat groups with character counts
-    const preliminaryGroups: FactGroup[] = [];
-    let groupId = 0;
+    const resumeAction = resolveWorkflowResumeAction({
+      session,
+      stages: STAGES,
+      effectiveChunkState,
+      finalOutput: restoredFinal,
+    });
 
-    for (const [type, regionMap] of typeGroups.entries()) {
-      for (const [region, regionFacts] of regionMap.entries()) {
-        const charCount = regionFacts.reduce((sum, fact) => sum + fact.text.length, 0);
-
-        preliminaryGroups.push({
-          id: `group-${groupId++}`,
-          label: region !== 'unspecified' ? `${type} - ${region}` : type,
-          facts: regionFacts,
-          characterCount: charCount,
-          entityTypes: [type],
-          regions: region !== 'unspecified' ? [region] : [],
-        });
-      }
+    if (resumeAction.kind === 'pending_prompt' && resumeAction.stageIndex !== session.currentStageIndex) {
+      console.warn(`[Resume] Correcting stage from ${session.currentStageIndex} to ${resumeAction.stageIndex} (${resumeAction.stageName})`);
+    } else if (resumeAction.kind === 'stage_chunk' && resumeAction.stageIndex !== session.currentStageIndex) {
+      console.warn(`[Resume] Correcting stage from ${session.currentStageIndex} to ${resumeAction.stageIndex} (Spaces) - more spaces to generate`);
     }
 
-    // Merge small groups and split large groups
-    const finalGroups: FactGroup[] = [];
-    let currentGroup: FactGroup | null = null;
-
-    for (const group of preliminaryGroups.sort((a, b) => a.characterCount - b.characterCount)) {
-      // If group exceeds limit, split it
-      if (group.characterCount > maxCharsPerGroup) {
-        // Split into multiple chunks
-        const chunks: CanonFact[][] = [];
-        let currentChunk: CanonFact[] = [];
-        let currentChunkChars = 0;
-
-        for (const fact of group.facts) {
-          if (currentChunkChars + fact.text.length > maxCharsPerGroup && currentChunk.length > 0) {
-            chunks.push(currentChunk);
-            currentChunk = [];
-            currentChunkChars = 0;
-          }
-
-          currentChunk.push(fact);
-          currentChunkChars += fact.text.length;
-        }
-
-        if (currentChunk.length > 0) {
-          chunks.push(currentChunk);
-        }
-
-        // Add each chunk as a separate group
-        chunks.forEach((chunkFacts, index) => {
-          finalGroups.push({
-            id: `${group.id}-${index + 1}`,
-            label: `${group.label} (Part ${index + 1}/${chunks.length})`,
-            facts: chunkFacts,
-            characterCount: chunkFacts.reduce((sum, fact) => sum + fact.text.length, 0),
-            entityTypes: group.entityTypes,
-            regions: group.regions,
-          });
-        });
-      }
-      // If we can merge with current group without exceeding limit
-      else if (currentGroup && (currentGroup.characterCount + group.characterCount <= maxCharsPerGroup)) {
-        currentGroup.facts.push(...group.facts);
-        currentGroup.characterCount += group.characterCount;
-        currentGroup.entityTypes = Array.from(new Set([...currentGroup.entityTypes, ...group.entityTypes]));
-        currentGroup.regions = Array.from(new Set([...currentGroup.regions, ...group.regions]));
-        currentGroup.label = currentGroup.entityTypes.length > 1
-          ? `Mixed (${currentGroup.entityTypes.join(', ')})`
-          : currentGroup.entityTypes[0];
-      }
-      // Start a new group
-      else {
-        if (currentGroup) {
-          finalGroups.push(currentGroup);
-        }
-        currentGroup = { ...group };
-      }
+    if (resumeAction.kind === 'pending_prompt') {
+      console.log('[Resume] Resuming at pending prompt for stage:', resumeAction.stageName);
+    } else if (resumeAction.kind === 'stage_chunk') {
+      console.log(`[Resume] Continuing stage chunking from chunk ${resumeAction.chunkInfo.currentChunk}/${resumeAction.chunkInfo.totalChunks}`);
+    } else if (resumeAction.kind === 'stage') {
+      console.log('[Resume] Showing stage output for index:', resumeAction.stageIndex);
+    } else if (resumeAction.kind === 'completed') {
+      console.log('[Resume] Session was already complete or at final stage');
     }
 
-    // Add final group if exists
-    if (currentGroup) {
-      finalGroups.push(currentGroup);
-    }
+    const launchPlan = buildWorkflowResumeLaunchPlan({
+      resumeAction,
+      stageResults: finalStageResults,
+      factpack: session.factpack as unknown as Factpack || null,
+      retryNoticeBuilder: buildWorkflowRetryPromptNotice,
+      compiledStageRequest: session.compiledStageRequest ?? null,
+    });
 
-    console.log(`[Fact Grouping] Created ${finalGroups.length} groups:`, finalGroups.map(g => ({
-      label: g.label,
-      facts: g.facts.length,
-      chars: g.characterCount,
-    })));
-
-    return finalGroups;
-  };
-
-  // Helper function to merge chunk outputs from a single stage
-  const mergeChunkOutputs = (chunkResults: JsonRecord[], stageName: string): JsonRecord => {
-    if (chunkResults.length === 0) {
-      return {};
-    }
-
-    if (chunkResults.length === 1) {
-      return chunkResults[0];
-    }
-
-    console.log(`[Merge Chunks] Merging ${chunkResults.length} chunk results for stage ${stageName}`);
-
-    // Start with the first chunk as base
-    const merged = { ...chunkResults[0] };
-
-    // For Planner stage: merge threads, retrieval_hints, use LAST chunk's proposals
-    if (stageName === 'Planner' || stageName === 'Outline & Structure') {
-      const allThreads = new Set<string>();  // Use Set to deduplicate
-      const allRetrievalHints = {
-        entities: new Set<string>(),
-        regions: new Set<string>(),
-        eras: new Set<string>(),
-        keywords: new Set<string>(),
-      };
-
-      chunkResults.forEach((chunk) => {
-        // Merge threads (deduplicate)
-        if (Array.isArray(chunk.threads)) {
-          chunk.threads.forEach((thread: unknown) => allThreads.add(String(thread)));
-        }
-
-        // Merge retrieval hints
-        if (chunk.retrieval_hints && typeof chunk.retrieval_hints === 'object') {
-          const hints = chunk.retrieval_hints as Record<string, unknown>;
-          if (Array.isArray(hints.entities)) hints.entities.forEach((e: unknown) => allRetrievalHints.entities.add(String(e)));
-          if (Array.isArray(hints.regions)) hints.regions.forEach((r: unknown) => allRetrievalHints.regions.add(String(r)));
-          if (Array.isArray(hints.eras)) hints.eras.forEach((e: unknown) => allRetrievalHints.eras.add(String(e)));
-          if (Array.isArray(hints.keywords)) hints.keywords.forEach((k: unknown) => allRetrievalHints.keywords.add(String(k)));
-        }
-      });
-
-      // UPDATED: Aggregate proposals from ALL chunks, not just the last one
-      // Each chunk may have asked unique questions about different aspects
-      const allProposals: unknown[] = [];
-      chunkResults.forEach((chunk) => {
-        if (Array.isArray(chunk.proposals)) {
-          allProposals.push(...chunk.proposals);
-        }
-      });
-
-      console.log(`[Merge Chunks] Collected ${allProposals.length} proposals from all ${chunkResults.length} chunks`);
-
-      merged.threads = Array.from(allThreads);  // Convert Set back to Array
-      merged.proposals = allProposals;
-      merged.retrieval_hints = {
-        entities: Array.from(allRetrievalHints.entities),
-        regions: Array.from(allRetrievalHints.regions),
-        eras: Array.from(allRetrievalHints.eras),
-        keywords: Array.from(allRetrievalHints.keywords),
-      };
-
-      console.log(`[Merge Chunks] Merged Planner: ${allThreads.size} unique threads, ${allProposals.length} proposals (from all chunks)`);
-    }
-
-    // For Creator/other stages: use last chunk as base
-    else {
-      const lastChunk = chunkResults[chunkResults.length - 1];
-      Object.assign(merged, lastChunk);
-
-      // UPDATED: Aggregate proposals from ALL chunks, not just the last one
-      // Each chunk may have asked unique questions about different aspects
-      const allProposals: unknown[] = [];
-      chunkResults.forEach((chunk) => {
-        if (Array.isArray(chunk.proposals)) {
-          allProposals.push(...chunk.proposals);
-        }
-      });
-
-      if (allProposals.length > 0) {
-        merged.proposals = allProposals;
-      }
-
-      console.log(`[Merge Chunks] Merged ${stageName}: ${allProposals.length} proposals (from all ${chunkResults.length} chunks)`);
-    }
-
-    return merged;
+    executeWorkflowStageLaunch(launchPlan, {
+      runtimeConfig: session.config as unknown as GenerationConfig,
+    });
   };
 
   // Helper function to check if factpack needs chunking and show modal if needed
@@ -4341,15 +1468,12 @@ export default function ManualGenerator() {
     if (config?.type === 'npc' && stageName === 'Creator') {
       console.log(`🎯 [NPC Section Chunking] Detected NPC Creator stage - forcing section-based chunking`);
       const sections = getNpcSectionChunks();
-      setNpcSectionChunks(sections);
       setCurrentNpcSectionIndex(0);
-      setIsNpcSectionChunking(true);
       setAccumulatedNpcSections({});
       console.log(`├─ Total Sections: ${sections.length}`);
       console.log(`└─ Sections: ${sections.map(s => s.chunkLabel).join(', ')}`);
 
-      // Show chunking modal with NPC sections
-      setShowChunkingModal(true);
+      setChunkingState(openNpcSectionWorkflowChunking(sections));
       return true; // Always chunk NPCs by section
     }
 
@@ -4375,223 +1499,40 @@ export default function ManualGenerator() {
     if (totalChars > availableForFacts) {
       console.log(`⚠️ [Fact Chunking] Facts (${totalChars.toLocaleString()}) exceed available space (${availableForFacts.toLocaleString()}). Showing chunking modal.`);
       const groups = groupFactsIntelligently(factpack, availableForFacts);
-      setFactGroups(groups);
-      setShowChunkingModal(true);
+      setChunkingState(openFactWorkflowChunking({
+        pendingFactpack: factpack,
+        factGroups: groups,
+      }));
       return true; // Needs chunking
     }
 
     return false; // No chunking needed
   };
 
-  // Helper function to merge factpacks (avoid duplicates)
-  const mergeFactpacks = (existing: Factpack, newFacts: Factpack): Factpack => {
-    const existingChunkIds = new Set(existing.facts.map(f => f.chunk_id));
-    const uniqueNewFacts = newFacts.facts.filter(f => !existingChunkIds.has(f.chunk_id));
+  // Helper function to search canon with keywords
+  const searchCanonWithKeywords = async (keywords: string[]): Promise<Factpack> => {
+    const workflowType = config ? resolveWorkflowTypeFromConfigType(config.type) : 'unknown';
+    const searchResult = await searchWorkflowCanonByKeywords({
+      keywords,
+      projectId: projectId !== 'default' ? projectId : undefined,
+      apiBaseUrl: API_BASE_URL,
+      workflowType,
+    });
 
-    const existingEntityIds = new Set(existing.entities);
-    const uniqueNewEntities = newFacts.entities.filter(e => !existingEntityIds.has(e));
-
-    const merged = {
-      facts: [...existing.facts, ...uniqueNewFacts],
-      entities: [...existing.entities, ...uniqueNewEntities],
-      gaps: [...existing.gaps, ...newFacts.gaps],
-    };
-
-    // Always deduplicate the merged result to ensure no duplicates slip through
-    return deduplicateFactpack(merged);
-  };
-
-  const fetchCanonEntitiesForSearch = async (): Promise<{ entities: CanonEntity[]; scope: 'project' | 'library' }> => {
-    const parseEntitiesResponse = async (url: string): Promise<CanonEntity[] | null> => {
-      const response = await fetch(url);
-      if (!response.ok) {
-        return null;
-      }
-
-      const data = await response.json();
-      return Array.isArray(data)
-        ? data.filter((entity): entity is CanonEntity => Boolean(entity && typeof entity === 'object' && '_id' in entity))
-        : [];
-    };
-
-    if (projectId && projectId !== 'default') {
-      const projectEntities = await parseEntitiesResponse(`${API_BASE_URL}/canon/projects/${projectId}/entities`);
-      if (Array.isArray(projectEntities) && projectEntities.length > 0) {
-        return { entities: projectEntities, scope: 'project' };
-      }
-
+    if (projectId && projectId !== 'default' && searchResult.searchedScope === 'library') {
       console.log('[ManualGenerator] Project canon search is empty. Falling back to library scope for retrieval.');
     }
 
-    const libraryEntities = await parseEntitiesResponse(`${API_BASE_URL}/canon/entities?scope=lib`);
-    if (Array.isArray(libraryEntities)) {
-      return { entities: libraryEntities, scope: 'library' };
+    console.log(`[ManualGenerator] Searching canon in ${searchResult.searchedScope} scope (${searchResult.availableEntityCount} entities available)`);
+    console.log(`[ManualGenerator] Filtered to ${searchResult.matchedEntityCount} relevant entities from ${searchResult.availableEntityCount} total (${searchResult.searchedScope} scope)`);
+    console.log(`[ManualGenerator] Keywords searched: ${keywords.join(', ')}`);
+
+    if (searchResult.groundingStatus === 'ungrounded' && searchResult.factpack.gaps.some((gap) => gap.startsWith('Error searching canon:'))) {
+      console.error('[searchCanonWithKeywords]', searchResult.factpack.gaps[0]);
     }
 
-    throw new Error('Failed to fetch canon entities from both project and library scopes.');
-  };
-
-  // Helper function to search canon with keywords
-  const searchCanonWithKeywords = async (keywords: string[]): Promise<Factpack> => {
-    try {
-      const { entities: relevantEntities, scope } = await fetchCanonEntitiesForSearch();
-      console.log(`[ManualGenerator] Searching canon in ${scope} scope (${relevantEntities.length} entities available)`);
-
-      const slugify = (s: string) => s
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '');
-
-      const keywordSlugs = keywords
-        .map((k) => (typeof k === 'string' ? slugify(k) : ''))
-        .filter((k) => k.length > 0);
-
-      const keywordSet = new Set(keywordSlugs);
-      const regionAnchors = new Set(['snowdown', 'westphal']);
-
-      // Score entities based on match quality
-      // Priority: Tags (1000) > Canonical Name/Title (500) > ID/Aliases (300) > Type/Region (100) > Claims (10)
-      const scoredEntities = relevantEntities.map((entity) => {
-        let score = 0;
-        const matchReasons: string[] = [];
-
-        const id = entity._id || '';
-        const leafId = id.includes('.') ? id.split('.').pop() || id : id;
-        const nameSlug = entity.canonical_name ? slugify(entity.canonical_name) : '';
-        const aliasSlugs = toStringArray(entity.aliases).map(slugify);
-        const regionSlug = entity.region ? slugify(entity.region) : '';
-        const typeSlug = entity.type ? slugify(entity.type) : '';
-        const tags = toStringArray(entity.tags || []).map(slugify);
-
-        // PRIORITY 1: Tags (HIGHEST - 1000 points per match)
-        for (const keyword of keywordSet) {
-          if (tags.includes(keyword)) {
-            score += 1000;
-            matchReasons.push(`tag:${keyword}`);
-          }
-        }
-
-        // PRIORITY 2: Canonical Name/Title (HIGH - 500 points)
-        if (nameSlug && keywordSet.has(nameSlug)) {
-          score += 500;
-          matchReasons.push(`name:${nameSlug}`);
-        }
-
-        // Check for partial name matches (250 points)
-        for (const keyword of keywordSet) {
-          if (nameSlug && nameSlug.includes(keyword) && keyword.length > 3) {
-            score += 250;
-            matchReasons.push(`name_partial:${keyword}`);
-          }
-        }
-
-        // PRIORITY 3: ID and Aliases (MEDIUM-HIGH - 300 points)
-        if (keywordSet.has(leafId)) {
-          score += 300;
-          matchReasons.push(`id:${leafId}`);
-        }
-
-        if (aliasSlugs.some((a) => keywordSet.has(a))) {
-          score += 300;
-          const matchedAlias = aliasSlugs.find((a) => keywordSet.has(a));
-          matchReasons.push(`alias:${matchedAlias}`);
-        }
-
-        // PRIORITY 4: Type and Region (MEDIUM - 100 points)
-        if (typeSlug && keywordSet.has(typeSlug)) {
-          score += 100;
-          matchReasons.push(`type:${typeSlug}`);
-        }
-
-        if (regionSlug) {
-          for (const keyword of keywordSet) {
-            if (regionSlug.includes(keyword)) {
-              score += 100;
-              matchReasons.push(`region:${keyword}`);
-            }
-          }
-        }
-
-        // Region anchors (special boost)
-        if (regionAnchors.has(leafId) && keywordSet.has(leafId)) {
-          score += 200;
-          matchReasons.push('region_anchor');
-        }
-
-        // PRIORITY 5: Claims/Description (LOW - 10 points per match)
-        // Only search claims for multi-word keywords or when we have no better matches
-        const multiWordKeywords = keywords.filter(k =>
-          typeof k === 'string' && k.trim().split(/\s+/).length >= 2
-        ).map(slugify);
-
-        const searchInClaims = multiWordKeywords.length > 0 || score === 0;
-
-        if (searchInClaims) {
-          const claims = toObjectArray(entity.claims);
-          for (const claim of claims) {
-            const claimText = getString(claim, 'text') || '';
-            const claimSlug = slugify(claimText);
-
-            for (const keyword of (multiWordKeywords.length > 0 ? multiWordKeywords : Array.from(keywordSet))) {
-              if (claimSlug.includes(keyword) && keyword.length > 3) {
-                score += 10;
-                matchReasons.push(`claim:${keyword}`);
-              }
-            }
-          }
-        }
-
-        return {
-          entity,
-          score,
-          matchReasons,
-        };
-      });
-
-      // Filter to only entities with matches (score > 0) and sort by score
-      const keywordMatches = scoredEntities
-        .filter((item) => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .map((item) => {
-          console.log(`[Canon Match] ${item.entity.canonical_name} (score: ${item.score}, reasons: ${item.matchReasons.join(', ')})`);
-          return item.entity;
-        });
-
-      console.log(`[ManualGenerator] Filtered to ${keywordMatches.length} relevant entities from ${relevantEntities.length} total (${scope} scope)`);
-      console.log(`[ManualGenerator] Keywords searched: ${keywords.join(', ')}`);
-
-      // Build factpack with prioritized entities
-      const facts: CanonFact[] = [];
-      keywordMatches.forEach((entity) => {
-        toObjectArray(entity.claims).forEach((claim, index) => {
-          facts.push({
-            chunk_id: `${entity._id}#c${index + 1}`,
-            text: getString(claim, 'text') || 'No description available',
-            entity_id: entity._id,
-            entity_name: entity.canonical_name || 'Unknown',
-            entity_type: entity.type,
-            region: entity.region,
-            era: entity.era,
-            tags: toStringArray(entity.tags || []),
-          });
-        });
-      });
-
-      return {
-        facts,
-        entities: keywordMatches.map((e) => e._id),
-        gaps: facts.length === 0 ? ['No relevant canon found for these keywords'] : [],
-      };
-    } catch (error) {
-      console.error('[searchCanonWithKeywords] Error fetching canon:', error);
-      // Return empty factpack on error rather than breaking the workflow
-      return {
-        facts: [],
-        entities: [],
-        gaps: [`Error searching canon: ${error instanceof Error ? error.message : 'Unknown error'}`],
-      };
-    }
+    setRetrievalGroundingStatus(searchResult.groundingStatus);
+    return searchResult.factpack;
   };
 
   const handleUploadedJson = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -4616,94 +1557,19 @@ export default function ManualGenerator() {
         throw new Error('Uploaded JSON must represent an object with content fields.');
       }
 
-      // CRITICAL FIX: Check if this is a saved generation output with nested structure
-      let contentToUse: JsonRecord = parsed;
+      const restoredUpload = restoreUploadedWorkflowContent(parsed, uploadedContentType);
+      let contentToUse: JsonRecord = restoredUpload.content;
 
-      // Check if this is NPC with multi-stage Creator structure
-      if (parsed._pipeline_stages &&
-        typeof parsed._pipeline_stages === 'object' &&
-        (parsed.deliverable === 'npc' || parsed.type === 'npc')) {
-        console.log('[Upload] Detected NPC with multi-stage Creator structure, using intelligent merger');
-
-        const { mergeNpcStages } = await import('../utils/npcStageMerger');
-        const mergeResult = mergeNpcStages(parsed._pipeline_stages as Record<string, JsonRecord>);
-
-        contentToUse = mergeResult.merged;
-
-        // Merge in the top-level metadata
-        if (parsed.deliverable) contentToUse.deliverable = parsed.deliverable;
-        if (parsed.title) contentToUse.title = parsed.title;
-        if (parsed.type) contentToUse.type = parsed.type;
-        if (parsed.fact_check_report) contentToUse.fact_check_report = parsed.fact_check_report;
-        if (parsed.conflicts) contentToUse.conflicts = parsed.conflicts;
-        if (parsed.physics_issues) contentToUse.physics_issues = parsed.physics_issues;
-
-        console.log('[Upload] NPC intelligently merged:', {
-          totalFields: Object.keys(contentToUse).length,
-          conflicts: mergeResult.conflicts.length,
-          warnings: mergeResult.warnings,
-        });
-
-        // Log conflicts
-        if (mergeResult.conflicts.length > 0) {
-          console.warn('[Upload NPC Merge Conflicts]', mergeResult.conflicts);
-        }
-      }
-      // If the uploaded JSON has _pipeline_stages with physics_validator.content.content, extract it
-      else if (isRecord(parsed._pipeline_stages)) {
-        const pipelineStages = parsed._pipeline_stages as JsonRecord;
-        const physicsValidatorStage = getObject(pipelineStages, 'physics_validator');
-        const physicsContent = getEmbeddedObject(physicsValidatorStage, 'content', 'content');
-
-        if (physicsContent) {
-          console.log('[Upload] Detected saved generation output, extracting content from physics_validator');
-          contentToUse = physicsContent;
-
-          // Merge in the top-level metadata if present
-          if (parsed.deliverable) contentToUse.deliverable = parsed.deliverable;
-          if (parsed.fact_check_report) contentToUse.fact_check_report = parsed.fact_check_report;
-          if (parsed.conflicts) contentToUse.conflicts = parsed.conflicts;
-          if (parsed.physics_issues) contentToUse.physics_issues = parsed.physics_issues;
-          if (parsed.logic_score) contentToUse.logic_score = parsed.logic_score;
-          if (parsed.balance_notes) contentToUse.balance_notes = parsed.balance_notes;
-          if (parsed.canon_alignment_score) contentToUse.canon_alignment_score = parsed.canon_alignment_score;
-          if (parsed.validation_notes) contentToUse.validation_notes = parsed.validation_notes;
-          if (parsed.proposals) contentToUse.proposals = parsed.proposals;
+      if (restoredUpload.logLabel) {
+        if (restoredUpload.logDetails) {
+          console.log(`[Upload] ${restoredUpload.logLabel}`, restoredUpload.logDetails);
+        } else {
+          console.log(`[Upload] ${restoredUpload.logLabel}`);
         }
       }
 
-      // Check if this is a monster with stage structure (basic_info, stats_&_defenses, etc.)
-      // If so, flatten the stages into a single object
-      if (uploadedContentType === 'monster' &&
-        (contentToUse['stats_&_defenses'] || contentToUse['combat_&_abilities'] ||
-          contentToUse['legendary_&_lair'] || contentToUse['ecology_&_lore'])) {
-        console.log('[Upload] Detected monster with stage structure, flattening...');
-
-        // Extract stage data
-        const statsDefenses = (contentToUse['stats_&_defenses'] as JsonRecord) || {};
-        const combatAbilities = (contentToUse['combat_&_abilities'] as JsonRecord) || {};
-        const legendaryLair = (contentToUse['legendary_&_lair'] as JsonRecord) || {};
-        const ecologyLore = (contentToUse['ecology_&_lore'] as JsonRecord) || {};
-
-        // Merge all stage results, with later stages overwriting earlier ones
-        // TOP-LEVEL fields (name, description, etc.) should be preserved
-        // STAGE fields (ability_scores, actions, etc.) from stages should be used
-        const flattened = {
-          ...contentToUse,  // Keep top-level fields like name, description
-          ...statsDefenses,
-          ...combatAbilities,
-          ...legendaryLair,
-          ...ecologyLore,
-        };
-
-        // Remove the stage containers
-        delete flattened['stats_&_defenses'];
-        delete flattened['combat_&_abilities'];
-        delete flattened['legendary_&_lair'];
-        delete flattened['ecology_&_lore'];
-
-        contentToUse = flattened;
-        console.log('[Upload] Monster stages flattened');
+      if (restoredUpload.conflicts && restoredUpload.conflicts.length > 0) {
+        console.warn('[Upload NPC Merge Conflicts]', restoredUpload.conflicts);
       }
 
       // Use the user's selected deliverable type from the dropdown
@@ -4786,13 +1652,14 @@ export default function ManualGenerator() {
 
       setResolvedProposals(proposals);
       setResolvedConflicts(conflicts);
-      setFinalOutput(normalized);
-      setIsComplete(true);
 
       const titleText = typeof (normalized as JsonRecord).title === 'string'
         ? ((normalized as JsonRecord).title as string)
         : String(((normalized as JsonRecord).title as unknown) ?? 'Untitled');
-      alert(`✅ Uploaded content loaded!\n\nTitle: ${titleText}\nDeliverable: ${uploadedContentType}`);
+      executeWorkflowStageLaunch(buildWorkflowCompletedLaunchPlan({
+        finalOutput: normalized,
+        alertMessage: `✅ Uploaded content loaded!\n\nTitle: ${titleText}\nDeliverable: ${uploadedContentType}`,
+      }));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to process uploaded JSON.';
       setUploadError(message);
@@ -4836,8 +1703,12 @@ export default function ManualGenerator() {
     setFinalOutput(null);
 
     // Create a new progress session for auto-save
+    let createdProgressSession: GenerationProgress | null = null;
     if (autoSaveEnabled) {
-      const session = createProgressSession(generationConfig as unknown as import('../utils/generationProgress').GenerationConfig);
+      const session = attachWorkflowMetadataToSession(
+        createProgressSession(generationConfig as unknown as import('../utils/generationProgress').GenerationConfig),
+      );
+      createdProgressSession = session;
       setProgressSession(session);
       await saveProgress(session);
       console.log('[Auto-Save] New generation session created:', session.sessionId);
@@ -4866,25 +1737,30 @@ export default function ManualGenerator() {
 
         // Store chunks in state for sequential processing
         const homebrewChunks = chunkData.chunks;
-
-        // Start processing first chunk
-        setCurrentStageIndex(0);
-        setStageResults({
-          homebrew_chunks: setStageArrayValue(homebrewChunks),
-          current_chunk: { value: 0 },
+        if (!Array.isArray(homebrewChunks) || homebrewChunks.length === 0) {
+          throw new Error('Homebrew chunking returned no chunks to process.');
+        }
+        const initialStageResults = buildWorkflowHomebrewStageResults(homebrewChunks);
+        const launchPlan = buildWorkflowPromptLaunchPlan({
+          stageIndex: 0,
+          stageResults: initialStageResults,
+          factpack: {
+            facts: [],
+            entities: [],
+            gaps: [],
+          },
+          prompt: homebrewChunks[0].prompt,
+          modalMode: 'output',
         });
 
-        // Initialize empty factpack (not used for homebrew)
-        setFactpack({
-          facts: [],
-          entities: [],
-          gaps: [],
+        executeWorkflowStageLaunch(launchPlan, {
+          runtimeConfig: generationConfig,
         });
-
-        // Show the first chunk prompt
-        setCompiledStageRequest(null);
-        setCurrentPrompt(homebrewChunks[0].prompt);
-        setModalMode('output');
+        await persistDirectPromptLaunchSession({
+          baseSession: createdProgressSession,
+          runtimeConfig: generationConfig,
+          plan: launchPlan,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to process homebrew file';
         setError(`Homebrew extraction error: ${message}`);
@@ -4903,14 +1779,14 @@ export default function ManualGenerator() {
     });
 
     // Show first stage prompt (Keyword Extractor)
-    showStageOutput(0, generationConfig, {} as StageResults, null);
-  };
-
-  /**
-   * Helper function to format canon facts for prompt.
-   */
-  const formatCanonFacts = (factpack: Factpack): string => {
-    return factpack.facts.map(f => `[${f.entity_name}] ${f.text}`).join('\n\n');
+    const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+      stageIndex: 0,
+      stageResults: {} as StageResults,
+      factpack: null,
+    });
+    executeWorkflowStageLaunch(launchPlan, {
+      runtimeConfig: generationConfig,
+    });
   };
 
   const showStageOutput = async (
@@ -4921,10 +1797,29 @@ export default function ManualGenerator() {
     chunkInfo?: { isChunked: boolean; currentChunk: number; totalChunks: number; chunkLabel: string },
     unansweredProposals?: unknown[],
     overrideDecisions?: Record<string, string>,
-    additionalGuidance?: string
+    additionalGuidance?: string,
+    promptOverrides?: StagePromptOverrides,
   ) => {
+    const effectiveRetrySource = promptOverrides?.retrySource ?? null;
+    const effectiveConfig =
+      promptOverrides?.flags && Object.keys(promptOverrides.flags).length > 0
+        ? {
+            ...cfg,
+            flags: {
+              ...cfg.flags,
+              ...promptOverrides.flags,
+            },
+          }
+        : cfg;
+
+    setCurrentPromptNotice(
+      promptOverrides?.promptNotice
+      ?? (effectiveRetrySource ? buildWorkflowRetryPromptNotice(effectiveRetrySource) : null),
+    );
+    setCurrentStageRetrySource(effectiveRetrySource);
+
     // Compute stages dynamically from cfg parameter to avoid React state timing issues
-    const stages = getStages(cfg, dynamicNpcStages);
+    const stages = getGeneratorStages(effectiveConfig?.type, STAGE_CATALOG, dynamicNpcStagesRef.current);
     const stage = stages[stageIndex];
 
     // Store chunkInfo in state so it persists across stages
@@ -4943,8 +1838,8 @@ export default function ManualGenerator() {
       : undefined;
 
     // Check if this is an NPC or Monster generation stage that needs schema guidance
-    const isNpcStage = cfg.type === 'npc' && (stage.name === 'Creator' || stage.name === 'Stylist');
-    const isMonsterStage = cfg.type === 'monster' && (stage.name === 'Creator' || stage.name === 'Stylist');
+    const isNpcStage = effectiveConfig.type === 'npc' && (stage.name === 'Creator' || stage.name === 'Stylist');
+    const isMonsterStage = effectiveConfig.type === 'monster' && (stage.name === 'Creator' || stage.name === 'Stylist');
     let npcSchemaGuidance: string | undefined;
 
     if (isNpcStage) {
@@ -5068,7 +1963,7 @@ Validation will reject incorrect field names or missing required fields.`;
       }
 
       const minimalContext: StageContext = {
-        config: cfg,
+        config: effectiveConfig,
         stageResults: results,
         factpack: { facts: [], entities: [], gaps: [] }, // Empty factpack for estimation
         chunkInfo: chunkInfo || currentChunkInfo,
@@ -5158,8 +2053,11 @@ Validation will reject incorrect field names or missing required fields.`;
                 ...groups,
               ];
 
-              setFactGroups(newGroups);
               console.log(`📦 Created ${newGroups.length} groups: 1 intro + ${groups.length} fact groups`);
+              setChunkingState(openFactWorkflowChunking({
+                pendingFactpack: factpackForChunking,
+                factGroups: newGroups,
+              }));
             }
             // Otherwise, try to fit some facts in chunk 1
             else if (groups.length > 0 && groups[0].characterCount > availableForChunk1) {
@@ -5201,14 +2099,17 @@ Validation will reject incorrect field names or missing required fields.`;
                 ...groups.slice(1), // Rest of the groups
               ];
 
-              setFactGroups(newGroups);
               console.log(`📦 Split into ${newGroups.length} groups for efficient chunking`);
+              setChunkingState(openFactWorkflowChunking({
+                pendingFactpack: factpackForChunking,
+                factGroups: newGroups,
+              }));
             } else {
-              setFactGroups(groups);
+              setChunkingState(openFactWorkflowChunking({
+                pendingFactpack: factpackForChunking,
+                factGroups: groups,
+              }));
             }
-
-            setShowChunkingModal(true);
-            setPendingFactpack(factpackForChunking);
 
             const estimatedChunks = Math.max(2, Math.ceil((totalFactChars - spaceCalculation.availableForFacts) / availableForSubsequentChunks) + 1);
             setError(`The ${stage.name} stage has too much canon data (${totalFactChars.toLocaleString()} chars) to fit in one prompt (only ${spaceCalculation.availableForFacts.toLocaleString()} chars available for facts after prompt overhead). Estimated ${estimatedChunks} chunks needed. Please approve chunking.`);
@@ -5258,7 +2159,7 @@ Validation will reject incorrect field names or missing required fields.`;
     }
 
     const context: StageContext = {
-      config: cfg,
+      config: effectiveConfig,
       stageResults: results,
       factpack: limitedFactpack,
       chunkInfo: chunkInfo || currentChunkInfo,
@@ -5293,16 +2194,23 @@ Validation will reject incorrect field names or missing required fields.`;
         setAccumulatedChunkResults([]);
 
         // Create chunkInfo for first iteration
-        const firstChunkInfo = {
-          isChunked: true,
-          currentChunk: 1,
-          totalChunks: chunkConfig.totalChunks,
-          chunkLabel: `Space 1 of ${chunkConfig.totalChunks}`,
-        };
+        const firstChunkInfo = buildWorkflowStageChunkInfoForIndex(0, chunkConfig.totalChunks);
 
         // Re-call showStageOutput with chunk info to start iteration
         console.log(`[Stage Chunking] Starting chunk 1/${chunkConfig.totalChunks}`);
-        showStageOutput(stageIndex, cfg, results, fp, firstChunkInfo, unansweredProposals);
+        const launchPlan = buildWorkflowSameStageLaunchPlan({
+          stageIndex,
+          stageResults: results,
+          factpack: fp,
+          chunkInfo: firstChunkInfo,
+        });
+        executeWorkflowStageLaunch(launchPlan, {
+          runtimeConfig: cfg,
+          unansweredProposals,
+          overrideDecisions,
+          additionalGuidance,
+          promptOverrides,
+        });
         return; // Exit and restart with chunk info
       }
     }
@@ -5357,11 +2265,11 @@ Validation will reject incorrect field names or missing required fields.`;
       }
 
       // Check individual components
-      if (cfg.prompt && cfg.prompt.length > 4000) {
-        console.warn(`⚠️ config.prompt itself is very large: ${cfg.prompt.length.toLocaleString()} chars`);
+      if (effectiveConfig.prompt && effectiveConfig.prompt.length > 4000) {
+        console.warn(`⚠️ config.prompt itself is very large: ${effectiveConfig.prompt.length.toLocaleString()} chars`);
       }
-      if (cfg.flags && JSON.stringify(cfg.flags).length > 2000) {
-        console.warn(`⚠️ config.flags is very large: ${JSON.stringify(cfg.flags).length.toLocaleString()} chars`);
+      if (effectiveConfig.flags && JSON.stringify(effectiveConfig.flags).length > 2000) {
+        console.warn(`⚠️ config.flags is very large: ${JSON.stringify(effectiveConfig.flags).length.toLocaleString()} chars`);
       }
     }
 
@@ -5385,7 +2293,7 @@ Validation will reject incorrect field names or missing required fields.`;
 - More canon facts will follow in subsequent messages
 - ⚠️ CRITICAL: Use the SAME AI chat session for ALL ${chunkInfo.totalChunks} chunks
 - Do NOT start a new session or you will lose context
-- After receiving all chunks, generate the complete ${cfg.type}`;
+- After receiving all chunks, generate the complete ${effectiveConfig.type}`;
 
       console.log(`📦 Chunk 1/${chunkInfo.totalChunks}: Added multi-part instructions`);
     }
@@ -5428,9 +2336,23 @@ Output: Valid JSON only. No markdown, no prose.`;
     // Check if this stage has a minimal contract (new prompt packer system)
     const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
     const stageContract =
-      getStageContract(stageLookupKey) ||
-      getStageContract(normalizedStageName) ||
+      getWorkflowStageContract(stage.workflowStageKey || stageLookupKey, config?.type) ||
+      getWorkflowStageContract(normalizedStageName, config?.type) ||
+      getNpcStageContract(stageLookupKey) ||
+      getNpcStageContract(normalizedStageName) ||
       null;
+    const packedStageContract =
+      typeof stageContract === 'string'
+        ? stageContract
+        : stageContract
+        ? `Allowed keys: ${stageContract.allowedKeys.join(', ')}\nRequired keys: ${stageContract.requiredKeys.join(', ')}`
+        : '';
+    const packedRequiredKeys =
+      typeof stageContract === 'string'
+        ? ''
+        : stageContract
+        ? stageContract.requiredKeys.join(', ')
+        : '';
     // Use packed prompt for ANY stage that has a contract (not just NPC), except subsequent chunks
     const usePackedPrompt = !!stageContract && !isSubsequentChunk;
 
@@ -5443,13 +2365,13 @@ Output: Valid JSON only. No markdown, no prose.`;
       // Build packed prompt config - stage contracts already contain required keys
       const packConfig: PromptPackConfig = {
         mustHave: {
-          stageContract: stageContract!,
+          stageContract: packedStageContract,
           outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
-          requiredKeys: '', // Contracts already embed required keys
+          requiredKeys: packedRequiredKeys,
           stageInputs: {
-            original_user_request: cfg.prompt,
+            original_user_request: effectiveConfig.prompt,
             inferred_species: inferSpecies({
-              original_user_request: cfg.prompt,
+              original_user_request: effectiveConfig.prompt,
               previous_decisions: limitedDecisions,
             }) || undefined,
             ...reducedStageInputs,
@@ -5462,7 +2384,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
           previousDecisionsSummary: limitedDecisions ? JSON.stringify(limitedDecisions, null, 2) : undefined,
         },
-        niceToHave: { verboseFlags: cfg.flags },
+        niceToHave: { verboseFlags: effectiveConfig.flags },
         safetyCeiling: PROMPT_SAFETY_CEILING,
       };
 
@@ -5506,7 +2428,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           warnings: [],
           compressionApplied: packed.analysis.compressionApplied,
         },
-        memory: buildAiStageMemorySummary(stage, cfg, results, limitedFactpack, limitedDecisions),
+        memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions),
       };
       setCompiledStageRequest(packedRequest);
       setCurrentPrompt(packedPrompt);
@@ -5515,18 +2437,15 @@ Output: Valid JSON only. No markdown, no prose.`;
       // Auto-save the prompt
       if (autoSaveEnabled && progressSession) {
         const chunkIndex = chunkInfo ? chunkInfo.currentChunk : null;
-        let updatedSession = addProgressEntry(
-          progressSession,
-          stage.name,
+        await savePendingPromptSession({
+          baseSession: progressSession,
+          stageIndex,
+          stageName: stage.name,
           chunkIndex,
-          packedPrompt
-        );
-        updatedSession = {
-          ...updatedSession,
-          currentStageIndex: stageIndex,
-        };
-        setProgressSession(updatedSession);
-        await saveProgress(updatedSession);
+          prompt: packedPrompt,
+          retrySource: effectiveRetrySource || undefined,
+          compiledStageRequest: packedRequest,
+        });
         console.log(`[Auto-Save] Saved packed prompt for ${stage.name}`);
       }
 
@@ -5597,7 +2516,10 @@ Output: Valid JSON only. No markdown, no prose.`;
             ...groups,
           ];
 
-          setFactGroups(newGroups);
+          setChunkingState(openFactWorkflowChunking({
+            pendingFactpack: factpackForOverflowChunking,
+            factGroups: newGroups,
+          }));
         }
         // Split first group if needed
         else if (groups.length > 0 && groups[0].characterCount > availableForChunk1) {
@@ -5635,13 +2557,16 @@ Output: Valid JSON only. No markdown, no prose.`;
             ...groups.slice(1),
           ];
 
-          setFactGroups(newGroups);
+          setChunkingState(openFactWorkflowChunking({
+            pendingFactpack: factpackForOverflowChunking,
+            factGroups: newGroups,
+          }));
         } else {
-          setFactGroups(groups);
+          setChunkingState(openFactWorkflowChunking({
+            pendingFactpack: factpackForOverflowChunking,
+            factGroups: groups,
+          }));
         }
-
-        setShowChunkingModal(true);
-        setPendingFactpack(factpackForOverflowChunking);
 
         setError(`This stage has too much canon data to fit in one prompt (${analysis.totalChars.toLocaleString()} chars). Please approve chunking.`);
         return;
@@ -5679,7 +2604,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         // Rebuild prompt with trimmed facts
         const context: StageContext = {
-          config: cfg,
+          config: effectiveConfig,
           stageResults: results,
           factpack: limitedFactpack,
           chunkInfo: chunkInfo || currentChunkInfo,
@@ -5716,12 +2641,24 @@ Output: Valid JSON only. No markdown, no prose.`;
             warnings: [],
             compressionApplied: false,
           },
-          memory: buildAiStageMemorySummary(stage, cfg, results, limitedFactpack, limitedDecisions),
+          memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions),
         };
         setCompiledStageRequest(rebuiltRequest);
         setCurrentPrompt(rebuiltPrompt);
         console.log(`📊 Rebuilt prompt after trimming: ${rebuiltAnalysis.totalChars} chars`);
         setModalMode('output');
+        if (autoSaveEnabled && progressSession) {
+          const chunkIndex = chunkInfo ? chunkInfo.currentChunk : null;
+          await savePendingPromptSession({
+            baseSession: progressSession,
+            stageIndex,
+            stageName: stage.name,
+            chunkIndex,
+            prompt: rebuiltPrompt,
+            retrySource: effectiveRetrySource || undefined,
+            compiledStageRequest: rebuiltRequest,
+          });
+        }
         return;
       }
 
@@ -5746,11 +2683,23 @@ Output: Valid JSON only. No markdown, no prose.`;
           warnings,
           compressionApplied: false,
         },
-        memory: buildAiStageMemorySummary(stage, cfg, results, limitedFactpack, limitedDecisions),
+        memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions),
       };
       setCompiledStageRequest(overflowRequest);
       setCurrentPrompt(fullPrompt);
       setModalMode('output');
+      if (autoSaveEnabled && progressSession) {
+        const chunkIndex = chunkInfo ? chunkInfo.currentChunk : null;
+        await savePendingPromptSession({
+          baseSession: progressSession,
+          stageIndex,
+          stageName: stage.name,
+          chunkIndex,
+          prompt: fullPrompt,
+          retrySource: effectiveRetrySource || undefined,
+          compiledStageRequest: overflowRequest,
+        });
+      }
       return;
     }
 
@@ -5775,7 +2724,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         warnings,
         compressionApplied: false,
       },
-      memory: buildAiStageMemorySummary(stage, cfg, results, limitedFactpack, limitedDecisions),
+      memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions),
     };
     setCompiledStageRequest(safeRequest);
     setCurrentPrompt(fullPrompt);
@@ -5784,19 +2733,15 @@ Output: Valid JSON only. No markdown, no prose.`;
     // Auto-save the prompt being shown to user
     if (autoSaveEnabled && progressSession) {
       const chunkIndex = chunkInfo ? chunkInfo.currentChunk : null;
-      let updatedSession = addProgressEntry(
-        progressSession,
-        stage.name,
+      await savePendingPromptSession({
+        baseSession: progressSession,
+        stageIndex,
+        stageName: stage.name,
         chunkIndex,
-        fullPrompt
-      );
-      // CRITICAL: Also update currentStageIndex so resume knows which stage to show
-      updatedSession = {
-        ...updatedSession,
-        currentStageIndex: stageIndex,
-      };
-      setProgressSession(updatedSession);
-      await saveProgress(updatedSession);
+        prompt: fullPrompt,
+        retrySource: effectiveRetrySource || undefined,
+        compiledStageRequest: safeRequest,
+      });
       console.log(`[Auto-Save] Saved prompt for ${stage.name} (stage ${stageIndex}) chunk ${chunkIndex ?? 'N/A'}`);
     }
   };
@@ -5812,9 +2757,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     setError(null);
 
     try {
-      const homebrewChunks = getHomebrewChunks(stageResults.homebrew_chunks);
-      const currentChunkIndex = getNumber(stageResults, 'current_chunk') ?? 0;
-      const currentChunk = homebrewChunks[currentChunkIndex];
+      const currentChunk = getCurrentWorkflowHomebrewChunk(stageResults);
 
       if (!currentChunk) {
         setError('Auto-parse failed: current homebrew chunk was missing or invalid.');
@@ -5870,152 +2813,13 @@ Output: Valid JSON only. No markdown, no prose.`;
       return;
     }
 
-    console.log(`[Space Approval] Space accepted: ${pendingSpace.name}`);
-
-    // Add the approved space to accumulated chunk results
-    const newAccumulated = [...accumulatedChunkResults, pendingSpace];
-    setAccumulatedChunkResults(newAccumulated);
-
-    // Clear pending space and close modal
-    setShowSpaceApprovalModal(false);
-    setPendingSpace(null);
-    setReviewingSpaceIndex(-1);
-
-    // Get current stage for logging
-    const currentStage = STAGES[currentStageIndex];
-    console.log(`[Space Approval] Accumulated ${newAccumulated.length}/${totalStageChunks} spaces`);
-
-    // Update live visual map with the accepted space
-    const spaceData = extractSpaceForMap(pendingSpace);
-    console.log(`[Live Map] Extracted space data from accepted space:`, spaceData);
-
-    let updatedLiveMapSpaces = liveMapSpaces;
-    if (spaceData) {
-      updatedLiveMapSpaces = mapAndSyncSpaces([...liveMapSpaces, spaceData]);
-      console.log(`[Live Map] Synchronized reciprocal doors after adding: ${spaceData.name}`);
-      setLiveMapSpaces(updatedLiveMapSpaces);
-      setShowLiveMap(true);
-      console.log(`[Live Map] ✓ Added accepted space: ${spaceData.name}`);
-    }
-
-    // Check if we have more spaces to generate
-    if (currentStageChunk < totalStageChunks - 1) {
-      // Move to next chunk
-      const nextChunkIndex = currentStageChunk + 1;
-      setCurrentStageChunk(nextChunkIndex);
-
-      const chunkInfo = {
-        isChunked: true,
-        currentChunk: nextChunkIndex + 1,
-        totalChunks: totalStageChunks,
-        chunkLabel: `Space ${nextChunkIndex + 1} of ${totalStageChunks}`,
-      };
-
-      console.log(`[Space Approval] Moving to space ${nextChunkIndex + 1}/${totalStageChunks}`);
-
-      // Update stage results with accumulated content
-      const mergedChunks = mergeStageChunks(newAccumulated, currentStage.name);
-      const updatedResults = {
-        ...stageResults,
-        [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: mergedChunks,
-      };
-      setStageResults(updatedResults);
-
-      // Auto-save progress
-      if (autoSaveEnabled && progressSession) {
-        const savedSession = {
-          ...progressSession,
-          lastUpdatedAt: new Date().toISOString(),
-          stageResults: updatedResults as unknown as Record<string, unknown>,
-          currentStageIndex: currentStageIndex,
-          // Save at top level as backup (in case stageChunkState gets lost)
-          liveMapSpaces: updatedLiveMapSpaces,
-          accumulatedChunkResults: newAccumulated,
-          // Also save in stageChunkState (primary location)
-          stageChunkState: {
-            isStageChunking: true,
-            currentStageChunk: nextChunkIndex,
-            totalStageChunks: totalStageChunks,
-            accumulatedChunkResults: newAccumulated,
-            liveMapSpaces: updatedLiveMapSpaces,
-            showLiveMap: showLiveMap,
-          },
-        };
-        setProgressSession(savedSession);
-        await saveProgress(savedSession);
-        console.log(`[Auto-Save] Saved approved space ${currentStageChunk + 1}/${totalStageChunks}`);
-      }
-
-      // Generate next space - merge rejection feedback into config if present
-      // This ensures the AI receives feedback from any rejected spaces when generating the next one
-      const configWithFeedback = rejectionFeedback ? {
-        ...config!,
-        flags: { ...config!.flags, rejection_feedback: rejectionFeedback },
-      } : config!;
-
-      setTimeout(() => {
-        showStageOutput(currentStageIndex, configWithFeedback, updatedResults, factpack, chunkInfo);
-      }, 100);
-
-      return;
-    }
-
-    // All spaces complete - finalize stage
-    console.log(`[Space Approval] All ${totalStageChunks} spaces approved. Finalizing...`);
-
-    // Merge all chunk results
-    const finalMerged = mergeStageChunks(newAccumulated, currentStage.name);
-
-    // Store final merged results
-    const finalResults = {
-      ...stageResults,
-      [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: finalMerged,
-    };
-    setStageResults(finalResults);
-
-    // Reset stage chunking state (but preserve accumulated data for later stages)
-    setIsStageChunking(false);
-    setCurrentStageChunk(0);
-    setTotalStageChunks(0);
-    // DON'T clear accumulatedChunkResults - keep for Details/Accuracy stages
-
-    // Clear rejection feedback for next generation
-    setRejectionFeedback(null);
-
-    // Move to next stage
-    if (currentStageIndex < STAGES.length - 1) {
-      console.log('[Space Approval] Moving to next stage after completion');
-      const nextStageIndex = currentStageIndex + 1;
-      setCurrentStageIndex(nextStageIndex);
-
-      // ✓ ATOMIC SAVE: Persist stage completion with chunking metadata
-      await saveStateAndSession({
-        currentStageIndex: nextStageIndex,
-        stageResults: finalResults,
-        stageChunkState: {
-          isStageChunking: false,
-          currentStageChunk: 0,
-          totalStageChunks: 0,
-          accumulatedChunkResults: accumulatedChunkResults,  // Keep spaces!
-          liveMapSpaces: liveMapSpaces,  // Keep map!
-          showLiveMap: true,
-        },
-      });
-
-      setTimeout(() => {
-        showStageOutput(nextStageIndex, config!, finalResults, factpack);
-      }, 100);
-    } else {
-      console.log('[Space Approval] All stages complete');
-      setFinalOutput(normalizeLocationData(finalResults));
-      setIsComplete(true);
-    }
+    await handleSpaceAcceptWithCustomSpace(pendingSpace, 'accepted');
   };
 
   /**
    * Handle space rejection - stores rejection reason and regenerates the same space
    */
-  const handleSpaceReject = (reason?: string) => {
+  const handleSpaceReject = (reason?: string, retrySource?: WorkflowRetrySource) => {
     if (!pendingSpace) {
       console.error('[Space Approval] No pending space to reject');
       return;
@@ -6024,15 +2828,16 @@ Output: Valid JSON only. No markdown, no prose.`;
     console.log(`[Space Approval] Space rejected: ${pendingSpace.name}${reason ? `, Reason: ${reason}` : ''}`);
 
     // Track rejected space for analytics/debugging
-    setRejectedSpaces(prev => [...prev, { space: pendingSpace, reason }]);
+    setRejectedSpaces(prev => [...prev, { space: pendingSpace, reason, retrySource }]);
 
-    // Build feedback for next AI generation
-    const spaceName = pendingSpace.name || 'the space';
-    const rejectionNote = reason
-      ? `IMPORTANT: The previous space "${spaceName}" was rejected by the user for this reason: "${reason}". Please generate a DIFFERENT space that addresses this feedback and better matches the user's floor plan specifications. Do NOT generate "${spaceName}" again.`
-      : `IMPORTANT: The previous space "${spaceName}" was rejected by the user. Please generate a DIFFERENT space that better matches the user's floor plan specifications. Do NOT generate "${spaceName}" again.`;
-
-    setRejectionFeedback(rejectionNote);
+    const parentStructure = getLocationParentStructure(stageResults);
+    const retryGuidance = buildLocationSpaceRetryGuidance({
+      rejectedSpace: pendingSpace,
+      existingSpaces: accumulatedChunkResults,
+      parentStructure,
+      userReason: reason,
+      retrySource,
+    });
 
     // Clear pending space and close modal
     setShowSpaceApprovalModal(false);
@@ -6042,23 +2847,27 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     // Regenerate the same space number with rejection feedback
     // The rejection feedback will be picked up in buildUserPrompt
-    const chunkInfo = {
-      isChunked: true,
-      currentChunk: currentStageChunk + 1,
-      totalChunks: totalStageChunks,
-      chunkLabel: `Space ${currentStageChunk + 1} of ${totalStageChunks} (Regenerating)`,
-    };
+    const chunkInfo = buildWorkflowStageChunkInfoForIndex(currentStageChunk, totalStageChunks, {
+      labelSuffix: '(Regenerating)',
+    });
 
-    // Show the output modal again to regenerate - include rejection feedback in config
-    // The rejection feedback is critical here as it tells the AI why the previous attempt failed
-    const configWithFeedback = rejectionFeedback ? {
-      ...config!,
-      flags: { ...config!.flags, rejection_feedback: rejectionFeedback },
-    } : config!;
-
-    setTimeout(() => {
-      showStageOutput(currentStageIndex, configWithFeedback, stageResults, factpack, chunkInfo);
-    }, 100);
+    const launchPlan = buildWorkflowSameStageLaunchPlan({
+      stageIndex: currentStageIndex,
+      stageResults,
+      factpack,
+      chunkInfo,
+    });
+    executeWorkflowStageLaunch(launchPlan, {
+      runtimeConfig: config!,
+      promptOverrides: {
+        flags: {
+          rejection_feedback: retryGuidance.rejectionFeedback,
+          rejection_context: retryGuidance.rejectionContext,
+        },
+        promptNotice: retryGuidance.promptNotice,
+        retrySource: retryGuidance.retrySource,
+      },
+    });
   };
 
   /**
@@ -6090,7 +2899,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       updatedAccumulated[reviewingSpaceIndex] = editedSpace;
 
       // Update live map - FORCE complete rebuild to ensure React sees the change
-      const spaceData = extractSpaceForMap(editedSpace);
+      const spaceData = extractLocationSpaceForMap(editedSpace);
       console.log('[Space Edit] Extracted space data for map:', spaceData);
       console.log('[Space Edit] Door count in extracted space:', spaceData?.doors?.length);
       console.log('[Space Edit] Doors in extracted space:', spaceData?.doors);
@@ -6112,13 +2921,18 @@ Output: Valid JSON only. No markdown, no prose.`;
         console.log(`[Space Edit] Setting live map with ${updatedLiveMap.length} spaces`);
 
         // Synchronize reciprocal doors across all spaces (live map only; accumulated remains raw records)
-        const syncedLiveMap = mapAndSyncSpaces(updatedLiveMap);
+        const syncedLiveMap = syncLocationLiveMapSpaces(updatedLiveMap);
         console.log(`[Space Edit] Synchronized reciprocal doors for ${syncedLiveMap.length} spaces`);
 
         // Update both accumulated results and live map with synchronized doors
         setAccumulatedChunkResults(updatedAccumulated);
         setLiveMapSpaces(syncedLiveMap);
         setMapUpdateCounter(prev => prev + 1); // Increment to force React re-render
+        const updatedStageResults = {
+          ...stageResults,
+          spaces: mergeWorkflowStageChunks(updatedAccumulated, 'Spaces'),
+        };
+        setStageResults(updatedStageResults);
 
         // Update pendingSpace with synced version so form shows reciprocal doors
         setPendingSpace(updatedAccumulated[reviewingSpaceIndex]);
@@ -6128,6 +2942,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         // Auto-save the changes to session using atomic save pattern
         await saveStateAndSession({
           currentStageIndex: currentStageIndex,  // ← Preserve current stage
+          stageResults: updatedStageResults,
           stageChunkState: progressSession?.stageChunkState ? {
             ...progressSession.stageChunkState,
             liveMapSpaces: syncedLiveMap,
@@ -6246,8 +3061,6 @@ Output: Valid JSON only. No markdown, no prose.`;
         total_spaces: accumulatedChunkResults.length,
       } as unknown as JsonRecord,
     };
-    setStageResults(finalResults);
-
     console.log(`[Skip Mode] Finalized ${accumulatedChunkResults.length} spaces, advancing to next stage`);
 
     // Clear skip mode and chunking state
@@ -6260,14 +3073,20 @@ Output: Valid JSON only. No markdown, no prose.`;
     setReviewingSpaceIndex(-1);
 
     // Advance to next stage
-    if (currentStageIndex < STAGES.length - 1) {
-      const nextStageIndex = currentStageIndex + 1;
-      setCurrentStageIndex(nextStageIndex);
+    const navigationPlan = buildWorkflowAdvancePlan({
+      currentStageIndex,
+      totalStages: STAGES.length,
+      stageResults: finalResults,
+      factpack,
+    });
+
+    if (navigationPlan.kind === 'advance') {
+      const nextStageIndex = navigationPlan.nextIndex;
 
       // ✓ ATOMIC SAVE: Persist skip completion with all spaces
       await saveStateAndSession({
         currentStageIndex: nextStageIndex,
-        stageResults: finalResults,
+        stageResults: navigationPlan.stageResults,
         stageChunkState: {
           isStageChunking: false,
           currentStageChunk: 0,
@@ -6279,14 +3098,13 @@ Output: Valid JSON only. No markdown, no prose.`;
       });
 
       // Show next stage output
-      setTimeout(() => {
-        showStageOutput(nextStageIndex, config!, finalResults, factpack);
-      }, 100);
+      executeWorkflowStageNavigation(navigationPlan);
     } else {
       // Final stage - just save
       await saveStateAndSession({
-        stageResults: finalResults,
+        stageResults: navigationPlan.stageResults,
       });
+      executeWorkflowStageNavigation(navigationPlan);
       console.log('[Skip Mode] Final stage reached');
     }
   };
@@ -6294,115 +3112,93 @@ Output: Valid JSON only. No markdown, no prose.`;
   /**
    * Helper function to accept a custom space (used after editing)
    */
-  const handleSpaceAcceptWithCustomSpace = async (customSpace: JsonRecord) => {
-    console.log(`[Space Approval] Accepting custom/edited space: ${customSpace.name}`);
+  const handleSpaceAcceptWithCustomSpace = async (
+    customSpace: JsonRecord,
+    sourceLabel: 'accepted' | 'edited' = 'edited'
+  ) => {
+    console.log(`[Space Approval] Accepting ${sourceLabel} space: ${customSpace.name}`);
 
-    // Add the custom space to accumulated chunk results
-    const newAccumulated = [...accumulatedChunkResults, customSpace];
-    setAccumulatedChunkResults(newAccumulated);
-
-    // Clear pending space and close modal
-    setShowSpaceApprovalModal(false);
-    setPendingSpace(null);
-
-    // Get current stage
     const currentStage = STAGES[currentStageIndex];
-    console.log(`[Space Approval] Accumulated ${newAccumulated.length}/${totalStageChunks} spaces`);
+    const progress = buildAcceptedLocationSpaceProgress({
+      acceptedSpace: customSpace,
+      accumulatedChunkResults,
+      liveMapSpaces,
+      stageResults,
+      stageName: currentStage.name,
+      currentStageChunk,
+      totalStageChunks,
+      showLiveMap,
+    });
 
-    // Update live visual map
-    const spaceData = extractSpaceForMap(customSpace);
-    let updatedLiveMapSpaces = liveMapSpaces;
-    if (spaceData) {
-      updatedLiveMapSpaces = mapAndSyncSpaces([...liveMapSpaces, spaceData]);
-      console.log(`[Live Map] Synchronized reciprocal doors after adding edited: ${spaceData.name}`);
-      setLiveMapSpaces(updatedLiveMapSpaces);
+    console.log(`[Space Approval] Accumulated ${progress.newAccumulated.length}/${totalStageChunks} spaces`);
+
+    setAccumulatedChunkResults(progress.newAccumulated);
+    setLiveMapSpaces(progress.updatedLiveMapSpaces);
+    if (progress.appendedSpaceData) {
       setShowLiveMap(true);
-      console.log(`[Live Map] ✓ Added edited space: ${spaceData.name}`);
+      console.log(`[Live Map] ✓ Added ${sourceLabel} space: ${progress.appendedSpaceData.name}`);
     }
 
-    // Continue with same logic as handleSpaceAccept
-    if (currentStageChunk < totalStageChunks - 1) {
-      const nextChunkIndex = currentStageChunk + 1;
-      setCurrentStageChunk(nextChunkIndex);
+    setShowSpaceApprovalModal(false);
+    setPendingSpace(null);
+    setReviewingSpaceIndex(-1);
 
-      const chunkInfo = {
-        isChunked: true,
-        currentChunk: nextChunkIndex + 1,
-        totalChunks: totalStageChunks,
-        chunkLabel: `Space ${nextChunkIndex + 1} of ${totalStageChunks}`,
-      };
-
-      const mergedChunks = mergeStageChunks(newAccumulated, currentStage.name);
-      const updatedResults = {
-        ...stageResults,
-        [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: mergedChunks,
-      };
-      setStageResults(updatedResults);
+    if (!progress.stageComplete && progress.nextChunkStep) {
+      setCurrentStageChunk(progress.nextChunkStep.nextChunkIndex);
+      setStageResults(progress.updatedStageResults);
 
       if (autoSaveEnabled && progressSession) {
-        const savedSession = {
-          ...progressSession,
-          lastUpdatedAt: new Date().toISOString(),
-          stageResults: updatedResults as unknown as Record<string, unknown>,
-          currentStageIndex,
-          // Save at top level as backup (in case stageChunkState gets lost)
-          liveMapSpaces: updatedLiveMapSpaces,
-          accumulatedChunkResults: newAccumulated,
-          // Also save in stageChunkState (primary location)
-          stageChunkState: {
-            isStageChunking: true,
-            currentStageChunk: nextChunkIndex,
-            totalStageChunks,
-            accumulatedChunkResults: newAccumulated,
-            liveMapSpaces: updatedLiveMapSpaces,
-            showLiveMap,
-          },
-        };
-        setProgressSession(savedSession);
-        await saveProgress(savedSession);
+        await saveStateAndSession({
+          stageResults: progress.updatedStageResults,
+          stageChunkState: progress.updatedStageChunkState,
+        });
       }
 
-      // Continue to next space - include rejection feedback if present
-      const configWithFeedback = rejectionFeedback ? {
-        ...config!,
-        flags: { ...config!.flags, rejection_feedback: rejectionFeedback },
-      } : config!;
-
-      setTimeout(() => {
-        showStageOutput(currentStageIndex, configWithFeedback, updatedResults, factpack, chunkInfo);
-      }, 100);
+      const launchPlan = buildWorkflowSameStageLaunchPlan({
+        stageIndex: currentStageIndex,
+        stageResults: progress.updatedStageResults,
+        factpack,
+        chunkInfo: progress.nextChunkStep.chunkInfo,
+      });
+      executeWorkflowStageLaunch(launchPlan, {
+        runtimeConfig: config!,
+      });
 
       return;
     }
 
-    // All spaces complete
-    const finalMerged = mergeStageChunks(newAccumulated, currentStage.name);
-    const finalResults = {
-      ...stageResults,
-      [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: finalMerged,
-    };
-    setStageResults(finalResults);
-
     setIsStageChunking(false);
     setCurrentStageChunk(0);
     setTotalStageChunks(0);
-    setRejectionFeedback(null);
 
-    if (currentStageIndex < STAGES.length - 1) {
-      setCurrentStageIndex(currentStageIndex + 1);
-      setTimeout(() => {
-        showStageOutput(currentStageIndex + 1, config!, finalResults, factpack);
-      }, 100);
+    const navigationPlan = buildWorkflowAdvancePlan({
+      currentStageIndex,
+      totalStages: STAGES.length,
+      stageResults: progress.updatedStageResults,
+      factpack,
+    });
+
+    if (navigationPlan.kind === 'advance') {
+      const nextStageIndex = navigationPlan.nextIndex;
+      await saveStateAndSession({
+        currentStageIndex: nextStageIndex,
+        stageResults: navigationPlan.stageResults,
+        stageChunkState: progress.updatedStageChunkState,
+      });
+      executeWorkflowStageNavigation(navigationPlan);
     } else {
-      setFinalOutput(normalizeLocationData(finalResults));
-      setIsComplete(true);
-      setSessionStatus('complete');
-      setCompiledStageRequest(null);
-      setModalMode(null);
+      setStageResults(progress.updatedStageResults);
+      executeWorkflowStageLaunch(buildWorkflowCompletedLaunchPlan({
+        finalOutput: buildResolvedWorkflowFinalContent({
+        workflowType: 'location',
+        stageResults: progress.updatedStageResults,
+        ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+        }),
+      }));
     }
   };
 
-  async function handleSubmit(aiResponse: string) {
+  async function handleSubmit(aiResponse: string, metadata?: SubmitPipelineStageMetadata) {
     // Clear any previous errors
     setError(null);
 
@@ -6410,176 +3206,43 @@ Output: Valid JSON only. No markdown, no prose.`;
       const currentStage = STAGES[currentStageIndex];
       const logAi = shouldLogAiPayload();
 
-      // Special handling for Visual Map stage - it outputs pure HTML, not JSON
-      let parsed: JsonRecord;
-      if (currentStage.name === 'Visual Map') {
-        console.log('[Visual Map] Processing raw HTML output (no JSON parsing)');
-        // Store the raw HTML directly without JSON parsing
-        parsed = {
-          visual_map_html: aiResponse.trim(),
-          stage: 'visual_map',
-          generated_at: new Date().toISOString(),
-        };
-      } else {
-        if (logAi) {
-          console.log(`[AI][RAW][${currentStage.name}] (${aiResponse.length} chars)`, aiResponse);
-        }
-
-        // Parse AI response with improved error handling for JSON stages
-        const parseResult = parseAIResponse<JsonRecord>(aiResponse);
-
-        if (!parseResult.success) {
-          const errorMessage = formatParseError(parseResult);
-          const stageName = currentStage.name;
-          const rawSnippet = typeof aiResponse === 'string' ? aiResponse.slice(0, 500) : undefined;
-          setError(errorMessage);
-          setLastStageError({ stage: stageName, message: errorMessage, rawSnippet });
-          setCurrentStageOutput({ stage: stageName, error: errorMessage, rawResponseSnippet: rawSnippet } as unknown as JsonRecord);
-          setShowReviewModal(true);
-          setSessionStatus('error');
-          // Clear any pending state to avoid stalls
-          setPendingStageResults(null);
-          setProcessingRetrievalHints(false);
-          _setShowNarrowingModal(false);
-          setPendingFactpack(null);
-          setCurrentKeywords([]);
-          setIsStageChunking(false);
-          setIsMultiPartGeneration(false);
-          return;
-        }
-
-        parsed = parseResult.data || {};
-
-        if (currentStage.name === 'Planner') {
-          parsed = normalizePlannerOutput(parsed, config?.flags as JsonRecord | undefined);
-        }
-
-        if (currentStage.name === 'Creator: Core Details') {
-          parsed = normalizeCoreDetailsStageOutput(parsed);
-        }
-
-        // Prune to allowed keys for the current stage to prevent bleed-over
-        const contractKey = resolveStageContractKey(currentStage.name);
-        if (contractKey) {
-          parsed = pruneToAllowedKeys(parsed, STAGE_OUTPUT_CONTRACTS[contractKey].allowedKeys) as JsonRecord;
-
-          if (contractKey === 'basicInfo') {
-            if (typeof parsed.race === 'string' && typeof parsed.species !== 'string') {
-              parsed.species = parsed.race;
-            }
-            if (typeof parsed.species === 'string' && typeof parsed.race !== 'string') {
-              parsed.race = parsed.species;
-            }
-
-            const inferred = inferSpecies({
-              original_user_request: config?.prompt,
-              previous_decisions: accumulatedAnswers,
-            });
-            if (inferred) {
-              if (typeof parsed.species !== 'string') {
-                parsed.species = inferred;
-              }
-              if (typeof parsed.race !== 'string') {
-                parsed.race = parsed.species;
-              }
-            }
-          }
-
-          if (contractKey === 'coreDetails') {
-            const coreCtx = {
-              name: typeof parsed.name === 'string' && parsed.name.trim().length > 0 ? parsed.name : 'Unknown',
-              alignment: typeof parsed.alignment === 'string' ? parsed.alignment : undefined,
-              oath: accumulatedAnswers['oath-subclass'],
-              location: typeof parsed.location === 'string' ? parsed.location : undefined,
-              tone: (() => {
-                const flagsRecord = config?.flags as JsonRecord | undefined;
-                return typeof flagsRecord?.tone === 'string' ? flagsRecord.tone : undefined;
-              })(),
-            };
-            parsed = normalizeCoreDetails(parsed, coreCtx) as JsonRecord;
-          }
-
-          if (contractKey === 'stats' && parsed.speed) {
-            const coercedSpeed = coerceSpeedNumbers(parsed.speed);
-            if (coercedSpeed) {
-              parsed.speed = coercedSpeed;
-            }
-          }
-
-          if (contractKey === 'spellcasting') {
-            const spellCtx: JsonRecord = {
-              ...getStageObject(stageResults, 'creator:_basic_info'),
-              ...getStageObject(stageResults, 'creator:_stats'),
-              ...parsed,
-            };
-            const resolved = resolveSpellcasting(spellCtx);
-            parsed = normalizeSpellcasting(parsed, resolved) as JsonRecord;
-
-            const spellMechanics = buildSpellcastingCapabilities(resolved ?? (parsed as unknown as SpellcastingNormalized));
-            if (spellMechanics) {
-              parsed.resolved_mechanics = spellMechanics as unknown as JsonRecord;
-            }
-          }
-
-          if (contractKey === 'combat') {
-            const combatCtx: JsonRecord = {
-              ...getStageObject(stageResults, 'creator:_stats'),
-              ...getStageObject(stageResults, 'creator:_equipment'),
-              ...parsed,
-            };
-            parsed = resolveCombat(combatCtx, parsed) as JsonRecord;
-            const combatMechanics = buildCombatCapabilities(parsed);
-            if (combatMechanics) {
-              parsed.resolved_mechanics = combatMechanics as unknown as JsonRecord;
-            }
-          }
-
-          if (contractKey === 'legendary') {
-            const legendaryMechanics = buildLegendaryCapabilities(parsed);
-            parsed.resolved_mechanics = legendaryMechanics as unknown as JsonRecord;
-          }
-
-          const validation = validateStageOutput(contractKey, parsed);
-          if (!validation.ok) {
-            const message = `AI response is invalid for ${currentStage.name}: ${validation.error}`;
-            const rawSnippet = typeof aiResponse === 'string' ? aiResponse.slice(0, 500) : undefined;
-            setError(message);
-            setLastStageError({ stage: currentStage.name, message, rawSnippet });
-            setCurrentStageOutput({ stage: currentStage.name, error: message, rawResponseSnippet: rawSnippet } as unknown as JsonRecord);
-            setShowReviewModal(true);
-            setSessionStatus('error');
-            // Clear any pending state to avoid stalls
-            setPendingStageResults(null);
-            setProcessingRetrievalHints(false);
-            _setShowNarrowingModal(false);
-            setPendingFactpack(null);
-            setCurrentKeywords([]);
-            setIsStageChunking(false);
-            setIsMultiPartGeneration(false);
-            return;
-          }
-        }
-
-        if (logAi) {
-          console.log(`[AI][PARSED][${currentStage.name}]`, parsed);
-        }
+      if (logAi && currentStage.name !== 'Visual Map') {
+        console.log(`[AI][RAW][${currentStage.name}] (${aiResponse.length} chars)`, aiResponse);
       }
 
-      if (currentStage.name === 'Spaces' && config?.type === 'location') {
-        const candidateSpace = ((): unknown => {
-          if (parsed.space && typeof parsed.space === 'object') return parsed.space;
-          if (Array.isArray(parsed.spaces) && parsed.spaces.length > 0) return parsed.spaces[0];
-          return parsed;
-        })();
+      const normalizedStageResponse = parseAndNormalizeWorkflowStageResponse({
+        aiResponse,
+        stageName: currentStage.name,
+        stageIdentity: currentStage.workflowStageKey || currentStage.routerKey || currentStage.name,
+        workflowType: config?.type,
+        configPrompt: config?.prompt,
+        configFlags: config?.flags as JsonRecord | undefined,
+        previousDecisions: accumulatedAnswers,
+        stageResults,
+      });
 
-        const validation = validateIncomingLocationSpace(candidateSpace, {
-          requireFeaturePositionAnchor: true,
-        });
-        if (validation.ok === false) {
-          const errorMessage = validation.error;
-          setError(errorMessage);
-          return;
-        }
+      if (isNormalizedStageResponseFailure(normalizedStageResponse)) {
+        const stageResponseFailure = normalizedStageResponse;
+        const errorMessage = stageResponseFailure.error;
+        const rawSnippet = stageResponseFailure.rawSnippet;
+        setError(errorMessage);
+        setLastStageError({ stage: currentStage.name, message: errorMessage, rawSnippet });
+        setCurrentStageOutput(buildWorkflowStageErrorOutput({
+          stageName: currentStage.name,
+          errorMessage,
+          rawSnippet,
+          parsed: stageResponseFailure.parsed,
+        }));
+        applyWorkflowUiTransition(buildWorkflowErrorUiTransition());
+        return;
+      }
+
+      let parsed: JsonRecord = normalizedStageResponse.parsed;
+
+      if (currentStage.name === 'Visual Map') {
+        console.log('[Visual Map] Processing raw HTML output (no JSON parsing)');
+      } else if (logAi) {
+        console.log(`[AI][PARSED][${currentStage.name}]`, parsed);
       }
 
       console.log(`[handleSubmit] Stage: ${currentStage.name}, isMultiPartGeneration: ${isMultiPartGeneration}, currentGroupIndex: ${currentGroupIndex}, totalGroups: ${factGroups.length}`);
@@ -6589,7 +3252,15 @@ Output: Valid JSON only. No markdown, no prose.`;
         const updatedSession = updateProgressResponse(
           progressSession,
           aiResponse,
-          'completed'
+          'completed',
+          undefined,
+          metadata
+            ? {
+              confirmedStageId: metadata.stageId,
+              confirmedStageKey: metadata.stageKey,
+              confirmedWorkflowType: metadata.workflowType as WorkflowContentType | undefined,
+            }
+            : undefined,
         );
         setProgressSession(updatedSession);
         await saveProgress(updatedSession);
@@ -6599,71 +3270,53 @@ Output: Valid JSON only. No markdown, no prose.`;
       // Special handling for Homebrew Extraction - chunked processing
       // Check if we're processing homebrew chunks (not by stage name, but by presence of chunks)
       if (config?.type === 'homebrew' && stageResults.homebrew_chunks) {
-        const homebrewChunks = getHomebrewChunks(stageResults.homebrew_chunks);
-        const currentChunkIndex = getNumber(stageResults, 'current_chunk') ?? 0;
         const stageKey = getStageStorageKey(currentStage);
+        const homebrewProgress = resolveWorkflowHomebrewChunkProgress({
+          stageResults,
+          stageKey,
+          parsed,
+          fileName: config.homebrewFile?.name,
+        });
 
-        // Store this chunk's result
-        const mechanicsFromStage = isRecord((parsed as JsonRecord).resolved_mechanics)
-          ? { resolved_mechanics: parsed.resolved_mechanics as JsonRecord }
-          : {};
+        if (homebrewProgress.kind === 'next_chunk') {
+          console.log(
+            `[Homebrew] Moving to chunk ${homebrewProgress.nextChunkIndex + 1}/${getWorkflowHomebrewChunks(stageResults.homebrew_chunks).length}: ${homebrewProgress.nextChunk.title}`,
+          );
 
-        const mergedMechanics = mechanicsFromStage.resolved_mechanics && isRecord(stageResults.resolved_mechanics)
-          ? { resolved_mechanics: { ...stageResults.resolved_mechanics, ...mechanicsFromStage.resolved_mechanics } as JsonRecord }
-          : mechanicsFromStage;
+          const launchPlan = buildWorkflowPromptLaunchPlan({
+            stageIndex: currentStageIndex,
+            stageResults: homebrewProgress.stageResults,
+            factpack,
+            prompt: homebrewProgress.nextChunk.prompt,
+            modalMode: 'output',
+          });
 
-        const newResults: StageResults = {
-          ...stageResults,
-          ...mergedMechanics,
-          [stageKey]: parsed,
-        };
-        setStageResults(newResults);
-
-        // Check if there are more chunks to process
-        const nextChunkIndex = currentChunkIndex + 1;
-        if (nextChunkIndex < homebrewChunks.length) {
-          // Show next chunk prompt
-          const nextChunk = homebrewChunks[nextChunkIndex];
-          console.log(`[Homebrew] Moving to chunk ${nextChunkIndex + 1}/${homebrewChunks.length}: ${nextChunk.title}`);
-
-          const updatedResults: StageResults = {
-            ...newResults,
-            current_chunk: { value: nextChunkIndex },
-          };
-          setStageResults(updatedResults);
-
-          setCompiledStageRequest(null);
-          setCurrentPrompt(nextChunk.prompt);
-          setModalMode('output');
+          executeWorkflowStageLaunch(launchPlan, {
+            runtimeConfig: config,
+          });
+          await persistDirectPromptLaunchSession({
+            baseSession: progressSession,
+            runtimeConfig: config,
+            plan: launchPlan,
+          });
           return;
         }
 
-        // All chunks processed - merge results
-        const chunkResults = [...asJsonRecordArray(newResults[`${stageKey}_chunks`]), parsed];
-        console.log(`[Homebrew] All ${chunkResults.length} chunks processed. Merging...`);
+        console.log(`[Homebrew] All ${homebrewProgress.chunkResults.length} chunks processed. Merging...`);
+        console.log('[Homebrew] Extraction complete:', homebrewProgress.finalOutput);
 
-        const mergedContent = mergeHomebrewChunks(chunkResults);
-
-        const finalContent: JsonRecord = {
-          ...mergedContent,
-          deliverable: 'homebrew',
-          type: 'homebrew',
-          document_title: config.homebrewFile?.name || 'Homebrew Content',
-          fileName: config.homebrewFile?.name || 'Homebrew Content', // For source attribution
-          content_type: 'homebrew',
-          total_chunks: homebrewChunks.length,
-        };
-
-        setStageResults({ ...newResults, merged: finalContent });
-        setFinalOutput(finalContent);
-        setIsComplete(true);
-        setSessionStatus('complete');
-        setModalMode(null);
-
-        console.log('[Homebrew] Extraction complete:', finalContent);
-
-        const docTitle = getString(finalContent, 'document_title') || 'Homebrew Content';
-        alert(`✅ Homebrew Extraction Complete!\n\nDocument: ${docTitle}\nChunks processed: ${homebrewChunks.length}\n\nReview the extracted content below before saving.`);
+        setStageResults(homebrewProgress.stageResults);
+        executeWorkflowStageLaunch(buildWorkflowCompletedLaunchPlan({
+          finalOutput: homebrewProgress.finalOutput,
+          alertMessage: buildWorkflowHomebrewCompletionAlertMessage({
+            finalOutput: homebrewProgress.finalOutput,
+            totalChunks: homebrewProgress.totalChunks,
+          }),
+        }));
+        await saveStateAndSession({
+          currentStageIndex,
+          stageResults: homebrewProgress.stageResults,
+        });
 
         // Scroll to results
         setTimeout(() => {
@@ -6676,191 +3329,16 @@ Output: Valid JSON only. No markdown, no prose.`;
         return;
       }
 
-      // If Fact Checker, convert its questions/issues into proposals for ReviewAdjustModal
-      if (currentStage.name === 'Fact Checker' || (config!.type === 'nonfiction' && currentStage.name === 'Editor & Style')) {
-        const proposals: Proposal[] = [];
-        const fc = parsed as FactCheckOutput;
-        const seenFieldPaths = new Set<string>();
+      const reviewPreparation = prepareWorkflowStageForReview({
+        parsed,
+        stageName: currentStage.name,
+        workflowType: config?.type,
+        accumulatedAnswers,
+        isMultiPartGeneration,
+      });
+      parsed = reviewPreparation.parsed;
 
-        // 2) ambiguities -> proposals requesting clarification (PROCESS FIRST - they have more detail)
-        if (Array.isArray(fc.ambiguities)) {
-          fc.ambiguities.forEach((a: FactCheckAmbiguityOut) => {
-            const fp: string = a?.field_path || 'unknown field';
-            const need: string | undefined = a?.clarification_needed;
-
-            if (typeof need === 'string' && need.trim().length > 0) {
-              // Mark this field_path as seen to avoid duplicates
-              if (fp && fp !== 'unknown field') {
-                seenFieldPaths.add(fp);
-              }
-
-              // Use clarification_needed as the main question
-              const question = need;
-
-              // Build options from recommended_revision if available
-              const options: Array<string | { choice: string; description: string }> = [];
-
-              if (a?.recommended_revision) {
-                // Option 1: Keep current value
-                options.push({
-                  choice: 'Keep current value',
-                  description: a?.text ? `Keep: "${a.text.substring(0, 100)}${a.text.length > 100 ? '...' : ''}"` : 'Keep the current implementation as-is'
-                });
-
-                // Option 2: Use recommended revision
-                options.push({
-                  choice: 'Use recommended revision',
-                  description: `${a.recommended_revision.substring(0, 150)}${a.recommended_revision.length > 150 ? '...' : ''}`
-                });
-              }
-
-              proposals.push({
-                question,
-                field_path: a?.field_path,
-                current_value: a?.text,
-                clarification_needed: a?.clarification_needed,
-                recommended_revision: a?.recommended_revision,
-                options: options.length > 0 ? options : undefined,
-              });
-            }
-          });
-        }
-
-        // 1) direct user_questions -> proposals (ONLY if not already covered by ambiguities)
-        if (Array.isArray(fc.user_questions)) {
-          fc.user_questions.forEach((q: string) => {
-            if (typeof q === 'string' && q.trim().length > 0) {
-              // Check if this question is already covered by checking field paths mentioned in the question
-              const isDuplicate = Array.from(seenFieldPaths).some(fp => {
-                // Check if field path appears in question
-                return fp !== 'unknown field' && q.includes(fp);
-              });
-
-              // Only add if not a duplicate
-              if (!isDuplicate) {
-                proposals.push({ question: q });
-              }
-            }
-          });
-        }
-
-        // 3) unassociated with suggested_action === 'ask_user' -> proposals for confirmation
-        if (Array.isArray(fc.unassociated)) {
-          fc.unassociated.forEach((u: FactCheckUnassociatedOut) => {
-            if (u?.suggested_action === 'ask_user') {
-              const fp = u?.field_path || 'unknown field';
-
-              // Skip if already handled
-              if (fp && fp !== 'unknown field' && seenFieldPaths.has(fp)) {
-                return;
-              }
-
-              const txt = typeof u?.text === 'string' ? u.text : '';
-              const why = typeof u?.reason === 'string' ? u.reason : '';
-
-              // Create a clear question
-              const question = txt
-                ? `Review unassociated content: "${txt}" at ${fp}`
-                : `Review ${fp} (not backed by canon)`;
-
-              proposals.push({
-                question,
-                field_path: u?.field_path,
-                current_value: txt,
-                reason: why,
-                options: [
-                  { choice: 'Keep as-is', description: 'Keep this content even though it lacks direct canon support' },
-                  { choice: 'Remove this', description: 'Remove this content entirely' },
-                  { choice: 'Revise based on canon', description: 'Modify to align better with canon facts' }
-                ],
-              });
-            }
-          });
-        }
-
-        if (proposals.length > 0) {
-          (parsed as JsonRecord).proposals = proposals as unknown as JsonRecord[];
-        }
-      }
-
-      if ((parsed as any).proposals !== undefined) {
-        (parsed as any).proposals = sanitizeProposalsValue((parsed as any).proposals);
-      }
-
-      if (Array.isArray((parsed as JsonRecord).conflicts) && ((parsed as JsonRecord).conflicts as unknown[]).length > 0) {
-        const conflicts = (parsed as JsonRecord).conflicts as unknown[];
-        const originalCount = conflicts.length;
-        (parsed as JsonRecord).conflicts = deduplicateConflictIssues(conflicts);
-        const nextConflicts = (parsed as JsonRecord).conflicts as unknown[];
-        if (nextConflicts.length !== originalCount) {
-          console.log(`[Stage ${currentStage.name}] Deduplicated conflicts: ${originalCount} -> ${nextConflicts.length}`);
-        }
-      }
-
-      if (config?.type === 'npc' && currentStage.name.startsWith('Creator:')) {
-        const stageContextForValidation: JsonRecord = {
-          ...getStageObject(stageResults, 'creator:_basic_info'),
-          ...getStageObject(stageResults, 'creator:_core_details'),
-          ...getStageObject(stageResults, 'creator:_stats'),
-          ...getStageObject(stageResults, 'creator:_character_build'),
-          ...parsed,
-        };
-        const validation = validateNpcStageOutput(currentStage.name, stageContextForValidation);
-        if (!validation.isValid) {
-          const message = validation.errors.join(' ');
-          const rawSnippet = typeof aiResponse === 'string' ? aiResponse.slice(0, 500) : undefined;
-          const existingConflicts = Array.isArray(parsed.conflicts) ? parsed.conflicts as unknown[] : [];
-          const stageIssues = validation.errors.map((errorMessage) => ({
-            severity: 'critical',
-            description: errorMessage,
-            suggestion: 'Retry this stage and require complete, fully populated NPC data.',
-          }));
-          setError(message);
-          setLastStageError({ stage: currentStage.name, message, rawSnippet });
-          setCurrentStageOutput({
-            ...parsed,
-            error: message,
-            rawResponseSnippet: rawSnippet,
-            conflicts: [...stageIssues, ...existingConflicts],
-          } as unknown as JsonRecord);
-          setShowReviewModal(true);
-          setSessionStatus('error');
-          setCompiledStageRequest(null);
-          setPendingStageResults(null);
-          setProcessingRetrievalHints(false);
-          _setShowNarrowingModal(false);
-          setPendingFactpack(null);
-          setCurrentKeywords([]);
-          setIsStageChunking(false);
-          setIsMultiPartGeneration(false);
-          return;
-        }
-
-        if (validation.warnings.length > 0) {
-          const stageIssues = validation.warnings.map((message) => ({
-            severity: 'warning',
-            description: message,
-            suggestion: 'Review this stage output and confirm whether the data is sufficiently complete.',
-          }));
-          const existingConflicts = Array.isArray(parsed.conflicts) ? parsed.conflicts as unknown[] : [];
-          parsed.conflicts = [...stageIssues, ...existingConflicts];
-        }
-      }
-
-      // Deduplicate proposals against already-answered questions BEFORE checking if we need review
-      if (Array.isArray((parsed as JsonRecord).proposals) && ((parsed as JsonRecord).proposals as unknown[]).length > 0) {
-        const proposals = (parsed as JsonRecord).proposals as unknown[];
-        const originalCount = proposals.length;
-        (parsed as JsonRecord).proposals = deduplicateProposals(proposals, accumulatedAnswers);
-        const newProposals = (parsed as JsonRecord).proposals as unknown[];
-        if (newProposals.length !== originalCount) {
-          console.log(`[Stage ${currentStage.name}] Deduplicated proposals: ${originalCount} -> ${newProposals.length}`);
-        }
-      }
-
-      // Planner gate: if proposals exist and no decisions yet, stop and collect user decisions
-      const hasProposals = Array.isArray(parsed.proposals) && parsed.proposals.length > 0;
-      if (currentStage.name === 'Planner' && hasProposals && Object.keys(accumulatedAnswers || {}).length === 0) {
+      if (reviewPreparation.shouldPauseForPlannerDecisions) {
         console.log('[Planner] Proposals present and no user decisions yet. Pausing pipeline for user input.');
         setCurrentStageOutput(parsed);
         setShowReviewModal(true);
@@ -6869,24 +3347,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         return; // Do not advance until decisions provided
       }
 
-      // Check if this stage has proposals or critical issues that need review
-      const hasCriticalPhysics = Array.isArray(parsed.physics_issues)
-        && parsed.physics_issues.some((issue: unknown) =>
-          typeof issue === 'object' && issue !== null && 'severity' in issue &&
-          (issue as { severity?: string }).severity === 'critical'
-        );
-      const hasCriticalConflicts = Array.isArray(parsed.conflicts)
-        && parsed.conflicts.some((conflict: unknown) =>
-          typeof conflict === 'object' && conflict !== null && 'severity' in conflict &&
-          (conflict as { severity?: string }).severity === 'critical'
-        );
-      const hasCriticalIssues = hasCriticalPhysics || hasCriticalConflicts;
-
-      // If there are proposals or critical issues, show review modal
-      // BUT: in multi-chunk mode, we carry proposals forward and only show after all chunks
-      // ALSO: For Location Spaces stage, space approval workflow takes precedence over proposals
-      const isLocationSpacesStage = currentStage.name === 'Spaces' && config!.type === 'location';
-      if ((hasProposals || hasCriticalIssues) && !isMultiPartGeneration && !isLocationSpacesStage) {
+      if (reviewPreparation.shouldPauseForReview) {
         setCurrentStageOutput(parsed);
         setShowReviewModal(true);
         setCompiledStageRequest(null);
@@ -6911,39 +3372,31 @@ Output: Valid JSON only. No markdown, no prose.`;
           if (newFactpack.facts.length > config!.max_canon_facts) {
             console.log('[ManualGenerator] Fact count exceeds threshold - showing narrowing modal');
             setStageResults(newResults);
-            setPendingStageResults(newResults);
-            setPendingFactpack(newFactpack);
-            setCurrentKeywords(keywords);
-            _setShowNarrowingModal(true);
+            setCanonNarrowingState(openInitialWorkflowCanonNarrowing({
+              keywords,
+              pendingFactpack: newFactpack,
+              pendingStageResults: newResults,
+            }));
             setModalMode(null);
             await saveStageResults(newResults, currentStageIndex);
             return;
           }
 
-          setFactpack(newFactpack);
-
           if (currentStageIndex < STAGES.length - 1) {
-            const nextIndex = currentStageIndex + 1;
+            const navigationPlan = buildWorkflowAdvancePlan({
+              currentStageIndex,
+              totalStages: STAGES.length,
+              stageResults: newResults,
+              factpack: newFactpack,
+              resetCurrentGroupIndex: true,
+            });
 
-            setIsMultiPartGeneration(false);
-            setFactGroups([]);
-            setCurrentGroupIndex(0);
-
-            setIsStageChunking(false);
-            setCurrentStageChunk(0);
-            setTotalStageChunks(0);
-            setAccumulatedChunkResults([]);
-
-            setCurrentStageIndex(nextIndex);
-            setModalMode(null);
-            _setSkipMode(false);
-            setStageResults(newResults);
+            applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+              resetStageChunking: true,
+            }));
 
             await saveStageResults(newResults, currentStageIndex);
-
-            setTimeout(() => {
-              showStageOutput(nextIndex, config!, newResults, newFactpack);
-            }, 100);
+            executeWorkflowStageNavigation(navigationPlan);
           }
           return;
         }
@@ -6962,44 +3415,33 @@ Output: Valid JSON only. No markdown, no prose.`;
         // Check if fact count exceeds user-configured threshold
         if (newFactpack.facts.length > config!.max_canon_facts) {
           console.log('[ManualGenerator] Fact count exceeds threshold - showing narrowing modal');
-          // Store factpack and keywords for later use
-          setPendingFactpack(newFactpack);
-          setCurrentKeywords(keywords);
-          _setShowNarrowingModal(true);
+          setCanonNarrowingState(openInitialWorkflowCanonNarrowing({
+            keywords,
+            pendingFactpack: newFactpack,
+          }));
           setModalMode(null); // Close the copy/paste modal
           return; // Don't proceed to next stage yet
         }
 
         // Fact count is within threshold - proceed to next stage
-        setFactpack(newFactpack);
-
-        // Move to next stage with the NEW factpack
         if (currentStageIndex < STAGES.length - 1) {
-          const nextIndex = currentStageIndex + 1;
+          const navigationPlan = buildWorkflowAdvancePlan({
+            currentStageIndex,
+            totalStages: STAGES.length,
+            stageResults: newResults,
+            factpack: newFactpack,
+            resetCurrentGroupIndex: true,
+          });
 
-          // Reset multi-part generation state when moving to new stage
-          setIsMultiPartGeneration(false);
-          setFactGroups([]);
-          setCurrentGroupIndex(0);
-
-          // Reset stage chunking state when moving to new stage
-          setIsStageChunking(false);
-          setCurrentStageChunk(0);
-          setTotalStageChunks(0);
-          setAccumulatedChunkResults([]);
-
-          setCurrentStageIndex(nextIndex);
-          setModalMode(null);
-          _setSkipMode(false); // Reset skip mode when moving to next stage
-          setStageResults(newResults);
+          applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+            resetStageChunking: true,
+          }));
 
           // Auto-save stage results
           await saveStageResults(newResults, currentStageIndex);
 
           // Show next stage with the NEW factpack
-          setTimeout(() => {
-            showStageOutput(nextIndex, config!, newResults, newFactpack);
-          }, 100);
+          executeWorkflowStageNavigation(navigationPlan);
         }
         return; // Exit early for keyword extractor
       }
@@ -7020,29 +3462,22 @@ Output: Valid JSON only. No markdown, no prose.`;
         // Update results after retrieval hints processing
         newResults = hintsResult.newResults;
         setStageResults(newResults);
+        const nextFactpack = hintsResult.factpack;
 
         // Move to next stage with UPDATED factpack (may have new facts from retrieval hints)
         if (currentStageIndex < STAGES.length - 1) {
-          const nextIndex = currentStageIndex + 1;
+          const navigationPlan = buildWorkflowAdvancePlan({
+            currentStageIndex,
+            totalStages: STAGES.length,
+            stageResults: newResults,
+            factpack: nextFactpack,
+            resetCurrentGroupIndex: true,
+          });
 
-          // Reset multi-part generation state when moving to new stage
-          setIsMultiPartGeneration(false);
-          setFactGroups([]);
-          setCurrentGroupIndex(0);
-
-          // Reset stage chunking state when moving to new stage
-          setIsStageChunking(false);
-          setCurrentStageChunk(0);
-          setTotalStageChunks(0);
-          setAccumulatedChunkResults([]);
-
-          setCurrentStageIndex(nextIndex);
-          setModalMode(null);
-          _setSkipMode(false);
-
-          setTimeout(() => {
-            showStageOutput(nextIndex, config!, newResults, factpack);
-          }, 100);
+          applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+            resetStageChunking: true,
+          }));
+          executeWorkflowStageNavigation(navigationPlan);
         }
         return; // Exit early after processing retrieval hints
       }
@@ -7147,82 +3582,83 @@ Output: Valid JSON only. No markdown, no prose.`;
           // ✓ Batch Mode: Auto-accept spaces without showing approval modal
           if (batchModeEnabled) {
             console.log(`[Batch Mode] Auto-accepting space: ${parsed.name || 'Unnamed'}`);
-            // Directly call the accept logic without showing modal
-            // Add the approved space to accumulated chunk results
-            const newAccumulated = [...accumulatedChunkResults, parsed];
-            setAccumulatedChunkResults(newAccumulated);
+            const progress = buildAcceptedLocationSpaceProgress({
+              acceptedSpace: parsed,
+              accumulatedChunkResults,
+              liveMapSpaces,
+              stageResults,
+              stageName: currentStage.name,
+              currentStageChunk: effectiveCurrentChunk,
+              totalStageChunks: effectiveTotalChunks,
+              showLiveMap,
+            });
 
-            // Update live visual map
-            const spaceData = extractSpaceForMap(parsed);
-            let updatedLiveMapSpaces = liveMapSpaces;
-            if (spaceData) {
-              updatedLiveMapSpaces = mapAndSyncSpaces([...liveMapSpaces, spaceData]);
-              console.log(`[Batch Mode] Synchronized reciprocal doors after auto-adding: ${spaceData.name}`);
-              setLiveMapSpaces(updatedLiveMapSpaces);
+            setAccumulatedChunkResults(progress.newAccumulated);
+            setLiveMapSpaces(progress.updatedLiveMapSpaces);
+            if (progress.appendedSpaceData) {
               setShowLiveMap(true);
-              console.log(`[Batch Mode] Auto-added space to map: ${spaceData.name}`);
+              console.log(`[Batch Mode] Auto-added space to map: ${progress.appendedSpaceData.name}`);
             }
 
-            // Check if we have more spaces to generate
-            if (effectiveCurrentChunk < effectiveTotalChunks - 1) {
-              const nextChunkIndex = effectiveCurrentChunk + 1;
-              setCurrentStageChunk(nextChunkIndex);
+            if (!progress.stageComplete && progress.nextChunkStep) {
+              setCurrentStageChunk(progress.nextChunkStep.nextChunkIndex);
+              setStageResults(progress.updatedStageResults);
 
-              const chunkInfo = {
-                isChunked: true,
-                currentChunk: nextChunkIndex + 1,
-                totalChunks: effectiveTotalChunks,
-                chunkLabel: `Space ${nextChunkIndex + 1} of ${effectiveTotalChunks}`,
-              };
-
-              console.log(`[Batch Mode] Auto-advancing to space ${nextChunkIndex + 1}/${effectiveTotalChunks}`);
-
-              // Auto-save progress
               if (autoSaveEnabled && progressSession) {
-                const savedSession = {
-                  ...progressSession,
-                  lastUpdatedAt: new Date().toISOString(),
-                  stageResults: { ...stageResults } as unknown as Record<string, unknown>,
-                  stageChunkState: {
-                    isStageChunking: true,
-                    currentStageChunk: nextChunkIndex,
-                    totalStageChunks: effectiveTotalChunks,
-                    accumulatedChunkResults: newAccumulated,
-                    liveMapSpaces: updatedLiveMapSpaces,
-                    showLiveMap: true,
-                  },
-                };
-                setProgressSession(savedSession);
-                saveProgress(savedSession);
+                await saveStateAndSession({
+                  stageResults: progress.updatedStageResults,
+                  stageChunkState: progress.updatedStageChunkState,
+                });
               }
 
-              // Generate next space prompt
-              setTimeout(() => {
-                showStageOutput(currentStageIndex, config!, stageResults, factpack, chunkInfo);
-              }, 100);
+              console.log(`[Batch Mode] Auto-advancing to space ${progress.nextChunkStep.nextChunkIndex + 1}/${effectiveTotalChunks}`);
+              const launchPlan = buildWorkflowSameStageLaunchPlan({
+                stageIndex: currentStageIndex,
+                stageResults: progress.updatedStageResults,
+                factpack,
+                chunkInfo: progress.nextChunkStep.chunkInfo,
+              });
+              executeWorkflowStageLaunch(launchPlan, {
+                runtimeConfig: config!,
+              });
               return;
             }
 
-            // All spaces complete in batch mode - finalize and move to next stage
             console.log(`[Batch Mode] All ${effectiveTotalChunks} spaces auto-accepted. Finalizing...`);
-            const finalMerged = mergeStageChunks(newAccumulated, currentStage.name);
-            const finalResults = {
-              ...stageResults,
-              [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: finalMerged,
-            };
-            setStageResults(finalResults);
+            setStageResults(progress.updatedStageResults);
             setIsStageChunking(false);
             setCurrentStageChunk(0);
             setTotalStageChunks(0);
-            setAccumulatedChunkResults([]); // Clear accumulated chunks
             setBatchModeEnabled(false); // Reset batch mode for next generation
 
             if (currentStageIndex < STAGES.length - 1) {
               const nextStageIndex = currentStageIndex + 1;
-              setCurrentStageIndex(nextStageIndex);
-              setTimeout(() => {
-                showStageOutput(nextStageIndex, config!, finalResults, factpack);
-              }, 100);
+              const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+                stageIndex: nextStageIndex,
+                stageResults: progress.updatedStageResults,
+                factpack,
+              });
+              applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+                resetStageChunking: true,
+              }));
+              setBatchModeEnabled(false);
+              await saveStateAndSession({
+                currentStageIndex: nextStageIndex,
+                stageResults: progress.updatedStageResults,
+                stageChunkState: progress.updatedStageChunkState,
+              });
+              executeWorkflowStageLaunch(launchPlan, {
+                runtimeConfig: config!,
+              });
+            } else {
+              setStageResults(progress.updatedStageResults);
+              executeWorkflowStageLaunch(buildWorkflowCompletedLaunchPlan({
+                finalOutput: buildResolvedWorkflowFinalContent({
+                  workflowType: 'location',
+                  stageResults: progress.updatedStageResults,
+                  ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+                }),
+              }));
             }
             return;
           }
@@ -7242,63 +3678,6 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         console.log(`[Stage Chunking] Accumulated ${newAccumulated.length}/${totalStageChunks} chunks`);
 
-        // Update live visual map if this is Spaces stage for a location
-        console.log(`[Stage Chunking] Checking live map conditions: stage=${currentStage.name}, type=${config!.type}`);
-        let updatedLiveMapSpaces = liveMapSpaces;
-        if (currentStage.name === 'Spaces' && config!.type === 'location') {
-          console.log(`[Live Map] Extracting space data from parsed result:`, parsed);
-          // Extract space data from the parsed result
-          const spaceData = extractSpaceForMap(parsed);
-          console.log(`[Live Map] Extracted space data:`, spaceData);
-          if (spaceData) {
-            updatedLiveMapSpaces = mapAndSyncSpaces([...liveMapSpaces, spaceData]);
-            console.log(`[Live Map] Synchronized reciprocal doors after adding: ${spaceData.name}`);
-            setLiveMapSpaces(updatedLiveMapSpaces);
-            setShowLiveMap(true);
-            console.log(`[Live Map] ✓ Added space: ${spaceData.name}`);
-
-            // Validate geometry and generate proposals
-            // NOTE: Stage results stored by stage.name, not stage.id (e.g., "foundation" not "location_foundation")
-            const foundation = getStageObject(stageResults, 'foundation');
-            const parentStructure = foundation ? {
-              total_floors: typeof foundation.total_floors === 'number' ? foundation.total_floors : undefined,
-              total_area: typeof foundation.total_area === 'number' ? foundation.total_area : undefined,
-              layout: typeof foundation.layout === 'string' ? foundation.layout : undefined,
-            } : undefined;
-
-            const geometrySpace = {
-              name: spaceData.name,
-              dimensions: getDimensionObject(spaceData.dimensions),
-              floor: typeof spaceData.floor === 'number' || typeof spaceData.floor === 'string' ? spaceData.floor : undefined,
-              connections: Array.isArray(spaceData.connections) ? spaceData.connections : undefined,
-            };
-            const existingGeometrySpaces = liveMapSpaces.map((space) => ({
-              name: space.name,
-              dimensions: getDimensionObject(space.dimensions),
-              floor: typeof space.floor === 'number' || typeof space.floor === 'string' ? space.floor : undefined,
-              connections: Array.isArray(space.connections) ? space.connections : undefined,
-            }));
-            const validation = validateSpaceGeometry(geometrySpace, existingGeometrySpaces, parentStructure);
-
-            if (!validation.isValid && validation.proposals.length > 0) {
-              console.log(`[Geometry Validation] Found ${validation.proposals.length} issues for "${spaceData.name}"`);
-
-              // Add geometry proposals to the parsed result
-              const existingProposals = Array.isArray(parsed.proposals) ? parsed.proposals : [];
-              parsed.proposals = [
-                ...existingProposals,
-                ...validation.proposals.map(p => ({
-                  type: p.type,
-                  category: p.category,
-                  question: p.question,
-                  options: p.options,
-                  context: p.context,
-                })),
-              ];
-            }
-          }
-        }
-
         // Check for proposals - if user answers are needed, show review modal
         const proposals = (parsed as JsonRecord).proposals;
         const hasProposals = proposals && Array.isArray(proposals) && proposals.length > 0;
@@ -7310,142 +3689,81 @@ Output: Valid JSON only. No markdown, no prose.`;
           return; // Wait for user to answer proposals before continuing
         }
 
-        // Check if we have more chunks to process
-        if (currentStageChunk < totalStageChunks - 1) {
-          // Move to next chunk
-          const nextChunkIndex = currentStageChunk + 1;
+        const stageChunkProgress = buildWorkflowStageChunkProgress({
+          stageName: currentStage.name,
+          stageResults: newResults,
+          accumulatedChunks: newAccumulated,
+          currentStageChunk,
+          totalStageChunks,
+          liveMapSpaces,
+          showLiveMap,
+        });
+
+        if (!stageChunkProgress.stageComplete && stageChunkProgress.nextChunkStep && stageChunkProgress.updatedStageChunkState) {
+          const { nextChunkIndex, chunkInfo } = stageChunkProgress.nextChunkStep;
           setCurrentStageChunk(nextChunkIndex);
 
-          const chunkInfo = {
-            isChunked: true,
-            currentChunk: nextChunkIndex + 1,
-            totalChunks: totalStageChunks,
-            chunkLabel: `Space ${nextChunkIndex + 1} of ${totalStageChunks}`,
-          };
-
           console.log(`[Stage Chunking] Moving to chunk ${nextChunkIndex + 1}/${totalStageChunks}`);
+          setStageResults(stageChunkProgress.updatedStageResults);
 
-          // Update stage results with accumulated content (merge arrays)
-          const mergedChunks = mergeStageChunks(newAccumulated, currentStage.name);
-          const updatedResults = {
-            ...newResults,
-            [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: mergedChunks,
-          };
-          setStageResults(updatedResults);
-
-          // Auto-save progress after each chunk to prevent data loss during long iterations
           if (autoSaveEnabled && progressSession) {
-            const savedSession = {
-              ...progressSession,
-              lastUpdatedAt: new Date().toISOString(),
-              stageResults: updatedResults as unknown as Record<string, unknown>,
-              currentStageIndex: currentStageIndex,
-              // Save at top level as backup (in case stageChunkState gets lost)
-              liveMapSpaces: updatedLiveMapSpaces,
-              accumulatedChunkResults: newAccumulated,
-              // Also save in stageChunkState (primary location)
-              stageChunkState: {
-                isStageChunking: true,
-                currentStageChunk: nextChunkIndex,
-                totalStageChunks: totalStageChunks,
-                accumulatedChunkResults: newAccumulated,
-                liveMapSpaces: updatedLiveMapSpaces,
-                showLiveMap: showLiveMap,
-              },
-            };
-            setProgressSession(savedSession);
-            await saveProgress(savedSession);
-            console.log(`[Auto-Save] Saved chunk ${currentStageChunk + 1}/${totalStageChunks} for ${currentStage.name} with ${updatedLiveMapSpaces.length} spaces`);
+            await saveStateAndSession({
+              stageResults: stageChunkProgress.updatedStageResults,
+              stageChunkState: stageChunkProgress.updatedStageChunkState,
+            });
+            console.log(`[Auto-Save] Saved chunk ${currentStageChunk + 1}/${totalStageChunks} for ${currentStage.name}`);
           }
 
-          // Re-run stage with next chunk
-          setTimeout(() => {
-            showStageOutput(currentStageIndex, config!, updatedResults, factpack, chunkInfo);
-          }, 100);
+          const launchPlan = buildWorkflowSameStageLaunchPlan({
+            stageIndex: currentStageIndex,
+            stageResults: stageChunkProgress.updatedStageResults,
+            factpack,
+            chunkInfo,
+          });
+          executeWorkflowStageLaunch(launchPlan, {
+            runtimeConfig: config!,
+          });
 
-          return; // Don't proceed to next stage yet
+          return;
         }
 
-        // All chunks complete - finalize
         console.log(`[Stage Chunking] All ${totalStageChunks} chunks complete for ${currentStage.name}. Finalizing...`);
-
-        // Merge all chunk results
-        const finalMerged = mergeStageChunks(newAccumulated, currentStage.name);
-
-        // Store final merged results
-        const finalResults = {
-          ...newResults,
-          [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: finalMerged,
-        };
-        setStageResults(finalResults);
-
-        // Reset stage chunking state
+        setStageResults(stageChunkProgress.updatedStageResults);
         setIsStageChunking(false);
         setCurrentStageChunk(0);
         setTotalStageChunks(0);
         setAccumulatedChunkResults([]);
 
-        // Keep live map state for location generation (Stages 4-5 will continue showing it)
-        // Only reset map state if not a location, or if location is fully complete
         if (config?.type !== 'location') {
           setShowLiveMap(false);
           setLiveMapSpaces([]);
         }
-        // Note: For locations, map persists through Details and Accuracy Refinement stages
 
-        // Clear stage chunk state from progress session (chunking complete)
         if (autoSaveEnabled && progressSession) {
-          const clearedSession = {
-            ...progressSession,
-            lastUpdatedAt: new Date().toISOString(),
-            stageResults: finalResults as unknown as Record<string, unknown>,
-            stageChunkState: undefined, // Clear chunking state
-          };
-          setProgressSession(clearedSession);
-          await saveProgress(clearedSession);
-          console.log(`[Auto-Save] Cleared chunking state - stage complete`);
+          await saveStateAndSession({
+            stageResults: stageChunkProgress.updatedStageResults,
+            stageChunkState: undefined,
+          });
+          console.log('[Auto-Save] Cleared chunking state - stage complete');
         }
 
-        console.log(`[Stage Chunking] Final merged result:`, finalMerged);
-
-        // Continue to next stage
-        newResults = finalResults;
+        console.log('[Stage Chunking] Final merged result:', stageChunkProgress.mergedStageOutput);
+        newResults = stageChunkProgress.updatedStageResults;
       }
 
       // NPC SECTION CHUNKING: Handle section completion and merging
       if (isNpcSectionChunking && currentStage.name === 'Creator') {
         console.log(`[NPC Section Chunking] Section ${currentNpcSectionIndex + 1}/${npcSectionChunks.length} complete: ${npcSectionChunks[currentNpcSectionIndex]?.chunkLabel}`);
 
-        // Merge this section's output with accumulated sections
-        const mergedSections = {
-          ...accumulatedNpcSections,
-          ...parsed, // Merge new fields from this section
-        };
+        const { mergedSections, cleanedSections } = mergeWorkflowNpcSections(accumulatedNpcSections, parsed);
         setAccumulatedNpcSections(mergedSections);
-
-        // Remove pipeline fields before storing
-        const cleanedSections = { ...mergedSections };
-        delete cleanedSections.sources_used;
-        delete cleanedSections.assumptions;
-        delete cleanedSections.proposals;
-        delete cleanedSections.retrieval_hints;
-        delete cleanedSections.canon_update;
 
         console.log(`[NPC Section Chunking] Merged section output. Total fields so far: ${Object.keys(cleanedSections).length}`);
 
-        // Check if we have more sections to process
-        if (currentNpcSectionIndex < npcSectionChunks.length - 1) {
-          // Move to next section
-          const nextSectionIndex = currentNpcSectionIndex + 1;
+        const nextSectionStep = getNextWorkflowNpcSectionStep(npcSectionChunks, currentNpcSectionIndex);
+        if (nextSectionStep) {
+          const { nextSectionIndex, nextSection, chunkInfo } = nextSectionStep;
           setCurrentNpcSectionIndex(nextSectionIndex);
-          const nextSection = npcSectionChunks[nextSectionIndex];
-
-          const chunkInfo = {
-            isChunked: true,
-            currentChunk: nextSectionIndex + 1,
-            totalChunks: npcSectionChunks.length,
-            chunkLabel: nextSection.chunkLabel,
-          };
 
           console.log(`[NPC Section Chunking] Moving to section ${nextSectionIndex + 1}/${npcSectionChunks.length}: ${nextSection.chunkLabel}`);
 
@@ -7457,9 +3775,17 @@ Output: Valid JSON only. No markdown, no prose.`;
           setStageResults(updatedResults);
 
           // Re-run Creator stage with next section
-          setTimeout(() => {
-            showStageOutput(currentStageIndex, config!, updatedResults, factpack, chunkInfo);
-          }, 100);
+          const launchPlan = buildWorkflowSameStageLaunchPlan({
+            stageIndex: currentStageIndex,
+            stageResults: updatedResults,
+            factpack,
+            chunkInfo,
+            currentNpcSectionIndex: nextSectionIndex,
+            accumulatedNpcSections: mergedSections,
+          });
+          executeWorkflowStageLaunch(launchPlan, {
+            runtimeConfig: config!,
+          });
 
           return; // Don't proceed to next stage yet
         }
@@ -7475,18 +3801,23 @@ Output: Valid JSON only. No markdown, no prose.`;
         setStageResults(finalResults);
 
         // Reset NPC section chunking state
-        setIsNpcSectionChunking(false);
+        clearWorkflowChunkingState();
         setIsMultiPartGeneration(false);
 
         // Continue to next stage (Fact Checker)
         if (currentStageIndex < STAGES.length - 1) {
           const nextIndex = currentStageIndex + 1;
-          setCurrentStageIndex(nextIndex);
-          setModalMode(null);
-
-          setTimeout(() => {
-            showStageOutput(nextIndex, config!, finalResults, factpack);
-          }, 100);
+          const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+            stageIndex: nextIndex,
+            stageResults: finalResults,
+            factpack,
+          });
+          applyWorkflowUiTransition({
+            modalMode: null,
+          });
+          executeWorkflowStageLaunch(launchPlan, {
+            runtimeConfig: config!,
+          });
         }
 
         return; // Exit after handling NPC section completion
@@ -7513,25 +3844,19 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         console.log(`[Multi-Chunk] Updated ${stageKey} with latest chunk response. Next chunk will see these corrections.`);
 
-        // Move to next chunk
-        const nextChunkIndex = currentGroupIndex + 1;
+        const nextChunkStep = getNextWorkflowFactChunkStep(factGroups, currentGroupIndex);
+        if (!nextChunkStep) {
+          console.warn('[Multi-Chunk] Expected a next fact chunk, but no next step could be built.');
+          return;
+        }
+
+        const {
+          nextChunkIndex,
+          nextFactpack: nextGroupFactpack,
+          chunkInfo,
+        } = nextChunkStep;
         setCurrentGroupIndex(nextChunkIndex);
-        const nextGroup = factGroups[nextChunkIndex];
-
-        const nextGroupFactpack: Factpack = {
-          facts: nextGroup.facts,
-          entities: Array.from(new Set(nextGroup.facts.map(f => f.entity_id || f.entity_name))),
-          gaps: [],
-        };
         setFactpack(nextGroupFactpack);
-
-        // Create chunk info for next chunk
-        const chunkInfo = {
-          isChunked: true,
-          currentChunk: nextChunkIndex + 1,
-          totalChunks: factGroups.length,
-          chunkLabel: nextGroup.label,
-        };
 
         // Extract unanswered proposals from this chunk to carry forward
         const unansweredProposals = Array.isArray(parsed.proposals) ? parsed.proposals : [];
@@ -7541,9 +3866,17 @@ Output: Valid JSON only. No markdown, no prose.`;
         console.log(`[Multi-Chunk] Carrying forward ${unansweredProposals.length} unanswered proposals to chunk ${nextChunkIndex + 1}`);
 
         // Re-run the SAME stage with the next chunk's facts
-        setTimeout(() => {
-          showStageOutput(currentStageIndex, config!, updatedResults, nextGroupFactpack, chunkInfo, unansweredProposals);
-        }, 100);
+        const launchPlan = buildWorkflowSameStageLaunchPlan({
+          stageIndex: currentStageIndex,
+          stageResults: updatedResults,
+          factpack: nextGroupFactpack,
+          chunkInfo,
+          currentGroupIndex: nextChunkIndex,
+        });
+        executeWorkflowStageLaunch(launchPlan, {
+          runtimeConfig: config!,
+          unansweredProposals,
+        });
 
         return; // Don't proceed to next stage yet
       }
@@ -7556,7 +3889,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         const chunkResults = [...asJsonRecordArray(newResults[`${stageKey}_chunks`]), parsed];
 
         // Merge all chunk results for this stage
-        const mergedStageOutput = mergeChunkOutputs(chunkResults, currentStage.name);
+        let mergedStageOutput = mergeWorkflowChunkOutputs(chunkResults, currentStage.name);
 
         // VALIDATION: Check Stats stage for refusal to create stats
         if (currentStage.name.toLowerCase().includes('stats')) {
@@ -7596,24 +3929,24 @@ Output: Valid JSON only. No markdown, no prose.`;
         };
         setStageResults(mergedResults);
 
-        // Deduplicate proposals against already-answered questions
-        const mergedStageProposals = (mergedStageOutput as Record<string, unknown>).proposals;
-        if (Array.isArray(mergedStageProposals) && mergedStageProposals.length > 0) {
-          const originalCount = mergedStageProposals.length;
-          (mergedStageOutput as Record<string, unknown>).proposals = deduplicateProposals(
-            mergedStageProposals,
-            accumulatedAnswers
-          ) as JsonRecord[];
-          const nextProposals = (mergedStageOutput as Record<string, unknown>).proposals;
-          if (Array.isArray(nextProposals) && nextProposals.length !== originalCount) {
-            console.log(`[Multi-Chunk] Deduplicated proposals: ${originalCount} -> ${nextProposals.length}`);
-          }
-        }
+        const mergedReviewPreparation = prepareWorkflowStageForReview({
+          parsed: mergedStageOutput as JsonRecord,
+          stageName: currentStage.name,
+          workflowType: config?.type,
+          accumulatedAnswers,
+          isMultiPartGeneration: false,
+        });
+        mergedStageOutput = mergedReviewPreparation.parsed;
+        mergedResults = {
+          ...stageResults,
+          [stageKey]: mergedStageOutput,
+        };
+        setStageResults(mergedResults);
 
-        // If there are still unanswered proposals after all chunks, show review modal
-        // IMPORTANT: Check this BEFORE processing retrieval hints
-        if (Array.isArray(mergedStageOutput.proposals) && mergedStageOutput.proposals.length > 0) {
-          console.log(`[Multi-Chunk] ${mergedStageOutput.proposals.length} proposals remain unanswered after all chunks. Showing review modal...`);
+        if (mergedReviewPreparation.shouldPauseForPlannerDecisions || mergedReviewPreparation.shouldPauseForReview) {
+          if (mergedReviewPreparation.hasProposals) {
+            console.log(`[Multi-Chunk] ${Array.isArray(mergedStageOutput.proposals) ? mergedStageOutput.proposals.length : 0} proposals remain unanswered after all chunks. Showing review modal...`);
+          }
           setCurrentStageOutput(mergedStageOutput as JsonRecord);
           setShowReviewModal(true);
           return; // Wait for user to answer
@@ -7621,6 +3954,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         // Now process retrieval hints from the merged output (Planner or Creator only)
         // Only do this if there are NO unanswered proposals
+        let factpackAfterHints = factpack;
         if (currentStage.name === 'Planner' || currentStage.name === 'Creator' || (config!.type === 'nonfiction' && (currentStage.name === 'Outline & Structure' || currentStage.name === 'Draft'))) {
           console.log(`[Multi-Chunk] Processing retrieval hints from merged ${currentStage.name} output...`);
           const initialFactCount = factpack!.facts.length;
@@ -7636,13 +3970,14 @@ Output: Valid JSON only. No markdown, no prose.`;
           // Update results after retrieval hints processing
           mergedResults = hintsResult.newResults;
           setStageResults(mergedResults);
+          factpackAfterHints = hintsResult.factpack;
 
           // If retrieval hints added facts, disable multi-chunk mode for subsequent stages
           // (the new factpack won't align with the original chunk groups)
-          if (factpack!.facts.length > initialFactCount) {
-            console.log(`[Multi-Chunk] Retrieval hints added facts (${initialFactCount} → ${factpack!.facts.length}). Disabling multi-chunk mode for subsequent stages.`);
+          if (factpackAfterHints && factpackAfterHints.facts.length > initialFactCount) {
+            console.log(`[Multi-Chunk] Retrieval hints added facts (${initialFactCount} → ${factpackAfterHints.facts.length}). Disabling multi-chunk mode for subsequent stages.`);
             setIsMultiPartGeneration(false);
-            setFactGroups([]);
+            clearWorkflowChunkingState();
             setCurrentGroupIndex(0);
           }
         }
@@ -7651,372 +3986,99 @@ Output: Valid JSON only. No markdown, no prose.`;
         setModalMode(null);
         _setSkipMode(false);
 
-        if (currentStageIndex < STAGES.length - 1) {
+        const stageProgression = getWorkflowStageProgression(currentStageIndex, STAGES.length);
+        if (stageProgression.kind === 'advance' && typeof stageProgression.nextIndex === 'number') {
           // Move to next stage
           console.log(`[Multi-Chunk] No unanswered proposals. Proceeding to next stage...`);
 
-          // Reset multi-part generation for the next stage
-          setIsMultiPartGeneration(false);
-          setFactGroups([]);
-          setCurrentGroupIndex(0);
+          applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+            resetMultiPart: true,
+            resetStageChunking: true,
+          }));
 
-          // Reset stage chunking for the next stage
-          setIsStageChunking(false);
-          setCurrentStageChunk(0);
-          setTotalStageChunks(0);
-          setAccumulatedChunkResults([]);
+          const navigationPlan = buildWorkflowAdvancePlan({
+            currentStageIndex,
+            totalStages: STAGES.length,
+            stageResults: mergedResults,
+            factpack: factpackAfterHints,
+            resetCurrentGroupIndex: true,
+          });
 
-          const nextIndex = currentStageIndex + 1;
-          setCurrentStageIndex(nextIndex);
-
-          setTimeout(() => {
-            showStageOutput(nextIndex, config!, mergedResults, factpack);
-          }, 100);
+          executeWorkflowStageNavigation(navigationPlan);
         } else {
           // Pipeline complete!
           console.log(`[Multi-Chunk] Pipeline complete! Processing final output...`);
 
-          // Reset multi-chunk mode
-          setIsMultiPartGeneration(false);
-          setFactGroups([]);
-          setCurrentGroupIndex(0);
+          applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+            resetMultiPart: true,
+            resetStageChunking: true,
+          }));
 
-          // Reset stage chunking mode
-          setIsStageChunking(false);
-          setCurrentStageChunk(0);
-          setTotalStageChunks(0);
-          setAccumulatedChunkResults([]);
-
-          // CRITICAL FIX: Extract content from correct location
-          let baseContent: JsonRecord = {};
-          if (config!.type === 'monster') {
-            baseContent = {
-              ...mergedResults.basic_info,
-              ...mergedResults['stats_&_defenses'],
-              ...mergedResults['combat_&_abilities'],
-              ...mergedResults['legendary_&_lair'],
-              ...mergedResults['ecology_&_lore'],
-              deliverable: 'monster', // Set AFTER spread to ensure it's not overwritten
-            };
-
-            // Keep hit_points as-is (integer or object {average, formula}) - schema accepts both
-
-            // Normalize saving throws: ensure value is string, remove notes
-            if (Array.isArray(baseContent.saving_throws)) {
-              baseContent.saving_throws = baseContent.saving_throws.map((st: any) => {
-                if (st && typeof st === 'object') {
-                  return {
-                    name: st.name,
-                    value: typeof st.value === 'number' ? (st.value >= 0 ? `+${st.value}` : `${st.value}`) : String(st.value),
-                    // Omit notes - schema doesn't require it
-                  };
-                }
-                return st;
-              });
-            }
-
-            // Normalize skill proficiencies: ensure value is string, remove notes
-            if (Array.isArray(baseContent.skill_proficiencies)) {
-              baseContent.skill_proficiencies = baseContent.skill_proficiencies.map((skill: any) => {
-                if (skill && typeof skill === 'object') {
-                  return {
-                    name: skill.name,
-                    value: typeof skill.value === 'number' ? (skill.value >= 0 ? `+${skill.value}` : `${skill.value}`) : String(skill.value),
-                    // Omit notes - schema doesn't require it
-                  };
-                }
-                return skill;
-              });
-            }
-
-            console.log('[Multi-Chunk Complete] Monster: Merged all 5 stage results');
-          } else {
-            const physicsValidator = mergedResults.physics_validator;
-            const physicsContent = isRecord(physicsValidator)
-              && isRecord(physicsValidator.content)
-              && isRecord(physicsValidator.content.content)
-              ? (physicsValidator.content.content as JsonRecord)
-              : null;
-
-            if (config!.type === 'nonfiction' && mergedResults.finalizer) {
-              baseContent = mergedResults.finalizer as JsonRecord;
-              console.log('[Multi-Chunk Complete] Using content from finalizer');
-            } else if (physicsContent) {
-              baseContent = physicsContent;
-              console.log('[Multi-Chunk Complete] Using content from physics_validator.content.content');
-            } else if (mergedResults.stylist) {
-              baseContent = mergedResults.stylist as JsonRecord;
-              console.log('[Multi-Chunk Complete] Using content from stylist');
-            } else if (mergedResults.creator) {
-              baseContent = mergedResults.creator as JsonRecord;
-              console.log('[Multi-Chunk Complete] Using content from creator');
-            }
-          }
-
-          const finalContent = normalizeOutput(baseContent as JsonRecord, config!.type);
+          const completionResult = buildWorkflowCompletionResult({
+            workflowType: config?.type,
+            stageResults: mergedResults,
+            strategy: 'resolved',
+            ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+          });
+          const { finalContent } = completionResult;
+          logWorkflowCompletionResult('[Multi-Chunk Complete]', completionResult, mergedResults);
 
           setStageResults(mergedResults);
-          setFinalOutput(finalContent);
-          setIsComplete(true);
+          executeWorkflowStageLaunch(buildWorkflowCompletedLaunchPlan({
+            finalOutput: finalContent,
+          }));
+          await saveStageResults(mergedResults, STAGES.length - 1);
         }
         return;
       }
 
       // Move to next stage or finish (for all other stages - non-chunked flow)
-      if (currentStageIndex < STAGES.length - 1) {
-        const nextIndex = currentStageIndex + 1;
+      const continuation = resolveWorkflowStageContinuation({
+        currentStageIndex,
+        currentStage,
+        stages: STAGES,
+        workflowType: config?.type,
+        userPrompt: config?.prompt,
+        stageResults: newResults,
+        currentStageOutput: parsed,
+        accumulatedAnswers,
+        ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+        dynamicNpcStages,
+        catalog: STAGE_CATALOG,
+        completionStrategy: 'finalized',
+        onLegendaryDecisionRequired: () =>
+          window.confirm('Should this character have legendary/mythic or lair/regional actions?'),
+      });
+      applyNpcDynamicRoutingPlan(continuation.routingPlan);
 
-        // Reset multi-part generation state when moving to new stage
-        setIsMultiPartGeneration(false);
-        setFactGroups([]);
-        setCurrentGroupIndex(0);
+      if (continuation.kind === 'advance') {
+        applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+          resetMultiPart: true,
+        }));
 
-        setCurrentStageIndex(nextIndex);
-        setModalMode(null);
-        _setSkipMode(false); // Reset skip mode when moving to next stage
         setStageResults(newResults);
 
         // Auto-save stage results
         await saveStageResults(newResults, currentStageIndex);
 
-        // Show next stage after a brief delay
-        setTimeout(() => {
-          showStageOutput(nextIndex, config!, newResults, factpack);
-        }, 100);
+        const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+          stageIndex: continuation.nextIndex,
+          stageResults: newResults,
+          factpack,
+        });
+        executeWorkflowStageLaunch(launchPlan, {
+          runtimeConfig: config!,
+        });
       } else {
         // Pipeline complete!
-        // CRITICAL FIX: Extract content from the correct location in stage results
-        // Physics Validator wraps content in { content: { content: {...}, relevant_canon: {...} } }
-        let baseContent: JsonRecord = {};
+        const completionResult = continuation.completionResult;
+        const { finalContent } = completionResult;
+        logWorkflowCompletionResult('[Pipeline Complete]', completionResult, newResults);
 
-        // For monsters, merge all stage results since each stage adds different fields
-        if (config!.type === 'monster') {
-          baseContent = {
-            ...newResults.basic_info,
-            ...newResults['stats_&_defenses'],
-            ...newResults['combat_&_abilities'],
-            ...newResults['legendary_&_lair'],
-            ...newResults['ecology_&_lore'],
-            deliverable: 'monster', // Set AFTER spread to ensure it's not overwritten
-          };
-
-          // Keep hit_points as-is (integer or object {average, formula}) - schema accepts both
-
-          // Clean up saving throws notes (remove LaTeX-style math)
-          if (Array.isArray(baseContent.saving_throws)) {
-            baseContent.saving_throws = baseContent.saving_throws.map((st: any) => {
-              if (st && typeof st === 'object' && st.notes) {
-                return { ...st, notes: undefined };
-              }
-              return st;
-            });
-          }
-
-          // Clean up skill proficiencies notes
-          if (Array.isArray(baseContent.skill_proficiencies)) {
-            baseContent.skill_proficiencies = baseContent.skill_proficiencies.map((skill: any) => {
-              if (skill && typeof skill === 'object' && skill.notes) {
-                return { ...skill, notes: undefined };
-              }
-              return skill;
-            });
-          }
-
-          console.log('[Pipeline Complete] Monster: Merged all 5 stage results');
-        } else if (config?.type === 'location') {
-          const purpose = getStageObject(newResults, 'purpose') || {};
-          const foundation = getStageObject(newResults, 'foundation') || {};
-          const details = getStageObject(newResults, 'details') || {};
-          const accuracyRefinement = getStageObject(newResults, 'accuracy_refinement') || {};
-          const spaces = getStageObject(newResults, 'spaces');
-
-          // Location uses multi-stage approach: Purpose -> Foundation -> Spaces -> Details -> Accuracy Refinement
-          baseContent = {
-            ...purpose,
-            ...foundation,
-            spaces,
-            ...details,
-            ...accuracyRefinement,
-            deliverable: 'location', // Set AFTER spread to ensure it's not overwritten
-          };
-
-          console.log('[Pipeline Complete] Location: Merged all location stage results', {
-            hasPurpose: !!getStageObject(newResults, 'purpose'),
-            hasFoundation: !!getStageObject(newResults, 'foundation'),
-            hasSpaces: !!spaces,
-            spacesCount: Array.isArray(spaces?.spaces) ? spaces.spaces.length : 0,
-            hasDetails: !!getStageObject(newResults, 'details'),
-            hasAccuracyRefinement: !!getStageObject(newResults, 'accuracy_refinement'),
-            totalFields: Object.keys(baseContent).length,
-          });
-        } else if (config?.type === 'npc') {
-          // NPC uses multi-stage Creator approach - use intelligent merger
-          const { mergeNpcStages } = await import('../utils/npcStageMerger');
-          const mergeResult = mergeNpcStages(newResults);
-
-          baseContent = mergeResult.merged;
-
-          // Log merge results
-          console.log('[Pipeline Complete] NPC: Intelligently merged all Creator sub-stages:', {
-            totalFields: Object.keys(baseContent).length,
-            conflicts: mergeResult.conflicts.length,
-            warnings: mergeResult.warnings,
-          });
-
-          // Log conflicts for review
-          if (mergeResult.conflicts.length > 0) {
-            console.warn('[NPC Merge Conflicts] The following fields had different values across stages:');
-            for (const conflict of mergeResult.conflicts) {
-              console.warn(`  - ${conflict.field}: ${conflict.resolution}`, {
-                stages: conflict.stages.map(s => s.stageName),
-                finalValue: conflict.resolvedValue,
-              });
-            }
-          }
-        } else if (config?.type === 'nonfiction') {
-          const finalizer = getStageObject(newResults, 'finalizer');
-          const editorStyle = getStageObject(newResults, 'editor_&_style');
-          const draft = getStageObject(newResults, 'draft');
-          if (finalizer) {
-            baseContent = finalizer;
-            console.log('[Pipeline Complete] Using content from finalizer');
-          } else if (editorStyle) {
-            baseContent = editorStyle;
-            console.log('[Pipeline Complete] Using content from editor_&_style');
-          } else if (draft) {
-            baseContent = draft;
-            console.log('[Pipeline Complete] Using content from draft');
-          }
-        } else {
-          const physicsValidator = getStageObject(newResults, 'physics_validator');
-          const physicsContent = getEmbeddedObject(physicsValidator, 'content', 'content');
-          const stylist = getStageObject(newResults, 'stylist');
-          const creator = getStageObject(newResults, 'creator');
-
-          if (physicsContent) {
-            // Content from Physics Validator (wrapped structure)
-            baseContent = physicsContent;
-            console.log('[Pipeline Complete] Using content from physics_validator.content.content');
-          } else if (stylist) {
-            // Content from Stylist (normal structure)
-            baseContent = stylist;
-            console.log('[Pipeline Complete] Using content from stylist');
-          } else if (creator) {
-            // Content from Creator (fallback)
-            baseContent = creator;
-            console.log('[Pipeline Complete] Using content from creator');
-          } else {
-            console.error('[Pipeline Complete] No content found in stage results!', newResults);
-          }
-        }
-
-        // Sanitize and deduplicate proposals to prevent asking the same question multiple times
-        let proposals = sanitizeProposalsValue((baseContent as any).proposals);
-        if (Array.isArray(proposals) && proposals.length > 0) {
-          // First, filter out malformed proposals (ones that don't have the correct schema)
-          proposals = proposals.filter((proposal: any) => {
-            // Must have a "question" field
-            if (!proposal.question || typeof proposal.question !== 'string') {
-              console.log('[Proposal Sanitization] Removing proposal without valid question field:', proposal);
-              return false;
-            }
-
-            // Must NOT have malformed fields like "summary", "details", "suggested_action"
-            if (proposal.summary || proposal.details || proposal.suggested_action) {
-              console.log('[Proposal Sanitization] Removing malformed proposal (has summary/details/suggested_action):', proposal.question);
-              return false;
-            }
-
-            // Should have options (though we'll allow it if missing for now)
-            if (!proposal.options) {
-              console.warn('[Proposal Sanitization] Proposal missing options, but allowing:', proposal.question);
-            }
-
-            return true;
-          });
-
-          console.log(`[Proposal Sanitization] After sanitization: ${(baseContent as any).proposals?.length || 0} -> ${proposals.length} proposals`);
-
-          // Now deduplicate
-          const seenQuestions = new Set<string>();
-          const seenQuestionsNormalized = new Set<string>();
-
-          proposals = proposals.filter((proposal: any) => {
-            const question = proposal.question || '';
-            const normalizedQuestion = question.trim().toLowerCase();
-
-            // Skip if we've already seen this exact question
-            if (seenQuestions.has(question)) {
-              console.log('[Proposal Dedup] Removing duplicate proposal:', question);
-              return false;
-            }
-
-            // Skip if we've already seen a very similar question
-            if (seenQuestionsNormalized.has(normalizedQuestion)) {
-              console.log('[Proposal Dedup] Removing similar proposal:', question);
-              return false;
-            }
-
-            // Skip if this question was already answered in a previous chunk
-            if (accumulatedAnswers[question]) {
-              console.log('[Proposal Dedup] Removing already-answered proposal:', question);
-              return false;
-            }
-
-            // Check if a very similar question was already answered
-            for (const answeredQ of Object.keys(accumulatedAnswers)) {
-              if (answeredQ.trim().toLowerCase() === normalizedQuestion) {
-                console.log('[Proposal Dedup] Removing answered proposal (similar):', question);
-                return false;
-              }
-            }
-
-            seenQuestions.add(question);
-            seenQuestionsNormalized.add(normalizedQuestion);
-            return true;
-          });
-
-          console.log(`[Proposal Dedup] Reduced from ${(baseContent as any).proposals?.length || 0} to ${proposals.length} proposals`);
-        }
-
-        // Infer deliverable to ensure correct save categorization (e.g., CHARACTER for NPC)
-        const inferredDeliverable = inferDeliverableType(baseContent as JsonRecord, config!.type);
-
-        const finalContent: JsonRecord = {
-          // Use Stylist as the source of truth for all content fields
-          ...baseContent,
-
-          // Override with deduplicated proposals
-          proposals,
-
-          rule_base:
-            (baseContent as any).rule_base ??
-            (typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined),
-
-          // Critical for correct mapping when saving to project
-          deliverable: inferredDeliverable,
-
-          fact_check_report: config!.type === 'nonfiction'
-            ? (getStageObject(newResults, 'editor_&_style') || {})
-            : (getStageObject(newResults, 'fact_checker') || {}),
-          // Add Canon Validator metadata (these are NEW fields, not overwrites)
-          conflicts: getJsonRecordList(getStageObject(newResults, 'canon_validator')?.conflicts),
-          canon_alignment_score: getStageObject(newResults, 'canon_validator')?.canon_alignment_score,
-          validation_notes: getStageObject(newResults, 'canon_validator')?.validation_notes,
-
-          // Add Physics Validator metadata (these are NEW fields, not overwrites)
-          physics_issues: getJsonRecordList(getStageObject(newResults, 'physics_validator')?.physics_issues),
-          logic_score: getStageObject(newResults, 'physics_validator')?.logic_score,
-          balance_notes: getStageObject(newResults, 'physics_validator')?.balance_notes,
-
-          // Include the full stage results for debugging/audit trail
-          _pipeline_stages: newResults,
-        };
-
-        setCompiledStageRequest(null);
-        setModalMode(null);
         setStageResults(newResults);
-        setFinalOutput(finalContent);
+        executeWorkflowStageLaunch(buildWorkflowCompletedLaunchPlan({
+          finalOutput: finalContent,
+        }));
 
         // Auto-save final stage results
         await saveStageResults(newResults, STAGES.length - 1);
@@ -8026,47 +4088,39 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         // Check if we're in multi-part generation and have more chunks
         if (isMultiPartGeneration && currentGroupIndex < factGroups.length - 1) {
-          const nextChunkIndex = currentGroupIndex + 1;
-          const nextGroup = factGroups[nextChunkIndex];
-
-          const shouldContinue = window.confirm(
-            `✅ Part ${currentGroupIndex + 1} of ${factGroups.length} Complete!\n\n` +
-            `Current part: ${factGroups[currentGroupIndex].label}\n` +
-            `Next part: ${nextGroup.label} (${nextGroup.facts.length} facts)\n\n` +
-            `Continue with next part?`
-          );
-
-          if (shouldContinue) {
-            // Load next chunk and restart from Planner stage
-            setCurrentGroupIndex(nextChunkIndex);
-            const nextGroupFactpack: Factpack = {
-              facts: nextGroup.facts,
-              entities: Array.from(new Set(nextGroup.facts.map(f => f.entity_id || f.entity_name))),
-              gaps: [],
-            };
-            setFactpack(nextGroupFactpack);
-
-            // Reset to Planner stage
-            setCurrentStageIndex(0); // Planner is at index 0
-            setIsComplete(false);
-            setFinalOutput(null);
-            setSessionStatus('idle');
-            setStageResults({});
-
-            // Create chunk info for next chunk
-            const chunkInfo = {
-              isChunked: true,
-              currentChunk: nextChunkIndex + 1,
-              totalChunks: factGroups.length,
-              chunkLabel: nextGroup.label,
-            };
-
-            setTimeout(() => {
-              showStageOutput(0, config!, {} as StageResults, nextGroupFactpack, chunkInfo);
-            }, 100);
-
-            return; // Don't set isComplete to true or show completion message
+          const nextChunkStep = getNextWorkflowFactChunkStep(factGroups, currentGroupIndex);
+          if (!nextChunkStep) {
+            console.warn('[Multi-Chunk] Expected a restart chunk, but no next step could be built.');
           } else {
+            const {
+              nextChunkIndex,
+              nextGroup,
+              nextFactpack: nextGroupFactpack,
+              chunkInfo,
+            } = nextChunkStep;
+
+            const shouldContinue = window.confirm(
+              `✅ Part ${currentGroupIndex + 1} of ${factGroups.length} Complete!\n\n` +
+              `Current part: ${factGroups[currentGroupIndex].label}\n` +
+              `Next part: ${nextGroup.label} (${nextGroup.facts.length} facts)\n\n` +
+              `Continue with next part?`
+            );
+
+            if (shouldContinue) {
+              const launchPlan = buildWorkflowFactChunkRestartLaunchPlan({
+                plannerStageIndex: 0,
+                nextChunkIndex,
+                nextFactpack: nextGroupFactpack,
+                chunkInfo,
+              });
+
+              executeWorkflowStageLaunch(launchPlan, {
+                runtimeConfig: config!,
+              });
+
+              return; // Don't set isComplete to true or show completion message
+            }
+
             // User chose to stop - show final results from all chunks processed so far
             alert(
               `✅ Multi-Part Generation Stopped\n\n` +
@@ -8076,17 +4130,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           }
         }
 
-        setIsComplete(true);
-
         // Show success message and scroll to results
-        const title = getString(finalContent, 'title') || getString(finalContent, 'canonical_name') || 'Generated Content';
-        const conflictCount = Array.isArray((finalContent as unknown as Record<string, unknown>)['conflicts'])
-          ? ((finalContent as unknown as Record<string, unknown>)['conflicts'] as unknown[]).length
-          : 0;
-        const issueCount = Array.isArray((finalContent as unknown as Record<string, unknown>)['physics_issues'])
-          ? ((finalContent as unknown as Record<string, unknown>)['physics_issues'] as unknown[]).length
-          : 0;
-
         // Scroll to results section after a brief delay to ensure it's rendered
         setTimeout(() => {
           const resultsSection = document.getElementById('generation-results');
@@ -8095,11 +4139,10 @@ Output: Valid JSON only. No markdown, no prose.`;
           }
         }, 200);
 
-        const canonAlign = (finalContent as Record<string, unknown>)['canon_alignment_score'];
-        const logicScore = (finalContent as Record<string, unknown>)['logic_score'];
-        const canonAlignText = typeof canonAlign === 'number' ? String(canonAlign) : 'N/A';
-        const logicScoreText = typeof logicScore === 'number' ? String(logicScore) : 'N/A';
-        alert(`✅ Generation Complete!\n\nTitle: ${title}\n\nValidation Results:\n• ${conflictCount} canon conflicts detected\n• ${issueCount} physics/logic issues found\n• Canon Alignment: ${canonAlignText}/100\n• Logic Score: ${logicScoreText}/100\n\nReview the results below before saving.`);
+        alert(buildWorkflowCompletionAlertMessage({
+          finalContent,
+          variant: 'validation_summary',
+        }));
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error processing AI response';
@@ -8109,22 +4152,12 @@ Output: Valid JSON only. No markdown, no prose.`;
       const messageText = 'Failed to process AI response. Please try again.';
       setError(messageText);
       setLastStageError({ stage: stageName, message: String(err), rawSnippet });
-      setCurrentStageOutput({
-        stage: stageName,
-        error: String(err),
-        rawResponseSnippet: rawSnippet,
-      } as unknown as JsonRecord);
-      setShowReviewModal(true);
-      setSessionStatus('error');
-      // Clear any pending state to avoid stalls
-      setCompiledStageRequest(null);
-      setPendingStageResults(null);
-      setProcessingRetrievalHints(false);
-      _setShowNarrowingModal(false);
-      setPendingFactpack(null);
-      setCurrentKeywords([]);
-      setIsStageChunking(false);
-      setIsMultiPartGeneration(false);
+      setCurrentStageOutput(buildWorkflowStageErrorOutput({
+        stageName,
+        errorMessage: String(err),
+        rawSnippet,
+      }));
+      applyWorkflowUiTransition(buildWorkflowErrorUiTransition());
       return;
     }
   };
@@ -8168,32 +4201,41 @@ Output: Valid JSON only. No markdown, no prose.`;
     if (currentStageIndex >= 0 && config) {
       setError(null);
       setLastStageError(null);
-      setShowReviewModal(false);
-      setSessionStatus('running');
-      showStageOutput(currentStageIndex, config, stageResults, factpack);
+      applyWorkflowUiTransition(buildWorkflowRetryUiTransition());
+      const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+        stageIndex: currentStageIndex,
+        stageResults,
+        factpack,
+      });
+      executeWorkflowStageLaunch(launchPlan, {
+        runtimeConfig: config,
+      });
     }
   };
 
   const handleBack = () => {
     if (currentStageIndex > 0) {
       const prevIndex = currentStageIndex - 1;
-      setCurrentStageIndex(prevIndex);
-      setModalMode(null);
-      _setSkipMode(false); // Reset skip mode when going back
-
-      // Show previous stage
-      setTimeout(() => {
-        showStageOutput(prevIndex, config!, stageResults, factpack);
-      }, 100);
+      const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+        stageIndex: prevIndex,
+        stageResults,
+        factpack,
+      });
+      applyWorkflowUiTransition({
+        modalMode: null,
+        skipMode: false,
+      });
+      executeWorkflowStageLaunch(launchPlan, {
+        runtimeConfig: config!,
+      });
     }
   };
 
   const handleRetryWithAnswers = (answers: Record<string, string>, issuesToAddress: string[]) => {
     // Close review modal
-    setShowReviewModal(false);
     setError(null);
     setLastStageError(null);
-    setSessionStatus('running');
+    applyWorkflowUiTransition(buildWorkflowRetryUiTransition());
 
     // Accumulate answers from this retry
     const updatedAnswers = {
@@ -8263,18 +4305,19 @@ Output: Valid JSON only. No markdown, no prose.`;
       additionalInstructions += '- Do not repeat the previous invalid response.\n';
     }
 
-    setTimeout(() => {
-      showStageOutput(
-        currentStageIndex,
-        config!,
-        stageResults,
-        factpack,
-        currentChunkInfo || undefined,
-        undefined,
-        updatedAnswers,
-        additionalInstructions
-      );
-    }, 100);
+    const launchPlan: WorkflowStageLaunchPlan = {
+      kind: 'show_stage',
+      stageIndex: currentStageIndex,
+      stageResults,
+      factpack,
+      chunkInfo: currentChunkInfo || undefined,
+    };
+
+    executeWorkflowStageLaunch(launchPlan, {
+      runtimeConfig: config!,
+      overrideDecisions: updatedAnswers,
+      additionalGuidance: additionalInstructions,
+    });
   };
 
   const handleAcceptWithIssues = (answers: Record<string, string>) => {
@@ -8284,10 +4327,9 @@ Output: Valid JSON only. No markdown, no prose.`;
     }
 
     // User chose to accept despite proposals/issues
-    setShowReviewModal(false);
     setError(null);
     setLastStageError(null);
-    setSessionStatus('running');
+    applyWorkflowUiTransition(buildWorkflowRetryUiTransition());
 
     // Accumulate answers from this stage
     const updatedAnswers = {
@@ -8301,25 +4343,14 @@ Output: Valid JSON only. No markdown, no prose.`;
     const currentStage = STAGES[currentStageIndex];
 
     // Filter out answered proposals from the stage output before storing
-    const answeredQuestions = new Set(Object.keys(answers));
     let filteredOutput = { ...currentStageOutput };
 
-    if (Array.isArray(filteredOutput.proposals)) {
-      const remainingProposals = (filteredOutput.proposals as unknown[])
-        .filter((proposal) => {
-          if (typeof proposal === 'string') {
-            return !answeredQuestions.has(proposal);
-          }
-          if (isRecord(proposal) && typeof proposal.question === 'string') {
-            return !answeredQuestions.has(proposal.question);
-          }
-          return true;
-        });
-
-      console.log(`[ManualGenerator] Filtered proposals: ${(filteredOutput.proposals as unknown[]).length} -> ${remainingProposals.length}`);
+    if (filteredOutput && Array.isArray(filteredOutput.proposals)) {
+      const remainingProposals = filterAnsweredWorkflowProposals(filteredOutput.proposals, answers);
+      console.log(`[ManualGenerator] Filtered proposals: ${(filteredOutput.proposals as unknown[]).length} -> ${remainingProposals?.length ?? 0}`);
       filteredOutput = {
         ...filteredOutput,
-        proposals: remainingProposals.length > 0 ? remainingProposals : undefined,
+        proposals: remainingProposals,
       };
     }
 
@@ -8328,250 +4359,66 @@ Output: Valid JSON only. No markdown, no prose.`;
       [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: filteredOutput || {},
     };
 
-    // Continue to next stage
-    if (currentStageIndex < STAGES.length - 1) {
-      let nextIndex = currentStageIndex + 1;
+    const continuation = resolveWorkflowStageContinuation({
+      currentStageIndex,
+      currentStage,
+      stages: STAGES,
+      workflowType: config?.type,
+      userPrompt: config?.prompt,
+      stageResults: newResults,
+      currentStageOutput: (filteredOutput || {}) as JsonRecord,
+      accumulatedAnswers: updatedAnswers,
+      ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+      dynamicNpcStages,
+      catalog: STAGE_CATALOG,
+      completionStrategy: 'resolved',
+      onLegendaryDecisionRequired: () =>
+        window.confirm('Should this character have legendary/mythic or lair/regional actions?'),
+    });
+    applyNpcDynamicRoutingPlan(continuation.routingPlan);
 
-      // Legendary UX: infer from prompt; if unknown, ask user; skip stage if negative.
-      const nextStage = STAGES[nextIndex];
-      if (nextStage?.routerKey === 'legendary') {
-        const pref = inferLegendaryPreference(config!.prompt || '');
-        let shouldRunLegendary = true;
-        if (pref === 'no') {
-          shouldRunLegendary = false;
-        } else if (pref === 'unknown') {
-          shouldRunLegendary = window.confirm('Should this character have legendary/mythic or lair/regional actions?');
-        }
+    if (continuation.kind === 'advance') {
+      applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+        resetMultiPart: true,
+        closeModal: false,
+      }));
 
-        if (!shouldRunLegendary) {
-          nextIndex = nextIndex + 1; // skip legendary stage
-        }
-      }
-
-      // Reset multi-part generation state when moving to new stage
-      setIsMultiPartGeneration(false);
-      setFactGroups([]);
-      setCurrentGroupIndex(0);
-
-      setCurrentStageIndex(nextIndex);
       setStageResults(newResults);
 
-      // Smart Stage Routing: Analyze Basic Info output for NPCs and build dynamic stages
-      if (config!.type === 'npc' && currentStage.name === 'Creator: Basic Info' && !dynamicNpcStages) {
-        const basicInfoOutput = filteredOutput || {};
-        const routingDecision = determineRequiredStages(
-          basicInfoOutput as Record<string, unknown>,
-          config!.prompt
-        );
-
-        setStageRoutingDecision(routingDecision);
-
-        console.log('[Smart Routing] Stage routing decision:', routingDecision);
-        console.log('[Smart Routing] Summary:\n' + getRoutingSummary(routingDecision));
-
-        const prefixStages: Stage[] = [GENERIC_STAGES[1], GENERIC_STAGES[2]];
-
-        const dynamicStages: Stage[] = [...prefixStages, NPC_CREATOR_STAGES[0]];
-
-        Object.entries(routingDecision).forEach(([stageKey, requirement]) => {
-          if (requirement.required && stageKey !== 'basicInfo') {
-            const stageConfig = STAGE_ROUTER_MAP[stageKey];
-            if (stageConfig) {
-              dynamicStages.push(stageConfig);
-            }
-          }
-        });
-
-        setDynamicNpcStages(dynamicStages);
-        console.log(`[Smart Routing] Dynamic stages built: ${dynamicStages.map(s => s.name).join(', ')}`);
-        console.log(`[Smart Routing] Skipped ${NPC_CREATOR_STAGES.length - (dynamicStages.length - prefixStages.length)} stages`);
-      }
-
-      setTimeout(() => {
-        const nextStageConfig = STAGES[nextIndex];
-        if (!nextStageConfig) {
-          setIsComplete(true);
-          setFinalOutput(newResults as unknown as JsonRecord);
-          setSessionStatus('complete');
-          setCompiledStageRequest(null);
-          setModalMode(null);
-          return;
-        }
-
-        showStageOutput(
-          nextIndex,
-          config!,
-          newResults,
-          factpack || null,
-          undefined,
-          undefined,
-          updatedAnswers
-        );
-      }, 100);
+      const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+        stageIndex: continuation.nextIndex,
+        stageResults: newResults,
+        factpack: factpack || null,
+      });
+      executeWorkflowStageLaunch(launchPlan, {
+        runtimeConfig: config!,
+        overrideDecisions: updatedAnswers,
+      });
     } else {
       // Pipeline complete - Build complete final output
       // CRITICAL FIX: Extract content from the correct location in stage results
       // Physics Validator wraps content in { content: { content: {...}, relevant_canon: {...} } }
-      let baseContent: JsonRecord = {};
-
-      if (config!.type === 'location') {
-        // Location: Use normalized data
-        baseContent = normalizeLocationData(newResults);
-        console.log('[handleAcceptWithIssues] Location: Normalized stage results');
-      } else if (config!.type === 'monster') {
-        baseContent = {
-          ...newResults.basic_info,
-          ...newResults['stats_&_defenses'],
-          ...newResults['combat_&_abilities'],
-          ...newResults['legendary_&_lair'],
-          ...newResults['ecology_&_lore'],
-          deliverable: 'monster', // Set AFTER spread to ensure it's not overwritten
-        };
-
-        // Keep hit_points as-is (integer or object {average, formula}) - schema accepts both
-
-        // Clean up saving throws notes
-        if (Array.isArray(baseContent.saving_throws)) {
-          baseContent.saving_throws = baseContent.saving_throws.map((st: any) => {
-            if (st && typeof st === 'object' && st.notes) {
-              return { ...st, notes: undefined };
-            }
-            return st;
-          });
-        }
-
-        // Clean up skill proficiencies notes
-        if (Array.isArray(baseContent.skill_proficiencies)) {
-          baseContent.skill_proficiencies = baseContent.skill_proficiencies.map((skill: any) => {
-            if (skill && typeof skill === 'object' && skill.notes) {
-              return { ...skill, notes: undefined };
-            }
-            return skill;
-          });
-        }
-
-        console.log('[handleAcceptWithIssues] Monster: Merged all 5 stage results');
-      } else if (config!.type === 'npc') {
-        const mergeResult = mergeNpcStages(newResults);
-        baseContent = {
-          ...mergeResult.merged,
-          proposals: [],
-        };
-        console.log('[handleAcceptWithIssues] NPC: Intelligently merged creator stage results', {
-          conflicts: mergeResult.conflicts.length,
-          warnings: mergeResult.warnings,
-        });
-      } else if (config?.type === 'nonfiction') {
-        const finalizer = getStageObject(newResults, 'finalizer');
-        const editorStyle = getStageObject(newResults, 'editor_&_style');
-        const draft = getStageObject(newResults, 'draft');
-        if (finalizer) {
-          baseContent = finalizer;
-          console.log('[handleAcceptWithIssues] Using content from finalizer');
-        } else if (editorStyle) {
-          baseContent = editorStyle;
-          console.log('[handleAcceptWithIssues] Using content from editor_&_style');
-        } else if (draft) {
-          baseContent = draft;
-          console.log('[handleAcceptWithIssues] Using content from draft');
-        }
-      } else {
-        const physicsValidator = getStageObject(newResults, 'physics_validator');
-        const physicsContent = getEmbeddedObject(physicsValidator, 'content', 'content');
-        const stylist = getStageObject(newResults, 'stylist');
-        const creator = getStageObject(newResults, 'creator');
-
-        if (physicsContent) {
-          // Content from Physics Validator (wrapped structure)
-          baseContent = physicsContent;
-          console.log('[handleAcceptWithIssues] Using content from physics_validator.content.content');
-        } else if (stylist) {
-          // Content from Stylist (normal structure)
-          baseContent = stylist;
-          console.log('[handleAcceptWithIssues] Using content from stylist');
-        } else if (creator) {
-          // Content from Creator (fallback)
-          baseContent = creator;
-          console.log('[handleAcceptWithIssues] Using content from creator');
-        } else {
-          console.error('[handleAcceptWithIssues] No content found in stage results!', newResults);
-        }
-      }
-
-      // Deduplicate proposals before including in final output
-      let proposals: unknown[] = [];
-      if (Array.isArray((baseContent as any).proposals)) {
-        const seenQuestions = new Set<string>();
-        const seenQuestionsNormalized = new Set<string>();
-
-        proposals = (baseContent as any).proposals.filter((p: unknown) => {
-          if (!isRecord(p) || typeof p.question !== 'string') return true;
-
-          const question = p.question;
-          const normalizedQuestion = question.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '');
-
-          // Check if this question was already answered
-          if (updatedAnswers[question]) {
-            console.log(`[Proposal Dedup] Removing answered question: ${question}`);
-            return false;
+      const completionResult = buildWorkflowCompletionResult({
+        workflowType: config?.type,
+        stageResults: newResults,
+        accumulatedAnswers: updatedAnswers,
+        strategy: 'finalized',
+        ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+        baseContentOverride: config?.type === 'npc'
+          ? {
+            ...assembleFinalWorkflowContent(config?.type, newResults).content,
+            proposals: [],
           }
-
-          // Check for exact duplicates
-          if (seenQuestions.has(question)) {
-            return false;
-          }
-
-          // Check for semantic duplicates
-          if (seenQuestionsNormalized.has(normalizedQuestion)) {
-            return false;
-          }
-
-          seenQuestions.add(question);
-          seenQuestionsNormalized.add(normalizedQuestion);
-          return true;
-        });
-
-        console.log(`[Proposal Dedup] Reduced from ${(baseContent as any).proposals?.length || 0} to ${proposals.length} proposals`);
-      }
-
-      // Infer deliverable to ensure correct save categorization
-      const inferredDeliverable = inferDeliverableType(baseContent as JsonRecord, config!.type);
-
-      const finalContent: JsonRecord = {
-        // Use Stylist as the source of truth for all content fields
-        ...baseContent,
-
-        // Override with deduplicated proposals
-        proposals,
-
-        // Critical for correct mapping when saving to project
-        deliverable: inferredDeliverable,
-
-        fact_check_report: config!.type === 'nonfiction'
-          ? (getStageObject(newResults, 'editor_&_style') || {})
-          : (getStageObject(newResults, 'fact_checker') || {}),
-
-        // Add Canon Validator metadata (these are NEW fields, not overwrites)
-        conflicts: getJsonRecordList(getStageObject(newResults, 'canon_validator')?.conflicts),
-        canon_alignment_score: getStageObject(newResults, 'canon_validator')?.canon_alignment_score,
-        validation_notes: getStageObject(newResults, 'canon_validator')?.validation_notes,
-
-        // Add Physics Validator metadata (these are NEW fields, not overwrites)
-        physics_issues: getJsonRecordList(getStageObject(newResults, 'physics_validator')?.physics_issues),
-        logic_score: getStageObject(newResults, 'physics_validator')?.logic_score,
-        balance_notes: getStageObject(newResults, 'physics_validator')?.balance_notes,
-
-        // Include the full stage results for debugging/audit trail
-        _pipeline_stages: newResults,
-      };
+          : undefined,
+      });
+      const { finalContent } = completionResult;
+      logWorkflowCompletionResult('[handleAcceptWithIssues]', completionResult, newResults);
 
       setStageResults(newResults);
-      setFinalOutput(finalContent);
-      setIsComplete(true);
-      setSessionStatus('complete');
       setLastStageError(null);
-      setCompiledStageRequest(null);
-      setModalMode(null); // CRITICAL: Close the modal
+      executeWorkflowStageLaunch(buildWorkflowCompletedLaunchPlan({
+        finalOutput: finalContent,
+      }));
 
       console.log('[ManualGenerator] Pipeline complete via handleAcceptWithIssues');
       console.log('[DEBUG] Final content:', finalContent);
@@ -8585,8 +4432,10 @@ Output: Valid JSON only. No markdown, no prose.`;
       }, 200);
 
       // Show success message
-      const title = getString(finalContent, 'title') || getString(finalContent, 'canonical_name') || 'Generated Content';
-      alert(`✅ Generation Complete!\n\nTitle: ${title}\n\nScroll down to review and save the content.`);
+      alert(buildWorkflowCompletionAlertMessage({
+        finalContent,
+        variant: 'simple',
+      }));
     }
   };
 
@@ -8607,71 +4456,31 @@ Output: Valid JSON only. No markdown, no prose.`;
 
       // Check if still exceeds threshold
       if (newFactpack.facts.length > config!.max_canon_facts) {
-        // Still too many - update modal with new counts
-        setPendingFactpack(newFactpack);
-        setCurrentKeywords(newKeywords);
-        // Modal stays open with updated data
+        setCanonNarrowingState((prev) => updateWorkflowCanonNarrowingSearch(prev, {
+          keywords: newKeywords,
+          pendingFactpack: newFactpack,
+        }));
         alert(`Still ${newFactpack.facts.length} facts found (limit: ${config!.max_canon_facts}). Please narrow further or proceed anyway.`);
       } else {
-        // Success! Within threshold
-        _setShowNarrowingModal(false);
-        setPendingFactpack(null);
-        setCurrentKeywords([]);
-        setRetrievalHintsContext(null);
-
-        if (processingRetrievalHints) {
-          // We were processing retrieval_hints - merge and continue
-          const mergedFactpack = mergeFactpacks(factpack!, newFactpack);
-          console.log(`[ManualGenerator] Merged after narrowing: ${mergedFactpack.facts.length} total facts`);
-          setFactpack(mergedFactpack);
-          setProcessingRetrievalHints(false);
-
-          // If in multi-chunk mode, we should have already merged chunks and be ready to proceed to next stage
-          // The pendingStageResults contains the merged stage output
-          if (pendingStageResults && currentStageIndex < STAGES.length - 1) {
-            const nextIndex = currentStageIndex + 1;
-            setCurrentStageIndex(nextIndex);
-            setStageResults(pendingStageResults);
-            setPendingStageResults(null);
-
-            // Note: chunk state already reset above
-            if (isMultiPartGeneration) {
-              setCurrentGroupIndex(0);
-              console.log(`[Multi-Chunk] Narrowed facts retrieved, proceeding to next stage with multi-chunk mode active`);
-            }
-
-            setTimeout(() => {
-              showStageOutput(nextIndex, config!, pendingStageResults, mergedFactpack);
-            }, 100);
-          }
-        } else {
-          // We were processing initial keyword extraction
-          setFactpack(newFactpack);
-          setPendingFactpack(null);
-          setCurrentKeywords([]);
-
-          const baseStageResults = pendingStageResults || stageResults;
-          setPendingStageResults(null);
-
-          // Store keyword extractor result and proceed to next stage
-          const currentStage = STAGES[currentStageIndex];
-          const stageKey = currentStage.name.toLowerCase().replace(/\s+/g, '_');
-          const shouldStoreKeywordsOnStage = currentStage.name === 'Keyword Extractor';
-          const newResults: StageResults = {
-            ...baseStageResults,
-            ...(shouldStoreKeywordsOnStage ? { [stageKey]: { keywords: newKeywords } } : {}),
-          };
-
-          if (currentStageIndex < STAGES.length - 1) {
-            const nextIndex = currentStageIndex + 1;
-            setCurrentStageIndex(nextIndex);
-            setStageResults(newResults);
-
-            setTimeout(() => {
-              showStageOutput(nextIndex, config!, newResults, newFactpack);
-            }, 100);
-          }
+        const pendingStageResults = canonNarrowingState.pendingStageResults;
+        const wasProcessingRetrievalHints = isProcessingRetrievalHints;
+        clearCanonNarrowingState();
+        const navigationPlan = buildWorkflowCanonContinuationPlan({
+          currentStageIndex,
+          totalStages: STAGES.length,
+          currentStageName: STAGES[currentStageIndex]?.name || '',
+          stageResults,
+          pendingStageResults,
+          selectedFactpack: newFactpack,
+          existingFactpack: factpack,
+          wasProcessingRetrievalHints,
+          narrowingKeywords: newKeywords,
+          resetCurrentGroupIndex: wasProcessingRetrievalHints && isMultiPartGeneration,
+        });
+        if (wasProcessingRetrievalHints && navigationPlan.factpack) {
+          console.log(`[ManualGenerator] Merged after narrowing: ${navigationPlan.factpack.facts.length} total facts`);
         }
+        executeWorkflowStageNavigation(navigationPlan);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error searching canon';
@@ -8679,264 +4488,163 @@ Output: Valid JSON only. No markdown, no prose.`;
     }
   };
 
-  const handleFilterFacts = (filteredFacts: Array<{ text: string; chunk_id?: string; entity_name: string; entity_id?: string; entity_type?: string; region?: string }>) => {
-    // User filtered facts manually
-    console.log('[ManualGenerator] User filtered to', filteredFacts.length, 'facts from', pendingFactpack!.facts.length);
+  const handleFilterFacts = (filteredFacts: WorkflowCanonFactSelection[]) => {
+    const pendingNarrowingFactpack = canonNarrowingState.pendingFactpack;
+    if (!pendingNarrowingFactpack) {
+      return;
+    }
 
-    // Create new factpack with filtered facts
-    const filteredFactpack: Factpack = {
-      facts: filteredFacts.map(fact => ({
-        text: fact.text,
-        chunk_id: fact.chunk_id || '',
-        entity_name: fact.entity_name,
-        entity_id: fact.entity_id || fact.entity_name,
-        entity_type: fact.entity_type,
-        region: fact.region,
-      })),
-      entities: Array.from(new Set(filteredFacts.map(f => f.entity_id || f.entity_name))),
-      gaps: [],
-    };
+    console.log('[ManualGenerator] User filtered to', filteredFacts.length, 'facts from', pendingNarrowingFactpack.facts.length);
 
-    _setShowNarrowingModal(false);
-    setRetrievalHintsContext(null);
+    const filteredFactpack = buildWorkflowFilteredFactpack(filteredFacts);
+    const pendingStageResults = canonNarrowingState.pendingStageResults;
+    const narrowingKeywords = canonNarrowingState.keywords;
+    const wasProcessingRetrievalHints = isProcessingRetrievalHints;
+    clearCanonNarrowingState();
 
-    if (processingRetrievalHints) {
-      // We were processing retrieval_hints - merge and continue
-      const mergedFactpack = mergeFactpacks(factpack!, filteredFactpack);
-      console.log(`[ManualGenerator] Merged after filtering: ${mergedFactpack.facts.length} total facts`);
-      setFactpack(mergedFactpack);
-      setPendingFactpack(null);
-      setCurrentKeywords([]);
-      setProcessingRetrievalHints(false);
-
-      // If in multi-chunk mode, we should have already merged chunks and be ready to proceed to next stage
-      // The pendingStageResults contains the merged stage output
-      if (pendingStageResults && currentStageIndex < STAGES.length - 1) {
-        const nextIndex = currentStageIndex + 1;
-        setCurrentStageIndex(nextIndex);
-        setStageResults(pendingStageResults);
-        setPendingStageResults(null);
-
-        // Reset chunk index for next stage (if still in multi-chunk mode)
-        if (isMultiPartGeneration) {
-          setCurrentGroupIndex(0);
-          console.log(`[Multi-Chunk] Retrieved additional facts, proceeding to next stage with multi-chunk mode active`);
-        }
-
-        setTimeout(() => {
-          showStageOutput(nextIndex, config!, pendingStageResults, mergedFactpack);
-        }, 100);
+    if (wasProcessingRetrievalHints) {
+      const navigationPlan = buildWorkflowCanonContinuationPlan({
+        currentStageIndex,
+        totalStages: STAGES.length,
+        currentStageName: STAGES[currentStageIndex]?.name || '',
+        stageResults,
+        pendingStageResults,
+        selectedFactpack: filteredFactpack,
+        existingFactpack: factpack,
+        wasProcessingRetrievalHints: true,
+        narrowingKeywords,
+        resetCurrentGroupIndex: isMultiPartGeneration,
+      });
+      if (navigationPlan.factpack) {
+        console.log(`[ManualGenerator] Merged after filtering: ${navigationPlan.factpack.facts.length} total facts`);
       }
+      executeWorkflowStageNavigation(navigationPlan);
     } else {
-      // We were processing initial keyword extraction
-
-      // Check if chunking is needed
       const nextStageName = STAGES[Math.min(currentStageIndex + 1, STAGES.length - 1)]?.name;
       const needsChunking = checkForChunking(filteredFactpack, nextStageName);
 
       if (needsChunking) {
-        // Store the factpack for after user approves chunking
-        setPendingFactpack(filteredFactpack);
         return;
       }
 
-      setFactpack(filteredFactpack);
-      setPendingFactpack(null);
-      setCurrentKeywords([]);
-
-      // Store keyword extractor result and proceed to next stage
-      const currentStage = STAGES[currentStageIndex];
-      const baseStageResults = pendingStageResults || stageResults;
-      setPendingStageResults(null);
-      const stageKey = currentStage.name.toLowerCase().replace(/\s+/g, '_');
-      const shouldStoreKeywordsOnStage = currentStage.name === 'Keyword Extractor';
-      const newResults: StageResults = {
-        ...baseStageResults,
-        ...(shouldStoreKeywordsOnStage ? { [stageKey]: { keywords: currentKeywords } } : {}),
-      };
-
-      if (currentStageIndex < STAGES.length - 1) {
-        const nextIndex = currentStageIndex + 1;
-        setCurrentStageIndex(nextIndex);
-        setStageResults(newResults);
-
-        setTimeout(() => {
-          showStageOutput(nextIndex, config!, newResults, filteredFactpack);
-        }, 100);
-      }
+      const navigationPlan = buildWorkflowCanonContinuationPlan({
+        currentStageIndex,
+        totalStages: STAGES.length,
+        currentStageName: STAGES[currentStageIndex]?.name || '',
+        stageResults,
+        pendingStageResults,
+        selectedFactpack: filteredFactpack,
+        existingFactpack: factpack,
+        wasProcessingRetrievalHints: false,
+        narrowingKeywords,
+      });
+      executeWorkflowStageNavigation(navigationPlan);
     }
   };
 
   const handleProceedAnyway = () => {
-    // User chose to proceed despite high fact count
-    console.log('[ManualGenerator] User chose to proceed with', pendingFactpack!.facts.length, 'facts');
-
-    _setShowNarrowingModal(false);
-    setRetrievalHintsContext(null);
-
-    if (processingRetrievalHints) {
-      // We were processing retrieval_hints - merge and continue
-      const mergedFactpack = mergeFactpacks(factpack!, pendingFactpack!);
-      console.log(`[ManualGenerator] Merged after proceeding anyway: ${mergedFactpack.facts.length} total facts`);
-      setFactpack(mergedFactpack);
-      setPendingFactpack(null);
-      setCurrentKeywords([]);
-      setProcessingRetrievalHints(false);
-
-      // If in multi-chunk mode, we should have already merged chunks and be ready to proceed to next stage
-      // The pendingStageResults contains the merged stage output
-      if (pendingStageResults && currentStageIndex < STAGES.length - 1) {
-        const nextIndex = currentStageIndex + 1;
-        setCurrentStageIndex(nextIndex);
-        setStageResults(pendingStageResults);
-        setPendingStageResults(null);
-
-        // Reset chunk index for next stage (if still in multi-chunk mode)
-        if (isMultiPartGeneration) {
-          setCurrentGroupIndex(0);
-          console.log(`[Multi-Chunk] Proceeding with all facts, advancing to next stage with multi-chunk mode active`);
-        }
-
-        setTimeout(() => {
-          showStageOutput(nextIndex, config!, pendingStageResults, mergedFactpack);
-        }, 100);
-      }
-    } else {
-      // We were processing initial keyword extraction
-      setFactpack(pendingFactpack!);
-      setPendingFactpack(null);
-      setCurrentKeywords([]);
-
-      const baseStageResults = pendingStageResults || stageResults;
-      setPendingStageResults(null);
-
-      // Store keyword extractor result and proceed to next stage
-      const currentStage = STAGES[currentStageIndex];
-      const stageKey = currentStage.name.toLowerCase().replace(/\s+/g, '_');
-      const shouldStoreKeywordsOnStage = currentStage.name === 'Keyword Extractor';
-      const newResults: StageResults = {
-        ...baseStageResults,
-        ...(shouldStoreKeywordsOnStage ? { [stageKey]: { keywords: currentKeywords } } : {}),
-      };
-
-      if (currentStageIndex < STAGES.length - 1) {
-        const nextIndex = currentStageIndex + 1;
-        setCurrentStageIndex(nextIndex);
-        setStageResults(newResults);
-
-        setTimeout(() => {
-          showStageOutput(nextIndex, config!, newResults, pendingFactpack!);
-        }, 100);
-      }
+    const pendingNarrowingFactpack = canonNarrowingState.pendingFactpack;
+    if (!pendingNarrowingFactpack) {
+      return;
     }
+
+    console.log('[ManualGenerator] User chose to proceed with', pendingNarrowingFactpack.facts.length, 'facts');
+
+    const pendingStageResults = canonNarrowingState.pendingStageResults;
+    const narrowingKeywords = canonNarrowingState.keywords;
+    const wasProcessingRetrievalHints = isProcessingRetrievalHints;
+    clearCanonNarrowingState();
+
+    const navigationPlan = buildWorkflowCanonContinuationPlan({
+      currentStageIndex,
+      totalStages: STAGES.length,
+      currentStageName: STAGES[currentStageIndex]?.name || '',
+      stageResults,
+      pendingStageResults,
+      selectedFactpack: pendingNarrowingFactpack,
+      existingFactpack: factpack,
+      wasProcessingRetrievalHints,
+      narrowingKeywords,
+      resetCurrentGroupIndex: wasProcessingRetrievalHints && isMultiPartGeneration,
+    });
+    if (wasProcessingRetrievalHints && navigationPlan.factpack) {
+      console.log(`[ManualGenerator] Merged after proceeding anyway: ${navigationPlan.factpack.facts.length} total facts`);
+    }
+    executeWorkflowStageNavigation(navigationPlan);
   };
 
   const handleProceedWithChunking = () => {
-    setShowChunkingModal(false);
+    setChunkingState((prev) => closeWorkflowChunkingModal(prev));
 
     if (isNpcSectionChunking) {
       // NPC Section-Based Chunking
       console.log('[NPC Section Chunking] User approved section-based generation with', npcSectionChunks.length, 'sections');
 
       setIsMultiPartGeneration(true);
-      setCurrentNpcSectionIndex(0);
-      setAccumulatedNpcSections({});
 
       const firstSection = npcSectionChunks[0];
 
       // Create chunk info for first section
-      const chunkInfo = {
-        isChunked: true,
-        currentChunk: 1,
-        totalChunks: npcSectionChunks.length,
-        chunkLabel: firstSection.chunkLabel,
-      };
+      const chunkInfo = buildWorkflowChunkInfo(1, npcSectionChunks.length, firstSection.chunkLabel);
 
       const currentStage = STAGES[currentStageIndex];
       console.log(`[NPC Section Chunking] Starting section 1/${npcSectionChunks.length}: ${firstSection.chunkLabel} for ${currentStage.name} stage`);
 
-      setTimeout(() => {
-        showStageOutput(currentStageIndex, config!, stageResults, factpack, chunkInfo);
-      }, 100);
+      const launchPlan = buildWorkflowNpcSectionStartLaunchPlan({
+        stageIndex: currentStageIndex,
+        stageResults,
+        factpack,
+        chunkInfo,
+      });
+
+      executeWorkflowStageLaunch(launchPlan, {
+        runtimeConfig: config!,
+      });
 
     } else {
       // Fact-Based Chunking (original behavior)
       console.log('[Fact Chunking] User approved multi-part generation with', factGroups.length, 'parts');
 
       setIsMultiPartGeneration(true);
-      setCurrentGroupIndex(0);
 
       // Start with first group
       const firstGroup = factGroups[0];
-      const firstGroupFactpack: Factpack = {
-        facts: firstGroup.facts,
-        entities: Array.from(new Set(firstGroup.facts.map(f => f.entity_id || f.entity_name))),
-        gaps: [],
-      };
-
-      setFactpack(firstGroupFactpack);
-      setPendingFactpack(null);
+      const firstGroupFactpack = buildWorkflowFactGroupFactpack(firstGroup);
 
       // Create chunk info for first chunk
-      const chunkInfo = {
-        isChunked: true,
-        currentChunk: 1,
-        totalChunks: factGroups.length,
-        chunkLabel: firstGroup.label,
-      };
+      const chunkInfo = buildWorkflowChunkInfo(1, factGroups.length, firstGroup.label);
 
       // CRITICAL FIX: Stay on the CURRENT stage and show chunk 1
       // Don't move to next stage - we're chunking the current stage
       const currentStage = STAGES[currentStageIndex];
       console.log(`[Fact Chunking] Starting chunk 1/${factGroups.length} for ${currentStage.name} stage`);
 
-      setTimeout(() => {
-        showStageOutput(currentStageIndex, config!, stageResults, firstGroupFactpack, chunkInfo);
-      }, 100);
+      const launchPlan = buildWorkflowFactChunkStartLaunchPlan({
+        stageIndex: currentStageIndex,
+        stageResults,
+        factpack: firstGroupFactpack,
+        chunkInfo,
+      });
+
+      executeWorkflowStageLaunch(launchPlan, {
+        runtimeConfig: config!,
+      });
     }
   };
 
   const handleCloseNarrowingModal = () => {
-    // User cancelled - reset and go back
-    _setShowNarrowingModal(false);
-    setPendingFactpack(null);
-    setCurrentKeywords([]);
-    setPendingStageResults(null);
-    setProcessingRetrievalHints(false);
-    setRetrievalHintsContext(null);
-    // Show the keyword extractor input modal again so user can retry
+    clearCanonNarrowingState();
     setModalMode('input');
   };
 
   // Helper function to process retrieval_hints from stage outputs
   const processRetrievalHints = async (stageOutput: JsonRecord, newResults: StageResults, stageName: string) => {
-    // Extract retrieval_hints if present
     const retrievalHints = isRecord(stageOutput.retrieval_hints) ? stageOutput.retrieval_hints : null;
-
-    if (!retrievalHints) {
-      // No retrieval hints - proceed normally
-      return { shouldProceed: true, newResults };
-    }
-
-    // Combine all hints into keywords array
-    const hintsKeywords: string[] = [];
-
-    if (Array.isArray(retrievalHints.entities)) {
-      hintsKeywords.push(...toStringArray(retrievalHints.entities));
-    }
-    if (Array.isArray(retrievalHints.regions)) {
-      hintsKeywords.push(...toStringArray(retrievalHints.regions));
-    }
-    if (Array.isArray(retrievalHints.eras)) {
-      hintsKeywords.push(...toStringArray(retrievalHints.eras));
-    }
-    if (Array.isArray(retrievalHints.keywords)) {
-      hintsKeywords.push(...toStringArray(retrievalHints.keywords));
-    }
+    const hintsKeywords = extractRetrievalHintKeywords(stageOutput);
 
     if (hintsKeywords.length === 0) {
       // No actual hints - proceed normally
-      return { shouldProceed: true, newResults };
+      return { shouldProceed: true, newResults, factpack };
     }
 
     console.log('[ManualGenerator] Found retrieval_hints:', hintsKeywords);
@@ -8950,27 +4658,20 @@ Output: Valid JSON only. No markdown, no prose.`;
       console.log('[ManualGenerator] Retrieval hints exceeded threshold - showing narrowing modal');
 
       // Store context about what was requested
-      const requestedEntities: string[] = [];
-      if (Array.isArray(retrievalHints.entities)) {
-        requestedEntities.push(...toStringArray(retrievalHints.entities));
-      }
-      if (Array.isArray(retrievalHints.regions)) {
-        requestedEntities.push(...toStringArray(retrievalHints.regions));
-      }
+      const requestedEntities = [
+        ...toStringArray(retrievalHints?.entities),
+        ...toStringArray(retrievalHints?.regions),
+      ];
 
-      setRetrievalHintsContext({
+      setCanonNarrowingState(openRetrievalHintWorkflowCanonNarrowing({
+        keywords: hintsKeywords,
+        pendingFactpack: newFactpack,
+        pendingStageResults: newResults,
         stageName,
         requestedEntities,
-      });
-
-      // Store for later processing
-      setPendingFactpack(newFactpack);
-      setCurrentKeywords(hintsKeywords);
-      setPendingStageResults(newResults);
-      setProcessingRetrievalHints(true);
-      _setShowNarrowingModal(true);
+      }));
       setModalMode(null);
-      return { shouldProceed: false, newResults };
+      return { shouldProceed: false, newResults, factpack };
     }
 
     // Merge with existing factpack
@@ -8978,7 +4679,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     console.log(`[ManualGenerator] Merged factpack: ${factpack!.facts.length} existing + ${newFactpack.facts.length} new = ${mergedFactpack.facts.length} total`);
     setFactpack(mergedFactpack);
 
-    return { shouldProceed: true, newResults };
+    return { shouldProceed: true, newResults, factpack: mergedFactpack };
   };
 
   return (
@@ -9153,7 +4854,9 @@ Output: Valid JSON only. No markdown, no prose.`;
                   <button
                     onClick={() => {
                       console.log('[Review Spaces] Opening space approval modal to review previous spaces');
-                      const syncedLiveMap = mapAndSyncSpaces(accumulatedChunkResults.map(r => extractSpaceForMap(r as JsonRecord)));
+                      const syncedLiveMap = syncLocationLiveMapSpaces(
+                        accumulatedChunkResults.map(r => extractLocationSpaceForMap(r as JsonRecord))
+                      );
                       setLiveMapSpaces(syncedLiveMap);
                       console.log('[Review Spaces] Synchronized reciprocal doors for', syncedLiveMap.length, 'spaces');
                       setReviewingSpaceIndex(accumulatedChunkResults.length - 1); // Start at last accepted space
@@ -9176,6 +4879,29 @@ Output: Valid JSON only. No markdown, no prose.`;
                   Reset & Start Over
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {config && workflowRunState?.retrieval.warningMessage && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-md">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-900">Canon Grounding Warning</h3>
+                  <p className="text-sm text-amber-800 mt-1">{workflowRunState.retrieval.warningMessage}</p>
+                  <p className="text-xs text-amber-700 mt-2">
+                    Grounding status: {workflowRunState.retrieval.groundingStatus}. Facts loaded: {workflowRunState.retrieval.factsFound}.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => document.getElementById('resources-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="px-3 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm font-medium whitespace-nowrap"
+              >
+                Check Resources
+              </button>
             </div>
           </div>
         )}
@@ -9458,7 +5184,9 @@ Output: Valid JSON only. No markdown, no prose.`;
         </div>
 
         {/* Resources Panel */}
-        <ResourcesPanel projectId={projectId} />
+        <div id="resources-panel">
+          <ResourcesPanel projectId={projectId} />
+        </div>
       </div>
 
       {/* Copy/Paste Modal - hidden in integrated AI mode */}
@@ -9468,7 +5196,8 @@ Output: Valid JSON only. No markdown, no prose.`;
         stageName={STAGES[currentStageIndex]?.name || ''}
         stageNumber={currentStageIndex + 1}
         totalStages={STAGES.length}
-        outputText={modalMode === 'output' ? currentPrompt : undefined}
+        outputText={modalMode === 'output' ? manualStagePrompt?.prompt ?? currentPrompt : undefined}
+        promptNotice={modalMode === 'output' ? currentPromptNotice : null}
         error={error}
         softWarning={locationSoftWarning}
         onFixNow={
@@ -9484,7 +5213,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         chunkProgress={
           // Show chunk progress for homebrew chunks
           (() => {
-            const homebrewChunks = getHomebrewChunks(stageResults.homebrew_chunks);
+                const homebrewChunks = getWorkflowHomebrewChunks(stageResults.homebrew_chunks);
             const currentChunk = getNumber(stageResults, 'current_chunk');
 
             if (homebrewChunks.length > 0 && typeof currentChunk === 'number') {
@@ -9512,11 +5241,10 @@ Output: Valid JSON only. No markdown, no prose.`;
                 : undefined;
           })()
         }
-        canAutoParse={getHomebrewChunks(stageResults.homebrew_chunks).length > 0 && config?.type === 'homebrew'}
+              canAutoParse={getWorkflowHomebrewChunks(stageResults.homebrew_chunks).length > 0 && config?.type === 'homebrew'}
         structuredContent={
           (() => {
-            const stages = getStages(config, dynamicNpcStages);
-            const currentStage = stages[currentStageIndex];
+            const currentStage = STAGES[currentStageIndex];
             if (!currentStage || modalMode !== 'input') return undefined;
 
             if (currentStage.name === 'Details' && stageResults.details) {
@@ -9539,7 +5267,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         liveMapPanel={
           // Show Live Map Panel inside modal during Location Spaces, Details, and Accuracy Refinement stages
           (() => {
-            const shouldShow = !!config && shouldShowMapForStage(config, currentStageIndex) && showLiveMap;
+            const shouldShow = shouldShowLocationMapForStage(config?.type, currentStageIndex, STAGES) && showLiveMap;
             return shouldShow ? (
               <LiveVisualMapPanel
                 updateToken={mapUpdateCounter}
@@ -9553,104 +5281,27 @@ Output: Valid JSON only. No markdown, no prose.`;
                   console.log('[ManualGenerator] Received updated spaces from editor:', updatedSpaces.length);
                   console.log('[ManualGenerator] Sample updated space:', updatedSpaces[0]?.name, updatedSpaces[0]?.size_ft);
 
-                  // Update the accumulated chunk results to persist the changes
-                  // CRITICAL: Match by name, NOT by index (order can change when rooms are repositioned)
-                  const resultsMap = new Map(
-                    accumulatedChunkResults.map(r => [(r.name || r.id), r])
-                  );
+                  const {
+                    updatedResults,
+                    updatedStageResults,
+                    updatedStageChunkState,
+                  } = applyLocationEditorUpdates({
+                    accumulatedChunkResults: accumulatedChunkResults as LiveMapSpace[],
+                    updatedSpaces: updatedSpaces as LiveMapSpace[],
+                    stageResults,
+                    stageChunkState: progressSession?.stageChunkState,
+                    isStageChunking,
+                    currentStageChunk,
+                    totalStageChunks,
+                    showLiveMap,
+                  });
 
-                  const updatedResults = updatedSpaces.map((space) => {
-                    // Find matching original by name
-                    const original = resultsMap.get(space.name || space.id);
-                    if (!original) {
-                      console.log('[onUpdateSpaces] New space detected:', space.name);
-                      return space;
-                    }
-
-                    // ✓ CRITICAL: Remove old dimensions before merging to prevent conflicts
-                    const cleanedOriginal = { ...original };
-                    delete cleanedOriginal.dimensions;
-                    delete cleanedOriginal.size_ft;
-
-                    const merged = {
-                      ...cleanedOriginal,
-                      ...space,
-                    };
-
-                    // ✓ CRITICAL: Explicitly preserve position and position_locked from editor
-                    if (space.position) {
-                      merged.position = {
-                        x: space.position.x,
-                        y: space.position.y,
-                      };
-                    }
-                    if (typeof space.position_locked === 'boolean') {
-                      merged.position_locked = space.position_locked;
-                    }
-
-                    // ✓ CRITICAL: Explicitly preserve doors from editor (including manually-adjusted child door positions)
-                    if (Array.isArray(space.doors)) {
-                      merged.doors = space.doors;
-                    }
-
-                    // ✓ CRITICAL: Sync dimensions and size_ft to prevent reversion
-                    // ALWAYS use size_ft as source of truth (visual editor uses this)
-                    if (space.size_ft && typeof space.size_ft === 'object') {
-                      merged.size_ft = {
-                        width: space.size_ft.width,
-                        height: space.size_ft.height,
-                      };
-                      merged.dimensions = {
-                        width: space.size_ft.width,
-                        height: space.size_ft.height,
-                      };
-                    }
-                    // Fallback: if only dimensions provided, sync to size_ft
-                    else if (space.dimensions && typeof space.dimensions === 'object') {
-                      const dims = space.dimensions as any;
-                      merged.dimensions = {
-                        width: dims.width,
-                        height: dims.height,
-                      };
-                      merged.size_ft = {
-                        width: dims.width,
-                        height: dims.height,
-                      };
-                    }
-                    // Last resort: preserve original if nothing provided
-                    else if (original.size_ft) {
-                      const originalSize = original.size_ft;
-                      if (originalSize && typeof originalSize === 'object') {
-                        const w = (originalSize as Record<string, unknown>).width;
-                        const h = (originalSize as Record<string, unknown>).height;
-                        merged.size_ft = {
-                          width: typeof w === 'number' ? w : undefined,
-                          height: typeof h === 'number' ? h : undefined,
-                        };
-                      }
-
-                      const originalDims = original.dimensions;
-                      if (typeof originalDims === 'string') {
-                        merged.dimensions = originalDims;
-                      } else if (originalDims && typeof originalDims === 'object') {
-                        const w = (originalDims as Record<string, unknown>).width;
-                        const h = (originalDims as Record<string, unknown>).height;
-                        const unit = (originalDims as Record<string, unknown>).unit;
-                        merged.dimensions = {
-                          width: typeof w === 'number' ? w : undefined,
-                          height: typeof h === 'number' ? h : undefined,
-                          unit: typeof unit === 'string' ? unit : undefined,
-                        };
-                      }
-                    }
-
+                  updatedResults.forEach((space) => {
                     console.log(`[Save Debug] ${space.name}:`, {
-                      position: merged.position,
-                      position_locked: merged.position_locked,
-                      size_ft: merged.size_ft
+                      position: space.position,
+                      position_locked: (space as LiveMapSpace & { position_locked?: boolean }).position_locked,
+                      size_ft: space.size_ft,
                     });
-
-                    return merged;
                   });
                   setAccumulatedChunkResults(updatedResults);
                   setLiveMapSpaces(updatedResults); // Use merged results to include door changes from form
@@ -9658,13 +5309,6 @@ Output: Valid JSON only. No markdown, no prose.`;
                   // Force map re-render
                   setMapUpdateCounter(prev => prev + 1);
 
-                  // CRITICAL: Also update stageResults so the AI context includes these manual edits
-                  // This ensures that when the next prompt is generated, it has the latest user edits
-                  const mergedChunks = mergeStageChunks(updatedResults, 'Spaces');
-                  const updatedStageResults = {
-                    ...stageResults,
-                    spaces: mergedChunks,
-                  };
                   setStageResults(updatedStageResults);
 
                   console.log('[ManualGenerator] ✓ Updated spaces saved to accumulatedChunkResults AND stageResults');
@@ -9673,28 +5317,15 @@ Output: Valid JSON only. No markdown, no prose.`;
                   // Save to progress session if auto-save is enabled
                   if (autoSaveEnabled && progressSession) {
                     try {
-                      // SINGLE SOURCE OF TRUTH: Always save to stageChunkState only
-                      const updatedSession: GenerationProgress = {
-                        ...progressSession,
-                        lastUpdatedAt: new Date().toISOString(),
-                        stageChunkState: {
-                          isStageChunking: progressSession.stageChunkState?.isStageChunking ?? isStageChunking,
-                          currentStageChunk: progressSession.stageChunkState?.currentStageChunk ?? currentStageChunk,
-                          totalStageChunks: progressSession.stageChunkState?.totalStageChunks ?? totalStageChunks,
-                          showLiveMap: progressSession.stageChunkState?.showLiveMap ?? showLiveMap,
-                          liveMapSpaces: updatedResults, // Use merged results to preserve all data
-                          accumulatedChunkResults: updatedResults,
-                        },
-                      };
-
                       console.log('[ManualGenerator] Saving to stageChunkState:', updatedResults.length, 'spaces');
                       updatedResults.slice(0, 3).forEach(s => {
                         console.log(`  - ${logLiveMapSpacePosition(s)}`);
                       });
 
-                      setProgressSession(updatedSession);
-                      await saveProgressToFile(updatedSession);
-                      setLastSaveTime(new Date().toISOString());
+                      await saveStateAndSession({
+                        stageResults: updatedStageResults,
+                        stageChunkState: updatedStageChunkState,
+                      });
                       console.log('[ManualGenerator] ✓ Saved to stageChunkState (single source of truth)');
                     } catch (error) {
                       console.error('[ManualGenerator] Failed to save updated spaces to session:', error);
@@ -9794,9 +5425,18 @@ Output: Valid JSON only. No markdown, no prose.`;
         existingSpaceNames={accumulatedChunkResults.map((s: JsonRecord) => s.name as string).filter(Boolean)}
         existingSpaces={accumulatedChunkResults as any}
         locationName={String(stageResults.purpose?.name || config?.prompt || '').slice(0, 100)}
+        parentStructure={(() => {
+          const foundation = getStageObject(stageResults, 'foundation');
+          if (!foundation) return undefined;
+          return {
+            total_floors: typeof foundation.total_floors === 'number' ? foundation.total_floors : undefined,
+            total_area: typeof foundation.total_area === 'number' ? foundation.total_area : undefined,
+            layout: typeof foundation.layout === 'string' ? foundation.layout : undefined,
+          };
+        })()}
         liveMapPanel={
           // Show Live Map in SpaceApprovalModal when reviewing spaces
-          shouldShowMapForStage(config, currentStageIndex) && showLiveMap && liveMapSpaces.length > 0 ? (
+          shouldShowLocationMapForStage(config?.type, currentStageIndex, STAGES) && showLiveMap && liveMapSpaces.length > 0 ? (
             <LiveVisualMapPanel
               updateToken={mapUpdateCounter}
               locationName={String(stageResults.purpose?.name || config?.prompt || '').slice(0, 50)}
@@ -9855,78 +5495,26 @@ Output: Valid JSON only. No markdown, no prose.`;
                   });
                 }
 
-                const updatedResults = updatedSpaces.map((space, idx) => {
-                  const original = accumulatedChunkResults[idx];
+                const {
+                  updatedResults,
+                  updatedStageResults,
+                  updatedStageChunkState,
+                  updatedPendingSpace,
+                } = applyLocationEditorUpdates({
+                  accumulatedChunkResults: accumulatedChunkResults as LiveMapSpace[],
+                  updatedSpaces: updatedSpaces as LiveMapSpace[],
+                  stageResults,
+                  stageChunkState: progressSession?.stageChunkState,
+                  isStageChunking,
+                  currentStageChunk,
+                  totalStageChunks,
+                  showLiveMap,
+                  reviewSpaceIndex: reviewingSpaceIndex,
+                  mergeStrategy: 'identity-or-index',
+                });
 
-                  // ✓ CRITICAL: Remove old dimensions before merging to prevent conflicts
-                  const cleanedOriginal = { ...original };
-                  delete cleanedOriginal.dimensions;
-                  delete cleanedOriginal.size_ft;
-
-                  const merged = {
-                    ...cleanedOriginal,
-                    ...space,
-                  };
-
-                  // ✓ CRITICAL: Sync dimensions and size_ft to prevent reversion
-                  // ALWAYS use size_ft as source of truth (visual editor uses this)
-                  if (space.size_ft && typeof space.size_ft === 'object') {
-                    merged.size_ft = {
-                      width: space.size_ft.width,
-                      height: space.size_ft.height,
-                    };
-                    merged.dimensions = {
-                      width: space.size_ft.width,
-                      height: space.size_ft.height,
-                    };
-                  }
-                  // Fallback: if only dimensions provided, sync to size_ft
-                  else if (space.dimensions && typeof space.dimensions === 'object') {
-                    const dims = space.dimensions as any;
-                    merged.dimensions = {
-                      width: dims.width,
-                      height: dims.height,
-                    };
-                    merged.size_ft = {
-                      width: dims.width,
-                      height: dims.height,
-                    };
-                  }
-                  // Last resort: preserve original if nothing provided
-                  else if (original.size_ft) {
-                    const originalSize = original.size_ft;
-                    if (originalSize && typeof originalSize === 'object') {
-                      const w = (originalSize as Record<string, unknown>).width;
-                      const h = (originalSize as Record<string, unknown>).height;
-                      merged.size_ft = {
-                        width: typeof w === 'number' ? w : undefined,
-                        height: typeof h === 'number' ? h : undefined,
-                      };
-                    }
-
-                    const originalDims = original.dimensions;
-                    if (typeof originalDims === 'string') {
-                      merged.dimensions = originalDims;
-                    } else if (originalDims && typeof originalDims === 'object') {
-                      const w = (originalDims as Record<string, unknown>).width;
-                      const h = (originalDims as Record<string, unknown>).height;
-                      const unit = (originalDims as Record<string, unknown>).unit;
-                      merged.dimensions = {
-                        width: typeof w === 'number' ? w : undefined,
-                        height: typeof h === 'number' ? h : undefined,
-                        unit: typeof unit === 'string' ? unit : undefined,
-                      };
-                    }
-                  }
-
-                  // ✓ CRITICAL: Explicitly preserve doors from editor (including manually-adjusted child door positions)
-                  if (Array.isArray(space.doors)) {
-                    merged.doors = space.doors;
-                  }
-
-                  console.log(`[Merge Debug] Space #${idx + 1}: size_ft`, merged.size_ft, 'dimensions', merged.dimensions);
-
-                  return merged;
+                updatedResults.forEach((space, idx) => {
+                  console.log(`[Merge Debug] Space #${idx + 1}: size_ft`, space.size_ft, 'dimensions', space.dimensions);
                 });
 
                 // Log the merged result
@@ -9945,9 +5533,10 @@ Output: Valid JSON only. No markdown, no prose.`;
                 // Force map re-render
                 setMapUpdateCounter(prev => prev + 1);
 
+                setStageResults(updatedStageResults);
+
                 // ✓ SYNC: Update pendingSpace so form receives new data
-                if (reviewingSpaceIndex >= 0 && reviewingSpaceIndex < updatedSpaces.length) {
-                  const updatedPendingSpace = updatedResults[reviewingSpaceIndex];
+                if (updatedPendingSpace) {
                   setPendingSpace(updatedPendingSpace);
                   console.log(`[Map→Form Sync] Updated pendingSpace for space #${reviewingSpaceIndex + 1}:`, {
                     name: updatedPendingSpace?.name,
@@ -9958,11 +5547,8 @@ Output: Valid JSON only. No markdown, no prose.`;
 
                 // Save using atomic save pattern
                 await saveStateAndSession({
-                  stageChunkState: progressSession?.stageChunkState ? {
-                    ...progressSession.stageChunkState,
-                    liveMapSpaces: updatedSpaces,
-                    accumulatedChunkResults: updatedResults,
-                  } : undefined,
+                  stageResults: updatedStageResults,
+                  stageChunkState: updatedStageChunkState,
                 });
                 console.log('[SpaceApprovalModal] ✓ Spaces persisted to session file');
               }}
@@ -10052,11 +5638,11 @@ Output: Valid JSON only. No markdown, no prose.`;
 
       {/* Canon Narrowing Modal */}
       <CanonNarrowingModal
-        isOpen={showNarrowingModal}
-        currentKeywords={currentKeywords}
-        factCount={pendingFactpack?.facts.length || 0}
+        isOpen={canonNarrowingState.isOpen}
+        currentKeywords={canonNarrowingState.keywords}
+        factCount={canonNarrowingState.pendingFactpack?.facts.length || 0}
         maxFacts={config?.max_canon_facts || 50}
-        canonFacts={pendingFactpack?.facts.map(fact => ({
+        canonFacts={canonNarrowingState.pendingFactpack?.facts.map(fact => ({
           text: fact.text,
           chunk_id: fact.chunk_id,
           entity_name: fact.entity_name,
@@ -10068,10 +5654,10 @@ Output: Valid JSON only. No markdown, no prose.`;
         onFilter={handleFilterFacts}
         onProceedAnyway={handleProceedAnyway}
         onClose={handleCloseNarrowingModal}
-        context={processingRetrievalHints ? 'retrieval_hints' : 'initial'}
-        requestedBy={retrievalHintsContext?.stageName}
-        requestedEntities={retrievalHintsContext?.requestedEntities}
-        existingFactCount={processingRetrievalHints ? factpack?.facts.length : undefined}
+        context={isProcessingRetrievalHints ? 'retrieval_hints' : 'initial'}
+        requestedBy={canonNarrowingState.retrievalHintsContext?.stageName}
+        requestedEntities={canonNarrowingState.retrievalHintsContext?.requestedEntities}
+        existingFactCount={isProcessingRetrievalHints ? factpack?.facts.length : undefined}
       />
 
       <FactChunkingModal
@@ -10079,8 +5665,8 @@ Output: Valid JSON only. No markdown, no prose.`;
         groups={factGroups}
         npcSections={npcSectionChunks}
         mode={isNpcSectionChunking ? 'npc-sections' : 'facts'}
-        totalCharacters={pendingFactpack?.facts.reduce((sum, f) => sum + f.text.length, 0) || 0}
-        onClose={() => setShowChunkingModal(false)}
+        totalCharacters={pendingChunkingFactpack?.facts.reduce((sum, f) => sum + f.text.length, 0) || 0}
+        onClose={() => setChunkingState((prev) => closeWorkflowChunkingModal(prev))}
         onProceed={handleProceedWithChunking}
       />
 
@@ -10103,3 +5689,4 @@ Output: Valid JSON only. No markdown, no prose.`;
     </div>
   );
 }
+

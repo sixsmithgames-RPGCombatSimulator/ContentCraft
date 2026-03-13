@@ -15,6 +15,7 @@ interface DoorConflictPanelProps {
   validationErrors: ValidationError[];
   onRemoveDoor?: (spaceName: string, doorIndex: number) => void;
   onRelocateDoor?: (spaceName: string, doorIndex: number, newPosition: number) => void;
+  onUseForRetry?: (error: ValidationError) => void;
   className?: string;
   compact?: boolean; // Compact mode for inline display
 }
@@ -113,13 +114,17 @@ export default function DoorConflictPanel({
   validationErrors,
   onRemoveDoor,
   onRelocateDoor,
+  onUseForRetry,
   className = '',
   compact = false,
 }: DoorConflictPanelProps) {
   // Filter for door conflict errors only
   const doorConflicts = validationErrors
-    .map(error => parseConflictError(error))
-    .filter((parsed): parsed is ParsedConflict => parsed !== null);
+    .map((error) => {
+      const parsed = parseConflictError(error);
+      return parsed ? { conflict: parsed, error } : null;
+    })
+    .filter((entry): entry is { conflict: ParsedConflict; error: ValidationError } => entry !== null);
 
   if (doorConflicts.length === 0) {
     return null;
@@ -159,7 +164,7 @@ export default function DoorConflictPanel({
 
       {/* Conflict List */}
       <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
-        {doorConflicts.map((conflict, idx) => {
+        {doorConflicts.map(({ conflict, error }, idx) => {
           // Estimate wall length (rough heuristic - would need actual room data for precision)
           const estimatedWallLength = Math.max(
             ...conflict.conflictingDoors.map(d => d.position),
@@ -198,8 +203,18 @@ export default function DoorConflictPanel({
               </div>
 
               {/* Action Buttons */}
-              {(onRemoveDoor || onRelocateDoor) && (
+              {(onRemoveDoor || onRelocateDoor || onUseForRetry) && (
                 <div className="flex gap-2 pt-3 border-t border-red-200">
+                  {onUseForRetry && (
+                    <button
+                      onClick={() => onUseForRetry(error)}
+                      className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-amber-600 text-white text-xs font-medium rounded hover:bg-amber-700 transition-colors"
+                      title="Use this specific conflict as retry feedback"
+                    >
+                      <AlertTriangle className="w-3 h-3" />
+                      Use for Retry
+                    </button>
+                  )}
                   {onRemoveDoor && (
                     <button
                       onClick={() => onRemoveDoor(conflict.spaceName, conflict.doorIndex)}

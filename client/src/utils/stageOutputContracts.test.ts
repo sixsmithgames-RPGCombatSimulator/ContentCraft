@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateStageOutput } from './stageOutputContracts';
+import { getStageContract, validateStageOutput } from './stageOutputContracts';
 
 describe('validateStageOutput', () => {
   it('allows optional character build arrays to be empty', () => {
@@ -41,5 +41,72 @@ describe('validateStageOutput', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain('personality_traits');
+  });
+
+  it('validates monster combat stages through the shared workflow registry', () => {
+    const result = validateStageOutput('monster.combat', {
+      abilities: [{ name: 'Pack Tactics', description: 'Advantage near allies.' }],
+      actions: [{ name: 'Bite', description: 'Melee Weapon Attack.' }],
+      bonus_actions: [],
+      reactions: [],
+      tactics: 'Prefers to flank isolated targets.',
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('validates item mechanics stages through the shared workflow registry', () => {
+    const result = validateStageOutput('item.mechanics', {
+      properties: [
+        {
+          name: 'Tidal Surge',
+          description: 'The wielder can release a wave of force.',
+          activation: 'action',
+        },
+      ],
+      spells: [],
+      charges: { maximum: 3, recharge: 'regains 1d3 charges at dawn' },
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('validates encounter concept stages through the shared workflow registry', () => {
+    const result = validateStageOutput('encounter.concept', {
+      title: 'Ambush at the Fallen Bridge',
+      description: 'Bandits and a mage pin the party on a collapsing span.',
+      encounter_type: 'combat',
+      difficulty_tier: 'hard',
+      party_level: 6,
+      party_size: 4,
+      xp_budget: 1800,
+      objectives: ['Defeat the raiders', 'Secure the caravan'],
+      failure_conditions: ['The caravan falls into the gorge'],
+      location: 'Northbridge Pass',
+      setting_context: 'The trade route has become a choke point for raiders.',
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('resolves ambiguous concept aliases using the workflow type', () => {
+    const contract = getStageContract('concept', 'encounter');
+
+    expect(contract?.allowedKeys).toEqual(
+      expect.arrayContaining(['title', 'description', 'encounter_type', 'xp_budget']),
+    );
+    expect(contract?.allowedKeys).not.toContain('item_type');
+  });
+
+  it('validates story arc structure stages through the shared workflow registry', () => {
+    const result = validateStageOutput('story_arc.structure', {
+      acts: [{ name: 'Act 1', summary: 'The threat emerges.' }],
+      beats: [{ name: 'First Omen', description: 'The sky fractures.', act: 'Act 1', type: 'revelation', required: true }],
+      branching_paths: [],
+      known_barriers: ['The duke refuses aid'],
+      unknown_barriers: ['A hidden cult is guiding the crisis'],
+    });
+
+    expect(result).toEqual({ ok: true });
   });
 });

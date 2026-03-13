@@ -8,6 +8,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { getWorkflowDefinition } from '../../shared/generation/workflowRegistry.js';
+import { resolveWorkflowContentType } from '../../shared/generation/workflowContentType.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -143,6 +145,38 @@ progressRouter.get('/list-progress', async (req: Request, res: Response) => {
           const filepath = path.join(PROGRESS_DIR, filename);
           const content = await fs.readFile(filepath, 'utf-8');
           const data = JSON.parse(content);
+          const progressEntries = Array.isArray(data.progress) ? data.progress : [];
+          const pendingEntry = progressEntries.find(
+            (entry) => entry?.status === 'pending' && entry?.response === null,
+          );
+          const latestRetryEntry = [...progressEntries].reverse().find((entry) => entry?.retrySource);
+          const latestConfirmedEntry = [...progressEntries].reverse().find(
+            (entry) => typeof entry?.confirmedStageKey === 'string' || typeof entry?.confirmedStageId === 'string',
+          );
+          const retryEntry = pendingEntry?.retrySource ? pendingEntry : latestRetryEntry;
+          const workflowType = resolveWorkflowContentType(data.workflowType || data.config?.type);
+          const workflowDefinition = getWorkflowDefinition(workflowType);
+          const workflowStageSequence = Array.isArray(data.workflowStageSequence)
+            ? data.workflowStageSequence.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+            : [];
+          const totalStages = workflowStageSequence.length > 0
+            ? workflowStageSequence.length
+            : workflowDefinition?.stageKeys.length ?? 0;
+          const recentProgress = [...progressEntries]
+            .slice(-4)
+            .reverse()
+            .map((entry) => ({
+              stage: typeof entry?.stage === 'string' ? entry.stage : 'Unknown Stage',
+              status: entry?.status === 'pending' || entry?.status === 'completed' || entry?.status === 'error'
+                ? entry.status
+                : 'completed',
+              timestamp: typeof entry?.timestamp === 'string' ? entry.timestamp : data.lastUpdatedAt,
+              chunkIndex: typeof entry?.chunkIndex === 'number' ? entry.chunkIndex : null,
+              retrySource: entry?.retrySource || undefined,
+              confirmedStageId: typeof entry?.confirmedStageId === 'string' ? entry.confirmedStageId : undefined,
+              confirmedStageKey: typeof entry?.confirmedStageKey === 'string' ? entry.confirmedStageKey : undefined,
+              confirmedWorkflowType: typeof entry?.confirmedWorkflowType === 'string' ? entry.confirmedWorkflowType : undefined,
+            }));
 
           // Filter by userId
           if (data.userId && data.userId !== authReq.userId) {
@@ -152,12 +186,26 @@ progressRouter.get('/list-progress', async (req: Request, res: Response) => {
           return {
             filename,
             sessionId: data.sessionId,
+            sessionName: data.sessionName,
             createdAt: data.createdAt,
             lastUpdatedAt: data.lastUpdatedAt,
             config: data.config,
             currentStageIndex: data.currentStageIndex,
-            progressCount: data.progress?.length || 0,
-            totalStages: 8, // Total stages in current pipeline
+            progressCount: progressEntries.length,
+            totalStages,
+            retrySource: retryEntry?.retrySource || null,
+            retryStage: retryEntry?.stage,
+            hasPendingRetry: Boolean(pendingEntry?.retrySource),
+            lastConfirmedStageId: typeof latestConfirmedEntry?.confirmedStageId === 'string'
+              ? latestConfirmedEntry.confirmedStageId
+              : undefined,
+            lastConfirmedStageKey: typeof latestConfirmedEntry?.confirmedStageKey === 'string'
+              ? latestConfirmedEntry.confirmedStageKey
+              : undefined,
+            lastConfirmedWorkflowType: typeof latestConfirmedEntry?.confirmedWorkflowType === 'string'
+              ? latestConfirmedEntry.confirmedWorkflowType
+              : undefined,
+            recentProgress,
           };
         } catch (error) {
           console.error(`[Progress] Error reading ${filename}:`, error);

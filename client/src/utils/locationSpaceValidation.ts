@@ -82,6 +82,46 @@ export function validateIncomingLocationSpace(
 
   const roomSize = getRoomSizeFt(space, issues);
 
+  if (space.wall_thickness_ft !== undefined) {
+    const wallThickness = getNumber(space.wall_thickness_ft);
+    if (wallThickness === null || wallThickness <= 0) {
+      issues.push({
+        path: 'wall_thickness_ft',
+        message: `wall_thickness_ft must be a positive number in feet (got ${JSON.stringify(space.wall_thickness_ft)}).`,
+      });
+    }
+  }
+
+  const walls = space.walls;
+  if (walls !== undefined) {
+    if (!Array.isArray(walls)) {
+      issues.push({ path: 'walls', message: 'walls must be an array when provided.' });
+    } else {
+      walls.forEach((wall, idx) => {
+        if (!isRecord(wall)) {
+          issues.push({ path: `walls[${idx}]`, message: 'Wall must be an object.' });
+          return;
+        }
+
+        const side = wall.side;
+        if (side !== 'north' && side !== 'south' && side !== 'east' && side !== 'west') {
+          issues.push({
+            path: `walls[${idx}].side`,
+            message: 'side must be one of: north|south|east|west.',
+          });
+        }
+
+        const thickness = getNumber(wall.thickness);
+        if (thickness === null || thickness <= 0) {
+          issues.push({
+            path: `walls[${idx}].thickness`,
+            message: 'thickness must be a positive number in feet.',
+          });
+        }
+      });
+    }
+  }
+
   const doors = space.doors;
   if (doors !== undefined) {
     if (!Array.isArray(doors)) {

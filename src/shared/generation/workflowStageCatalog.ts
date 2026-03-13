@@ -1,3 +1,5 @@
+import type { StageContract as SharedStageContract } from './workflowTypes';
+
 export type WorkflowStageKey =
   | 'purpose'
   | 'keyword_extractor'
@@ -29,12 +31,7 @@ export type LegacyStageContractKey =
 
 export type NpcPromptContractKey = Exclude<WorkflowStageContractKey, 'keyword_extractor' | 'planner'>;
 
-export interface WorkflowStageContract {
-  outputAllowedKeys: readonly string[];
-  requiredKeys: readonly string[];
-  proxyAllowedKeys?: readonly string[];
-  zeroRawGuard?: boolean;
-}
+export interface WorkflowStageContract extends SharedStageContract {}
 
 export interface WorkflowStageDefinition {
   key: WorkflowStageKey;
@@ -66,6 +63,9 @@ export const NPC_SPELLCASTING_PROXY_ALLOWED_KEYS = [
   'proficiency_bonus',
 ] as const;
 
+const NON_EMPTY_ARRAY_RULE = { policy: 'non_empty_if_present', type: 'array' } as const;
+const MAY_BE_EMPTY_ARRAY_RULE = { policy: 'may_be_empty', type: 'array' } as const;
+
 const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefinition> = {
   purpose: {
     key: 'purpose',
@@ -85,6 +85,9 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       outputAllowedKeys: ['keywords'],
       requiredKeys: ['keywords'],
       proxyAllowedKeys: ['keywords'],
+      fieldRules: {
+        keywords: NON_EMPTY_ARRAY_RULE,
+      },
     },
   },
   planner: {
@@ -98,6 +101,9 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       outputAllowedKeys: ['deliverable', 'retrieval_hints', 'proposals', 'assumptions', 'flags_echo'],
       requiredKeys: ['deliverable', 'retrieval_hints', 'proposals', 'flags_echo'],
       proxyAllowedKeys: ['deliverable', 'retrieval_hints', 'proposals', 'assumptions', 'flags_echo'],
+      fieldRules: {
+        proposals: MAY_BE_EMPTY_ARRAY_RULE,
+      },
     },
   },
   basic_info: {
@@ -128,6 +134,17 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       requiredKeys: ['personality_traits', 'ideals', 'bonds', 'flaws', 'goals', 'fears', 'quirks', 'voice_mannerisms', 'hooks'],
       proxyAllowedKeys: ['personality_traits', 'ideals', 'bonds', 'flaws', 'goals', 'fears', 'quirks', 'voice_mannerisms', 'hooks'],
       zeroRawGuard: true,
+      fieldRules: {
+        personality_traits: NON_EMPTY_ARRAY_RULE,
+        ideals: NON_EMPTY_ARRAY_RULE,
+        bonds: NON_EMPTY_ARRAY_RULE,
+        flaws: NON_EMPTY_ARRAY_RULE,
+        goals: NON_EMPTY_ARRAY_RULE,
+        fears: NON_EMPTY_ARRAY_RULE,
+        quirks: NON_EMPTY_ARRAY_RULE,
+        voice_mannerisms: NON_EMPTY_ARRAY_RULE,
+        hooks: NON_EMPTY_ARRAY_RULE,
+      },
     },
   },
   stats: {
@@ -156,6 +173,15 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       outputAllowedKeys: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
       requiredKeys: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
       proxyAllowedKeys: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
+      fieldRules: {
+        class_features: MAY_BE_EMPTY_ARRAY_RULE,
+        subclass_features: MAY_BE_EMPTY_ARRAY_RULE,
+        racial_features: MAY_BE_EMPTY_ARRAY_RULE,
+        feats: MAY_BE_EMPTY_ARRAY_RULE,
+        fighting_styles: MAY_BE_EMPTY_ARRAY_RULE,
+        skill_proficiencies: MAY_BE_EMPTY_ARRAY_RULE,
+        saving_throws: MAY_BE_EMPTY_ARRAY_RULE,
+      },
     },
   },
   combat: {
@@ -170,6 +196,11 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       outputAllowedKeys: ['actions', 'bonus_actions', 'reactions', 'multiattack', 'special_attacks'],
       requiredKeys: ['actions', 'bonus_actions', 'reactions'],
       proxyAllowedKeys: ['actions', 'bonus_actions', 'reactions', 'multiattack', 'special_attacks', 'tactics', 'combat_tactics'],
+      fieldRules: {
+        actions: NON_EMPTY_ARRAY_RULE,
+        bonus_actions: MAY_BE_EMPTY_ARRAY_RULE,
+        reactions: MAY_BE_EMPTY_ARRAY_RULE,
+      },
     },
   },
   spellcasting: {
@@ -184,6 +215,12 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       outputAllowedKeys: [...NPC_SPELLCASTING_OUTPUT_ALLOWED_KEYS],
       requiredKeys: ['spellcasting_ability', 'spell_save_dc', 'spell_attack_bonus'],
       proxyAllowedKeys: [...NPC_SPELLCASTING_PROXY_ALLOWED_KEYS],
+      fieldRules: {
+        prepared_spells: { policy: 'present_if_applicable', type: 'object' },
+        always_prepared_spells: { policy: 'present_if_applicable', type: 'object' },
+        innate_spells: { policy: 'present_if_applicable', type: 'object' },
+        spells_known: MAY_BE_EMPTY_ARRAY_RULE,
+      },
     },
   },
   legendary: {
@@ -212,6 +249,13 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       outputAllowedKeys: ['allies', 'enemies', 'organizations', 'family', 'contacts'],
       requiredKeys: ['allies', 'enemies', 'organizations'],
       proxyAllowedKeys: ['allies', 'enemies', 'foes', 'organizations', 'family', 'contacts'],
+      fieldRules: {
+        allies: MAY_BE_EMPTY_ARRAY_RULE,
+        enemies: MAY_BE_EMPTY_ARRAY_RULE,
+        organizations: MAY_BE_EMPTY_ARRAY_RULE,
+        family: MAY_BE_EMPTY_ARRAY_RULE,
+        contacts: MAY_BE_EMPTY_ARRAY_RULE,
+      },
     },
   },
   equipment: {
@@ -226,6 +270,13 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       outputAllowedKeys: ['weapons', 'armor_and_shields', 'wondrous_items', 'consumables', 'other_gear'],
       requiredKeys: ['weapons', 'armor_and_shields', 'wondrous_items', 'consumables', 'other_gear'],
       proxyAllowedKeys: ['weapons', 'armor_and_shields', 'wondrous_items', 'consumables', 'other_gear', 'equipment'],
+      fieldRules: {
+        weapons: MAY_BE_EMPTY_ARRAY_RULE,
+        armor_and_shields: MAY_BE_EMPTY_ARRAY_RULE,
+        wondrous_items: MAY_BE_EMPTY_ARRAY_RULE,
+        consumables: MAY_BE_EMPTY_ARRAY_RULE,
+        other_gear: MAY_BE_EMPTY_ARRAY_RULE,
+      },
     },
   },
 };

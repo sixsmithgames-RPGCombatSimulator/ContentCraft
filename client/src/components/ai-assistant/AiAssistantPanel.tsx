@@ -34,8 +34,29 @@ import {
   computeFieldDiff,
 } from '../../utils/aiPromptBuilder';
 import { sendToProvider } from '../../services/aiProvider';
+import {
+  buildIntegratedStageRequest,
+  executeIntegratedStageRequest,
+  getConfirmedIntegratedStageMetadata,
+} from '../../services/workflowTransport';
+import type { WorkflowTransportStageResponse } from '../../services/workflowTransport';
+import { getWorkflowRetryBadgeLabel, getWorkflowRetryDetail } from '../../services/workflowRetryNotice';
 import AiProviderSettings from './AiProviderSettings';
 import ModeSelectionDialog from './ModeSelectionDialog';
+import {
+  getCurrentStageAttempt,
+  hasAcceptedCurrentStage,
+  markStageError as markRunStageError,
+  upsertStageAttempt,
+} from '../../../../src/shared/generation/workflowRunState';
+
+function isWorkflowFailureResponse(
+  body: WorkflowTransportStageResponse,
+): body is Extract<WorkflowTransportStageResponse, { ok: false }> {
+  return body.ok === false;
+}
+
+type AIProvider = 'gemini' | 'openai' | 'ollama' | 'openrouter' | 'manual';
 
 type StageRunnerState =
   | 'idle'
@@ -200,6 +221,7 @@ export default function AiAssistantPanel() {
     workflowContext,
     applyChanges,
     submitPipelineResponse,
+    workflowRunStateDispatcher,
     providerConfig,
     assistMode,
     setAssistMode,
@@ -250,6 +272,57 @@ export default function AiAssistantPanel() {
 
   const effectiveStageKey = workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest?.stageKey || null;
   const hasActiveAutomatedStage = Boolean(workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest);
+  const workflowRunState = workflowContext?.runState || null;
+  const currentRunAttempt = getCurrentStageAttempt(workflowRunState);
+  const currentRunAttemptStatus = currentRunAttempt?.status || null;
+  const currentRunAttemptId = currentRunAttempt?.attemptId || null;
+  const currentRetrySource = currentRunAttempt?.retrySource || null;
+  const currentRetryBadge = currentRetrySource ? getWorkflowRetryBadgeLabel(currentRetrySource) : null;
+  const currentRetryDetail = currentRetrySource ? getWorkflowRetryDetail(currentRetrySource, 160) : null;
+
+  const updateWorkflowRunAttempt = useCallback(
+    (
+      status: 'sending' | 'awaiting' | 'parsing' | 'applying' | 'error' | 'complete',
+      options?: { error?: string; warnings?: string[]; stageKey?: string; stageLabel?: string },
+    ) => {
+      if (!workflowRunStateDispatcher || !workflowContext) return;
+      const stageKey = options?.stageKey || effectiveStageKey || workflowContext.compiledStageRequest?.stageKey;
+      if (!stageKey) return;
+      const stageLabel = options?.stageLabel || workflowContext.currentStage || workflowContext.compiledStageRequest?.stageLabel || stageKey;
+      const mappedStatus =
+        status === 'sending'
+          ? 'sending'
+          : status === 'awaiting'
+          ? 'awaiting_response'
+          : status === 'parsing'
+          ? 'received'
+          : status === 'applying'
+          ? 'applying'
+          : status === 'error'
+          ? 'error'
+          : 'accepted';
+
+      workflowRunStateDispatcher((prev) => {
+        if (status === 'error') {
+          return markRunStageError(prev, stageKey, stageLabel, options?.error || 'Stage execution failed.', {
+            attemptId: currentRunAttemptId || undefined,
+            warnings: options?.warnings,
+          });
+        }
+
+        return upsertStageAttempt(prev, {
+          attemptId: currentRunAttemptId || undefined,
+          stageKey,
+          stageLabel,
+          status: mappedStatus,
+          warnings: options?.warnings,
+          error: options?.error,
+          transport: 'integrated',
+        });
+      });
+    },
+    [workflowRunStateDispatcher, workflowContext, effectiveStageKey, currentRunAttemptId]
+  );
 
   // Reset stageRunId when stage changes (use compiled request as fallback identifier)
   useEffect(() => {
@@ -292,10 +365,31 @@ export default function AiAssistantPanel() {
         hasProvider,
         stageRouterKey: workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest?.stageKey,
         stageRunnerState,
+        attemptStatus: currentRunAttemptStatus,
         hasAutoStarted,
+        retrySource: currentRetrySource
+          ? {
+            kind: currentRetrySource.kind,
+            label: currentRetrySource.label,
+            targetName: currentRetrySource.targetName,
+            issueCategory: currentRetrySource.issueCategory,
+            issueType: currentRetrySource.issueType,
+          }
+          : null,
       });
     },
-    [assistMode, hasAutoStarted, hasProvider, isPanelOpen, providerConfig.type, stageRunnerState, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest?.stageKey]
+    [
+      assistMode,
+      currentRetrySource,
+      currentRunAttemptStatus,
+      hasAutoStarted,
+      hasProvider,
+      isPanelOpen,
+      providerConfig.type,
+      stageRunnerState,
+      workflowContext?.stageRouterKey,
+      workflowContext?.compiledStageRequest?.stageKey,
+    ]
   );
 
   // ─── Handlers ────────────────────────────────────────────────────────────
@@ -616,23 +710,25 @@ export default function AiAssistantPanel() {
     setStageRunId(runId);
     setStageRunnerState('sending');
     setStageRunnerError(null);
+    updateWorkflowRunAttempt('sending', {
+      stageKey,
+      stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+    });
     inFlightRef.current = true;
 
     try {
-      const requestBody = {
-        projectId: workflowContext.projectId || 'default',
-        stageId: stageKey,
-        stageRunId: runId,
-        prompt,
-        schemaVersion: workflowContext.schemaVersion || 'v1.1-client',
-        clientContext: {
-          generatorType: workflowContext.generatorType || workflowContext.workflowType,
+      const requestBody = buildIntegratedStageRequest(workflowContext, stageKey, runId, providerConfig.type);
+      if (!requestBody) {
+        setStageRunnerError('Unable to build a workflow stage request.');
+        setStageRunnerState('error');
+        updateWorkflowRunAttempt('error', {
+          error: 'Unable to build a workflow stage request.',
           stageKey,
-          userSelectedMode: providerConfig.type,
-          promptMode: compiledStageRequest.promptBudget.mode,
-          measuredChars: compiledStageRequest.promptBudget.measuredChars,
-        },
-      };
+          stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+        });
+        inFlightRef.current = false;
+        return;
+      }
 
       console.info('[AI Runner][Request]', {
         stageKey,
@@ -641,26 +737,44 @@ export default function AiAssistantPanel() {
         schemaVersion: requestBody.schemaVersion,
         promptChars: compiledStageRequest.promptBudget.measuredChars,
         promptMode: compiledStageRequest.promptBudget.mode,
+        retrySource: currentRetrySource
+          ? {
+            kind: currentRetrySource.kind,
+            label: currentRetrySource.label,
+            targetName: currentRetrySource.targetName,
+            issueCategory: currentRetrySource.issueCategory,
+            issueType: currentRetrySource.issueType,
+          }
+          : null,
       });
 
-      const response = await fetch('/api/ai/gemini/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-
+      const { response, body } = await executeIntegratedStageRequest(requestBody);
       setStageRunnerState('awaiting');
-      const body = await response.json();
+      updateWorkflowRunAttempt('awaiting', {
+        stageKey,
+        stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+      });
 
       if (!response.ok || !body?.ok) {
-        const message = body?.error?.message || `Request failed (${response.status})`;
+        const failureBody = isWorkflowFailureResponse(body) ? body : null;
+        const message = failureBody?.error?.message || `Request failed (${response.status})`;
+        const failedStageKey = failureBody?.workflow?.stageKey || stageKey;
         console.warn('[AI Runner][Response][Error]', {
           status: response.status,
           message,
-          body,
+          body: failureBody ?? body,
+          retrySource: currentRetrySource
+            ? {
+              kind: currentRetrySource.kind,
+              label: currentRetrySource.label,
+              targetName: currentRetrySource.targetName,
+              issueCategory: currentRetrySource.issueCategory,
+              issueType: currentRetrySource.issueType,
+            }
+            : null,
         });
-        if (body?.error?.type === 'RATE_LIMIT') {
-          const cooldown = typeof body?.error?.retryAfterMs === 'number' ? Math.max(body.error.retryAfterMs, 5000) : 10_000;
+        if (failureBody?.error?.type === 'RATE_LIMIT') {
+          const cooldown = typeof failureBody.error.retryAfterMs === 'number' ? Math.max(failureBody.error.retryAfterMs, 5000) : 10_000;
           setRateLimitCooldownMs(cooldown);
           setCooldownEndsAt(Date.now() + cooldown);
           setStageRunnerError(`Rate limited. Auto-retry in ${(cooldown / 1000).toFixed(0)}s.`);
@@ -669,18 +783,46 @@ export default function AiAssistantPanel() {
           setStageRunnerError(message);
         }
         setStageRunnerState('error');
+        updateWorkflowRunAttempt('error', {
+          error: message,
+          stageKey: failedStageKey,
+          stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+        });
         inFlightRef.current = false;
         return;
       }
 
+      const confirmedStage = getConfirmedIntegratedStageMetadata(body, {
+        stageId: stageKey,
+        stageKey,
+        workflowType: workflowContext.generatorType || workflowContext.workflowType,
+      });
+      const confirmedStageKey = confirmedStage.stageKey;
+      if (confirmedStageKey !== stageKey) {
+        console.warn('[AI Runner][Stage Confirmed] Server confirmed a different stage key than requested', {
+          requestedStageKey: stageKey,
+          confirmedStageKey,
+          workflow: body.workflow ?? null,
+        });
+      }
+
       setStageRunnerState('parsing');
+      updateWorkflowRunAttempt('parsing', {
+        stageKey: confirmedStageKey,
+        stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+      });
       const patch = body.jsonPatch as unknown;
-      const validated = validatePatch(stageKey, patch);
+      const validated = validatePatch(confirmedStageKey, patch);
 
       if (!validated.ok) {
         const failure = validated as { ok: false; message: string };
         setStageRunnerError(failure.message);
         setStageRunnerState('error');
+        updateWorkflowRunAttempt('error', {
+          error: failure.message,
+          stageKey,
+          stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+        });
         inFlightRef.current = false;
         return;
       }
@@ -689,27 +831,59 @@ export default function AiAssistantPanel() {
       const allowedKeys = workflowContext?.schema && isPlainObject(workflowContext.schema)
         ? Object.keys((workflowContext.schema as { properties?: Record<string, unknown> }).properties || {})
         : null;
-      const sanitizedPayload = sanitizeStagePayload(stageKey, payload, allowedKeys);
+      const sanitizedPayload = sanitizeStagePayload(confirmedStageKey, payload, allowedKeys);
       setStageRunnerState('applying');
+      updateWorkflowRunAttempt('applying', {
+        stageKey: confirmedStageKey,
+        stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+      });
       setExtractedPayload(sanitizedPayload);
-      applyStagePatch(stageKey, sanitizedPayload);
+      applyStagePatch(confirmedStageKey, sanitizedPayload);
       
       if (submitPipelineResponse) {
         // Submit the actual payload to the generator pipeline
-        await submitPipelineResponse(JSON.stringify(sanitizedPayload), sanitizedPayload);
+        await submitPipelineResponse(JSON.stringify(sanitizedPayload), sanitizedPayload, {
+          ...confirmedStage,
+          requestId: body.requestId,
+          stageRunId: body.stageRunId,
+        });
       }
       
       setStageRunnerState('complete');
+      updateWorkflowRunAttempt('applying', {
+        stageKey: confirmedStageKey,
+        stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+      });
       addMessage({
         role: 'system',
-        content: `Stage ${stageKey} applied successfully via Gemini.`,
+        content: body.workflow?.stageKey
+          ? `Stage ${body.workflow.stageKey} applied successfully via Gemini.`
+          : `Stage ${stageKey} applied successfully via Gemini.`,
       });
-      console.info('[AI Runner][Success]', { stageKey, runId });
+      console.info('[AI Runner][Success]', {
+        stageKey: confirmedStageKey,
+        runId,
+        workflow: body.workflow ?? null,
+        retrySource: currentRetrySource
+          ? {
+            kind: currentRetrySource.kind,
+            label: currentRetrySource.label,
+            targetName: currentRetrySource.targetName,
+            issueCategory: currentRetrySource.issueCategory,
+            issueType: currentRetrySource.issueType,
+          }
+          : null,
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('[AI Runner][Exception]', message);
       setStageRunnerError(message);
       setStageRunnerState('error');
+      updateWorkflowRunAttempt('error', {
+        error: message,
+        stageKey: stageKeyForRun || effectiveStageKey || workflowContext?.compiledStageRequest?.stageKey || 'unknown',
+        stageLabel: workflowContext?.currentStage || workflowContext?.compiledStageRequest?.stageLabel || 'Unknown Stage',
+      });
       inFlightRef.current = false;
     } finally {
       inFlightRef.current = false;
@@ -724,6 +898,8 @@ export default function AiAssistantPanel() {
     addMessage,
     logStageRunnerGate,
     stageRunnerState,
+    currentRetrySource,
+    updateWorkflowRunAttempt,
   ]);
 
   const handleRetryAfterRateLimit = useCallback(() => {
@@ -814,6 +990,10 @@ export default function AiAssistantPanel() {
       logStageRunnerGate('skip: missing stageRouterKey');
       return;
     }
+    if (currentRunAttemptStatus && currentRunAttemptStatus !== 'compiled') {
+      logStageRunnerGate(`skip: attempt not ready (${currentRunAttemptStatus})`);
+      return;
+    }
     if (stageRunnerState !== 'idle') {
       logStageRunnerGate(`skip: runner not idle (${stageRunnerState})`);
       return;
@@ -827,11 +1007,11 @@ export default function AiAssistantPanel() {
     setHasAutoStarted(true);
     // Add 2.5s initial delay to ensure server-side throttle window is clear
     setTimeout(() => runStageWithGemini(), 2500);
-  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate]);
+  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus]);
 
   // Auto-retry on error with countdown (skip if missing stageRouterKey)
   useEffect(() => {
-    if (stageRunnerState !== 'error' || !workflowContext?.stageRouterKey) {
+    if (stageRunnerState !== 'error' || currentRunAttemptStatus !== 'error') {
       setRetryCountdown(null);
       if (retryTimerRef.current) {
         clearInterval(retryTimerRef.current as unknown as number);
@@ -871,54 +1051,81 @@ export default function AiAssistantPanel() {
       clearInterval(interval);
       retryTimerRef.current = null;
     };
-  }, [stageRunnerState, stageRunnerError, workflowContext?.stageRouterKey, runStageWithGemini]);
+  }, [stageRunnerState, stageRunnerError, currentRunAttemptStatus, runStageWithGemini]);
 
-  // Stall watchdog: if runner is complete but stageRouterKey doesn't advance, raise error and retry
+  // Stall watchdog: only retry if the same explicit attempt never gets accepted.
   useEffect(() => {
-    if (assistMode !== 'integrated') return;
-    if (!isPanelOpen) return;
-    if (!hasActiveAutomatedStage) return;
-
-    // Clear any existing stall timer when routerKey changes
-    if (stallTimerRef.current) {
-      clearInterval(stallTimerRef.current as unknown as number);
-      stallTimerRef.current = null;
+    const clearStallTimer = () => {
+      if (stallTimerRef.current) {
+        clearInterval(stallTimerRef.current as unknown as number);
+        stallTimerRef.current = null;
+      }
       setStallCountdown(null);
-    }
+    };
 
-    // If complete and routerKey is missing, surface error (no retry here)
-    if (stageRunnerState === 'complete' && !workflowContext?.stageRouterKey) {
+    if (assistMode !== 'integrated' || !isPanelOpen || !hasActiveAutomatedStage) {
+      clearStallTimer();
       return;
     }
 
-    if (stageRunnerState === 'complete' && workflowContext?.stageRouterKey) {
-      // Start a short countdown to detect no-advance
-      setStallCountdown(3);
-      const interval = setInterval(() => {
-        setStallCountdown((current) => {
-          if (current === null) return current;
-          const next = current - 1;
-          if (next <= 0) {
-            clearInterval(interval);
-            stallTimerRef.current = null;
-            setStallCountdown(null);
-            setStageRunnerError('Workflow stalled: next stage did not start. Auto-retrying current stage.');
-            setStageRunnerState('idle');
-            setTimeout(() => runStageWithGemini(), 0);
-            return null;
-          }
-          return next;
-        });
-      }, 1000);
-
-      stallTimerRef.current = interval as unknown as NodeJS.Timeout;
-
-      return () => {
-        clearInterval(interval);
-        stallTimerRef.current = null;
-      };
+    if (!currentRunAttemptId || currentRunAttemptStatus !== 'applying' || hasAcceptedCurrentStage(workflowRunState)) {
+      clearStallTimer();
+      return;
     }
-  }, [assistMode, hasActiveAutomatedStage, isPanelOpen, stageRunnerState, workflowContext?.stageRouterKey, runStageWithGemini]);
+
+    if (stageRunnerState !== 'complete') {
+      clearStallTimer();
+      return;
+    }
+
+    clearStallTimer();
+    setStallCountdown(4);
+    const interval = setInterval(() => {
+      setStallCountdown((current) => {
+        if (current === null) return current;
+        const next = current - 1;
+        if (next <= 0) {
+          clearInterval(interval);
+          stallTimerRef.current = null;
+          setStallCountdown(null);
+          setStageRunnerError('Workflow stalled: stage apply was never accepted. Auto-retrying current stage.');
+          updateWorkflowRunAttempt('error', {
+            error: 'Workflow stalled: stage apply was never accepted.',
+            stageKey: effectiveStageKey || undefined,
+            stageLabel: workflowContext?.currentStage || workflowContext?.compiledStageRequest?.stageLabel,
+          });
+          setStageRunnerState('idle');
+          setHasAutoStarted(false);
+          setTimeout(() => runStageWithGemini(), 0);
+          return null;
+        }
+        return next;
+      });
+    }, 1000);
+
+    stallTimerRef.current = interval as unknown as NodeJS.Timeout;
+
+    return () => {
+      clearInterval(interval);
+      if (stallTimerRef.current === (interval as unknown as NodeJS.Timeout)) {
+        stallTimerRef.current = null;
+      }
+      setStallCountdown(null);
+    };
+  }, [
+    assistMode,
+    currentRunAttemptId,
+    currentRunAttemptStatus,
+    effectiveStageKey,
+    hasActiveAutomatedStage,
+    isPanelOpen,
+    runStageWithGemini,
+    stageRunnerState,
+    updateWorkflowRunAttempt,
+    workflowContext?.currentStage,
+    workflowContext?.compiledStageRequest?.stageLabel,
+    workflowRunState,
+  ]);
 
   const handleConfirmApply = useCallback(() => {
     if (!pendingDiff || !applyChanges) return;
@@ -1098,6 +1305,26 @@ export default function AiAssistantPanel() {
                 )}
               </div>
             </div>
+            {currentRetrySource && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-amber-900">Retry Context</span>
+                  {currentRetryBadge && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                      {currentRetryBadge}
+                    </span>
+                  )}
+                  {currentRetrySource.targetName && (
+                    <span className="text-[11px] text-amber-700">
+                      Target: {currentRetrySource.targetName}
+                    </span>
+                  )}
+                </div>
+                {currentRetryDetail && (
+                  <p className="mt-1 text-xs text-amber-800">{currentRetryDetail}</p>
+                )}
+              </div>
+            )}
             {stageRunnerState === 'idle' && !hasAutoStarted && (
               <div className="bg-white rounded-lg p-3 border border-primary-200">
                 <p className="text-xs text-gray-600 mb-2">

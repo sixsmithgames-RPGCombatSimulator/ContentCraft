@@ -8,6 +8,7 @@ import { Copy, Check, X, ArrowRight, ArrowLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 import LocationDetailsPreview from './LocationDetailsPreview';
 import LocationAccuracyPreview from './LocationAccuracyPreview';
+import type { WorkflowPromptNotice } from '../../types/workflowUi';
 
 interface CopyPasteModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface CopyPasteModalProps {
   stageNumber: number;
   totalStages: number;
   outputText?: string;
+  promptNotice?: WorkflowPromptNotice | null;
   error?: string | null;
   softWarning?: {
     title: string;
@@ -56,6 +58,7 @@ export default function CopyPasteModal({
   stageNumber,
   totalStages,
   outputText,
+  promptNotice,
   error,
   softWarning,
   onFixNow,
@@ -210,6 +213,30 @@ export default function CopyPasteModal({
 
           {mode === 'output' ? (
             <>
+              {promptNotice && (
+                <div
+                  className={`mb-4 rounded-md border p-4 ${
+                    promptNotice.tone === 'warning'
+                      ? 'border-amber-200 bg-amber-50'
+                      : 'border-blue-200 bg-blue-50'
+                  }`}
+                >
+                  <p
+                    className={`text-sm font-semibold ${
+                      promptNotice.tone === 'warning' ? 'text-amber-900' : 'text-blue-900'
+                    }`}
+                  >
+                    {promptNotice.title}
+                  </p>
+                  <p
+                    className={`mt-1 text-sm ${
+                      promptNotice.tone === 'warning' ? 'text-amber-800' : 'text-blue-800'
+                    }`}
+                  >
+                    {promptNotice.message}
+                  </p>
+                </div>
+              )}
               <p className="text-gray-600 mb-4">
                 Copy this prompt and paste it into your AI chat (ChatGPT, Claude, Gemini, etc.)
               </p>

@@ -9,28 +9,22 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
+import type { GenerationRunState, WorkflowContentType } from '../../../src/shared/generation/workflowTypes';
+import type { WorkflowExecutionOutcome, WorkflowExecutionRetryContext } from '../../../src/server/services/workflowExecutionService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /** Supported workflow types that the AI assistant can contextually assist with */
-export type WorkflowType =
-  | 'npc'
-  | 'monster'
-  | 'encounter'
-  | 'location'
-  | 'item'
-  | 'story_arc'
-  | 'scene'
-  | 'adventure'
-  | 'homebrew'
-  | 'nonfiction'
-  | 'outline'
-  | 'chapter'
-  | 'memoir'
-  | 'journal_entry'
-  | 'other_writing'
-  | 'unknown';
+export type WorkflowType = WorkflowContentType;
 
 export interface AiStageMemorySummary {
   request: {
@@ -68,6 +62,19 @@ export interface AiCompiledStageRequest {
   memory: AiStageMemorySummary;
 }
 
+export interface SubmitPipelineStageMetadata {
+  stageId: string;
+  stageKey: string;
+  workflowType?: string;
+  outcome?: WorkflowExecutionOutcome;
+  accepted?: boolean;
+  requestId?: string;
+  stageRunId?: string;
+  allowedKeyCount?: number;
+  rawAllowedKeyCount?: number;
+  retryContext?: WorkflowExecutionRetryContext;
+}
+
 /** Workflow context pushed by the active page/component into the AI assistant */
 export interface AiAssistantWorkflowContext {
   /** Which workflow type is currently active */
@@ -96,6 +103,8 @@ export interface AiAssistantWorkflowContext {
   schemaVersion?: string;
   /** Project identifier (if available) */
   projectId?: string;
+  /** Shared workflow runtime state */
+  runState?: GenerationRunState;
 }
 
 /** A single message in the AI assistant chat history */
@@ -139,8 +148,11 @@ export type ApplyChangesCallback = (
  */
 export type SubmitPipelineResponseCallback = (
   rawText: string,
-  parsedJson?: Record<string, unknown>
+  parsedJson?: Record<string, unknown>,
+  metadata?: SubmitPipelineStageMetadata,
 ) => Promise<void>;
+
+export type WorkflowRunStateDispatcher = Dispatch<SetStateAction<GenerationRunState | null>>;
 
 // ─── Context Shape ───────────────────────────────────────────────────────────
 /** AI assist mode: integrated (automated) or manual (copy/paste) */
@@ -164,6 +176,10 @@ interface AiAssistantContextValue {
   /** Callback the active workflow registers so the panel can trigger the pipeline */
   submitPipelineResponse: SubmitPipelineResponseCallback | null;
   registerSubmitPipelineResponse: (cb: SubmitPipelineResponseCallback | null) => void;
+
+  /** Dispatcher the active workflow registers so the panel can update workflow run-state */
+  workflowRunStateDispatcher: WorkflowRunStateDispatcher | null;
+  registerWorkflowRunStateDispatcher: (cb: WorkflowRunStateDispatcher | null) => void;
 
   /** Chat history */
   messages: ChatMessage[];
@@ -213,6 +229,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const [workflowContext, setWorkflowContext] = useState<AiAssistantWorkflowContext | null>(null);
   const [applyChanges, setApplyChanges] = useState<ApplyChangesCallback | null>(null);
   const [submitPipelineResponse, setSubmitPipelineResponse] = useState<SubmitPipelineResponseCallback | null>(null);
+  const [workflowRunStateDispatcher, setWorkflowRunStateDispatcherState] = useState<WorkflowRunStateDispatcher | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [providerConfig, setProviderConfigState] = useState<AiProviderConfig>(loadProviderConfig);
   const [assistMode, setAssistMode] = useState<AssistMode>(null);
@@ -228,6 +245,10 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
 
   const registerSubmitPipelineResponse = useCallback((cb: SubmitPipelineResponseCallback | null) => {
     setSubmitPipelineResponse(() => cb);
+  }, []);
+
+  const registerWorkflowRunStateDispatcher = useCallback((cb: WorkflowRunStateDispatcher | null) => {
+    setWorkflowRunStateDispatcherState(() => cb);
   }, []);
 
   const addMessage = useCallback(
@@ -262,6 +283,8 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         registerApplyChanges,
         submitPipelineResponse,
         registerSubmitPipelineResponse,
+        workflowRunStateDispatcher,
+        registerWorkflowRunStateDispatcher,
         messages,
         addMessage,
         clearMessages,

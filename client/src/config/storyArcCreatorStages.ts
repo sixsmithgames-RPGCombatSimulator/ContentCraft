@@ -15,44 +15,13 @@ import {
   getStoryArcSecretsSchema,
   formatStoryArcSchemaForPrompt,
 } from '../utils/storyArcSchemaExtractor';
-
-interface StageContext {
-  config: { prompt: string; type: string; flags: Record<string, unknown> };
-  stageResults: Record<string, Record<string, unknown>>;
-  factpack: unknown;
-  chunkInfo?: {
-    isChunked: boolean;
-    currentChunk: number;
-    totalChunks: number;
-    chunkLabel: string;
-  };
-  previousDecisions?: Record<string, string>;
-  unansweredProposals?: unknown[];
-}
-
-/**
- * Helper to strip internal pipeline fields from stage output
- */
-function stripStageOutput(result: Record<string, unknown>): Record<string, unknown> {
-  if (!result) return {};
-  const content = { ...result } as Record<string, unknown>;
-  delete content.sources_used;
-  delete content.assumptions;
-  delete content.proposals;
-  delete content.retrieval_hints;
-  delete content.canon_update;
-  return content;
-}
-
-/**
- * Create a minimal factpack reference for prompts
- */
-function createMinimalFactpack(factpack: unknown, maxChars: number = 8000): unknown {
-  if (!factpack) return null;
-  const serialized = JSON.stringify(factpack);
-  if (serialized.length <= maxChars) return factpack;
-  return JSON.parse(serialized.substring(0, maxChars) + '"}]');
-}
+import { type GeneratorStagePromptContext as StageContext } from '../services/stagePromptShared';
+import {
+  buildStoryArcCharactersPrompt,
+  buildStoryArcPremisePrompt,
+  buildStoryArcSecretsPrompt,
+  buildStoryArcStructurePrompt,
+} from '../services/storyArcStagePrompt';
 
 const BASE_STORY_ARC_SYSTEM_PROMPT = `You are a D&D 5e Story Arc Creator — a specialist in designing compelling, multi-session campaign narratives with strong dramatic structure, memorable NPCs, and meaningful player agency.
 
@@ -110,22 +79,7 @@ STORY ARC DESIGN PRINCIPLES:
 - The synopsis should create excitement without spoiling key twists`,
 
   buildUserPrompt: (context: StageContext) => {
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'story_arc',
-      stage: 'premise',
-      flags: context.config.flags,
-    };
-
-    if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildStoryArcPremisePrompt(context);
   },
 };
 
@@ -168,27 +122,7 @@ DRAMATIC STRUCTURE GUIDELINES:
 - Unknown barriers create dramatic irony and surprise`,
 
   buildUserPrompt: (context: StageContext) => {
-    const premise = stripStageOutput(context.stageResults['story_arc_premise'] || {});
-
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'story_arc',
-      stage: 'structure',
-      premise,
-      instructions: `Design the dramatic structure for "${premise.title || 'this story arc'}". Create ${premise.estimated_sessions ? `content for approximately ${premise.estimated_sessions} sessions` : 'a multi-session arc'}.`,
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for story structure and events.`;
-    } else if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildStoryArcStructurePrompt(context);
   },
 };
 
@@ -233,33 +167,7 @@ FACTION GUIDELINES:
 - Faction relationships with the party should be dynamic — they can shift based on player choices`,
 
   buildUserPrompt: (context: StageContext) => {
-    const premise = stripStageOutput(context.stageResults['story_arc_premise'] || {});
-    const structure = stripStageOutput(context.stageResults['story_arc_structure'] || {});
-
-    const actNames = Array.isArray(structure.acts)
-      ? (structure.acts as Array<{ name?: string }>).map(a => a.name || 'Unnamed Act')
-      : [];
-
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'story_arc',
-      stage: 'characters',
-      premise: { title: premise.title, theme: premise.theme, setting: premise.setting, overarching_goal: premise.overarching_goal },
-      structure_summary: { act_count: actNames.length, acts: actNames },
-      instructions: 'Create the key NPCs and factions for this story arc. Every character should serve a narrative purpose.',
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for existing NPCs and factions.`;
-    } else if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildStoryArcCharactersPrompt(context);
   },
 };
 
@@ -310,38 +218,7 @@ DM NOTES SHOULD COVER:
 - How to handle failed checks at critical moments`,
 
   buildUserPrompt: (context: StageContext) => {
-    const premise = stripStageOutput(context.stageResults['story_arc_premise'] || {});
-    const structure = stripStageOutput(context.stageResults['story_arc_structure'] || {});
-    const characters = stripStageOutput(context.stageResults['story_arc_characters'] || {});
-
-    const characterNames = Array.isArray(characters.characters)
-      ? (characters.characters as Array<{ name?: string; role?: string }>).map(c => `${c.name || '?'} (${c.role || '?'})`)
-      : [];
-
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'story_arc',
-      stage: 'secrets',
-      premise: { title: premise.title, theme: premise.theme },
-      barrier_count: {
-        known: Array.isArray(structure.known_barriers) ? structure.known_barriers.length : 0,
-        unknown: Array.isArray(structure.unknown_barriers) ? structure.unknown_barriers.length : 0,
-      },
-      characters_summary: characterNames,
-      instructions: 'Create secrets, rewards, and DM notes that tie everything together and create layers of depth.',
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for secrets and lore.`;
-    } else if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildStoryArcSecretsPrompt(context);
   },
 };
 

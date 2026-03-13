@@ -16,143 +16,18 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { getTemplateById, LocationTemplate } from './locationTemplates';
-import { LocationConstraints } from './locationConstraints';
-
-interface StageContext {
-  config: { prompt: string; type: string; flags: Record<string, unknown> };
-  stageResults: Record<string, Record<string, unknown>>;
-  factpack: unknown;
-  chunkInfo?: {
-    isChunked: boolean;
-    currentChunk: number;
-    totalChunks: number;
-    chunkLabel: string;
-  };
-  previousDecisions?: Record<string, string>;
-  unansweredProposals?: unknown[];
-}
-
-/**
- * Helper to strip internal pipeline fields from stage output
- */
-function stripStageOutput(result: Record<string, unknown>): Record<string, unknown> {
-  if (!result) return {};
-  const content: Record<string, unknown> = { ...result };
-  delete content.sources_used;
-  delete content.assumptions;
-  delete content.proposals;
-  delete content.retrieval_hints;
-  delete content.canon_update;
-  return content;
-}
-
-/**
- * Build constraint prompt section from LocationConstraints
- * Converts structured constraints into natural language for AI
- */
-function buildConstraintsPromptSection(constraints: LocationConstraints): string {
-  let text = '\n## ARCHITECTURAL CONSTRAINTS\n\n';
-
-  // Room size guidelines
-  text += '### Room Size Guidelines\n';
-  const roomTypes = Object.keys(constraints.room_size_constraints);
-  for (const roomType of roomTypes) {
-    const constraint = constraints.room_size_constraints[roomType];
-    text += `- ${roomType}: ${constraint.min_width}-${constraint.max_width}ft wide, ${constraint.min_height}-${constraint.max_height}ft long\n`;
-  }
-  text += '\n';
-
-  // Door specifications
-  text += '### Door Specifications\n';
-  text += `- Width: ${constraints.door_constraints.min_width}-${constraints.door_constraints.max_width}ft\n`;
-  text += `- Position doors at least ${constraints.door_constraints.position_rules.min_from_corner}ft from corners\n`;
-  text += `- Snap to ${constraints.door_constraints.position_rules.snap_to_grid}ft grid\n`;
-  text += '\n';
-
-  // Adjacency rules
-  if (constraints.adjacency_rules.length > 0) {
-    text += '### Adjacency Rules\n';
-    for (const rule of constraints.adjacency_rules) {
-      const relationshipText =
-        rule.relationship === 'must_be_adjacent'
-          ? 'MUST be adjacent to'
-          : rule.relationship === 'should_be_adjacent'
-            ? 'should be near'
-            : 'MUST NOT be adjacent to';
-      const reason = rule.reason ? ` (${rule.reason})` : '';
-      text += `- ${rule.room_type_a} ${relationshipText} ${rule.room_type_b}${reason}\n`;
-    }
-    text += '\n';
-  }
-
-  // Structural requirements
-  if (constraints.structural_rules.length > 0) {
-    text += '### Structural Requirements\n';
-    for (const rule of constraints.structural_rules) {
-      text += `- ${rule.constraint}\n`;
-    }
-    text += '\n';
-  }
-
-  return text;
-}
-
-/**
- * Build style prompt section from ArchitecturalStyle
- * Provides aesthetic and material guidance
- */
-function buildStylePromptSection(template: LocationTemplate): string {
-  const style = template.architectural_style;
-  let text = '\n## ARCHITECTURAL STYLE\n\n';
-
-  text += `### Materials\n`;
-  text += `- Primary: ${style.materials.primary.join(', ')}\n`;
-  text += `- Floors: ${style.materials.floors.join(', ')}\n`;
-  text += `- Walls: ${style.materials.walls.join(', ')}\n`;
-  text += '\n';
-
-  text += `### Aesthetic\n`;
-  text += `- Door style: ${style.door_style}\n`;
-  text += `- Lighting: ${style.lighting}\n`;
-  text += `- Decorative elements: ${style.decorative_elements.join(', ')}\n`;
-  text += '\n';
-
-  return text;
-}
-
-/**
- * Build room type guidance for Spaces stage iteration
- * Provides specific suggestions for the current room being generated
- */
-function buildRoomTypeGuidance(
-  template: LocationTemplate,
-  currentIteration: number
-): string {
-  const roomTypes = template.room_types;
-  if (roomTypes.length === 0) return '';
-
-  // Cycle through room types to provide variety
-  const roomType = roomTypes[currentIteration % roomTypes.length];
-
-  let text = '\n## ROOM TYPE GUIDANCE\n';
-  text += `For space #${currentIteration}, consider creating a **${roomType.type}**:\n\n`;
-  text += `**Typical names**: ${roomType.typical_names.join(', ')}\n`;
-  text += `**Purpose**: ${roomType.purpose}\n`;
-  text += `**Common features**: ${roomType.features.join(', ')}\n`;
-
-  if (roomType.adjacency_preferences.prefer_near.length > 0) {
-    text += `**Should be near**: ${roomType.adjacency_preferences.prefer_near.join(', ')}\n`;
-  }
-
-  if (roomType.adjacency_preferences.avoid_near.length > 0) {
-    text += `**Avoid placing near**: ${roomType.adjacency_preferences.avoid_near.join(', ')}\n`;
-  }
-
-  text += '\n';
-
-  return text;
-}
+import {
+  buildWorkflowStagePrompt,
+  type GeneratorStagePromptContext as StageContext,
+} from '../services/stagePromptShared';
+import {
+  buildLocationAccuracyRefinementPrompt,
+  buildLocationDetailsPrompt,
+  buildLocationFoundationPrompt,
+  buildLocationSpacesChunkPlan,
+  buildLocationSpacesPrompt,
+  buildLocationVisualMapPrompt,
+} from '../services/locationStagePrompt';
 
 /**
  * Stage 1: Purpose
@@ -193,10 +68,12 @@ The estimated_spaces MUST match the user's specifications if they provided a spe
 Return ONLY a JSON object with the specified fields. No markdown, no explanation.`,
 
   buildUserPrompt: (context: StageContext) => {
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
+    return buildWorkflowStagePrompt({
+      context,
       deliverable: 'location',
       stage: 'purpose',
+      promptKey: 'request',
+      payload: {
       instructions: `Analyze the request and determine:
 1. What type of location this is
 2. How complex it should be (scale: simple/moderate/complex/massive)
@@ -209,17 +86,8 @@ Examples:
 - "The city of Waterdeep's Dock Ward" → massive, 50+ spaces (districts, key buildings, landmarks)
 
 Be realistic about scope based on the request.`,
-    };
-
-    if (context.factpack) {
-      userPrompt.canon_context = 'Use factpack for regional context and existing lore.';
-    }
-
-    if (context.previousDecisions) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+      },
+    });
   },
 };
 
@@ -276,43 +144,7 @@ This metadata ensures chunks mesh perfectly when generated iteratively.
 Return ONLY a JSON object with the specified fields. No markdown, no explanation.`,
 
   buildUserPrompt: (context: StageContext) => {
-    const purpose = stripStageOutput(context.stageResults.purpose || {});
-    const scale = purpose.scale || 'moderate';
-    const locationType = purpose.location_type || 'location';
-
-    // Check if template is selected
-    const templateId = context.config.flags?.template_id as string | undefined;
-    const template = getTemplateById(templateId);
-
-    let baseInstructions = `Generate the structural foundation for this ${locationType} (scale: ${scale}).
-
-${scale === 'simple' || scale === 'moderate'
-  ? 'Keep it simple - just layout, dimensions, and spatial organization. No complex topology needed.'
-  : 'This is complex - provide detailed topology with wings, floors, locking points, and constraints for geometric validation.'
-}
-
-CRITICAL: Include chunk_mesh_metadata to enable seamless integration when spaces are generated iteratively.`;
-
-    // Inject template constraints and style if available
-    if (template) {
-      baseInstructions += buildConstraintsPromptSection(template.constraints);
-      baseInstructions += buildStylePromptSection(template);
-      baseInstructions += `\n## LAYOUT PHILOSOPHY\n${template.layout_philosophy}\n`;
-    }
-
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
-      deliverable: 'location',
-      stage: 'foundation',
-      purpose: purpose,
-      instructions: baseInstructions,
-    };
-
-    if (context.factpack) {
-      userPrompt.canon_context = 'Use factpack for architectural conventions.';
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildLocationFoundationPrompt(context);
   },
 };
 
@@ -324,53 +156,7 @@ export const LOCATION_CREATOR_SPACES = {
   id: 'location_spaces',
   name: 'Spaces',
   shouldChunk: (context: StageContext): { shouldChunk: boolean; totalChunks: number; chunkSize: number } => {
-    // Check if we need to iterate based on estimated_spaces from Purpose stage
-    // NOTE: Stage results are stored by stage.name, not stage.id, so "Purpose" not "location_purpose"
-    const purpose = context.stageResults.purpose as Record<string, unknown> | undefined;
-
-    console.log('[shouldChunk] Purpose data:', purpose);
-
-    // Try to get estimated_spaces - handle both number and string
-    let estimatedSpaces: number | undefined;
-
-    if (purpose?.estimated_spaces !== undefined) {
-      if (typeof purpose.estimated_spaces === 'number') {
-        estimatedSpaces = purpose.estimated_spaces;
-      } else if (typeof purpose.estimated_spaces === 'string') {
-        estimatedSpaces = parseInt(purpose.estimated_spaces, 10);
-        console.log('[shouldChunk] Converted string to number:', estimatedSpaces);
-      }
-    }
-
-    // Fallback: infer from scale if estimated_spaces missing
-    if (!estimatedSpaces && purpose?.scale) {
-      const scale = String(purpose.scale).toLowerCase();
-      if (scale.includes('simple')) estimatedSpaces = 3;
-      else if (scale.includes('moderate')) estimatedSpaces = 12;
-      else if (scale.includes('complex')) estimatedSpaces = 30;
-      else if (scale.includes('massive')) estimatedSpaces = 50;
-      console.log(`[shouldChunk] Inferred ${estimatedSpaces} spaces from scale: ${scale}`);
-    }
-
-    console.log('[shouldChunk] Final estimated_spaces:', estimatedSpaces);
-
-    if (estimatedSpaces && estimatedSpaces > 1) {
-      // Each chunk generates ONE space
-      console.log(`[shouldChunk] ✓ Will chunk into ${estimatedSpaces} iterations`);
-      return {
-        shouldChunk: true,
-        totalChunks: estimatedSpaces,
-        chunkSize: 1, // One space per chunk
-      };
-    }
-
-    // No chunking needed for single-space locations
-    console.log('[shouldChunk] No chunking needed');
-    return {
-      shouldChunk: false,
-      totalChunks: 1,
-      chunkSize: 1,
-    };
+    return buildLocationSpacesChunkPlan(context);
   },
   systemPrompt: `D&D Location Generator - Stage 3/5: Spaces (Iterative)
 
@@ -396,13 +182,17 @@ DIMENSIONS:
 - dimensions: {width: number, height: number, unit: "ft"}
 - size_ft: {width: number, height: number} (REQUIRED, numeric feet)
 - floor_height: number
+- wall_thickness_ft: number (REQUIRED, shared wall thickness in feet for layout/rendering)
+- wall_material: string (REQUIRED, primary wall material such as "stone", "wood", or "brick")
 VISUAL DATA:
 - floor: {material: "stone"|"wood"|"dirt"|"tile", color: "#hexcode"}
 - walls: [{side: "north"|"south"|"east"|"west", material: "stone"|"wood"|"brick", color: "#hexcode", thickness: number}]
+  * If you include walls[], each wall.thickness should agree with wall_thickness_ft unless there is a deliberate special-case wall.
 - doors: [{wall: "north"|"south"|"east"|"west", position_on_wall_ft: number (feet), width_ft: number, door_type: string, leads_to: "Name or Pending", color: "#hexcode"}]
   * MULTIPLE DOORS: A wall can have multiple doors. Use position_on_wall_ft in FEET representing door CENTER from wall start.
   * For initial placement: use 50% of wall length (e.g., 30ft wall → position_on_wall_ft: 15)
   * Example: Two doors on 40ft north wall: position_on_wall_ft: 10 (at 25%) and position_on_wall_ft: 30 (at 75%)
+  * If a door connects to an already-generated space, prefer a clean reciprocal pair: opposite wall, matching doorway, and compatible wall thickness.
 - features: [{type: "furniture"|"architectural"|"fixture", label: "Name", shape: "rectangle"|"circle", position_anchor: "center", position: {x: number, y: number}, width?: number, height?: number, radius?: number, color: "#hexcode", material: "wood"|"stone"|"metal"|"cloth"}]
   * FEATURE COORDINATE SYSTEM (CRITICAL):
     - Units: FEET.
@@ -430,87 +220,7 @@ CONFLICTS: Add proposals[] if geometry conflicts detected.
 Return JSON only. No markdown.`,
 
   buildUserPrompt: (context: StageContext) => {
-    const purpose = stripStageOutput(context.stageResults.purpose || {});
-    const foundation = stripStageOutput(context.stageResults.foundation || {});
-    const scale = purpose.scale || 'moderate';
-
-    // Check if template is selected
-    const templateId = context.config.flags?.template_id as string | undefined;
-    const template = getTemplateById(templateId);
-
-    // Check for rejection feedback from space approval workflow
-    const rejectionFeedback = context.config.flags?.rejection_feedback as string | undefined;
-
-    // Castle State = ONLY last 5 spaces to reduce prompt size
-    const allSpaces = context.stageResults.spaces
-      ? (context.stageResults.spaces as Record<string, unknown>).spaces || []
-      : [];
-    const recentSpaces = Array.isArray(allSpaces) ? allSpaces.slice(-5) : [];
-
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
-      stage: 'spaces',
-      purpose: { name: purpose.name, location_type: purpose.location_type, scale: purpose.scale },
-      foundation: { layout: foundation.layout, key_areas: foundation.key_areas },
-      recent_spaces: recentSpaces,
-      instructions: '',
-    };
-
-    if (context.chunkInfo) {
-      const spaceNumber = context.chunkInfo.currentChunk;
-      const totalSpaces = context.chunkInfo.totalChunks;
-
-      userPrompt.chunk_info = `Space ${spaceNumber}/${totalSpaces}`;
-
-      let instructions = `Generate space #${spaceNumber}. Review recent_spaces for context. Use mesh_anchors to link.
-
-CRITICAL: All door "leads_to" values MUST use exact space names from the "name" field (e.g., "Southeast Outer Ward"), NOT codes or abbreviations. This is required for spatial layout to work.
-
-${scale === 'complex' || scale === 'massive' ? 'Add proposals[] if conflicts.' : ''}`;
-
-      // ====================================================================
-      // REJECTION FEEDBACK: If the previous space was rejected by the user,
-      // inject feedback at the TOP of instructions to ensure AI sees it first
-      // ====================================================================
-      if (rejectionFeedback) {
-        instructions = rejectionFeedback + '\n\n' + instructions;
-      }
-
-      // ====================================================================
-      // STRICT ROOM ADHERENCE: If enabled, enforce that AI only generates
-      // rooms explicitly listed in the user's prompt. No extra rooms allowed.
-      // ====================================================================
-      const strictRoomAdherence = context.config.flags?.strict_room_adherence as boolean | undefined;
-      if (strictRoomAdherence) {
-        instructions = `
-⚠️ STRICT MODE ENABLED ⚠️
-You MUST ONLY generate rooms that are EXPLICITLY listed in the user's request.
-DO NOT add any extra rooms, guard posts, storage areas, or any other spaces that were not specifically requested.
-If the user listed 3 rooms, you generate EXACTLY 3 rooms - no more, no less.
-Review the "request" field carefully to identify which rooms the user wants.
-
-` + instructions;
-      }
-
-      // Add room type guidance from template
-      if (template) {
-        instructions += buildRoomTypeGuidance(template, spaceNumber);
-        instructions += '\n## CONSTRAINT REMINDERS\n';
-        instructions += `- Door widths: ${template.constraints.door_constraints.min_width}-${template.constraints.door_constraints.max_width}ft\n`;
-        instructions += `- Door positions: at least ${template.constraints.door_constraints.position_rules.min_from_corner}ft from corners\n`;
-        instructions += '- Follow room size guidelines from Foundation stage\n';
-      }
-
-      userPrompt.instructions = instructions;
-    } else {
-      userPrompt.instructions = `Generate next space with mesh_anchors.`;
-    }
-
-    if (context.previousDecisions) {
-      userPrompt.decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildLocationSpacesPrompt(context);
   },
 };
 
@@ -555,41 +265,7 @@ Focus on these fields:
 Return ONLY a JSON object with the specified fields. No markdown, no explanation.`,
 
   buildUserPrompt: (context: StageContext) => {
-    // NOTE: Stage results stored by stage.name, not stage.id
-    const purpose = stripStageOutput(context.stageResults.purpose || {});
-    const foundation = stripStageOutput(context.stageResults.foundation || {});
-    const spacesResult = stripStageOutput(context.stageResults.spaces || {});
-
-    // Extract minimal space info to reduce prompt size
-    const allSpaces = Array.isArray(spacesResult.spaces)
-      ? (spacesResult.spaces as Record<string, unknown>[])
-      : [];
-    const spaceSummary = allSpaces.map((s) => ({
-      id: s.id,
-      name: s.name,
-      purpose: s.purpose,
-      dimensions: s.dimensions,
-    }));
-
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
-      stage: 'details',
-      structure: {
-        name: purpose.name,
-        type: purpose.location_type,
-        scale: purpose.scale,
-        layout: foundation.layout,
-        total_spaces: spaceSummary.length,
-        space_list: spaceSummary
-      },
-      instructions: `Add rich narrative details. Include: materials, lighting, atmosphere, inhabitants, encounter areas, secrets, treasure, history, current events, adventure hooks, cinematic walkthrough.`,
-    };
-
-    if (context.factpack) {
-      userPrompt.canon = 'Use factpack for NPCs, creatures, history, plot hooks.';
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildLocationDetailsPrompt(context);
   },
 };
 
@@ -646,35 +322,7 @@ Color-code spaces by function:
 Output ONLY the HTML. No JSON wrapper. No markdown. No explanations.`,
 
   buildUserPrompt: (context: StageContext) => {
-    // NOTE: Stage results stored by stage.name, not stage.id
-    const purpose = stripStageOutput(context.stageResults.purpose || {});
-    const spaces = stripStageOutput(context.stageResults.spaces || {});
-
-    // For Visual Map, we want PURE HTML output, not JSON
-    // So we build a text prompt, not a JSON prompt
-    const textPrompt = `Create a simple HTML visual map showing the ${purpose.location_type || 'location'} layout.
-
-LOCATION: ${purpose.name || 'Unnamed Location'}
-SCALE: ${purpose.scale || 'moderate'}
-TOTAL SPACES: ${(spaces.spaces as unknown[] || []).length}
-
-Show all ${(spaces.spaces as unknown[] || []).length} spaces that have been generated so far.
-
-Use a grid-based layout where each space is represented by a colored box with its name and dimensions.
-Color-code by function:
-- Public/Common spaces: Light Blue
-- Private/Residential areas: Light Green
-- Restricted/Military zones: Light Red
-- Service/Industrial areas: Light Yellow
-
-Show connections between spaces (doors, stairs, passages) with arrows or lines if possible.
-
-Make it visually clear and easy to read. This will help the GM understand the spatial relationships at a glance.
-
-⚠️ CRITICAL: Output PURE HTML ONLY. NO JSON wrapper. NO markdown code blocks. NO explanations.
-Start immediately with <div> and end with </div>.`;
-
-    return textPrompt;
+    return buildLocationVisualMapPrompt(context);
   },
 };
 
@@ -765,77 +413,7 @@ REFINEMENT FOCUS:
 Return ONLY a JSON object with the specified fields. No markdown, no explanation.`,
 
   buildUserPrompt: (context: StageContext) => {
-    // NOTE: Stage results stored by stage.name, not stage.id
-    const purpose = stripStageOutput(context.stageResults.purpose || {});
-    const foundation = stripStageOutput(context.stageResults.foundation || {});
-    const spaces = stripStageOutput(context.stageResults.spaces || {});
-    const details = stripStageOutput(context.stageResults.details || {});
-
-    const layout = (foundation as Record<string, unknown>).layout;
-    const layoutObj = typeof layout === 'object' && layout !== null ? (layout as Record<string, unknown>) : null;
-    const dims = layoutObj ? layoutObj.dimensions : null;
-    const dimsObj = typeof dims === 'object' && dims !== null ? (dims as Record<string, unknown>) : null;
-    const footprintLength = dimsObj?.length;
-    const footprintWidth = dimsObj?.width;
-
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
-      deliverable: 'location',
-      stage: 'accuracy_refinement',
-      complete_location: {
-        purpose,
-        foundation,
-        spaces,
-        details,
-      },
-      instructions: `Perform geometric validation and accuracy refinement on this ${purpose.location_type || 'location'}.
-
-VALIDATION TASKS (Review ALL ${(spaces.spaces as unknown[] || []).length} spaces):
-
-1. DIMENSIONAL ACCURACY:
-   - Footprint: ${typeof footprintLength === 'string' ? footprintLength : (typeof footprintLength === 'number' ? String(footprintLength) : 'Unknown')} × ${typeof footprintWidth === 'string' ? footprintWidth : (typeof footprintWidth === 'number' ? String(footprintWidth) : 'Unknown')}
-   - Check each space fits within boundaries
-   - Flag overlapping coordinates
-   - Create proposals[] for CRITICAL conflicts
-
-2. CONNECTION CONSISTENCY:
-   - Verify door "leads_to" values match actual space names
-   - Check for orphaned connections (leading nowhere)
-   - Create proposals[] for broken connections
-
-3. BASIC GEOMETRY:
-   - Door positions valid for walls (north/south/east/west)
-   - Door widths reasonable (3-10 ft)
-   - Create proposals[] for impossible geometry
-
-4. ACCESSIBILITY:
-   - All spaces reachable from entrance
-   - No isolated spaces (unless intentional)
-   - Create proposals[] for unreachable areas
-
-OUTPUTS REQUIRED:
-1. accuracy_report: Detailed findings for all validation checks
-2. proposals: ONLY for CRITICAL issues requiring user decision
-   - Include 3 options: auto-fix, manual fix in editor, or ignore
-   - Be specific about the issue and consequences
-3. refined_spaces: Auto-corrected spaces (apply safe fixes)
-4. refined_details: Improved details section
-5. gm_notes: Important notes for running this location
-6. tactical_summary: Combat/encounter guidance (choke points, escapes, hazards)
-
-VALIDATION SCOPE:
-- Structural/geometric only
-- DO NOT validate physics, canon, or lore
-- Focus on playability and correctness
-
-Be thorough and precise - this is the final quality check before delivery.`,
-    };
-
-    if (context.factpack) {
-      userPrompt.canon_context = 'Verify all named NPCs, creatures, and items align with canon facts.';
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildLocationAccuracyRefinementPrompt(context);
   },
 };
 

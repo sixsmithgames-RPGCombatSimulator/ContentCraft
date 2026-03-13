@@ -9,33 +9,16 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-interface StageContext {
-  config: { prompt: string; type: string; flags: Record<string, unknown> };
-  stageResults: Record<string, Record<string, unknown>>;
-  factpack: unknown;
-  chunkInfo?: {
-    isChunked: boolean;
-    currentChunk: number;
-    totalChunks: number;
-    chunkLabel: string;
-  };
-  previousDecisions?: Record<string, string>;
-  unansweredProposals?: unknown[];
-}
-
-/**
- * Helper to strip internal pipeline fields from stage output
- */
-function stripStageOutput(result: Record<string, unknown>): Record<string, unknown> {
-  if (!result) return {};
-  const content = { ...result } as Record<string, unknown>;
-  delete content.sources_used;
-  delete content.assumptions;
-  delete content.proposals;
-  delete content.retrieval_hints;
-  delete content.canon_update;
-  return content;
-}
+import {
+  type GeneratorStagePromptContext as StageContext,
+} from '../services/stagePromptShared';
+import {
+  buildMonsterBasicInfoPrompt,
+  buildMonsterCombatPrompt,
+  buildMonsterLegendaryPrompt,
+  buildMonsterLorePrompt,
+  buildMonsterStatsPrompt,
+} from '../services/monsterStagePrompt';
 
 /**
  * Stage 1: Basic monster information
@@ -63,22 +46,7 @@ Do NOT include stats, abilities, or actions yet - those come in later stages.
 Return ONLY a JSON object with the specified fields. No markdown, no explanation.`,
 
   buildUserPrompt: (context: StageContext) => {
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
-      deliverable: 'monster',
-      stage: 'basic_info',
-      instructions: 'Generate the basic information for this monster. Include name, description, size, creature type, alignment, and challenge rating.',
-    };
-
-    if (context.factpack) {
-      userPrompt.canon_context = 'Use the provided factpack for canon accuracy.';
-    }
-
-    if (context.previousDecisions) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildMonsterBasicInfoPrompt(context);
   },
 };
 
@@ -113,21 +81,7 @@ Calculate stats appropriate for the monster's CR and type. Use D&D 5e guidelines
 Return ONLY a JSON object with the specified fields. No markdown, no explanation.`,
 
   buildUserPrompt: (context: StageContext) => {
-    const basicInfo = stripStageOutput(context.stageResults.monster_basic_info || {});
-
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
-      deliverable: 'monster',
-      stage: 'stats',
-      basic_info: basicInfo,
-      instructions: `Generate stats and defenses for this monster. Ensure values are appropriate for CR ${basicInfo.challenge_rating || 'unknown'}.`,
-    };
-
-    if (context.factpack) {
-      userPrompt.canon_context = 'Use the provided factpack for canon accuracy.';
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildMonsterStatsPrompt(context);
   },
 };
 
@@ -159,23 +113,7 @@ Create abilities and actions appropriate for the monster's CR and type. Include:
 Return ONLY a JSON object with the specified fields. No markdown, no explanation.`,
 
   buildUserPrompt: (context: StageContext) => {
-    const basicInfo = stripStageOutput(context.stageResults.monster_basic_info || {});
-    const stats = stripStageOutput(context.stageResults.monster_stats || {});
-
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
-      deliverable: 'monster',
-      stage: 'combat',
-      basic_info: basicInfo,
-      stats: stats,
-      instructions: `Generate combat abilities and actions for this monster. Make it interesting and mechanically appropriate for CR ${basicInfo.challenge_rating || 'unknown'}.`,
-    };
-
-    if (context.factpack) {
-      userPrompt.canon_context = 'Use the provided factpack for canon accuracy.';
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildMonsterCombatPrompt(context);
   },
 };
 
@@ -207,21 +145,7 @@ If not applicable, return an empty object {} or omit these fields.
 Return ONLY a JSON object. No markdown, no explanation.`,
 
   buildUserPrompt: (context: StageContext) => {
-    const basicInfo = stripStageOutput(context.stageResults.monster_basic_info || {});
-
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
-      deliverable: 'monster',
-      stage: 'legendary',
-      basic_info: basicInfo,
-      instructions: `If appropriate for CR ${basicInfo.challenge_rating || 'unknown'}, generate legendary actions and/or lair features. Otherwise return an empty object.`,
-    };
-
-    if (context.factpack) {
-      userPrompt.canon_context = 'Use the provided factpack for canon accuracy.';
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildMonsterLegendaryPrompt(context);
   },
 };
 
@@ -246,26 +170,7 @@ This is the final polish stage - provide interesting context that helps a GM use
 Return ONLY a JSON object with the specified fields. No markdown, no explanation.`,
 
   buildUserPrompt: (context: StageContext) => {
-    const basicInfo = stripStageOutput(context.stageResults.monster_basic_info || {});
-
-    const userPrompt: Record<string, unknown> = {
-      request: context.config.prompt,
-      deliverable: 'monster',
-      stage: 'lore',
-      basic_info: basicInfo,
-      stats_summary: {
-        cr: basicInfo.challenge_rating,
-        type: basicInfo.creature_type,
-        has_legendary: !!(context.stageResults.monster_legendary && Object.keys(context.stageResults.monster_legendary).length > 0),
-      },
-      instructions: 'Generate ecology and lore information for this monster. Provide context that helps GMs use it effectively.',
-    };
-
-    if (context.factpack) {
-      userPrompt.canon_context = 'Use the provided factpack for canon accuracy.';
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildMonsterLorePrompt(context);
   },
 };
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateKeywordExtractorCompliance, getStageAllowedKeys } from './ai.js';
+import { evaluateKeywordExtractorCompliance, getStageAllowedKeys, validateWorkflowStageContractPayload } from './ai.js';
 
 describe('evaluateKeywordExtractorCompliance', () => {
 
@@ -10,7 +10,7 @@ describe('evaluateKeywordExtractorCompliance', () => {
       schema: {},
     } as any;
 
-    const allowedKeys = getStageAllowedKeys('basicInfo', registry);
+    const allowedKeys = getStageAllowedKeys('basicInfo', registry, 'npc');
 
     expect(allowedKeys).toContain('species');
     expect(allowedKeys).toContain('race');
@@ -25,7 +25,7 @@ describe('evaluateKeywordExtractorCompliance', () => {
       schema: {},
     } as any;
 
-    const allowedKeys = getStageAllowedKeys('Creator: Spellcasting', registry);
+    const allowedKeys = getStageAllowedKeys('Creator: Spellcasting', registry, 'npc');
 
     expect(allowedKeys).toContain('spellcasting_ability');
     expect(allowedKeys).toContain('class_levels');
@@ -42,6 +42,36 @@ describe('evaluateKeywordExtractorCompliance', () => {
 
     expect(getStageAllowedKeys('unknown_stage', registry)).toEqual(['foo', 'bar']);
   });
+
+  it('validates planner payload structure through shared contracts', () => {
+    const result = validateWorkflowStageContractPayload('planner', {
+      deliverable: 'npc',
+      retrieval_hints: {
+        entities: ['Barley'],
+        regions: [],
+        eras: [],
+        keywords: ['warlock'],
+      },
+      proposals: [],
+    }, 'npc');
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects missing required contract fields for encounter stages', () => {
+    const result = validateWorkflowStageContractPayload('Creator: Rewards', {
+      treasure: { gold: '250 gp' },
+      notes: [],
+    }, 'encounter');
+
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      const failure = result;
+      expect(failure.error).toContain('consequences');
+      expect(failure.error).toContain('scaling');
+    }
+  });
+
   it('passes when keywords array exists alongside junk fields', () => {
     const payload = {
       keywords: [

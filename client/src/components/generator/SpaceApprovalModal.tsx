@@ -18,10 +18,21 @@ import { CheckCircle, XCircle, Edit3, AlertCircle, ArrowLeft, Code, X, Plus, Tra
 import { validateIncomingLocationSpace } from '../../utils/locationSpaceValidation';
 import { validateAllDoors, convertDoorValidationToErrors } from '../../utils/doorSync';
 import type { Door, ValidationError } from '../../contexts/locationEditorTypes';
+import { buildLocationGeometryReview } from '../../services/locationSpaceReview';
+import {
+  buildLocationSpaceProposalRetryText,
+  buildLocationSpaceProposalRetrySource,
+  buildLocationSpaceRejectionSuggestions,
+  buildLocationSpaceValidationRetryText,
+  buildLocationSpaceValidationRetrySource,
+} from '../../services/locationSpaceRetry';
+import type { GeometryProposal, ParentStructure } from '../../utils/locationGeometry';
 import DoorConflictPanel from './DoorConflictPanel';
+import type { WorkflowRetrySource } from '../../../../src/shared/generation/workflowTypes';
 
 interface Space {
   id?: string;
+  code?: string;
   name?: string;
   purpose?: string;
   description?: string;
@@ -57,7 +68,7 @@ interface SpaceApprovalModalProps {
   spaceNumber: number;
   totalSpaces: number;
   onAccept: () => void;
-  onReject: (reason?: string) => void;
+  onReject: (reason?: string, retrySource?: WorkflowRetrySource) => void;
   onEdit: (editedSpace: Space) => void;
   onClose: () => void;
   onPreviousSpace?: () => void;
@@ -70,6 +81,7 @@ interface SpaceApprovalModalProps {
   existingSpaceNames?: string[]; // List of existing space names for door "leads to" dropdown
   existingSpaces?: Space[]; // Full space data for AI context
   locationName?: string; // Overall location name/description for context
+  parentStructure?: ParentStructure;
   onNavigateToEditor?: () => void; // Navigate to Layout/Editor view
 }
 
@@ -92,6 +104,7 @@ export default function SpaceApprovalModal({
   existingSpaceNames = [],
   existingSpaces = [],
   locationName = '',
+  parentStructure,
   onNavigateToEditor,
 }: SpaceApprovalModalProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -101,10 +114,12 @@ export default function SpaceApprovalModal({
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [selectedRetrySource, setSelectedRetrySource] = useState<WorkflowRetrySource | undefined>(undefined);
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [panelWidth, setPanelWidth] = useState(600);
   const [isResizing, setIsResizing] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [geometryProposals, setGeometryProposals] = useState<GeometryProposal[]>([]);
 
   // Editable form fields
   const [editedName, setEditedName] = useState('');
@@ -184,12 +199,27 @@ export default function SpaceApprovalModal({
     setValidationErrors(errors);
     console.log('[SpaceApprovalModal] Validation:', errors.length, 'error(s) found');
 
+    const geometryReview = buildLocationGeometryReview(
+      space,
+      existingSpaces,
+      {
+        parentStructure,
+        exclude: {
+          id: space.id,
+          code: space.code,
+          name: space.name,
+        },
+      },
+    );
+    setGeometryProposals(geometryReview.proposals);
+    console.log('[SpaceApprovalModal] Geometry review:', geometryReview.proposals.length, 'proposal(s) found');
+
     // Auto-enter edit mode for new/blank spaces
     if (autoEditNewSpace && !space.purpose && !space.description) {
       console.log('[SpaceApprovalModal] New blank space detected, auto-entering edit mode');
       setIsEditing(true);
     }
-  }, [space, autoEditNewSpace]); // ← Dependency: re-run when space changes
+  }, [space, autoEditNewSpace, existingSpaces, parentStructure]); // ← Dependency: re-run when space changes
 
   // Real-time validation when doors are edited in the form
   useEffect(() => {
@@ -202,7 +232,36 @@ export default function SpaceApprovalModal({
     setValidationErrors(errors);
 
     console.log('[SpaceApprovalModal] Real-time validation:', errors.length, 'error(s) found');
-  }, [editedDoors, isEditing]); // Re-validate when doors change in edit mode
+
+    const width = parseFloat(editedWidth) || 0;
+    const height = parseFloat(editedHeight) || 0;
+    const geometryReview = buildLocationGeometryReview(
+      {
+        ...space,
+        name: editedName,
+        dimensions: {
+          width,
+          height,
+          unit: space.dimensions?.unit || 'ft',
+        },
+        size_ft: {
+          width,
+          height,
+        },
+        doors: editedDoors,
+      },
+      existingSpaces,
+      {
+        parentStructure,
+        exclude: {
+          id: space.id,
+          code: space.code,
+          name: space.name,
+        },
+      },
+    );
+    setGeometryProposals(geometryReview.proposals);
+  }, [editedDoors, editedHeight, editedName, editedWidth, existingSpaces, isEditing, parentStructure, space]); // Re-validate when fields change in edit mode
 
   if (!isOpen || !space) return null;
 
@@ -498,25 +557,127 @@ IMPORTANT REMINDERS:
   // Handle rejection - show rejection form
   const handleRejectClick = () => {
     setIsRejecting(true);
+    setSelectedRetrySource(undefined);
   };
 
   // Confirm rejection with reason
   const handleConfirmReject = () => {
-    onReject(rejectionReason.trim() || undefined);
+    onReject(rejectionReason.trim() || undefined, selectedRetrySource);
     setIsRejecting(false);
     setRejectionReason('');
+    setSelectedRetrySource(undefined);
   };
 
   // Cancel rejection
   const handleCancelReject = () => {
     setIsRejecting(false);
     setRejectionReason('');
+    setSelectedRetrySource(undefined);
   };
 
   const dimensions = space.dimensions || {};
   const width = dimensions.width || '?';
   const height = dimensions.height || '?';
   const unit = dimensions.unit || 'ft';
+  const rejectionSuggestions = buildLocationSpaceRejectionSuggestions({
+    spaceName: typeof space.name === 'string' ? space.name : undefined,
+    geometryProposals,
+    validationErrors,
+  });
+
+  const handleApplyRejectionSuggestion = (suggestionText: string, retrySource?: WorkflowRetrySource) => {
+    setRejectionReason((prev) => {
+      const trimmedPrev = prev.trim();
+      if (trimmedPrev.length === 0) {
+        return suggestionText;
+      }
+      if (trimmedPrev.includes(suggestionText)) {
+        return trimmedPrev;
+      }
+      return `${trimmedPrev}\n${suggestionText}`;
+    });
+    setSelectedRetrySource(retrySource);
+  };
+
+  const renderGeometryProposalSummary = (options?: { enableRetryAction?: boolean }) => {
+    if (geometryProposals.length === 0) return null;
+
+    return (
+      <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h4 className="text-sm font-semibold text-amber-900">
+              Spatial Questions & Warnings ({geometryProposals.length})
+            </h4>
+            <p className="text-xs text-amber-800 mt-1">
+              These come from local geometry checks. Use Edit or Reject if you want to resolve them before continuing.
+            </p>
+            <div className="mt-3 space-y-3">
+              {geometryProposals.map((proposal, index) => {
+                const badgeClass =
+                  proposal.type === 'error'
+                    ? 'bg-red-100 text-red-700'
+                    : proposal.type === 'warning'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-blue-100 text-blue-700';
+
+                return (
+                  <div key={`${proposal.category}-${index}`} className="bg-white border border-amber-100 rounded p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full uppercase tracking-wide ${badgeClass}`}>
+                        {proposal.type}
+                      </span>
+                      <span className="text-[11px] text-gray-600 uppercase tracking-wide">
+                        {proposal.category}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-800">{proposal.question}</p>
+                    {proposal.context && (
+                      <p className="text-xs text-gray-600 mt-1">{proposal.context}</p>
+                    )}
+                    {options?.enableRetryAction && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const retrySource = buildLocationSpaceProposalRetrySource({
+                            spaceName: typeof space.name === 'string' ? space.name : undefined,
+                            proposal,
+                          });
+                          handleApplyRejectionSuggestion(
+                            buildLocationSpaceProposalRetryText({
+                              spaceName: typeof space.name === 'string' ? space.name : undefined,
+                              proposal,
+                            }),
+                            retrySource,
+                          );
+                        }}
+                        className="mt-2 px-3 py-1.5 text-xs font-medium rounded-md border border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                      >
+                        Use for retry
+                      </button>
+                    )}
+                    {proposal.options.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {proposal.options.map((option) => (
+                          <span
+                            key={option}
+                            className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700 border border-gray-200"
+                          >
+                            {option}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
@@ -572,6 +733,27 @@ IMPORTANT REMINDERS:
                 </p>
               </div>
 
+              {rejectionSuggestions.length > 0 && (
+                <div className="p-3 bg-white border border-red-200 rounded-md">
+                  <div className="text-sm font-medium text-gray-700 mb-2">Quick feedback from detected issues</div>
+                  <div className="flex flex-wrap gap-2">
+                    {rejectionSuggestions.map((suggestion) => (
+                      <button
+                        key={suggestion.id}
+                        type="button"
+                        onClick={() => handleApplyRejectionSuggestion(suggestion.text, suggestion.retrySource)}
+                        className="px-3 py-1.5 text-xs font-medium rounded-full border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+                      >
+                        {suggestion.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Click a suggestion to add the detected issue to your rejection reason.
+                  </p>
+                </div>
+              )}
+
               {/* Show space summary for context */}
               <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
                 <div className="text-sm font-medium text-gray-700 mb-2">Space being rejected:</div>
@@ -581,6 +763,28 @@ IMPORTANT REMINDERS:
                   <div><span className="font-medium">Dimensions:</span> {width} × {height} {unit}</div>
                 </div>
               </div>
+
+              {renderGeometryProposalSummary({ enableRetryAction: true })}
+
+              {validationErrors.length > 0 && (
+                <DoorConflictPanel
+                  validationErrors={validationErrors}
+                  compact={false}
+                  onUseForRetry={(error) =>
+                    handleApplyRejectionSuggestion(
+                      buildLocationSpaceValidationRetryText({
+                        spaceName: typeof space.name === 'string' ? space.name : undefined,
+                        validationError: error,
+                      }),
+                      buildLocationSpaceValidationRetrySource({
+                        spaceName: typeof space.name === 'string' ? space.name : undefined,
+                        validationError: error,
+                      }),
+                    )
+                  }
+                  className="mb-4"
+                />
+              )}
             </div>
           ) : !isEditing ? (
             // REVIEW MODE
@@ -644,6 +848,8 @@ IMPORTANT REMINDERS:
                 </div>
               )}
 
+              {renderGeometryProposalSummary()}
+
               {/* Door Conflicts (Review Mode) */}
               {validationErrors.length > 0 && (
                 <DoorConflictPanel
@@ -665,6 +871,8 @@ IMPORTANT REMINDERS:
           ) : (
             // EDIT MODE
             <div className="space-y-4">
+              {renderGeometryProposalSummary()}
+
               {/* Door Conflicts (Edit Mode) - Full Display with Fix Buttons */}
               {validationErrors.length > 0 && (
                 <DoorConflictPanel

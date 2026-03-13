@@ -14,44 +14,12 @@ import {
   getItemLoreSchema,
   formatItemSchemaForPrompt,
 } from '../utils/itemSchemaExtractor';
-
-interface StageContext {
-  config: { prompt: string; type: string; flags: Record<string, unknown> };
-  stageResults: Record<string, Record<string, unknown>>;
-  factpack: unknown;
-  chunkInfo?: {
-    isChunked: boolean;
-    currentChunk: number;
-    totalChunks: number;
-    chunkLabel: string;
-  };
-  previousDecisions?: Record<string, string>;
-  unansweredProposals?: unknown[];
-}
-
-/**
- * Helper to strip internal pipeline fields from stage output
- */
-function stripStageOutput(result: Record<string, unknown>): Record<string, unknown> {
-  if (!result) return {};
-  const content = { ...result } as Record<string, unknown>;
-  delete content.sources_used;
-  delete content.assumptions;
-  delete content.proposals;
-  delete content.retrieval_hints;
-  delete content.canon_update;
-  return content;
-}
-
-/**
- * Create a minimal factpack reference for prompts
- */
-function createMinimalFactpack(factpack: unknown, maxChars: number = 8000): unknown {
-  if (!factpack) return null;
-  const serialized = JSON.stringify(factpack);
-  if (serialized.length <= maxChars) return factpack;
-  return JSON.parse(serialized.substring(0, maxChars) + '"}]');
-}
+import { type GeneratorStagePromptContext as StageContext } from '../services/stagePromptShared';
+import {
+  buildItemConceptPrompt,
+  buildItemLorePrompt,
+  buildItemMechanicsPrompt,
+} from '../services/itemStagePrompt';
 
 const BASE_ITEM_SYSTEM_PROMPT = `You are a D&D 5e Magic Item Creator — a specialist in designing balanced, flavorful, and mechanically interesting magic items.
 
@@ -117,22 +85,7 @@ ATTUNEMENT GUIDELINES:
 - Add restrictions (class, alignment) only when thematically appropriate`,
 
   buildUserPrompt: (context: StageContext) => {
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'item',
-      stage: 'concept',
-      flags: context.config.flags,
-    };
-
-    if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildItemConceptPrompt(context);
   },
 };
 
@@ -179,27 +132,7 @@ MECHANICAL CLARITY:
 - Include save type AND DC for any saving throw effects`,
 
   buildUserPrompt: (context: StageContext) => {
-    const concept = stripStageOutput(context.stageResults['item_concept'] || {});
-
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'item',
-      stage: 'mechanics',
-      concept,
-      instructions: `Design mechanics for this ${concept.rarity || ''} ${concept.item_type || 'magic'} item. Ensure balance is appropriate for rarity.`,
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for item mechanics and lore.`;
-    } else if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildItemMechanicsPrompt(context);
   },
 };
 
@@ -247,33 +180,7 @@ SENTIENCE GUIDELINES (only for legendary+ or thematically appropriate):
 - Int/Wis/Cha should be 10-20 range (higher = more forceful personality)`,
 
   buildUserPrompt: (context: StageContext) => {
-    const concept = stripStageOutput(context.stageResults['item_concept'] || {});
-    const mechanics = stripStageOutput(context.stageResults['item_mechanics'] || {});
-
-    const userPrompt: Record<string, unknown> = {
-      original_user_request: context.config.prompt,
-      deliverable: 'item',
-      stage: 'lore',
-      concept: { name: concept.name, item_type: concept.item_type, rarity: concept.rarity, description: concept.description },
-      mechanics_summary: {
-        has_charges: !!mechanics.charges,
-        has_spells: Array.isArray(mechanics.spells) && mechanics.spells.length > 0,
-        property_count: Array.isArray(mechanics.properties) ? mechanics.properties.length : 0,
-      },
-      instructions: 'Create rich history, flavor, and campaign hooks for this item. Add curse/sentience ONLY if thematically appropriate.',
-    };
-
-    if (context.stageResults.planner) {
-      userPrompt.canon_reference = `⚠️ Canon facts were provided in the Planner stage. Review them for item lore and history.`;
-    } else if (context.factpack) {
-      userPrompt.relevant_canon = createMinimalFactpack(context.factpack);
-    }
-
-    if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
-      userPrompt.previous_decisions = context.previousDecisions;
-    }
-
-    return JSON.stringify(userPrompt, null, 2);
+    return buildItemLorePrompt(context);
   },
 };
 

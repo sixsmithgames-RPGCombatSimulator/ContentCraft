@@ -1,0 +1,155 @@
+import { describe, expect, it } from 'vitest';
+import {
+  inferSpecies,
+  parseAndNormalizeWorkflowStageResponse,
+} from './workflowStageResponse';
+
+describe('workflowStageResponse', () => {
+  it('infers species from fuzzy user prompt text', () => {
+    expect(inferSpecies({
+      original_user_request: 'Create an 11th level aasismar paladin named Thyra.',
+    })).toBe('Aasimar');
+  });
+
+  it('normalizes planner output into shared workflow shape', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        deliverable: 'npc',
+        retrieval_hints: {
+          entities: ['Thyra Odinson', 42],
+          keywords: ['Aasimar', 'Paladin'],
+          regions: 'Tears of Selune',
+        },
+        proposals: [{ id: 'oath-choice' }],
+        allow_invention: 'cosmetic',
+        tone: 'epic',
+        rule_base: '2024RAW',
+      }),
+      stageName: 'Planner',
+      stageIdentity: 'planner',
+      workflowType: 'npc',
+      configFlags: {
+        allow_invention: 'grounded',
+        tone: 'grim',
+        rule_base: '2014RAW',
+      },
+      stageResults: {},
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed).toMatchObject({
+      deliverable: 'npc',
+      retrieval_hints: {
+        entities: ['Thyra Odinson'],
+        keywords: ['Aasimar', 'Paladin'],
+        regions: [],
+        eras: [],
+      },
+      proposals: [{ id: 'oath-choice' }],
+      flags_echo: {
+        allow_invention: 'cosmetic',
+        tone: 'epic',
+        rule_base: '2024RAW',
+      },
+    });
+  });
+
+  it('infers npc basic-info species and prunes forbidden fields', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        name: 'Thyra Odinson',
+        description: 'A stern celestial knight sworn to defend sacred frontiers.',
+        appearance: 'Moonlit armor and an unflinching gaze mark her presence.',
+        background: 'She patrols the Tears of Selune in service to her oath.',
+        alignment: 'Lawful Good',
+        class_levels: [{ class: 'Paladin', level: 11 }],
+        ability_scores: { str: 18 },
+      }),
+      stageName: 'Creator: Basic Info',
+      stageIdentity: 'basic_info',
+      workflowType: 'npc',
+      configPrompt: 'Create an 11th level aasismar paladin named Thyra Odinson.',
+      stageResults: {},
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.contractKey).toBe('basic_info');
+    expect(result.parsed.species).toBe('Aasimar');
+    expect(result.parsed.race).toBe('Aasimar');
+    expect(result.parsed).not.toHaveProperty('ability_scores');
+  });
+
+  it('flattens npc core details personality data through the shared normalizer', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        personality: {
+          traits: ['Stoic'],
+          ideals: ['Duty'],
+          bonds: ['Selune'],
+          flaws: ['Stubborn'],
+          goals: ['Protect the Tears'],
+          fears: ['Failing her oath'],
+          quirks: ['Counts prayer beads'],
+          voice_mannerisms: ['Quiet and deliberate'],
+          hooks: ['Needs help cleansing a shrine'],
+        },
+      }),
+      stageName: 'Creator: Core Details',
+      stageIdentity: 'core_details',
+      workflowType: 'npc',
+      configFlags: { tone: 'epic' },
+      stageResults: {},
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.contractKey).toBe('core_details');
+    expect(result.parsed.personality_traits).toEqual(expect.arrayContaining(['Stoic']));
+    expect(result.parsed.ideals).toEqual(expect.arrayContaining(['Duty']));
+    expect(result.parsed.voice_mannerisms).toEqual(expect.arrayContaining(['Quiet and deliberate']));
+    expect(Array.isArray(result.parsed.hooks)).toBe(true);
+    expect((result.parsed.hooks as unknown[]).length).toBeGreaterThanOrEqual(3);
+    expect(result.parsed).not.toHaveProperty('personality');
+  });
+
+  it('passes through visual map html without JSON parsing', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: '<section>map html</section>',
+      stageName: 'Visual Map',
+      stageIdentity: 'visual_map',
+      workflowType: 'location',
+      stageResults: {},
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      parsed: {
+        visual_map_html: '<section>map html</section>',
+        stage: 'visual_map',
+      },
+    });
+  });
+
+  it('rejects invalid location spaces before the page accepts them', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        name: 'Antechamber',
+        doors: [],
+      }),
+      stageName: 'Spaces',
+      stageIdentity: 'spaces',
+      workflowType: 'location',
+      stageResults: {},
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+
+    expect(result.error).toContain('size_ft');
+  });
+});

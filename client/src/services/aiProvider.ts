@@ -105,16 +105,12 @@ async function sendToGeminiBackendProxy(
   userMessage: string
 ): Promise<AiProviderResponse> {
   try {
-    const response = await fetch('/api/ai/gemini/generate', {
+    const response = await fetch('/api/ai/workflow/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        prompt: `${systemPrompt}\n\n${userMessage}`,
-        projectId: 'chat',
-        stageId: 'assistant-chat',
-        stageRunId: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        schemaVersion: 'v1.1-client',
-        clientContext: { generatorType: 'chat', stageKey: 'assistant-chat' },
+        systemPrompt,
+        userMessage,
       }),
     });
 
@@ -125,9 +121,7 @@ async function sendToGeminiBackendProxy(
       return { success: false, error: message };
     }
 
-    // The backend returns jsonPatch, but for chat we need the raw text
-    // If rawText is available use it, otherwise stringify the patch
-    const text = body.rawText || (body.jsonPatch ? JSON.stringify(body.jsonPatch, null, 2) : null);
+    const text = body.text || body.rawText || (body.jsonPatch ? JSON.stringify(body.jsonPatch, null, 2) : null);
     if (!text) return { success: false, error: 'Empty response from Gemini backend proxy.' };
     return { success: true, text };
   } catch (err: unknown) {

@@ -19,10 +19,12 @@ import {
   synchronizeReciprocalDoors,
   validateAllDoors,
   convertDoorValidationToErrors,
-  getOppositeWall,
-  calculateReciprocalDoorPosition,
   validateDoor
 } from '../utils/doorSync';
+import {
+  getConnectedRoomPlacementFt,
+  snapConnectedRoomPlacementToGrid,
+} from '../utils/locationMapGeometry';
 
 // Types are imported from locationEditorTypes.ts to satisfy React Refresh
 
@@ -52,15 +54,6 @@ const initialState: EditorState = {
   canvasBounds: { width: 1000, height: 1000 }, // 1000ft x 1000ft default
   gridSize: 5, // 5ft grid squares
 };
-
-function getEffectiveWallThicknessFt(space: Space, globalWallSettings: WallSettings): number {
-  if (typeof space.wall_thickness_ft === 'number' && Number.isFinite(space.wall_thickness_ft) && space.wall_thickness_ft > 0) {
-    return space.wall_thickness_ft;
-  }
-  return globalWallSettings.thickness_ft;
-}
-
-// Note: getOppositeWall() and calculateReciprocalDoorPosition() are now imported from doorSync.ts
 
 function shouldTreatAsPlaced(space: Space): space is Space & { position: { x: number; y: number } } {
   return !!space.position &&
@@ -253,85 +246,30 @@ function computeAutoLayout(
       const targetSpace = resultById.get(targetId);
       if (!targetSpace) continue;
 
-      // Find the reciprocal door on the target room that leads back to current room
-      const currentRoomName = currentSpace.name;
-      const reciprocalDoor = (targetSpace.doors || []).find(d => d.leads_to === currentRoomName);
+      // Find the reciprocal door on the target room that leads back to the current room.
+      const reciprocalDoor = (targetSpace.doors || []).find(d =>
+        d.leads_to === currentSpace.name || d.leads_to === currentSpace.code
+      );
 
-      // Gap calculation: walls extend outward from interior space
-      // The gap between two rooms' interior spaces = sum of both wall thicknesses
-      const fromWallThickness = getEffectiveWallThicknessFt(currentSpace, globalWallSettings);
-      const toWallThickness = getEffectiveWallThicknessFt(targetSpace, globalWallSettings);
-      const gapFt = fromWallThickness + toWallThickness;
-
-      const fromX = currentPos.x;
-      const fromY = currentPos.y;
-      const fromWidth = currentSpace.size_ft.width;
-      const fromHeight = currentSpace.size_ft.height;
-      const toWidth = targetSpace.size_ft.width;
-      const toHeight = targetSpace.size_ft.height;
-
-      // Helper function to get door position in feet
-      // SINGLE SOURCE OF TRUTH: Only position_on_wall_ft is supported (absolute feet from wall start)
-      const getDoorPositionFt = (doorObj: any, wallDir: string, roomName: string): number => {
-        if (typeof doorObj.position_on_wall_ft === 'number') {
-          return doorObj.position_on_wall_ft;
-        }
-
-        // ERROR: No position data found
-        throw new Error(
-          `Door position data missing for "${roomName}" on ${wallDir} wall leading to "${doorObj.leads_to}". ` +
-          `Every door must have "position_on_wall_ft" (absolute feet from wall start, representing door center). ` +
-          `Fix this door in the JSON file or delete and recreate it.`
-        );
-      };
-
-      // Get door positions on their respective walls
-      const fromDoorPos = getDoorPositionFt(door, door.wall, currentSpace.name);
-
-      // If no reciprocal door, assume it's at the same relative position to minimize misalignment
-      const toDoorPos = reciprocalDoor
-        ? getDoorPositionFt(reciprocalDoor, reciprocalDoor.wall, targetSpace.name)
-        : fromDoorPos;
-
-      let x = fromX;
-      let y = fromY;
-
-      // Position the target room so its door aligns with the current room's door
-      switch (door.wall) {
-        case 'north':
-          // Door is on current room's north wall (top edge)
-          // Target room's reciprocal door should be on its south wall (bottom edge)
-          x = fromX + fromDoorPos - toDoorPos; // Align doors horizontally
-          y = fromY - toHeight - gapFt; // Place above
-          break;
-        case 'south':
-          // Door is on current room's south wall (bottom edge)
-          // Target room's reciprocal door should be on its north wall (top edge)
-          x = fromX + fromDoorPos - toDoorPos; // Align doors horizontally
-          y = fromY + fromHeight + gapFt; // Place below
-          break;
-        case 'east':
-          // Door is on current room's east wall (right edge)
-          // Target room's reciprocal door should be on its west wall (left edge)
-          x = fromX + fromWidth + gapFt; // Place to the right
-          y = fromY + fromDoorPos - toDoorPos; // Align doors vertically
-          break;
-        case 'west':
-          // Door is on current room's west wall (left edge)
-          // Target room's reciprocal door should be on its east wall (right edge)
-          x = fromX - toWidth - gapFt; // Place to the left
-          y = fromY + fromDoorPos - toDoorPos; // Align doors vertically
-          break;
-      }
-
-      const newPos = { x: snapToGrid(x), y: snapToGrid(y) };
+      const placement = getConnectedRoomPlacementFt(
+        { ...currentSpace, position: currentPos },
+        targetSpace,
+        door,
+        globalWallSettings,
+        reciprocalDoor
+      );
+      const newPos = snapConnectedRoomPlacementToGrid(
+        { x: placement.x, y: placement.y },
+        door.wall,
+        gridSize
+      );
       placed.set(targetId, newPos);
       queue.push(targetId);
 
       if (reciprocalDoor) {
-        console.log(`  ✓ Placed "${targetSpace.name}" at (${newPos.x}, ${newPos.y}) via ${door.wall} door (aligned ${fromDoorPos}ft ↔ ${toDoorPos}ft)`);
+        console.log(`  ✓ Placed "${targetSpace.name}" at (${newPos.x}, ${newPos.y}) via ${door.wall} door (aligned ${placement.fromDoorPositionFt}ft ↔ ${placement.toDoorPositionFt}ft)`);
       } else {
-        console.log(`  ✓ Placed "${targetSpace.name}" at (${newPos.x}, ${newPos.y}) via ${door.wall} door (no reciprocal, centered at ${toDoorPos}ft)`);
+        console.log(`  ✓ Placed "${targetSpace.name}" at (${newPos.x}, ${newPos.y}) via ${door.wall} door (no reciprocal, projected at ${placement.toDoorPositionFt}ft)`);
       }
     }
   }
@@ -433,11 +371,13 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     }
 
     case 'RESIZE_ROOM': {
-      const newSpaces = state.spaces.map(space =>
+      let newSpaces = state.spaces.map(space =>
         (space.code === action.payload.id || space.name === action.payload.id)
           ? { ...space, size_ft: action.payload.size }
           : space
       );
+
+      newSpaces = synchronizeReciprocalDoors(newSpaces as any[]) as unknown as Space[];
 
       // Run validation since resizing can invalidate door positions
       const resizeValidationResults = validateAllDoors(newSpaces as any[]);
@@ -510,56 +450,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
       console.log(`[ADD_DOOR] ✓ Added door to ${targetRoom.name} on ${door.wall} wall at ${door.position_on_wall_ft}ft (center, width: ${door.width_ft}ft)`);
 
-      // Create reciprocal door in target room (unless skipReciprocal flag is set)
-      if (!action.payload.skipReciprocal && door.leads_to && door.leads_to !== 'Pending') {
-        const leadsToRoom = newSpaces.find(
-          s => s.code === door.leads_to || s.name === door.leads_to
-        );
-
-        if (leadsToRoom) {
-          const oppositeWall = getOppositeWall(door.wall);
-          const reciprocalPosition = calculateReciprocalDoorPosition(targetRoom as any, leadsToRoom as any, door);
-
-          // Check if THIS SPECIFIC reciprocal door already exists
-          // Match by: leads back to target AND on opposite wall AND at reciprocal position
-          const positionTolerance = 10; // 10ft tolerance for position matching (supports multiple doors + manual adjustments)
-          const reciprocalExists = (leadsToRoom.doors || []).some(existingDoor => {
-            const leadsBackToTarget = existingDoor.leads_to === targetRoom.name || existingDoor.leads_to === targetRoom.code;
-            const onOppositeWall = existingDoor.wall === oppositeWall;
-            const positionMatches = Math.abs(existingDoor.position_on_wall_ft - reciprocalPosition) < positionTolerance;
-            return leadsBackToTarget && onOppositeWall && positionMatches;
-          });
-
-          if (!reciprocalExists) {
-
-            // Create the reciprocal door
-            const reciprocalDoor: Door = {
-              wall: oppositeWall,
-              position_on_wall_ft: reciprocalPosition,
-              width_ft: door.width_ft,
-              leads_to: targetRoom.name,
-              style: door.style,
-              door_type: door.door_type,
-              material: door.material,
-              state: door.state,
-              color: door.color,
-              is_reciprocal: true, // Mark as auto-created reciprocal
-            };
-
-            // Add reciprocal door to target room
-            newSpaces = newSpaces.map(space =>
-              (space.code === leadsToRoom.code || space.name === leadsToRoom.name)
-                ? { ...space, doors: [...(space.doors || []), reciprocalDoor] }
-                : space
-            );
-
-            console.log(`[ADD_DOOR] ✓ Created reciprocal door in ${leadsToRoom.name} on ${oppositeWall} wall at ${reciprocalPosition.toFixed(1)}ft`);
-          } else {
-            console.log(`[ADD_DOOR] Reciprocal door already exists in ${leadsToRoom.name} on ${oppositeWall} wall at ~${reciprocalPosition.toFixed(1)}ft`);
-          }
-        } else {
-          console.log(`[ADD_DOOR] Target room "${door.leads_to}" not found - no reciprocal door created`);
-        }
+      if (!action.payload.skipReciprocal) {
+        newSpaces = synchronizeReciprocalDoors(newSpaces as any[]) as unknown as Space[];
       }
 
       // Run validation on updated spaces to populate validation state
@@ -611,42 +503,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
       console.log(`[REMOVE_DOOR] ✓ Removed door from ${targetRoom.name}, ${remainingDoors.length} door(s) remaining`);
 
-      // Remove reciprocal door from target room (unless skipReciprocal flag is set)
-      if (!action.payload.skipReciprocal && doorToRemove && doorToRemove.leads_to && doorToRemove.leads_to !== 'Pending' && doorToRemove.leads_to !== 'Outside') {
-        const leadsToRoom = newSpaces.find(
-          s => s.code === doorToRemove.leads_to || s.name === doorToRemove.leads_to
-        );
-
-        if (leadsToRoom) {
-          // Calculate expected reciprocal door properties
-          const oppositeWall = getOppositeWall(doorToRemove.wall);
-          const reciprocalPosition = calculateReciprocalDoorPosition(targetRoom as any, leadsToRoom as any, doorToRemove);
-
-          // Find THE SPECIFIC reciprocal door (not just any door that leads back)
-          // Match by: leads back to target AND on opposite wall AND at reciprocal position
-          const tolerance = 0.5; // Allow 0.5ft tolerance for position matching
-          const reciprocalDoorIndex = (leadsToRoom.doors || []).findIndex(existingDoor => {
-            const leadsBackToTarget = existingDoor.leads_to === targetRoom.name || existingDoor.leads_to === targetRoom.code;
-            const onOppositeWall = existingDoor.wall === oppositeWall;
-            const atReciprocalPosition = Math.abs(existingDoor.position_on_wall_ft - reciprocalPosition) < tolerance;
-            return leadsBackToTarget && onOppositeWall && atReciprocalPosition;
-          });
-
-          if (reciprocalDoorIndex !== -1) {
-            const reciprocalDoor = leadsToRoom.doors![reciprocalDoorIndex];
-
-            // Remove the SPECIFIC reciprocal door
-            newSpaces = newSpaces.map(space =>
-              (space.code === leadsToRoom.code || space.name === leadsToRoom.name)
-                ? { ...space, doors: (space.doors || []).filter((_, idx) => idx !== reciprocalDoorIndex) }
-                : space
-            );
-
-            console.log(`[REMOVE_DOOR] ✓ Removed reciprocal door from ${leadsToRoom.name} on ${reciprocalDoor.wall} wall at ${reciprocalDoor.position_on_wall_ft.toFixed(1)}ft`);
-          } else {
-            console.log(`[REMOVE_DOOR] No matching reciprocal door found in ${leadsToRoom.name} on ${oppositeWall} wall at ~${reciprocalPosition.toFixed(1)}ft`);
-          }
-        }
+      if (!action.payload.skipReciprocal) {
+        newSpaces = synchronizeReciprocalDoors(newSpaces as any[]) as unknown as Space[];
       }
 
       // Run validation on updated spaces to populate validation state
@@ -730,7 +588,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       }
 
       // Validation passed - update the door
-      const newSpaces = state.spaces.map(space =>
+      let newSpaces = state.spaces.map(space =>
         (space.code === action.payload.roomId || space.name === action.payload.roomId)
           ? {
               ...space,
@@ -740,6 +598,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
             }
           : space
       );
+
+      newSpaces = synchronizeReciprocalDoors(newSpaces as any[]) as unknown as Space[];
 
       console.log(`[UPDATE_DOOR] ✓ Updated door in ${targetRoom.name} on ${wall} wall to ${updatedDoor.position_on_wall_ft}ft (center, width: ${updatedDoor.width_ft}ft)`);
 

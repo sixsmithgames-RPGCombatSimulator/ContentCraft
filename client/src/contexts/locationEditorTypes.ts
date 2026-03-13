@@ -16,6 +16,7 @@ export interface Door {
   state?: 'open' | 'closed' | 'locked' | 'barred';
   color?: string;
   is_reciprocal?: boolean; // True if this door was auto-created as a reciprocal (child door)
+  reciprocal_parent_signature?: string; // Stable identifier for the source parent door that created this reciprocal
 }
 
 export interface SpaceFeature {

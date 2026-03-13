@@ -9,6 +9,13 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
+import {
+  getOppositeWall,
+  projectDoorPositionToTargetWallFt,
+} from './locationMapGeometry';
+
+type Wall = 'north' | 'south' | 'east' | 'west';
+
 interface Space {
   name: string;
   dimensions?: string | { width: number; height: number; unit?: string };
@@ -19,11 +26,21 @@ interface Space {
   connections?: string[];
   vertical_connections?: string[];
   parent_structure?: string;
+  wall_thickness_ft?: number;
+  wall_material?: string;
+  doors?: DoorGeometry[];
 }
 
-interface GeometryProposal {
+interface DoorGeometry {
+  wall: Wall;
+  position_on_wall_ft: number;
+  width_ft: number;
+  leads_to: string;
+}
+
+export interface GeometryProposal {
   type: 'question' | 'warning' | 'error';
-  category: 'dimensions' | 'connections' | 'vertical' | 'parent_fit';
+  category: 'dimensions' | 'connections' | 'vertical' | 'parent_fit' | 'doors' | 'wall_thickness';
   question: string;
   options: string[];
   context?: string;
@@ -35,17 +52,22 @@ interface ValidationResult {
   warnings: string[];
 }
 
+export interface ParentStructure {
+  total_floors?: number;
+  total_area?: number;
+  layout?: string;
+}
+
+const DOOR_ALIGNMENT_TOLERANCE_FT = 1;
+const WALL_THICKNESS_VARIANCE_FT = 4;
+
 /**
  * Validates a newly generated space against existing spaces and parent structure
  */
 export function validateSpaceGeometry(
   newSpace: Space,
   existingSpaces: Space[],
-  parentStructure?: {
-    total_floors?: number;
-    total_area?: number;
-    layout?: string;
-  }
+  parentStructure?: ParentStructure
 ): ValidationResult {
   const proposals: GeometryProposal[] = [];
   const warnings: string[] = [];
@@ -66,6 +88,12 @@ export function validateSpaceGeometry(
   if (newSpace.connections && newSpace.connections.length > 0) {
     const connectionProposals = validateConnections(newSpace, existingSpaces);
     proposals.push(...connectionProposals);
+  }
+
+  // 3b. Validate door bounds, reciprocal pairs, and wall-thickness drift
+  if (newSpace.doors && newSpace.doors.length > 0) {
+    const doorProposals = validateDoorGeometry(newSpace, existingSpaces);
+    proposals.push(...doorProposals);
   }
 
   // 4. Validate vertical connections (stairs, elevators)
@@ -241,6 +269,249 @@ function validateConnections(newSpace: Space, existingSpaces: Space[]): Geometry
   return proposals;
 }
 
+function getSpaceSizeFt(space: Space): { width: number; height: number } | null {
+  if (space.width && space.length) {
+    return { width: space.width, height: space.length };
+  }
+
+  if (space.dimensions) {
+    if (typeof space.dimensions === 'object') {
+      const dims = space.dimensions;
+      if (dims.width && dims.height && typeof dims.width === 'number' && typeof dims.height === 'number') {
+        return { width: dims.width, height: dims.height };
+      }
+    } else {
+      const rectMatch = space.dimensions.toLowerCase().match(/(\d+)\s*[×x]\s*(\d+)/);
+      if (rectMatch) {
+        return {
+          width: parseInt(rectMatch[1]),
+          height: parseInt(rectMatch[2]),
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function getWallLengthFt(space: Space, wall: Wall): number | null {
+  const sizeFt = getSpaceSizeFt(space);
+  if (!sizeFt) return null;
+
+  return wall === 'north' || wall === 'south' ? sizeFt.width : sizeFt.height;
+}
+
+function isMeaningfulDoorTarget(target: string): boolean {
+  const normalized = target.trim().toLowerCase();
+  return normalized.length > 0 && normalized !== 'pending' && normalized !== 'outside' && normalized !== 'entrance';
+}
+
+function validateDoorBounds(space: Space, door: DoorGeometry): GeometryProposal | null {
+  const wallLength = getWallLengthFt(space, door.wall);
+  if (!wallLength) {
+    return null;
+  }
+
+  if (door.width_ft > wallLength) {
+    return {
+      type: 'error',
+      category: 'doors',
+      question: `Door on "${space.name}" is ${door.width_ft}ft wide, which exceeds the ${door.wall} wall length of ${wallLength}ft. How should we resolve this?`,
+      options: [
+        'Reduce the door width',
+        'Move the door to a longer wall',
+        'Resize the room',
+      ],
+    };
+  }
+
+  const halfWidth = door.width_ft / 2;
+  const leftEdge = door.position_on_wall_ft - halfWidth;
+  const rightEdge = door.position_on_wall_ft + halfWidth;
+
+  if (leftEdge < 0 || rightEdge > wallLength) {
+    return {
+      type: 'error',
+      category: 'doors',
+      question: `Door on "${space.name}" extends beyond the ${door.wall} wall bounds. Should we move it inward or resize the wall?`,
+      options: [
+        'Move the door inward',
+        'Reduce the door width',
+        'Resize the room',
+      ],
+      context: `Valid door-center range on this wall is ${halfWidth.toFixed(1)}ft to ${(wallLength - halfWidth).toFixed(1)}ft.`,
+    };
+  }
+
+  return null;
+}
+
+function findSpaceByName(name: string, spaces: Space[]): Space | undefined {
+  return spaces.find((space) => space.name.toLowerCase() === name.toLowerCase());
+}
+
+function getDoorPairDistance(sourceDoor: DoorGeometry, targetDoor: DoorGeometry, sourceSpace: Space, targetSpace: Space): number {
+  const sourceSize = getSpaceSizeFt(sourceSpace);
+  const targetSize = getSpaceSizeFt(targetSpace);
+  if (!sourceSize || !targetSize) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const projectedPosition = projectDoorPositionToTargetWallFt(
+    { size_ft: sourceSize },
+    { size_ft: targetSize },
+    sourceDoor,
+  );
+
+  const wallPenalty = targetDoor.wall === getOppositeWall(sourceDoor.wall) ? 0 : 1000;
+  return wallPenalty + Math.abs(targetDoor.position_on_wall_ft - projectedPosition);
+}
+
+function validateDoorGeometry(newSpace: Space, existingSpaces: Space[]): GeometryProposal[] {
+  if (!newSpace.doors || newSpace.doors.length === 0) return [];
+
+  const proposals: GeometryProposal[] = [];
+  const sourceDoorsByTarget = new Map<string, DoorGeometry[]>();
+  const sourceSpaceSize = getSpaceSizeFt(newSpace);
+  const wallThicknessCheckedTargets = new Set<string>();
+
+  for (const door of newSpace.doors) {
+    const boundsProposal = validateDoorBounds(newSpace, door);
+    if (boundsProposal) {
+      proposals.push(boundsProposal);
+    }
+
+    if (!isMeaningfulDoorTarget(door.leads_to)) {
+      continue;
+    }
+
+    const targetKey = door.leads_to.toLowerCase();
+    const doorsForTarget = sourceDoorsByTarget.get(targetKey);
+    if (doorsForTarget) {
+      doorsForTarget.push(door);
+    } else {
+      sourceDoorsByTarget.set(targetKey, [door]);
+    }
+  }
+
+  for (const [targetKey, sourceDoors] of sourceDoorsByTarget.entries()) {
+    const targetSpace = findSpaceByName(sourceDoors[0].leads_to, existingSpaces);
+    if (!targetSpace) {
+      continue;
+    }
+
+    const returnDoors = (targetSpace.doors || []).filter((door) => door.leads_to.toLowerCase() === newSpace.name.toLowerCase());
+    const targetSpaceSize = getSpaceSizeFt(targetSpace);
+
+    if (returnDoors.length === 0) {
+      proposals.push({
+        type: 'warning',
+        category: 'doors',
+        question: `"${newSpace.name}" has ${sourceDoors.length} door${sourceDoors.length === 1 ? '' : 's'} leading to "${targetSpace.name}", but "${targetSpace.name}" does not have a paired return door yet. Should we add one?`,
+        options: [
+          'Add matching return door(s)',
+          'Leave it for the map editor',
+          'Keep this as a one-way/open connection',
+        ],
+      });
+    } else {
+      if (returnDoors.length < sourceDoors.length) {
+        proposals.push({
+          type: 'warning',
+          category: 'doors',
+          question: `"${newSpace.name}" has ${sourceDoors.length} door${sourceDoors.length === 1 ? '' : 's'} to "${targetSpace.name}", but "${targetSpace.name}" only has ${returnDoors.length} matching return door${returnDoors.length === 1 ? '' : 's'}. Should we pair the extras?`,
+          options: [
+            'Add more paired doors',
+            'Consolidate to fewer doors',
+            'Keep and fix later in the editor',
+          ],
+        });
+      }
+
+      const availableDoorIndexes = returnDoors.map((_, index) => index);
+
+      for (const sourceDoor of sourceDoors) {
+        if (!sourceSpaceSize || !targetSpaceSize || availableDoorIndexes.length === 0) {
+          continue;
+        }
+
+        let bestDoorIndex = -1;
+        let bestDistance = Number.POSITIVE_INFINITY;
+
+        for (const candidateIndex of availableDoorIndexes) {
+          const distance = getDoorPairDistance(sourceDoor, returnDoors[candidateIndex], newSpace, targetSpace);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestDoorIndex = candidateIndex;
+          }
+        }
+
+        if (bestDoorIndex === -1) {
+          continue;
+        }
+
+        const matchedDoor = returnDoors[bestDoorIndex];
+        availableDoorIndexes.splice(availableDoorIndexes.indexOf(bestDoorIndex), 1);
+
+        const expectedWall = getOppositeWall(sourceDoor.wall);
+        const expectedPosition = projectDoorPositionToTargetWallFt(
+          { size_ft: sourceSpaceSize },
+          { size_ft: targetSpaceSize },
+          sourceDoor,
+        );
+
+        if (matchedDoor.wall !== expectedWall) {
+          proposals.push({
+            type: 'warning',
+            category: 'doors',
+            question: `Door pairing between "${newSpace.name}" and "${targetSpace.name}" looks inconsistent: the return door is on the ${matchedDoor.wall} wall, but it should usually be on the ${expectedWall} wall. Should we realign it?`,
+            options: [
+              `Move the return door to the ${expectedWall} wall`,
+              'Keep this unusual layout',
+              'Fix it in the editor',
+            ],
+          });
+        } else if (Math.abs(matchedDoor.position_on_wall_ft - expectedPosition) > DOOR_ALIGNMENT_TOLERANCE_FT) {
+          proposals.push({
+            type: 'warning',
+            category: 'doors',
+            question: `Paired doors between "${newSpace.name}" and "${targetSpace.name}" are offset (${sourceDoor.position_on_wall_ft.toFixed(1)}ft vs ${matchedDoor.position_on_wall_ft.toFixed(1)}ft projected to ${expectedPosition.toFixed(1)}ft). Should we align them?`,
+            options: [
+              'Align the paired doors',
+              'Keep the offset intentionally',
+              'Fix it in the editor',
+            ],
+          });
+        }
+      }
+    }
+
+    if (
+      !wallThicknessCheckedTargets.has(targetKey) &&
+      typeof newSpace.wall_thickness_ft === 'number' &&
+      typeof targetSpace.wall_thickness_ft === 'number'
+    ) {
+      wallThicknessCheckedTargets.add(targetKey);
+
+      const thicknessDifference = Math.abs(newSpace.wall_thickness_ft - targetSpace.wall_thickness_ft);
+      if (thicknessDifference >= WALL_THICKNESS_VARIANCE_FT) {
+        proposals.push({
+          type: 'warning',
+          category: 'wall_thickness',
+          question: `"${newSpace.name}" uses ${newSpace.wall_thickness_ft}ft walls, but connected space "${targetSpace.name}" uses ${targetSpace.wall_thickness_ft}ft walls. Should connected rooms share a more consistent wall thickness?`,
+          options: [
+            `Match "${targetSpace.name}" at ${targetSpace.wall_thickness_ft}ft`,
+            `Keep "${newSpace.name}" at ${newSpace.wall_thickness_ft}ft`,
+            'Use different thicknesses intentionally',
+          ],
+        });
+      }
+    }
+  }
+
+  return proposals;
+}
+
 /**
  * Validates vertical connections (stairs, elevators) across floors
  */
@@ -324,34 +595,15 @@ function calculateArea(space: Space): number | null {
     return space.area;
   }
 
-  // If width and length are specified
-  if (space.width && space.length) {
-    return space.width * space.length;
+  const sizeFt = getSpaceSizeFt(space);
+  if (sizeFt) {
+    return sizeFt.width * sizeFt.height;
   }
 
-  // Try to parse from dimensions
-  if (space.dimensions) {
-    // Handle object format
-    if (typeof space.dimensions === 'object') {
-      const dims = space.dimensions;
-      if (dims.width && dims.height && typeof dims.width === 'number' && typeof dims.height === 'number') {
-        return dims.width * dims.height;
-      }
-    } else {
-      // Handle string format
-      const dimStr = space.dimensions.toLowerCase();
-
-      // Try "50×30 ft" or "50x30"
-      const rectMatch = dimStr.match(/(\d+)\s*[×x]\s*(\d+)/);
-      if (rectMatch) {
-        return parseInt(rectMatch[1]) * parseInt(rectMatch[2]);
-      }
-
-      // Try "100 sq ft"
-      const sqftMatch = dimStr.match(/(\d+)\s*sq\s*ft/i);
-      if (sqftMatch) {
-        return parseInt(sqftMatch[1]);
-      }
+  if (space.dimensions && typeof space.dimensions === 'string') {
+    const sqftMatch = space.dimensions.toLowerCase().match(/(\d+)\s*sq\s*ft/i);
+    if (sqftMatch) {
+      return parseInt(sqftMatch[1]);
     }
   }
 
