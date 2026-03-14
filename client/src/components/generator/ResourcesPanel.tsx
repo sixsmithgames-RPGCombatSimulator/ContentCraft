@@ -34,6 +34,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [scopeTab, setScopeTab] = useState<'project' | 'library'>('project'); // Project vs Library tabs
+  const [uploadModalInitialMode, setUploadModalInitialMode] = useState<'choice' | 'project-content'>('choice');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
@@ -43,6 +44,8 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
   const [showLibraryBrowser, setShowLibraryBrowser] = useState(false);
   const [showCollectionsModal, setShowCollectionsModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [projectLinkIdsByEntityId, setProjectLinkIdsByEntityId] = useState<Record<string, string>>({});
+  const [activeProjectEntityIds, setActiveProjectEntityIds] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadResources = useCallback(async () => {
@@ -99,6 +102,38 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
     }
   }, [projectId, scopeTab]);
 
+  const loadProjectLinkState = useCallback(async () => {
+    try {
+      const [linksResponse, entitiesResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`),
+        fetch(`${API_BASE_URL}/canon/projects/${projectId}/entities`),
+      ]);
+
+      const linksData = linksResponse.ok ? (await linksResponse.json() as Array<{ _id: string; library_entity_id: string }>) : [];
+      const entitiesData = entitiesResponse.ok ? (await entitiesResponse.json() as Array<{ _id: string }>) : [];
+
+      const nextLinkMap: Record<string, string> = {};
+      for (const link of linksData) {
+        if (typeof link.library_entity_id === 'string' && typeof link._id === 'string') {
+          nextLinkMap[link.library_entity_id] = link._id;
+        }
+      }
+
+      setProjectLinkIdsByEntityId(nextLinkMap);
+      setActiveProjectEntityIds(
+        entitiesData
+          .map((entity) => (typeof entity._id === 'string' ? entity._id : ''))
+          .filter((entityId) => entityId.length > 0),
+      );
+    } catch (error) {
+      console.error('[ResourcesPanel] Failed to load project link state:', error);
+    }
+  }, [projectId]);
+
+  const refreshPanelData = useCallback(async () => {
+    await Promise.all([loadResources(), loadProjectLinkState()]);
+  }, [loadProjectLinkState, loadResources]);
+
   const deleteResource = useCallback(
     async (resourceId: string) => {
       const confirmDelete = window.confirm(
@@ -129,8 +164,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
           return;
         }
 
-        // Refresh list after delete
-        await loadResources();
+        await refreshPanelData();
       } catch (error) {
         console.error('[ResourcesPanel] Failed to delete resource:', error);
         setErrorMessage('Unable to delete resource. Please try again later.');
@@ -138,12 +172,70 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
         setDeletingId(null);
       }
     },
-    [loadResources],
+    [refreshPanelData],
   );
 
   useEffect(() => {
-    loadResources();
-  }, [projectId, scopeTab, loadResources]);
+    refreshPanelData();
+  }, [projectId, scopeTab, refreshPanelData]);
+
+  const handleLibraryLink = useCallback(
+    async (resourceId: string) => {
+      try {
+        setDeletingId(`link:${resourceId}`);
+        setErrorMessage(null);
+        const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ library_entity_ids: [resourceId] }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to link resource');
+        }
+
+        await refreshPanelData();
+      } catch (error) {
+        console.error('[ResourcesPanel] Failed to link resource:', error);
+        setErrorMessage(error instanceof Error ? error.message : 'Unable to link resource.');
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [projectId, refreshPanelData],
+  );
+
+  const handleLibraryUnlink = useCallback(
+    async (resourceId: string) => {
+      const linkId = projectLinkIdsByEntityId[resourceId];
+      if (!linkId) {
+        setErrorMessage('This resource is active via a collection link. Remove it from the collection to unlink it here.');
+        return;
+      }
+
+      try {
+        setDeletingId(`unlink:${resourceId}`);
+        setErrorMessage(null);
+        const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links/${linkId}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to unlink resource');
+        }
+
+        await refreshPanelData();
+      } catch (error) {
+        console.error('[ResourcesPanel] Failed to unlink resource:', error);
+        setErrorMessage(error instanceof Error ? error.message : 'Unable to unlink resource.');
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [projectId, projectLinkIdsByEntityId, refreshPanelData],
+  );
 
   const getResourceSources = (resource: Resource): string[] => {
     const sources = new Set<string>();
@@ -181,7 +273,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
     // Switch to project tab to show newly linked entities
     setScopeTab('project');
     // Reload to show the newly linked entities
-    setTimeout(() => loadResources(), 500);
+    setTimeout(() => refreshPanelData(), 500);
   };
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -220,6 +312,17 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
     });
 
   const showFilters = resources.length > 0;
+  const activeProjectEntityIdSet = new Set(activeProjectEntityIds);
+
+  const openUploadChoices = () => {
+    setUploadModalInitialMode('choice');
+    setShowUploadModal(true);
+  };
+
+  const openProjectContentPromoter = () => {
+    setUploadModalInitialMode('project-content');
+    setShowUploadModal(true);
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -263,13 +366,20 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
       {/* Action Buttons based on scope */}
       <div className="mb-4">
         {scopeTab === 'library' ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
             <button
-              onClick={() => setShowUploadModal(true)}
+              onClick={openUploadChoices}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
             >
               <Plus className="w-4 h-4" />
               Add to Library
+            </button>
+            <button
+              onClick={openProjectContentPromoter}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium"
+            >
+              <FolderOpen className="w-4 h-4" />
+              Use Project Content
             </button>
             <button
               onClick={() => setShowCollectionsModal(true)}
@@ -287,9 +397,27 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
             </button>
           </div>
         ) : (
-          <div className="text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded-md p-3">
-            <p className="font-medium text-blue-900 mb-1">📚 Project resources come from the Library</p>
-            <p>Switch to the Library tab to add new resources or link existing ones to this project.</p>
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <p className="font-medium text-blue-900 mb-1">📚 Project canon comes from linked library entries</p>
+            <p className="text-sm text-blue-800 mb-3">
+              Promote content you already made for this project, or link existing library entries. Unlink anything you no longer want the generator to think with.
+            </p>
+            <div className="flex flex-col gap-2 md:flex-row">
+              <button
+                onClick={openProjectContentPromoter}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium"
+              >
+                <FolderOpen className="w-4 h-4" />
+                Use Existing Project Content
+              </button>
+              <button
+                onClick={() => setScopeTab('library')}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-blue-300 text-blue-800 rounded-md hover:bg-blue-100 text-sm font-medium"
+              >
+                <Library className="w-4 h-4" />
+                Browse Library
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -403,6 +531,12 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
               key={resource._id}
               className="border border-gray-200 rounded-md p-4 hover:border-blue-300 transition-colors"
             >
+              {(() => {
+                const isActiveInProject = activeProjectEntityIdSet.has(resource._id);
+                const directLinkId = projectLinkIdsByEntityId[resource._id] ?? null;
+                const isBusyLinkAction = deletingId === `link:${resource._id}` || deletingId === `unlink:${resource._id}`;
+
+                return (
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -410,6 +544,11 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
                     <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
                       {resource.type}
                     </span>
+                    {isActiveInProject && (
+                      <span className="px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded">
+                        {directLinkId ? 'Linked to Project' : 'Active via Collection'}
+                      </span>
+                    )}
                     {resource.is_official && (
                       <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
                         Official
@@ -452,6 +591,29 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
                 </div>
 
                 <div className="ml-3 flex flex-col gap-2">
+                  {scopeTab === 'library' && !isActiveInProject && (
+                    <button
+                      onClick={() => handleLibraryLink(resource._id)}
+                      disabled={isBusyLinkAction}
+                      className="px-3 py-2 text-xs border border-emerald-300 text-emerald-700 rounded-md hover:bg-emerald-50 disabled:opacity-60 whitespace-nowrap"
+                    >
+                      {deletingId === `link:${resource._id}` ? 'Linking…' : 'Link to Project'}
+                    </button>
+                  )}
+                  {isActiveInProject && (
+                    <button
+                      onClick={() => handleLibraryUnlink(resource._id)}
+                      disabled={isBusyLinkAction || !directLinkId}
+                      className="px-3 py-2 text-xs border border-amber-300 text-amber-700 rounded-md hover:bg-amber-50 disabled:opacity-60 whitespace-nowrap"
+                      title={directLinkId ? 'Remove from this project canon' : 'This item is active through a collection link'}
+                    >
+                      {directLinkId
+                        ? deletingId === `unlink:${resource._id}`
+                          ? 'Unlinking…'
+                          : 'Unlink'
+                        : 'Via Collection'}
+                    </button>
+                  )}
                   <button
                     onClick={async () => {
                       try {
@@ -483,6 +645,8 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
                   </button>
                 </div>
               </div>
+                );
+              })()}
 
               {expandedResourceId === resource._id && (
                 <div className="mt-3 border-t pt-3">
@@ -516,11 +680,12 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
       {/* Upload Modal */}
       <UploadModal
         isOpen={showUploadModal}
+        initialMode={uploadModalInitialMode}
         projectId={projectId}
         onClose={() => setShowUploadModal(false)}
         onSuccess={() => {
           console.log('[ResourcesPanel] onSuccess called - reloading resources');
-          loadResources(); // Reload resources after successful upload
+          refreshPanelData();
         }}
       />
 
@@ -540,7 +705,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
         onCollectionLinked={() => {
           setShowCollectionsModal(false);
           setScopeTab('library');
-          setTimeout(() => loadResources(), 500);
+          setTimeout(() => refreshPanelData(), 500);
         }}
       />
     </div>

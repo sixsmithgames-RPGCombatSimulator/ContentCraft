@@ -8,6 +8,7 @@ import { X, Upload, FileText, CheckCircle, AlertCircle, Loader, Edit, Zap } from
 import { API_BASE_URL } from '../../services/api';
 import ManualEntityForm from './ManualEntityForm';
 import ManualParseWorkflow from './ManualParseWorkflow';
+import ProjectContentLibraryPicker from './ProjectContentLibraryPicker';
 
 interface ParsedEntity {
   type: string;
@@ -22,13 +23,14 @@ type NewEntity = ParsedEntity;
 
 interface UploadModalProps {
   isOpen: boolean;
+  initialMode?: 'choice' | 'project-content';
   projectId: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function UploadModal({ isOpen, projectId, onClose, onSuccess }: UploadModalProps) {
-  const [mode, setMode] = useState<'choice' | 'manual' | 'manual-parse' | 'ai'>('choice');
+export default function UploadModal({ isOpen, initialMode = 'choice', projectId, onClose, onSuccess }: UploadModalProps) {
+  const [mode, setMode] = useState<'choice' | 'manual' | 'manual-parse' | 'ai' | 'project-content'>(initialMode);
   const [step, setStep] = useState<'upload' | 'review' | 'saving'>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [sourceName, setSourceName] = useState('');
@@ -42,7 +44,7 @@ export default function UploadModal({ isOpen, projectId, onClose, onSuccess }: U
   // Reset modal state when it opens to ensure clean start
   useEffect(() => {
     if (isOpen) {
-      setMode('choice');
+      setMode(initialMode);
       setStep('upload');
       setFile(null);
       setSourceName('');
@@ -52,7 +54,7 @@ export default function UploadModal({ isOpen, projectId, onClose, onSuccess }: U
       setSelectedEntities(new Set());
       setError(null);
     }
-  }, [isOpen]);
+  }, [initialMode, isOpen]);
 
   if (!isOpen) return null;
 
@@ -271,7 +273,7 @@ export default function UploadModal({ isOpen, projectId, onClose, onSuccess }: U
   };
 
   const resetModalState = () => {
-    setMode('choice');
+    setMode(initialMode);
     setStep('upload');
     setFile(null);
     setSourceName('');
@@ -307,6 +309,7 @@ export default function UploadModal({ isOpen, projectId, onClose, onSuccess }: U
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-2xl font-bold text-gray-900">
             {mode === 'choice' && 'Add Canon Resource'}
+            {mode === 'project-content' && 'Use Existing Project Content'}
             {mode === 'manual' && 'Create Entity Manually'}
             {mode === 'manual-parse' && 'Parse with AI (Manual Mode)'}
             {mode === 'ai' && step === 'upload' && 'Upload Canon Document'}
@@ -338,6 +341,27 @@ export default function UploadModal({ isOpen, projectId, onClose, onSuccess }: U
               <p className="text-gray-600 mb-6">
                 Choose how you'd like to add canon resources to your campaign:
               </p>
+
+              <button
+                onClick={() => setMode('project-content')}
+                className="w-full p-6 border-2 border-emerald-300 bg-emerald-50 rounded-lg hover:border-emerald-500 hover:bg-emerald-100 transition-colors text-left group"
+              >
+                <div className="flex items-start gap-4">
+                  <CheckCircle className="w-8 h-8 text-emerald-600 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 group-hover:text-emerald-900">
+                      Use Existing Project Content
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Turn content you already generated for this project into library canon, then link or unlink it
+                      instantly. Great for reviewing lots of project content without re-entering anything.
+                    </p>
+                    <div className="mt-2 text-sm font-medium text-emerald-700">
+                      Promote, sync, link, or unlink project content →
+                    </div>
+                  </div>
+                </div>
+              </button>
 
               <button
                 onClick={() => setMode('manual')}
@@ -416,6 +440,14 @@ export default function UploadModal({ isOpen, projectId, onClose, onSuccess }: U
               projectId={projectId}
               onComplete={handleManualParseComplete}
               onCancel={handleBackToChoice}
+            />
+          )}
+
+          {mode === 'project-content' && (
+            <ProjectContentLibraryPicker
+              projectId={projectId}
+              onBack={handleBackToChoice}
+              onSuccess={onSuccess}
             />
           )}
 
@@ -597,7 +629,7 @@ export default function UploadModal({ isOpen, projectId, onClose, onSuccess }: U
         </div>
 
         {/* Footer */}
-        {mode !== 'manual' && mode !== 'manual-parse' && (
+        {mode !== 'manual' && mode !== 'manual-parse' && mode !== 'project-content' && (
           <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
             <button
               onClick={handleClose}

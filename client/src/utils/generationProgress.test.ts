@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addProgressEntry, attachWorkflowSessionMetadata, createProgressSession, updateProgressResponse } from './generationProgress';
+import { addProgressEntry, attachWorkflowSessionMetadata, createProgressSession, prepareProgressForPersistence, updateProgressResponse } from './generationProgress';
 
 describe('generationProgress', () => {
   it('persists confirmed workflow metadata on the last completed progress entry', () => {
@@ -116,5 +116,121 @@ describe('generationProgress', () => {
         stageKey: 'planner',
       }),
     );
+  });
+
+  it('compacts oversized autosave payloads while preserving resume-critical workflow metadata', () => {
+    let session = createProgressSession({ type: 'npc', prompt: 'Create an archmage NPC' });
+
+    for (let index = 0; index < 40; index += 1) {
+      session = addProgressEntry(
+        session,
+        `Stage ${index}`,
+        null,
+        `PROMPT-${index}-` + 'P'.repeat(20_000),
+      );
+      session = updateProgressResponse(
+        session,
+        `RESPONSE-${index}-` + 'R'.repeat(30_000),
+        'completed',
+      );
+    }
+
+    const stageResults = Object.fromEntries(
+      Array.from({ length: 40 }, (_, index) => [
+        `stage_${index}`,
+        {
+          description: 'D'.repeat(20_000),
+          nested: {
+            entries: Array.from({ length: 50 }, () => ({
+              text: 'N'.repeat(2_000),
+            })),
+          },
+        },
+      ]),
+    );
+
+    const persisted = prepareProgressForPersistence({
+      ...session,
+      stageResults,
+      factpack: {
+        facts: Array.from({ length: 120 }, (_, index) => ({ text: `fact-${index}-` + 'F'.repeat(2_000) })),
+        entities: Array.from({ length: 250 }, (_, index) => `entity-${index}`),
+        gaps: Array.from({ length: 250 }, (_, index) => `gap-${index}`),
+      },
+      workflowType: 'npc',
+      workflowStageSequence: ['keyword_extractor', 'planner', 'basic_info'],
+      workflowRunState: {
+        runId: 'run-oversized',
+        workflowType: 'npc',
+        workflowLabel: 'NPC Creator',
+        executionMode: 'integrated',
+        status: 'running',
+        stageSequence: ['keyword_extractor', 'planner', 'basic_info'],
+        stageLabels: {
+          keyword_extractor: 'Keyword Extractor',
+          planner: 'Planner',
+          basic_info: 'Creator: Basic Info',
+        },
+        currentStageKey: 'planner',
+        currentStageLabel: 'Planner',
+        currentStageIndex: 1,
+        attempts: [],
+        retrieval: {
+          groundingStatus: 'project',
+          provenance: 'project',
+          factsFound: 120,
+          lastUpdatedAt: 2,
+          resourceCheckTarget: '#resources-panel',
+        },
+        warnings: [],
+        startedAt: 1,
+        updatedAt: 2,
+      },
+      compiledStageRequest: {
+        requestId: 'req-large',
+        stageKey: 'planner',
+        stageLabel: 'Planner',
+        prompt: 'Q'.repeat(25_000),
+        systemPrompt: 'S'.repeat(25_000),
+        userPrompt: 'U'.repeat(25_000),
+        promptBudget: {
+          measuredChars: 75_000,
+          safetyCeiling: 7_200,
+          hardLimit: 8_000,
+          mode: 'packed',
+          droppedSections: [],
+          warnings: [],
+          compressionApplied: true,
+        },
+        memory: {
+          request: {
+            prompt: 'M'.repeat(25_000),
+            stageKey: 'planner',
+            stageLabel: 'Planner',
+          },
+          completedStages: ['keyword_extractor'],
+          currentStageData: {
+            giant: 'G'.repeat(25_000),
+          },
+          priorStageSummaries: {
+            keyword_extractor: {
+              notes: 'K'.repeat(25_000),
+            },
+          },
+          previousDecisions: {},
+          factpack: {
+            factCount: 120,
+            entityNames: ['wizard'],
+          },
+        },
+      },
+    });
+
+    expect(JSON.stringify(persisted).length).toBeLessThan(3_000_000);
+    expect(persisted.progress.length).toBeLessThanOrEqual(24);
+    expect(persisted.workflowType).toBe('npc');
+    expect(persisted.workflowStageSequence).toEqual(['keyword_extractor', 'planner', 'basic_info']);
+    expect(persisted.compiledStageRequest?.requestId).toBe('req-large');
+    expect((persisted.compiledStageRequest?.prompt.length ?? 0)).toBeLessThan(25_000);
   });
 });

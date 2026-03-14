@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import {
+  getDb,
   getCanonEntitiesCollection,
   getCanonChunksCollection,
   getProjectLibraryLinksCollection,
@@ -13,15 +14,88 @@ import {
 import { CanonEntity, generateEntityId } from '../models/CanonEntity.js';
 import { CanonChunk, generateChunkId } from '../models/CanonChunk.js';
 import { ProjectLibraryLink, generateLinkId } from '../models/ProjectLibraryLink.js';
+import { GeneratedContentDocument } from '../models/GeneratedContent.js';
 import { generateEmbedding, findTopKSimilar } from '../utils/embeddings.js';
 import { logger } from '../utils/logger.js';
 import { LibraryCollection, generateCollectionId } from '../models/LibraryCollection.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { createProjectContentLibraryDraft, type ProjectContentLibraryDraft } from '../services/projectContentLibraryMapper.js';
 
 export const canonRouter = Router();
 
 // Apply auth middleware to all routes
 canonRouter.use(authMiddleware);
+
+const isPromotionDraft = (
+  value: ReturnType<typeof createProjectContentLibraryDraft>,
+): value is ProjectContentLibraryDraft => 'entityId' in value;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const getGeneratedContentDisplayType = (content: GeneratedContentDocument): string => {
+  const metadata = isRecord(content.metadata) ? content.metadata : null;
+  return typeof metadata?.deliverable === 'string' && metadata.deliverable.trim().length > 0
+    ? metadata.deliverable.trim()
+    : content.content_type;
+};
+
+const buildPromotedCanonEntity = (
+  draft: ProjectContentLibraryDraft,
+  userId: string | undefined,
+): CanonEntity => {
+  const now = new Date();
+
+  return {
+    _id: draft.entityId,
+    userId,
+    scope: 'lib',
+    type: draft.entityType,
+    canonical_name: draft.canonicalName,
+    aliases: [],
+    relationships: [],
+    claims: draft.claims,
+    npc_details: draft.entityType === 'npc' ? (draft.sourceData as unknown as CanonEntity['npc_details']) : undefined,
+    spell_details: draft.entityType === 'spell' ? (draft.sourceData as unknown as CanonEntity['spell_details']) : undefined,
+    project_id: undefined,
+    is_official: false,
+    tags: draft.tags,
+    source: draft.sourceLabel,
+    version: '1.0.0',
+    created_at: now,
+    updated_at: now,
+  };
+};
+
+const replaceCanonChunksForEntity = async (
+  chunksCollection: ReturnType<typeof getCanonChunksCollection>,
+  entity: CanonEntity,
+  userId: string | undefined,
+): Promise<number> => {
+  await chunksCollection.deleteMany({ entity_id: entity._id, userId });
+
+  if (!Array.isArray(entity.claims) || entity.claims.length === 0) {
+    return 0;
+  }
+
+  const chunks: CanonChunk[] = entity.claims.map((claim, index) => ({
+    _id: generateChunkId(entity._id, index + 1),
+    userId,
+    entity_id: entity._id,
+    text: claim.text,
+    metadata: {
+      source: claim.source,
+      entity_name: entity.canonical_name,
+      entity_type: entity.type,
+      tags: entity.tags,
+    },
+    created_at: new Date(),
+    updated_at: new Date(),
+  }));
+
+  await chunksCollection.insertMany(chunks);
+  return chunks.length;
+};
 
 // ============================================================================
 // CANON ENTITY ROUTES - Complete CRUD operations for canon entities
@@ -529,6 +603,196 @@ canonRouter.delete('/chunks/:id', async (req: Request, res: Response) => {
 // ============================================================================
 // PROJECT LIBRARY LINK ROUTES - Linking library entities to projects
 // ============================================================================
+
+canonRouter.get('/projects/:projectId/generated-content-status', async (req: Request, res: Response) => {
+  try {
+    const authReq = req as unknown as AuthRequest;
+    const { projectId } = req.params;
+    const { limit = '200' } = req.query;
+
+    const db = getDb();
+    const generatedContentCollection = db.collection<GeneratedContentDocument>('generated_content');
+    const entitiesCollection = getCanonEntitiesCollection();
+    const linksCollection = getProjectLibraryLinksCollection();
+
+    const generatedContent = await generatedContentCollection
+      .find({ project_id: projectId, userId: authReq.userId })
+      .sort({ updated_at: -1 })
+      .limit(parseInt(limit as string, 10))
+      .toArray();
+
+    const drafts = generatedContent.map((content) => ({
+      content,
+      draft: createProjectContentLibraryDraft(content, projectId),
+    }));
+
+    const promotableEntityIds = drafts
+      .filter((entry): entry is { content: GeneratedContentDocument; draft: ProjectContentLibraryDraft } => isPromotionDraft(entry.draft))
+      .map((entry) => entry.draft.entityId);
+
+    const [existingEntities, projectLinks] = await Promise.all([
+      promotableEntityIds.length > 0
+        ? entitiesCollection.find({ _id: { $in: promotableEntityIds }, userId: authReq.userId }).toArray()
+        : Promise.resolve([]),
+      linksCollection.find({ project_id: projectId }).toArray(),
+    ]);
+
+    const existingEntityIds = new Set(existingEntities.map((entity) => entity._id));
+    const linkByEntityId = new Map(projectLinks.map((link) => [link.library_entity_id, link._id]));
+
+    const items = drafts.map(({ content, draft }) => {
+      if (!isPromotionDraft(draft)) {
+        return {
+          content_id: content._id,
+          title: content.title,
+          content_type: content.content_type,
+          display_type: getGeneratedContentDisplayType(content),
+          created_at: content.created_at,
+          updated_at: content.updated_at,
+          eligible: false,
+          status: 'unsupported' as const,
+          reason: draft.reason,
+          library_entity_id: null,
+          link_id: null,
+          source_count: 0,
+        };
+      }
+
+      const linkId = linkByEntityId.get(draft.entityId) ?? null;
+      const inLibrary = existingEntityIds.has(draft.entityId);
+
+      return {
+        content_id: content._id,
+        title: content.title,
+        content_type: content.content_type,
+        display_type: getGeneratedContentDisplayType(content),
+        created_at: content.created_at,
+        updated_at: content.updated_at,
+        eligible: true,
+        entity_type: draft.entityType,
+        status: linkId ? 'linked' as const : inLibrary ? 'in_library' as const : 'project_only' as const,
+        library_entity_id: draft.entityId,
+        link_id: linkId,
+        source_count: draft.claims.length,
+      };
+    });
+
+    res.json(items);
+  } catch (error) {
+    logger.error('Error fetching project generated-content library status:', error);
+    res.status(500).json({ error: 'Failed to fetch project content library status' });
+  }
+});
+
+canonRouter.post('/projects/:projectId/promote-generated', async (req: Request, res: Response) => {
+  try {
+    const authReq = req as unknown as AuthRequest;
+    const { projectId } = req.params;
+    const { content_ids, link_to_project = true } = req.body as {
+      content_ids?: string[];
+      link_to_project?: boolean;
+    };
+
+    if (!Array.isArray(content_ids) || content_ids.length === 0) {
+      return res.status(400).json({ error: 'content_ids array is required' });
+    }
+
+    const db = getDb();
+    const generatedContentCollection = db.collection<GeneratedContentDocument>('generated_content');
+    const entitiesCollection = getCanonEntitiesCollection();
+    const chunksCollection = getCanonChunksCollection();
+    const linksCollection = getProjectLibraryLinksCollection();
+
+    const generatedContent = await generatedContentCollection
+      .find({ _id: { $in: content_ids }, project_id: projectId, userId: authReq.userId })
+      .toArray();
+
+    const existingEntities = await entitiesCollection.find({ userId: authReq.userId }).project({ _id: 1, created_at: 1 }).toArray();
+    const existingEntityMap = new Map(existingEntities.map((entity) => [entity._id, entity]));
+    const existingLinks = await linksCollection.find({ project_id: projectId }).toArray();
+    const existingLinkIds = new Set(existingLinks.map((link) => link._id));
+
+    const results: Array<Record<string, unknown>> = [];
+    let created = 0;
+    let updated = 0;
+    let linked = 0;
+    let chunksReplaced = 0;
+
+    for (const content of generatedContent) {
+      const draft = createProjectContentLibraryDraft(content, projectId);
+
+      if (!isPromotionDraft(draft)) {
+        results.push({
+          content_id: content._id,
+          title: content.title,
+          status: 'unsupported',
+          reason: draft.reason,
+        });
+        continue;
+      }
+
+      const existingEntity = existingEntityMap.get(draft.entityId);
+      const canonEntity = buildPromotedCanonEntity(draft, authReq.userId);
+      if (existingEntity?.created_at instanceof Date) {
+        canonEntity.created_at = existingEntity.created_at;
+      }
+
+      if (existingEntity) {
+        await entitiesCollection.updateOne(
+          { _id: draft.entityId, userId: authReq.userId },
+          { $set: canonEntity },
+        );
+        updated += 1;
+      } else {
+        await entitiesCollection.insertOne(canonEntity);
+        created += 1;
+      }
+
+      chunksReplaced += await replaceCanonChunksForEntity(chunksCollection, canonEntity, authReq.userId);
+
+      let linkId: string | null = null;
+      if (link_to_project) {
+        const generatedLinkId = generateLinkId(projectId, draft.entityId);
+        linkId = generatedLinkId;
+        if (!existingLinkIds.has(generatedLinkId)) {
+          const link: ProjectLibraryLink = {
+            _id: generatedLinkId,
+            project_id: projectId,
+            library_entity_id: draft.entityId,
+            added_at: new Date(),
+          };
+          await linksCollection.insertOne(link);
+          existingLinkIds.add(generatedLinkId);
+          linked += 1;
+        }
+      }
+
+      results.push({
+        content_id: content._id,
+        title: content.title,
+        status: link_to_project ? 'linked' : 'in_library',
+        library_entity_id: draft.entityId,
+        link_id: linkId,
+        entity_type: draft.entityType,
+      });
+    }
+
+    const foundIds = new Set(generatedContent.map((content) => content._id));
+    const missingContentIds = content_ids.filter((contentId) => !foundIds.has(contentId));
+
+    res.json({
+      created,
+      updated,
+      linked,
+      chunks_replaced: chunksReplaced,
+      missing_content_ids: missingContentIds,
+      results,
+    });
+  } catch (error) {
+    logger.error('Error promoting generated project content to library:', error);
+    res.status(500).json({ error: 'Failed to promote project content to library' });
+  }
+});
 
 /**
  * GET /api/canon/projects/:projectId/links

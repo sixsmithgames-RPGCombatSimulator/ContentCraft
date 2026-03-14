@@ -85,6 +85,223 @@ export interface PersistedWorkflowSessionMetadata {
   compiledStageRequest?: AiCompiledStageRequest | null;
 }
 
+const PERSISTENCE_TARGET_CHARS = 2_000_000;
+const PERSISTENCE_HARD_CHARS = 3_000_000;
+const MAX_PROGRESS_ENTRIES = 24;
+const MAX_PROGRESS_ENTRIES_AGGRESSIVE = 12;
+const MAX_PROMPT_CHARS = 12_000;
+const MAX_PROMPT_CHARS_AGGRESSIVE = 4_000;
+const MAX_RESPONSE_CHARS = 16_000;
+const MAX_RESPONSE_CHARS_AGGRESSIVE = 6_000;
+const MAX_ERROR_MESSAGE_CHARS = 2_000;
+
+function estimateJsonChars(value: unknown): number {
+  try {
+    return JSON.stringify(value).length;
+  } catch {
+    return Number.MAX_SAFE_INTEGER;
+  }
+}
+
+function truncateString(value: string, maxChars: number): string {
+  if (value.length <= maxChars) {
+    return value;
+  }
+
+  return `${value.slice(0, Math.max(0, maxChars - 18))}[truncated:${value.length}]`;
+}
+
+function compactUnknown(
+  value: unknown,
+  options: {
+    maxDepth: number;
+    maxArrayItems: number;
+    maxObjectKeys: number;
+    maxStringChars: number;
+  },
+  depth: number = 0,
+): unknown {
+  if (typeof value === 'string') {
+    return truncateString(value, options.maxStringChars);
+  }
+
+  if (value === null || value === undefined || typeof value !== 'object') {
+    return value;
+  }
+
+  if (depth >= options.maxDepth) {
+    if (Array.isArray(value)) {
+      return `[truncated-array:${value.length}]`;
+    }
+
+    const keyCount = Object.keys(value as Record<string, unknown>).length;
+    return `[truncated-object:${keyCount}]`;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, options.maxArrayItems)
+      .map((item) => compactUnknown(item, options, depth + 1));
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>).slice(0, options.maxObjectKeys);
+  return Object.fromEntries(
+    entries.map(([key, entryValue]) => [key, compactUnknown(entryValue, options, depth + 1)]),
+  );
+}
+
+function compactProgressEntries(
+  entries: ProgressEntry[],
+  options: {
+    maxEntries: number;
+    maxPromptChars: number;
+    maxResponseChars: number;
+  },
+): ProgressEntry[] {
+  return entries.slice(-options.maxEntries).map((entry) => ({
+    ...entry,
+    prompt: truncateString(entry.prompt, options.maxPromptChars),
+    response: typeof entry.response === 'string'
+      ? truncateString(entry.response, options.maxResponseChars)
+      : entry.response,
+    errorMessage: typeof entry.errorMessage === 'string'
+      ? truncateString(entry.errorMessage, MAX_ERROR_MESSAGE_CHARS)
+      : entry.errorMessage,
+  }));
+}
+
+function compactFactpack(
+  factpack: GenerationProgress['factpack'],
+  aggressive: boolean,
+): GenerationProgress['factpack'] {
+  if (!factpack) {
+    return factpack;
+  }
+
+  if (aggressive) {
+    return {
+      facts: [],
+      entities: factpack.entities.slice(0, 100),
+      gaps: factpack.gaps.slice(0, 100),
+    };
+  }
+
+  return {
+    facts: compactUnknown(factpack.facts, {
+      maxDepth: 3,
+      maxArrayItems: 80,
+      maxObjectKeys: 12,
+      maxStringChars: 600,
+    }) as unknown[],
+    entities: factpack.entities.slice(0, 200),
+    gaps: factpack.gaps.slice(0, 200),
+  };
+}
+
+function compactCompiledStageRequest(
+  request: AiCompiledStageRequest | undefined,
+  aggressive: boolean,
+): AiCompiledStageRequest | undefined {
+  if (!request) {
+    return request;
+  }
+
+  return {
+    ...request,
+    prompt: truncateString(request.prompt, aggressive ? 4_000 : 10_000),
+    systemPrompt: truncateString(request.systemPrompt, aggressive ? 3_000 : 8_000),
+    userPrompt: truncateString(request.userPrompt, aggressive ? 3_000 : 8_000),
+    memory: {
+      ...request.memory,
+      request: {
+        ...request.memory.request,
+        prompt: truncateString(request.memory.request.prompt, aggressive ? 2_000 : 6_000),
+      },
+      currentStageData: compactUnknown(request.memory.currentStageData, {
+        maxDepth: aggressive ? 2 : 4,
+        maxArrayItems: aggressive ? 12 : 30,
+        maxObjectKeys: aggressive ? 12 : 30,
+        maxStringChars: aggressive ? 300 : 800,
+      }) as Record<string, unknown>,
+      priorStageSummaries: compactUnknown(request.memory.priorStageSummaries, {
+        maxDepth: aggressive ? 2 : 3,
+        maxArrayItems: aggressive ? 10 : 20,
+        maxObjectKeys: aggressive ? 10 : 20,
+        maxStringChars: aggressive ? 250 : 600,
+      }) as Record<string, unknown>,
+    },
+  };
+}
+
+function compactStageResults(stageResults: JsonRecord, aggressive: boolean): JsonRecord {
+  return compactUnknown(stageResults, {
+    maxDepth: aggressive ? 3 : 5,
+    maxArrayItems: aggressive ? 20 : 60,
+    maxObjectKeys: aggressive ? 20 : 60,
+    maxStringChars: aggressive ? 400 : 1_200,
+  }) as JsonRecord;
+}
+
+function compactStageChunkState(
+  stageChunkState: StageChunkState | undefined,
+  aggressive: boolean,
+): StageChunkState | undefined {
+  if (!stageChunkState) {
+    return stageChunkState;
+  }
+
+  return {
+    ...stageChunkState,
+    accumulatedChunkResults: compactUnknown(stageChunkState.accumulatedChunkResults, {
+      maxDepth: aggressive ? 3 : 4,
+      maxArrayItems: aggressive ? 15 : 40,
+      maxObjectKeys: aggressive ? 15 : 30,
+      maxStringChars: aggressive ? 300 : 800,
+    }) as JsonRecord[],
+    liveMapSpaces: compactUnknown(stageChunkState.liveMapSpaces, {
+      maxDepth: aggressive ? 3 : 4,
+      maxArrayItems: aggressive ? 15 : 40,
+      maxObjectKeys: aggressive ? 15 : 30,
+      maxStringChars: aggressive ? 300 : 800,
+    }) as LiveMapSpace[],
+  };
+}
+
+export function prepareProgressForPersistence(session: GenerationProgress): GenerationProgress {
+  const buildPersisted = (aggressive: boolean): GenerationProgress => ({
+    ...session,
+    progress: compactProgressEntries(session.progress, {
+      maxEntries: aggressive ? MAX_PROGRESS_ENTRIES_AGGRESSIVE : MAX_PROGRESS_ENTRIES,
+      maxPromptChars: aggressive ? MAX_PROMPT_CHARS_AGGRESSIVE : MAX_PROMPT_CHARS,
+      maxResponseChars: aggressive ? MAX_RESPONSE_CHARS_AGGRESSIVE : MAX_RESPONSE_CHARS,
+    }),
+    stageResults: compactStageResults(session.stageResults, aggressive),
+    factpack: compactFactpack(session.factpack, aggressive),
+    compiledStageRequest: compactCompiledStageRequest(session.compiledStageRequest, aggressive),
+    stageChunkState: compactStageChunkState(session.stageChunkState, aggressive),
+    liveMapSpaces: compactUnknown(session.liveMapSpaces, {
+      maxDepth: aggressive ? 3 : 4,
+      maxArrayItems: aggressive ? 15 : 40,
+      maxObjectKeys: aggressive ? 15 : 30,
+      maxStringChars: aggressive ? 300 : 800,
+    }) as JsonRecord[] | undefined,
+    accumulatedChunkResults: compactUnknown(session.accumulatedChunkResults, {
+      maxDepth: aggressive ? 3 : 4,
+      maxArrayItems: aggressive ? 15 : 40,
+      maxObjectKeys: aggressive ? 15 : 30,
+      maxStringChars: aggressive ? 300 : 800,
+    }) as JsonRecord[] | undefined,
+  });
+
+  const firstPass = buildPersisted(false);
+  if (estimateJsonChars(firstPass) <= PERSISTENCE_TARGET_CHARS) {
+    return firstPass;
+  }
+
+  const aggressivePass = buildPersisted(true);
+  return estimateJsonChars(aggressivePass) <= PERSISTENCE_HARD_CHARS ? aggressivePass : aggressivePass;
+}
+
 function areStringArraysEqual(left: string[] | undefined, right: string[]): boolean {
   return Array.isArray(left) && left.length === right.length && left.every((value, index) => value === right[index]);
 }
@@ -318,8 +535,15 @@ export async function saveProgressToFile(
   filename?: string
 ): Promise<string> {
   const fn = filename || `generation-${session.sessionId}.json`;
+  const persistedSession = prepareProgressForPersistence(session);
+  const originalChars = estimateJsonChars(session);
+  const persistedChars = estimateJsonChars(persistedSession);
 
   try {
+    if (persistedChars < originalChars) {
+      console.warn(`[Progress] Compacted autosave payload for ${session.sessionId}: ${originalChars} -> ${persistedChars} chars`);
+    }
+
     const response = await fetch(`${API_BASE_URL}/save-progress`, {
       method: 'POST',
       headers: {
@@ -327,7 +551,7 @@ export async function saveProgressToFile(
       },
       body: JSON.stringify({
         filename: fn,
-        data: session,
+        data: persistedSession,
       }),
     });
 
