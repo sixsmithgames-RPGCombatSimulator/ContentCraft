@@ -13,12 +13,26 @@
 
 import Ajv, { type ValidateFunction, type ErrorObject } from 'ajv';
 import addFormats from 'ajv-formats';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const resolveNpcSchemaPath = (fileName: string): string => {
+  const candidatePaths = [
+    join(__dirname, '../schemas/npc', fileName),
+    join(__dirname, '../../../schema/npc', fileName),
+  ];
+  const resolvedPath = candidatePaths.find((candidatePath) => existsSync(candidatePath));
+
+  if (!resolvedPath) {
+    throw new Error(`NPC validation schema file \"${fileName}\" not found. Checked: ${candidatePaths.join(', ')}`);
+  }
+
+  return resolvedPath;
+};
 
 // Initialize AJV with strict settings
 const ajv = new Ajv({
@@ -33,11 +47,11 @@ const ajv = new Ajv({
 addFormats(ajv);
 
 // Load v1 schema (legacy)
-const npcSchemaV1Path = join(__dirname, '../../../schema/npc/v1-flat.json');
+const npcSchemaV1Path = resolveNpcSchemaPath('v1-flat.json');
 const npcSchemaV1 = JSON.parse(readFileSync(npcSchemaV1Path, 'utf-8'));
 
 // Load v1.1 schema
-const npcSchemaV1_1Path = join(__dirname, '../../../schema/npc/v1.1-server.json');
+const npcSchemaV1_1Path = resolveNpcSchemaPath('v1.1-server.json');
 const npcSchemaV1_1 = JSON.parse(readFileSync(npcSchemaV1_1Path, 'utf-8'));
 
 // Compile validators for both versions

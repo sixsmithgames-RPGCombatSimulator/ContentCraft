@@ -8,11 +8,11 @@
  * 4. NO FALLBACKS - only explicit mapping or actionable errors
  
  *
- * © 2025 Sixsmith Games. All rights reserved.
+ * 2025 Sixsmith Games. All rights reserved.
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { validateNpcStrict, validateNpcSafe } from '../validation/npcValidator.js';
@@ -20,8 +20,22 @@ import { validateNpcStrict, validateNpcSafe } from '../validation/npcValidator.j
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const resolveNpcSchemaPath = (fileName: string): string => {
+  const candidatePaths = [
+    join(__dirname, '../schemas/npc', fileName),
+    join(__dirname, '../../../schema/npc', fileName),
+  ];
+  const resolvedPath = candidatePaths.find((candidatePath) => existsSync(candidatePath));
+
+  if (!resolvedPath) {
+    throw new Error(`NPC schema file \"${fileName}\" not found. Checked: ${candidatePaths.join(', ')}`);
+  }
+
+  return resolvedPath;
+};
+
 // Load canonical schema
-const schemaPath = join(__dirname, '../../../schema/npc/v1-flat.json');
+const schemaPath = resolveNpcSchemaPath('v1-flat.json');
 const npcSchema = JSON.parse(readFileSync(schemaPath, 'utf-8'));
 
 /**

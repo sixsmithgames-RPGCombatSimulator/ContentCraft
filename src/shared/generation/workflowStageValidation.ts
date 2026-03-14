@@ -1,9 +1,9 @@
 import {
   getStageDefinition,
   getWorkflowStageDefinition,
-} from './workflowRegistry';
-import { resolveWorkflowContentType } from './workflowContentType';
-import type { StageDefinition, WorkflowContentType } from './workflowTypes';
+} from './workflowRegistry.js';
+import { resolveWorkflowContentType } from './workflowContentType.js';
+import type { StageDefinition, WorkflowContentType } from './workflowTypes.js';
 
 export type WorkflowStageJsonRecord = Record<string, unknown>;
 
