@@ -33,6 +33,8 @@ if (!isVercel) {
 
 export const db = _db as sqlite3.Database;
 
+export const isSqliteAvailable = (): boolean => !_db ? false : true;
+
 export const initializeDatabase = (): Promise<void> => {
   // Skip SQLite initialization on Vercel
   if (isVercel || !_db) {
