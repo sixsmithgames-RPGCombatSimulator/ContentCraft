@@ -11,6 +11,48 @@ import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 
 export const projectRouter = Router();
 
+function resolveProjectsErrorStatus(error: unknown): number {
+  if (!(error instanceof Error)) {
+    return 500;
+  }
+
+  if (
+    error.message.includes('SQLite not available in this environment')
+    || error.message.includes('MongoDB not available')
+  ) {
+    return 503;
+  }
+
+  return 500;
+}
+
+function resolveProjectsErrorResponse(error: unknown, fallbackError: string): APIResponse {
+  if (error instanceof Error) {
+    if (
+      error.message.includes('SQLite not available in this environment')
+      || error.message.includes('MongoDB not available')
+    ) {
+      return {
+        success: false,
+        error: 'Project storage unavailable',
+        message: 'Project persistence is not configured for this environment. Configure MongoDB persistence before using project endpoints.'
+      };
+    }
+
+    return {
+      success: false,
+      error: fallbackError,
+      message: error.message
+    };
+  }
+
+  return {
+    success: false,
+    error: fallbackError,
+    message: 'Unknown error'
+  };
+}
+
 // Apply auth middleware to all routes
 projectRouter.use(authMiddleware);
 
@@ -34,12 +76,8 @@ projectRouter.get('/', async (req, res) => {
     res.json(response);
   } catch (error) {
     console.error('Error fetching projects:', error);
-    const response: APIResponse = {
-      success: false,
-      error: 'Failed to fetch projects',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    };
-    res.status(500).json(response);
+    const response = resolveProjectsErrorResponse(error, 'Failed to fetch projects');
+    res.status(resolveProjectsErrorStatus(error)).json(response);
   }
 });
 
@@ -64,12 +102,8 @@ projectRouter.get('/:id', async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    const response: APIResponse = {
-      success: false,
-      error: 'Failed to fetch project',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    };
-    res.status(500).json(response);
+    const response = resolveProjectsErrorResponse(error, 'Failed to fetch project');
+    res.status(resolveProjectsErrorStatus(error)).json(response);
   }
 });
 
@@ -92,12 +126,9 @@ projectRouter.post('/', async (req, res) => {
 
     res.status(201).json(response);
   } catch (error) {
-    const response: APIResponse = {
-      success: false,
-      error: 'Failed to create project',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    };
-    res.status(400).json(response);
+    const response = resolveProjectsErrorResponse(error, 'Failed to create project');
+    const status = resolveProjectsErrorStatus(error);
+    res.status(status === 500 ? 400 : status).json(response);
   }
 });
 
@@ -124,12 +155,9 @@ projectRouter.put('/:id', async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    const response: APIResponse = {
-      success: false,
-      error: 'Failed to update project',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    };
-    res.status(400).json(response);
+    const response = resolveProjectsErrorResponse(error, 'Failed to update project');
+    const status = resolveProjectsErrorStatus(error);
+    res.status(status === 500 ? 400 : status).json(response);
   }
 });
 
@@ -154,11 +182,7 @@ projectRouter.delete('/:id', async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    const response: APIResponse = {
-      success: false,
-      error: 'Failed to delete project',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    };
-    res.status(500).json(response);
+    const response = resolveProjectsErrorResponse(error, 'Failed to delete project');
+    res.status(resolveProjectsErrorStatus(error)).json(response);
   }
 });
