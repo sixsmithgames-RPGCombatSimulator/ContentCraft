@@ -220,6 +220,17 @@ A change is complete only when:
 [ ] Visual verification completed
 [ ] Documentation updated
 [ ] High-risk protocol followed
+
+1.12 Serverless & Node ESM Runtime Stability
+
+Guardrails to prevent cold-start crashes (e.g., Vercel FUNCTION_INVOCATION_FAILED):
+
+- ESM import specifiers that ship to runtime MUST include explicit `.js` extensions (Node/Vercel ESM does not resolve extensionless relative imports after build).
+- Module-scope file reads MUST resolve against bundled assets in `dist/server/...` and the build MUST copy those assets (add root→dist copy steps when assets live outside `src/server`).
+- CI/build gate MUST import compiled artifacts to fail fast:
+  - `node --input-type=module -e "import './dist/server/app.js'"`
+  - `VERCEL=1 node --input-type=module -e "import('./api/index.js')"`
+  These checks are required for any change that touches server, schemas, or shared runtime modules.
 2. High-Risk File Protocol
 
 High-risk modules require extra discipline.

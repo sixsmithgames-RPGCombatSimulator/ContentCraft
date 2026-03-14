@@ -43,6 +43,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
   const [showLibraryBrowser, setShowLibraryBrowser] = useState(false);
   const [showCollectionsModal, setShowCollectionsModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadResources = useCallback(async () => {
     console.log('[ResourcesPanel] loadResources called - scopeTab:', scopeTab);
@@ -97,6 +98,48 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
       setLoading(false);
     }
   }, [projectId, scopeTab]);
+
+  const deleteResource = useCallback(
+    async (resourceId: string) => {
+      const confirmDelete = window.confirm(
+        'Delete this library item? This removes the entity and its facts from all projects.',
+      );
+      if (!confirmDelete) return;
+
+      try {
+        setDeletingId(resourceId);
+        setErrorMessage(null);
+        const response = await fetch(`${API_BASE_URL}/canon/entities/${resourceId}`, {
+          method: 'DELETE',
+        });
+
+        let data: unknown = null;
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          console.warn('[ResourcesPanel] Failed to parse delete response JSON:', parseError);
+        }
+
+        if (!response.ok) {
+          const message =
+            data && typeof data === 'object' && data !== null && 'error' in data
+              ? String((data as { error?: unknown }).error ?? 'Failed to delete resource')
+              : `Failed to delete resource (${response.status})`;
+          setErrorMessage(message);
+          return;
+        }
+
+        // Refresh list after delete
+        await loadResources();
+      } catch (error) {
+        console.error('[ResourcesPanel] Failed to delete resource:', error);
+        setErrorMessage('Unable to delete resource. Please try again later.');
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [loadResources],
+  );
 
   useEffect(() => {
     loadResources();
@@ -421,6 +464,15 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
                   >
                     Copy ID
                   </button>
+                  {scopeTab === 'library' && (
+                    <button
+                      onClick={() => deleteResource(resource._id)}
+                      disabled={deletingId === resource._id}
+                      className="px-3 py-2 text-xs border border-red-300 text-red-700 rounded-md hover:bg-red-50 disabled:opacity-60 whitespace-nowrap"
+                    >
+                      {deletingId === resource._id ? 'Deleting…' : 'Delete'}
+                    </button>
+                  )}
                   <button
                     onClick={() =>
                       setExpandedResourceId((prev) => (prev === resource._id ? null : resource._id))
