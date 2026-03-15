@@ -56,6 +56,47 @@ describe('workflowStageResponse', () => {
     });
   });
 
+  it('repairs malformed planner retrieval hints and proposals before validation', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        deliverable: 'npc',
+        retrieval_hints: 'Tiefling rogue assassin',
+        proposals: { id: 'origin', question: 'Choose an origin?' },
+        allow_invention: 'cosmetic',
+        tone: 'epic',
+        rule_base: '2024RAW',
+      }),
+      stageName: 'Planner',
+      stageIdentity: 'planner',
+      workflowType: 'npc',
+      configFlags: {
+        allow_invention: 'grounded',
+        tone: 'grim',
+        rule_base: '2014RAW',
+      },
+      stageResults: {},
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed).toMatchObject({
+      deliverable: 'npc',
+      retrieval_hints: {
+        entities: [],
+        regions: [],
+        eras: [],
+        keywords: ['Tiefling rogue assassin'],
+      },
+      proposals: [{ id: 'origin', question: 'Choose an origin?' }],
+      flags_echo: {
+        allow_invention: 'cosmetic',
+        tone: 'epic',
+        rule_base: '2024RAW',
+      },
+    });
+  });
+
   it('infers npc basic-info species and prunes forbidden fields', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({
@@ -147,9 +188,12 @@ describe('workflowStageResponse', () => {
       stageResults: {},
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
+    if (!result.ok) {
+      const failure = result as { ok: false; error: string };
+      expect(failure.error).toContain('size_ft');
+      return;
+    }
 
-    expect(result.error).toContain('size_ft');
+    expect.fail('Expected location stage normalization to fail for invalid spaces.');
   });
 });

@@ -3,10 +3,9 @@ import { validateNpcStageOutput } from '../utils/npcStageValidator';
 import { validateIncomingLocationSpace } from '../utils/locationSpaceValidation';
 import {
   getStageContract,
-  pruneToAllowedKeys,
-  resolveStageContractKey,
   validateStageOutput,
 } from '../utils/stageOutputContracts';
+import { repairWorkflowStagePayload } from '../../../src/shared/generation/workflowStageRepair';
 
 type JsonRecord = Record<string, unknown>;
 type StageResults = Record<string, JsonRecord>;
@@ -630,61 +629,19 @@ export function parseAndNormalizeWorkflowStageResponse(
 
   let parsed = parseResult.data || {};
 
-  if (input.stageName === 'Planner') {
-    parsed = normalizePlannerOutput(parsed, input.configFlags);
-  }
-
-  if (input.stageName === 'Creator: Core Details') {
-    parsed = normalizeCoreDetailsStageOutput(parsed);
-  }
-
-  const contractLookupKey = input.stageIdentity || input.stageName;
-  const contractKey = resolveStageContractKey(contractLookupKey, input.workflowType);
+  const repairResult = repairWorkflowStagePayload({
+    stageIdOrName: input.stageIdentity || input.stageName,
+    workflowType: input.workflowType,
+    payload: parsed,
+    configPrompt: input.configPrompt,
+    configFlags: input.configFlags,
+    previousDecisions: input.previousDecisions,
+  });
+  parsed = repairResult.payload;
+  const contractKey = repairResult.contractKey;
   const stageContract = contractKey ? getStageContract(contractKey, input.workflowType) : null;
 
   if (contractKey && stageContract) {
-    parsed = pruneToAllowedKeys(parsed, stageContract.allowedKeys) as JsonRecord;
-
-    if (contractKey === 'basic_info') {
-      if (typeof parsed.race === 'string' && typeof parsed.species !== 'string') {
-        parsed.species = parsed.race;
-      }
-      if (typeof parsed.species === 'string' && typeof parsed.race !== 'string') {
-        parsed.race = parsed.species;
-      }
-
-      const inferred = inferSpecies({
-        original_user_request: input.configPrompt,
-        previous_decisions: input.previousDecisions,
-      });
-      if (inferred) {
-        if (typeof parsed.species !== 'string') {
-          parsed.species = inferred;
-        }
-        if (typeof parsed.race !== 'string') {
-          parsed.race = parsed.species;
-        }
-      }
-    }
-
-    if (contractKey === 'core_details') {
-      const coreCtx = {
-        name: typeof parsed.name === 'string' && parsed.name.trim().length > 0 ? parsed.name : 'Unknown',
-        alignment: typeof parsed.alignment === 'string' ? parsed.alignment : undefined,
-        oath: input.previousDecisions?.['oath-subclass'],
-        location: typeof parsed.location === 'string' ? parsed.location : undefined,
-        tone: typeof input.configFlags?.tone === 'string' ? input.configFlags.tone : undefined,
-      };
-      parsed = normalizeCoreDetails(parsed, coreCtx) as JsonRecord;
-    }
-
-    if (contractKey === 'stats' && parsed.speed) {
-      const coercedSpeed = coerceSpeedNumbers(parsed.speed);
-      if (coercedSpeed) {
-        parsed.speed = coercedSpeed;
-      }
-    }
-
     if (contractKey === 'spellcasting') {
       const spellCtx: JsonRecord = {
         ...getStageObject(input.stageResults, 'creator:_basic_info'),

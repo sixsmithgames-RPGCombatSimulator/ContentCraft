@@ -16,6 +16,7 @@ import {
   normalizeWorkflowStageId,
 } from '../../shared/generation/workflowRegistry.js';
 import { resolveWorkflowContentType } from '../../shared/generation/workflowContentType.js';
+import { repairWorkflowStagePayload } from '../../shared/generation/workflowStageRepair.js';
 import { validateWorkflowStageContractPayload as validateSharedWorkflowStageContractPayload } from '../../shared/generation/workflowStageValidation.js';
 import {
   createWorkflowChatFailure,
@@ -1324,7 +1325,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
 
       const payload = extraction.patch[body.stageId] as Record<string, unknown>;
       const allowedKeys = getStageAllowedKeys(body.stageId, registry, generatorType);
-      const prunedPayload = pruneToAllowedKeys(allowedKeys, payload);
+      let prunedPayload = pruneToAllowedKeys(allowedKeys, payload);
       let rawAllowedKeyCount = Object.keys(prunedPayload).length;
       console.log(`[AI][PRUNED][${body.stageId}]`, {
         stageRunId: body.stageRunId,
@@ -1555,6 +1556,15 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
         }
       }
 
+      const repairResult = repairWorkflowStagePayload({
+        stageIdOrName: body.stageId,
+        workflowType: generatorType,
+        payload: prunedPayload,
+        pruneToContractKeys: false,
+      });
+      prunedPayload = repairResult.payload;
+      const stageRepairWarnings = repairResult.appliedRepairs.map((repair) => `repair:${repair}`);
+
       const contractValidation = validateSharedWorkflowStageContractPayload(body.stageId, prunedPayload, generatorType);
       if (contractValidation.ok === false) {
         const failure = contractValidation;
@@ -1582,7 +1592,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
           rawText,
           jsonPatch: extraction.patch,
           foundJsonBlock: extraction.foundJsonBlock,
-          parseWarnings: extraction.warnings,
+          parseWarnings: [...extraction.warnings, ...stageRepairWarnings],
           inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
           outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
           patchSizeBytes: Buffer.byteLength(JSON.stringify(extraction.patch)),
@@ -1647,7 +1657,7 @@ Make sure to include required fields: ${requiredFields.join(', ')}`;
         rawText,
         jsonPatch: extraction.patch,
         foundJsonBlock: extraction.foundJsonBlock,
-        parseWarnings: extraction.warnings,
+        parseWarnings: [...extraction.warnings, ...stageRepairWarnings],
         inputTokens: Number(data.usageMetadata?.promptTokenCount ?? 0),
         outputTokens: Number(data.usageMetadata?.candidatesTokenCount ?? 0),
         patchSizeBytes: extraction.patch ? JSON.stringify(extraction.patch).length : 0,

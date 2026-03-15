@@ -40,12 +40,12 @@ export function validateStageOutput(
   workflowType?: string | null,
 ): { ok: boolean; error?: string } {
   const result = validateWorkflowStageContractPayload(stageIdOrName, obj, workflowType);
-  if (result.ok) {
-    return { ok: true };
+  if (result.ok === false) {
+    return {
+      ok: false,
+      error: result.error,
+    };
   }
 
-  return {
-    ok: false,
-    error: result.error,
-  };
+  return { ok: true };
 }
