@@ -28,6 +28,16 @@ const isRecord = (value: unknown): value is JsonRecord =>
 
 const STATS_SPEED_KEYS = ['walk', 'fly', 'swim', 'climb', 'burrow', 'hover'] as const;
 
+const CHARACTER_BUILD_TEXT_ARRAY_KEYS = [
+  'class_features',
+  'subclass_features',
+  'racial_features',
+  'feats',
+  'fighting_styles',
+] as const;
+
+const CHARACTER_BUILD_VALUE_ARRAY_KEYS = ['skill_proficiencies', 'saving_throws'] as const;
+
 const normalizeStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -36,6 +46,174 @@ const normalizeStringArray = (value: unknown): string[] => {
   return value
     .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
     .filter((entry) => entry.length > 0);
+};
+
+const coerceNonEmptyString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const coercePositiveInteger = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const normalized = Math.trunc(value);
+    return normalized > 0 ? normalized : undefined;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return Number.isNaN(parsed) || parsed <= 0 ? undefined : parsed;
+  }
+
+  return undefined;
+};
+
+const normalizeNamedDescriptionEntries = (
+  value: unknown,
+  options?: { includeLevel?: boolean },
+): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const trimmed = entry.trim();
+        if (!trimmed) {
+          return null;
+        }
+
+        return {
+          name: trimmed,
+          description: trimmed,
+        } as JsonRecord;
+      }
+
+      if (!isRecord(entry)) {
+        return null;
+      }
+
+      const name = coerceNonEmptyString(entry.name)
+        ?? coerceNonEmptyString(entry.title)
+        ?? coerceNonEmptyString(entry.feature)
+        ?? coerceNonEmptyString(entry.choice);
+
+      if (!name) {
+        return null;
+      }
+
+      const description = coerceNonEmptyString(entry.description)
+        ?? coerceNonEmptyString(entry.details)
+        ?? coerceNonEmptyString(entry.text)
+        ?? name;
+
+      const normalized: JsonRecord = {
+        name,
+        description,
+      };
+
+      const source = coerceNonEmptyString(entry.source)
+        ?? coerceNonEmptyString(entry.class)
+        ?? coerceNonEmptyString(entry.subclass)
+        ?? coerceNonEmptyString(entry.race);
+      if (source) {
+        normalized.source = source;
+      }
+
+      const uses = coerceNonEmptyString(entry.uses);
+      if (uses) {
+        normalized.uses = uses;
+      }
+
+      const notes = coerceNonEmptyString(entry.notes);
+      if (notes) {
+        normalized.notes = notes;
+      }
+
+      const prerequisite = coerceNonEmptyString(entry.prerequisite);
+      if (prerequisite) {
+        normalized.prerequisite = prerequisite;
+      }
+
+      if (options?.includeLevel) {
+        const level = coercePositiveInteger(entry.level ?? entry.gained_at_level);
+        if (level !== undefined) {
+          normalized.level = level;
+        }
+      }
+
+      return normalized;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null);
+};
+
+const normalizeNameValueEntries = (value: unknown): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const trimmed = entry.trim();
+        if (!trimmed) {
+          return null;
+        }
+
+        return {
+          name: trimmed,
+          value: '+0',
+        } as JsonRecord;
+      }
+
+      if (!isRecord(entry)) {
+        return null;
+      }
+
+      const name = coerceNonEmptyString(entry.name)
+        ?? coerceNonEmptyString(entry.skill)
+        ?? coerceNonEmptyString(entry.save);
+      if (!name) {
+        return null;
+      }
+
+      const valueText = coerceNonEmptyString(entry.value)
+        ?? coerceNonEmptyString(entry.modifier)
+        ?? '+0';
+
+      const normalized: JsonRecord = {
+        name,
+        value: valueText,
+      };
+
+      const notes = coerceNonEmptyString(entry.notes);
+      if (notes) {
+        normalized.notes = notes;
+      }
+
+      return normalized;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null);
+};
+
+const normalizeCharacterBuildPayload = (payload: JsonRecord): JsonRecord => {
+  const normalized: JsonRecord = { ...payload };
+
+  for (const key of CHARACTER_BUILD_TEXT_ARRAY_KEYS) {
+    normalized[key] = normalizeNamedDescriptionEntries(payload[key], {
+      includeLevel: key === 'class_features' || key === 'subclass_features',
+    });
+  }
+
+  for (const key of CHARACTER_BUILD_VALUE_ARRAY_KEYS) {
+    normalized[key] = normalizeNameValueEntries(payload[key]);
+  }
+
+  return normalized;
 };
 
 const parseStructuredString = (value: string): unknown => {
@@ -402,6 +580,14 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     const normalized = normalizeCoreDetailsStageInput(payload);
     if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
       appliedRepairs.push('core_details:flatten_personality');
+    }
+    payload = normalized;
+  }
+
+  if (contractKey === 'character_build') {
+    const normalized = normalizeCharacterBuildPayload(payload);
+    if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
+      appliedRepairs.push('character_build:normalize');
     }
     payload = normalized;
   }

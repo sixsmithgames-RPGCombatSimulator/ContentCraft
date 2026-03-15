@@ -74,6 +74,30 @@ describe('workflow transport', () => {
     });
   });
 
+  it('uses override prompt metadata for correction retries', () => {
+    const context = createWorkflowContext();
+    const request = buildIntegratedStageRequest(context, 'basic_info', 'run-2', 'gemini', {
+      promptOverride: 'FIX JSON ONLY',
+      correctionAttempt: 1,
+    });
+
+    expect(request).toEqual({
+      projectId: 'project-1',
+      stageId: 'basic_info',
+      stageRunId: 'run-2',
+      prompt: 'FIX JSON ONLY',
+      schemaVersion: 'v1.1-client',
+      clientContext: {
+        generatorType: 'npc',
+        stageKey: 'basic_info',
+        userSelectedMode: 'gemini',
+        promptMode: 'packed',
+        measuredChars: 'FIX JSON ONLY'.length,
+        correctionAttempt: 1,
+      },
+    });
+  });
+
   it('builds manual stage prompts from the same compiled request', () => {
     const context = createWorkflowContext();
     const manual = buildManualStagePrompt(context);
@@ -239,5 +263,32 @@ describe('workflow transport', () => {
         retryable: false,
       },
     })).toBe(false);
+  });
+
+  it('allows auto-retry for repairable schema failures carrying correction prompts', () => {
+    expect(shouldAutoRetryIntegratedFailure({
+      ok: false,
+      requestId: 'req-5',
+      stageRunId: 'run-5',
+      workflow: {
+        stageId: 'character_build',
+        stageKey: 'character_build',
+        workflowType: 'npc',
+        outcome: 'retry_required',
+        accepted: false,
+        allowedKeyCount: 8,
+        rawAllowedKeyCount: 8,
+        retryContext: {
+          reason: 'schema_validation_failed',
+          retryable: true,
+          correctionPrompt: 'Output ONLY valid JSON.',
+        },
+      },
+      error: {
+        type: 'INVALID_RESPONSE',
+        message: 'character_build returned malformed structured data. Retrying automatically with repair instructions.',
+        retryable: true,
+      },
+    })).toBe(true);
   });
 });

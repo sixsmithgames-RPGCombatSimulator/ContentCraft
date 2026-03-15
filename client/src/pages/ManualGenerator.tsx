@@ -4830,27 +4830,33 @@ Output: Valid JSON only. No markdown, no prose.`;
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <p className="font-medium text-green-700">Included Stages:</p>
-                        <ul className="list-disc list-inside text-green-800 mt-1">
+                        <ul className="list-disc list-inside text-green-800 mt-1 space-y-1">
                           {Object.entries(stageRoutingDecision).filter(([_, req]) => req.required).map(([key, req]) => (
-                            <li key={key} title={req.reason}>
-                              {key.replace(/([A-Z])/g, ' $1').trim().replace(/^./, str => str.toUpperCase())}
+                            <li key={key}>
+                              <span className="font-medium">
+                                {key.replace(/([A-Z])/g, ' $1').trim().replace(/^./, str => str.toUpperCase())}
+                              </span>
+                              {req.reason ? <span className="text-green-700"> — {req.reason}</span> : null}
                             </li>
                           ))}
                         </ul>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-600">Skipped Stages:</p>
-                        <ul className="list-disc list-inside text-gray-700 mt-1">
+                        <p className="font-medium text-gray-600">Deferred Stages:</p>
+                        <ul className="list-disc list-inside text-gray-700 mt-1 space-y-1">
                           {Object.entries(stageRoutingDecision).filter(([_, req]) => !req.required).map(([key, req]) => (
-                            <li key={key} title={req.reason}>
-                              {key.replace(/([A-Z])/g, ' $1').trim().replace(/^./, str => str.toUpperCase())}
+                            <li key={key}>
+                              <span className="font-medium">
+                                {key.replace(/([A-Z])/g, ' $1').trim().replace(/^./, str => str.toUpperCase())}
+                              </span>
+                              {req.reason ? <span className="text-gray-600"> — {req.reason}</span> : null}
                             </li>
                           ))}
                         </ul>
                       </div>
                     </div>
                     <p className="text-xs text-blue-700 mt-2 italic">
-                      Hover over stages to see reasoning
+                      Stages are included automatically when the request or resolved mechanics indicate they are needed.
                     </p>
                   </div>
                 )}

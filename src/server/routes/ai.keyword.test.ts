@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateKeywordExtractorCompliance, getStageAllowedKeys, validateWorkflowStageContractPayload } from './ai.js';
+import {
+  buildSchemaCorrectionPrompt,
+  evaluateKeywordExtractorCompliance,
+  getStageAllowedKeys,
+  shouldOfferAutomaticSchemaCorrectionRetry,
+  validateWorkflowStageContractPayload,
+} from './ai.js';
 
 describe('evaluateKeywordExtractorCompliance', () => {
 
@@ -136,5 +142,39 @@ describe('evaluateKeywordExtractorCompliance', () => {
       expect('message' in result ? result.message : '').toContain('no usable keywords');
       expect(result.rawKeywordCount).toBe(0);
     }
+  });
+
+  it('offers one automatic schema correction retry before review is required', () => {
+    expect(shouldOfferAutomaticSchemaCorrectionRetry({
+      projectId: 'project-1',
+      stageId: 'stats',
+      stageRunId: 'run-1',
+      prompt: 'Prompt',
+      schemaVersion: 'v1.1-client',
+      clientContext: {
+        generatorType: 'npc',
+        correctionAttempt: 0,
+      },
+    })).toBe(true);
+
+    expect(shouldOfferAutomaticSchemaCorrectionRetry({
+      projectId: 'project-1',
+      stageId: 'stats',
+      stageRunId: 'run-1',
+      prompt: 'Prompt',
+      schemaVersion: 'v1.1-client',
+      clientContext: {
+        generatorType: 'npc',
+        correctionAttempt: 1,
+      },
+    })).toBe(false);
+  });
+
+  it('builds a hidden schema correction prompt with validation details', () => {
+    const prompt = buildSchemaCorrectionPrompt('/speed/walk must be string', ['ability_scores', 'speed']);
+
+    expect(prompt).toContain('Output ONLY valid JSON');
+    expect(prompt).toContain('/speed/walk must be string');
+    expect(prompt).toContain('ability_scores, speed');
   });
 });

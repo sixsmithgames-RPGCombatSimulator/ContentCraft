@@ -21,6 +21,10 @@ Implement a shared, app-controlled stage response repair pipeline so integrated 
 - [x] Correct shared `stats` repair so movement speeds remain schema-safe strings for integrated validation
 - [x] Stop integrated auto-retry from re-sending non-retryable or review-required failures
 - [x] Add focused regressions for stats speed repair and integrated failure retry gating
+- [x] Repair malformed `character_build` feature/value arrays into schema-safe object arrays before shared validation
+- [x] Return fixable schema-invalid stage output as a bounded automatic correction retry with hidden repair instructions
+- [x] Keep NPC `Combat` routing enabled when `class_levels` arrives as an array of class entries
+- [x] Soften integrated runner failure copy and make smart stage routing reasons visible in the UI
 
 ## Risks
 - Shared normalization may change accepted payload shape for existing stages
@@ -33,6 +37,7 @@ Implement a shared, app-controlled stage response repair pipeline so integrated 
 - Server route tests for repaired integrated payloads
 - Targeted Vitest run: `client/src/services/workflowStageResponse.test.ts`, `src/shared/generation/workflowStageRepair.test.ts`, `src/server/routes/ai.keyword.test.ts`
 - Follow-up targeted Vitest run: `client/src/services/workflowTransport.test.ts`, `client/src/services/workflowStageResponse.test.ts`, `src/shared/generation/workflowStageRepair.test.ts`, `src/server/routes/ai.keyword.test.ts`
+- Follow-up targeted Vitest run: `client/src/services/generatorWorkflow.test.ts`, `client/src/services/workflowTransport.test.ts`, `src/shared/generation/workflowStageRepair.test.ts`, `src/server/routes/ai.keyword.test.ts`
 - Full project build
 
 ## Known Limitations

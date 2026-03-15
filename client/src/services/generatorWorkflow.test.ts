@@ -95,6 +95,23 @@ describe('generator workflow service', () => {
     expect(plan.dynamicStages[2]?.name).toBe('Creator: Basic Info');
   });
 
+  it('keeps combat included when class_levels are provided as an array', () => {
+    const plan = buildNpcDynamicStagePlan({
+      basicInfoOutput: {
+        name: 'Thyra Odinson',
+        race: 'Aasimar',
+        challenge_rating: 0,
+        description: 'A disciplined knight sworn to defend sacred frontiers.',
+        class_levels: [{ class: 'Paladin', level: 11 }],
+      },
+      userPrompt: 'Create an 11th level paladin NPC named Thyra Odinson.',
+      catalog: stageCatalog,
+    });
+
+    expect(plan.routingDecision.combat.required).toBe(true);
+    expect(plan.dynamicStages.some((stage) => stage.name === 'Creator: Combat')).toBe(true);
+  });
+
   it('prefers dynamic NPC stages when they are available', () => {
     const dynamicNpcStages = [createStage('Dynamic NPC Stage')];
 

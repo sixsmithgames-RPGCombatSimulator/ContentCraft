@@ -76,4 +76,28 @@ describe('workflowStageRepair', () => {
     });
     expect(validateWorkflowStageContractPayload('stats', repaired.payload, 'npc')).toEqual({ ok: true });
   });
+
+  it('repairs malformed character build feature arrays into schema-safe object arrays', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'character_build',
+      workflowType: 'npc',
+      payload: {
+        class_features: ['Extra Attack', { name: 'Action Surge', level: '2', source: 'Fighter' }],
+        subclass_features: [{ title: 'Improved Critical', details: 'Critical hit on 19-20.', level: 3, subclass: 'Champion' }],
+        racial_features: ['Darkvision'],
+        feats: ['Alert'],
+        fighting_styles: ['Defense'],
+        skill_proficiencies: ['Athletics'],
+        saving_throws: [{ save: 'Strength', modifier: '+7' }],
+      },
+    });
+
+    expect(repaired.payload.class_features).toEqual([
+      { name: 'Extra Attack', description: 'Extra Attack' },
+      { name: 'Action Surge', description: 'Action Surge', level: 2, source: 'Fighter' },
+    ]);
+    expect(repaired.payload.feats).toEqual([{ name: 'Alert', description: 'Alert' }]);
+    expect(repaired.payload.skill_proficiencies).toEqual([{ name: 'Athletics', value: '+0' }]);
+    expect(validateWorkflowStageContractPayload('character_build', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
 });

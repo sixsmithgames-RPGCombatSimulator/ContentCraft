@@ -20,7 +20,7 @@ export type StageRoutingDecision = Record<RoutedNpcStageKey, StageRequirement>;
 
 interface BasicInfoOutput {
   challenge_rating?: number | string;
-  class_levels?: Record<string, number>;
+  class_levels?: Array<{ class?: string; name?: string; level?: number | string }> | Record<string, number>;
   race?: string;
   description?: string;
   subtype?: string;
@@ -93,7 +93,48 @@ function parseChallenge(cr: unknown): number {
  */
 function hasClasses(classLevels: unknown): boolean {
   if (!classLevels || typeof classLevels !== 'object') return false;
+
+  if (Array.isArray(classLevels)) {
+    return classLevels.some((entry) => {
+      if (!entry || typeof entry !== 'object') return false;
+      const record = entry as Record<string, unknown>;
+      const className = typeof record.class === 'string'
+        ? record.class.trim()
+        : typeof record.name === 'string'
+        ? record.name.trim()
+        : '';
+      const levelValue = typeof record.level === 'number'
+        ? record.level
+        : typeof record.level === 'string'
+        ? Number.parseInt(record.level, 10)
+        : NaN;
+      return className.length > 0 || Number.isFinite(levelValue);
+    });
+  }
+
   return Object.keys(classLevels).length > 0;
+}
+
+function getClassLevelNames(classLevels: unknown): string[] {
+  if (!classLevels || typeof classLevels !== 'object') {
+    return [];
+  }
+
+  if (Array.isArray(classLevels)) {
+    return classLevels
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') return '';
+        const record = entry as Record<string, unknown>;
+        return typeof record.class === 'string'
+          ? record.class.trim()
+          : typeof record.name === 'string'
+          ? record.name.trim()
+          : '';
+      })
+      .filter((entry) => entry.length > 0);
+  }
+
+  return Object.keys(classLevels as Record<string, unknown>).filter((entry) => entry.trim().length > 0);
 }
 
 /**
@@ -182,7 +223,7 @@ function analyzeNeedsSpellcasting(
   subtype: string,
   mechanics?: { has_spellcasting?: boolean }
 ): StageRequirement {
-  const classLevels = basicInfo.class_levels as Record<string, number> || {};
+  const classLevels = getClassLevelNames(basicInfo.class_levels);
 
   // Spellcasting classes
   const spellcastingClasses = [
@@ -199,7 +240,7 @@ function analyzeNeedsSpellcasting(
   }
 
   // Check class levels for spellcasters
-  const hasSpellcastingClass = Object.keys(classLevels).some(className =>
+  const hasSpellcastingClass = classLevels.some(className =>
     spellcastingClasses.some(sc => className.toLowerCase().includes(sc))
   );
 
@@ -228,7 +269,7 @@ function analyzeNeedsSpellcasting(
   if (hasSpellcastingClass) {
     return {
       required: true,
-      reason: `Has spellcasting class: ${Object.keys(classLevels).join(', ')}`
+      reason: `Has spellcasting class: ${classLevels.join(', ')}`
     };
   }
 

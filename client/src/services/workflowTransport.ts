@@ -19,6 +19,7 @@ export interface WorkflowTransportStageRequest {
     userSelectedMode?: string;
     promptMode?: string;
     measuredChars?: number;
+    correctionAttempt?: number;
   };
 }
 
@@ -44,22 +45,26 @@ export function buildIntegratedStageRequest(
   stageId: string,
   stageRunId: string,
   providerType: AiProviderType = 'none',
+  overrides?: { promptOverride?: string; correctionAttempt?: number },
 ): WorkflowTransportStageRequest | null {
   const compiled = workflowContext.compiledStageRequest;
   if (!compiled) return null;
+  const prompt = overrides?.promptOverride ?? compiled.prompt;
+  const measuredChars = overrides?.promptOverride ? prompt.length : compiled.promptBudget.measuredChars;
 
   return {
     projectId: workflowContext.projectId || 'default',
     stageId,
     stageRunId,
-    prompt: compiled.prompt,
+    prompt,
     schemaVersion: workflowContext.schemaVersion || 'v1.1-client',
     clientContext: {
       generatorType: workflowContext.generatorType || workflowContext.workflowType,
       stageKey: stageId,
       userSelectedMode: providerType,
       promptMode: compiled.promptBudget.mode,
-      measuredChars: compiled.promptBudget.measuredChars,
+      measuredChars,
+      ...(overrides?.correctionAttempt !== undefined ? { correctionAttempt: overrides.correctionAttempt } : {}),
     },
   };
 }

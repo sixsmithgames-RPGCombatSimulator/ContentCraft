@@ -57,6 +57,30 @@ function isWorkflowFailureResponse(
   return body.ok === false;
 }
 
+function getWorkflowFailureDisplayMessage(
+  failureBody: Extract<WorkflowTransportStageResponse, { ok: false }> | null,
+  fallbackMessage: string,
+): string {
+  if (!failureBody) {
+    return fallbackMessage;
+  }
+
+  const retryReason = failureBody.workflow?.retryContext?.reason;
+  if (retryReason === 'schema_validation_failed_after_correction') {
+    return 'The AI returned malformed structured data twice for this stage. Review the stage and retry when ready.';
+  }
+
+  if (retryReason === 'duplicate_retry_signature') {
+    return 'Automatic retry was paused to avoid sending the same broken request again. Review the stage and retry when ready.';
+  }
+
+  if (failureBody.error.type === 'INVALID_RESPONSE') {
+    return 'The AI returned malformed structured data for this stage. The app could not repair it automatically.';
+  }
+
+  return failureBody.error.message || fallbackMessage;
+}
+
 type AIProvider = 'gemini' | 'openai' | 'ollama' | 'openrouter' | 'manual';
 
 type StageRunnerState =
@@ -677,7 +701,7 @@ export default function AiAssistantPanel() {
     []
   );
 
-  const runStageWithGemini = useCallback(async () => {
+  const runStageWithGemini = useCallback(async (overrides?: { promptOverride?: string; correctionAttempt?: number }) => {
     if (inFlightRef.current || stageRunnerState !== 'idle') {
       logStageRunnerGate(`skip: in-flight (${stageRunnerState})`);
       return;
@@ -700,15 +724,17 @@ export default function AiAssistantPanel() {
       return;
     }
 
-    if (compiledStageRequest.promptBudget.measuredChars > compiledStageRequest.promptBudget.safetyCeiling) {
+    const effectivePrompt = overrides?.promptOverride ?? compiledStageRequest.prompt;
+    const correctionAttempt = overrides?.correctionAttempt ?? 0;
+
+    if (effectivePrompt.length > compiledStageRequest.promptBudget.safetyCeiling) {
       setStageRunnerError(
-        `Stage request exceeds safety ceiling (${compiledStageRequest.promptBudget.measuredChars}/${compiledStageRequest.promptBudget.safetyCeiling}). Rebuild or trim the request before automated send.`
+        `Stage request exceeds safety ceiling (${effectivePrompt.length}/${compiledStageRequest.promptBudget.safetyCeiling}). Rebuild or trim the request before automated send.`
       );
       setStageRunnerState('error');
       return;
     }
 
-    const prompt = compiledStageRequest.prompt;
     const stageKey = stageKeyForRun || compiledStageRequest.stageKey;
     const runId = stageRunId || crypto.randomUUID();
     setStageRunId(runId);
@@ -722,7 +748,10 @@ export default function AiAssistantPanel() {
     inFlightRef.current = true;
 
     try {
-      const requestBody = buildIntegratedStageRequest(workflowContext, stageKey, runId, providerConfig.type);
+      const requestBody = buildIntegratedStageRequest(workflowContext, stageKey, runId, providerConfig.type, {
+        promptOverride: effectivePrompt,
+        correctionAttempt,
+      });
       if (!requestBody) {
         setStageRunnerError('Unable to build a workflow stage request.');
         setStageRunnerState('error');
@@ -740,8 +769,9 @@ export default function AiAssistantPanel() {
         runId,
         generatorType: requestBody.clientContext.generatorType,
         schemaVersion: requestBody.schemaVersion,
-        promptChars: compiledStageRequest.promptBudget.measuredChars,
+        promptChars: effectivePrompt.length,
         promptMode: compiledStageRequest.promptBudget.mode,
+        correctionAttempt,
         retrySource: currentRetrySource
           ? {
             kind: currentRetrySource.kind,
@@ -762,12 +792,13 @@ export default function AiAssistantPanel() {
 
       if (!response.ok || !body?.ok) {
         const failureBody = isWorkflowFailureResponse(body) ? body : null;
-        const message = failureBody?.error?.message || `Request failed (${response.status})`;
+        const rawMessage = failureBody?.error?.message || `Request failed (${response.status})`;
+        const message = getWorkflowFailureDisplayMessage(failureBody, rawMessage);
         const failedStageKey = failureBody?.workflow?.stageKey || stageKey;
         setAutoRetryEligible(failureBody ? shouldAutoRetryIntegratedFailure(failureBody) : false);
         console.warn('[AI Runner][Response][Error]', {
           status: response.status,
-          message,
+          message: rawMessage,
           body: failureBody ?? body,
           retrySource: currentRetrySource
             ? {
@@ -779,6 +810,23 @@ export default function AiAssistantPanel() {
             }
             : null,
         });
+        const correctionPrompt = failureBody?.workflow?.retryContext?.correctionPrompt;
+        if (failureBody && correctionPrompt && shouldAutoRetryIntegratedFailure(failureBody)) {
+          addMessage({
+            role: 'system',
+            content: 'The AI returned malformed stage data. Retrying automatically with repair instructions.',
+          });
+          setAutoRetryEligible(false);
+          setStageRunnerError(null);
+          setStageRunnerState('idle');
+          setHasAutoStarted(false);
+          inFlightRef.current = false;
+          setTimeout(() => runStageWithGemini({
+            promptOverride: correctionPrompt,
+            correctionAttempt: correctionAttempt + 1,
+          }), 0);
+          return;
+        }
         if (failureBody?.error?.type === 'RATE_LIMIT') {
           const cooldown = typeof failureBody.error.retryAfterMs === 'number' ? Math.max(failureBody.error.retryAfterMs, 5000) : 10_000;
           setRateLimitCooldownMs(cooldown);
@@ -1345,7 +1393,9 @@ export default function AiAssistantPanel() {
                   Stage will run automatically when ready.
                 </p>
                 <button
-                  onClick={runStageWithGemini}
+                  onClick={() => {
+                    void runStageWithGemini();
+                  }}
                   disabled={!hasProvider}
                   className="w-full px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
                 >
@@ -1371,7 +1421,7 @@ export default function AiAssistantPanel() {
             )}
             {stageRunnerError && stageRunnerState === 'error' && (
               <div className="bg-red-50 rounded-lg p-3 border border-red-200">
-                <p className="text-xs text-red-700 font-medium mb-1">Error occurred:</p>
+                <p className="text-xs text-red-700 font-medium mb-1">Stage needs attention:</p>
                 <p className="text-xs text-red-600">{stageRunnerError}</p>
                 <button
                   onClick={rateLimitSecondsLeft && rateLimitSecondsLeft > 0 ? undefined : handleRetryAfterRateLimit}
@@ -1380,7 +1430,7 @@ export default function AiAssistantPanel() {
                 >
                   {rateLimitSecondsLeft && rateLimitSecondsLeft > 0
                     ? `Retry in ${rateLimitSecondsLeft}s`
-                    : 'Retry now'}
+                    : 'Retry stage'}
                 </button>
               </div>
             )}

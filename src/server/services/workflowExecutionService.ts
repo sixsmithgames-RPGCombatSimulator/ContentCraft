@@ -21,6 +21,7 @@ export interface WorkflowExecutionRetryContext {
   retryable: boolean;
   retryAfterMs?: number;
   duplicateRetryBlocked?: boolean;
+  correctionPrompt?: string;
 }
 
 export interface WorkflowExecutionMetadata {
@@ -48,6 +49,7 @@ export interface WorkflowExecutionRequestBody {
     userSelectedMode?: string;
     promptMode?: string;
     measuredChars?: number;
+    correctionAttempt?: number;
   };
 }
 

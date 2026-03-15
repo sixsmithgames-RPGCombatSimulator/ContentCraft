@@ -345,6 +345,7 @@ const MAX_PATCH_BYTES = 200_000;
 const IDEMPOTENCY_TTL_MS = 10 * 60_000;
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
 const MAX_RETRY_ATTEMPTS = 2;
+const MAX_SCHEMA_CORRECTION_ATTEMPTS = 1;
 const MIN_REQUEST_SPACING_MS = 2000;
 const aiRouter = Router();
 const ajv = new Ajv({ allErrors: true, strict: true, allowUnionTypes: true });
@@ -944,6 +945,28 @@ function mapError(status: number, retryAfterMsFromHeader?: number): { type: AiEr
   if (status === 408 || status === 504) return { type: 'TIMEOUT', retryable: true };
   if (status >= 500) return { type: 'PROVIDER_ERROR', retryable: true };
   return { type: 'PROVIDER_ERROR', retryable: false };
+}
+
+function getCorrectionAttemptCount(body: GeminiRequestBody): number {
+  const rawAttempt = body.clientContext?.correctionAttempt;
+  if (typeof rawAttempt !== 'number' || !Number.isFinite(rawAttempt) || rawAttempt < 0) {
+    return 0;
+  }
+
+  return Math.trunc(rawAttempt);
+}
+
+function buildSchemaCorrectionPrompt(validationErrors: string, requiredFields: string[]): string {
+  return `Output ONLY valid JSON. NO markdown. NO prose.
+
+Your previous response was incomplete. Fix ONLY these missing/invalid fields:
+${validationErrors}
+
+Make sure to include required fields: ${requiredFields.join(', ')}`;
+}
+
+function shouldOfferAutomaticSchemaCorrectionRetry(body: GeminiRequestBody): boolean {
+  return getCorrectionAttemptCount(body) < MAX_SCHEMA_CORRECTION_ATTEMPTS;
 }
 
 function shouldShortCircuitRateLimit(): boolean {
@@ -1622,20 +1645,34 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
         const validationErrors = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
         const requiredFields = (validate.schema as any)?.required || [];
 
-        // Build minimal patch prompt (much smaller than full regeneration)
-        const correctionPrompt = `Output ONLY valid JSON. NO markdown. NO prose.
-
-Your previous response was incomplete. Fix ONLY these missing/invalid fields:
-${validationErrors}
-
-Make sure to include required fields: ${requiredFields.join(', ')}`;
+        if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
+          const correctionPrompt = buildSchemaCorrectionPrompt(validationErrors, requiredFields);
+          return respondWithWorkflowFailure(422, {
+            type: 'INVALID_RESPONSE',
+            message: `${body.stageId} returned malformed structured data. Retrying automatically with repair instructions.`,
+            retryable: true,
+            outcome: 'retry_required',
+            allowedKeyCount: allowedKeys.length,
+            rawAllowedKeyCount,
+            retryContext: {
+              reason: 'schema_validation_failed',
+              retryable: true,
+              correctionPrompt,
+            },
+          });
+        }
 
         return respondWithWorkflowFailure(422, {
           type: 'INVALID_RESPONSE',
-          message: correctionPrompt,
+          message: `${body.stageId} returned malformed structured data after automatic repair. Review required before retrying.`,
           retryable: false,
+          outcome: 'review_required',
           allowedKeyCount: allowedKeys.length,
           rawAllowedKeyCount,
+          retryContext: {
+            reason: 'schema_validation_failed_after_correction',
+            retryable: false,
+          },
         });
       }
 
@@ -1812,8 +1849,10 @@ aiRouter.post('/workflow/chat', async (req: Request, res: ExpressResponse) => {
 
 export {
   aiRouter,
+  buildSchemaCorrectionPrompt,
   evaluateKeywordExtractorCompliance,
   getNormalizedStageKey,
   getStageAllowedKeys,
+  shouldOfferAutomaticSchemaCorrectionRetry,
   validateSharedWorkflowStageContractPayload as validateWorkflowStageContractPayload,
 };
