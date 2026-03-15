@@ -8,6 +8,7 @@ import {
 } from './workflowRegistry';
 import {
   createGenerationRunState,
+  getStageAttempt,
   markRunAwaitingUserDecisions,
   markRunComplete,
   markStageAccepted,
@@ -101,6 +102,41 @@ describe('workflow run state', () => {
         issueType: 'invalid-door',
       }),
     );
+  });
+
+  it('keeps the active stage attempt when an earlier stage is accepted retroactively', () => {
+    const run = createGenerationRunState({
+      workflowType: 'npc',
+      workflowLabel: 'NPC Creator',
+      executionMode: 'integrated',
+      stageSequence: ['keyword_extractor', 'planner', 'basic_info'],
+      stageLabels: {
+        keyword_extractor: 'Keyword Extractor',
+        planner: 'Planner',
+        basic_info: 'Creator: Basic Info',
+      },
+      resourceCheckTarget: '#resources-panel',
+      now: 1000,
+    });
+
+    const keywordCompiled = syncCurrentStage(run, 'keyword_extractor', 'Keyword Extractor', 'req-kw', { now: 1100 });
+    const keywordAccepted = markStageAccepted(keywordCompiled, 'keyword_extractor', 'Keyword Extractor', {
+      attemptId: keywordCompiled?.currentAttemptId,
+      now: 1200,
+    });
+    const plannerCompiled = syncCurrentStage(keywordAccepted, 'planner', 'Planner', 'req-planner', { now: 1300 });
+
+    expect(getStageAttempt(plannerCompiled, 'planner')?.status).toBe('compiled');
+    expect(plannerCompiled?.currentStageKey).toBe('planner');
+
+    const withRetroactiveAcceptance = markStageAccepted(plannerCompiled, 'keyword_extractor', 'Keyword Extractor', {
+      now: 1400,
+    });
+
+    expect(withRetroactiveAcceptance?.currentStageKey).toBe('planner');
+    expect(getStageAttempt(withRetroactiveAcceptance, 'planner')?.status).toBe('compiled');
+    expect(getStageAttempt(withRetroactiveAcceptance, 'keyword_extractor')?.status).toBe('accepted');
+    expect(withRetroactiveAcceptance?.attempts.filter((attempt) => attempt.stageKey === 'keyword_extractor')).toHaveLength(1);
   });
 
   it('tracks canon grounding and warning state explicitly', () => {

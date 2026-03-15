@@ -123,6 +123,18 @@ export function getCurrentStageAttempt(runState: GenerationRunState | null): Sta
   return runState.attempts.find((attempt) => attempt.attemptId === runState.currentAttemptId) ?? null;
 }
 
+export function getStageAttempt(
+  runState: GenerationRunState | null,
+  stageKey?: string | null,
+): StageAttempt | null {
+  if (!runState) return null;
+  if (!stageKey) {
+    return getCurrentStageAttempt(runState);
+  }
+
+  return [...runState.attempts].reverse().find((attempt) => attempt.stageKey === stageKey) ?? null;
+}
+
 function mergeWarnings(existing: string[], incoming?: string[]): string[] {
   const values = [...existing, ...(incoming ?? [])].filter((value) => typeof value === 'string' && value.trim().length > 0);
   return Array.from(new Set(values));
@@ -167,15 +179,21 @@ export function upsertStageAttempt(
       acceptedAt: input.status === 'accepted' ? timestamp : existing.acceptedAt,
       completedAt: input.status === 'accepted' || input.status === 'error' ? timestamp : existing.completedAt,
     };
+    const isActiveAttemptUpdate =
+      !runState.currentAttemptId ||
+      existing.attemptId === runState.currentAttemptId ||
+      runState.currentStageKey === input.stageKey;
 
     return {
       ...runState,
-      currentStageKey: input.stageKey,
-      currentStageLabel: input.stageLabel,
-      currentStageIndex: Math.max(runState.stageSequence.indexOf(input.stageKey), runState.currentStageIndex),
-      currentAttemptId: updatedAttempt.attemptId,
+      currentStageKey: isActiveAttemptUpdate ? input.stageKey : runState.currentStageKey,
+      currentStageLabel: isActiveAttemptUpdate ? input.stageLabel : runState.currentStageLabel,
+      currentStageIndex: isActiveAttemptUpdate
+        ? Math.max(runState.stageSequence.indexOf(input.stageKey), runState.currentStageIndex)
+        : runState.currentStageIndex,
+      currentAttemptId: isActiveAttemptUpdate ? updatedAttempt.attemptId : runState.currentAttemptId,
       attempts: replaceAttempt(runState.attempts, updatedAttempt.attemptId, () => updatedAttempt),
-      status: inferRunStatusFromAttempt(input.status),
+      status: isActiveAttemptUpdate ? inferRunStatusFromAttempt(input.status) : runState.status,
       warnings: mergeWarnings(runState.warnings, input.warnings),
       updatedAt: timestamp,
     };
@@ -235,8 +253,9 @@ export function markStageAccepted(
   stageLabel: string,
   options?: { attemptId?: string; warnings?: string[]; now?: number },
 ): GenerationRunState | null {
+  const resolvedAttemptId = options?.attemptId ?? getStageAttempt(runState, stageKey)?.attemptId;
   const updated = upsertStageAttempt(runState, {
-    attemptId: options?.attemptId,
+    attemptId: resolvedAttemptId,
     stageKey,
     stageLabel,
     status: 'accepted',
@@ -261,8 +280,9 @@ export function markStageError(
   error: string,
   options?: { attemptId?: string; warnings?: string[]; now?: number },
 ): GenerationRunState | null {
+  const resolvedAttemptId = options?.attemptId ?? getStageAttempt(runState, stageKey)?.attemptId;
   return upsertStageAttempt(runState, {
-    attemptId: options?.attemptId,
+    attemptId: resolvedAttemptId,
     stageKey,
     stageLabel,
     status: 'error',
@@ -278,8 +298,9 @@ export function markRunAwaitingUserDecisions(
   stageLabel: string,
   options?: { attemptId?: string; now?: number },
 ): GenerationRunState | null {
+  const resolvedAttemptId = options?.attemptId ?? getStageAttempt(runState, stageKey)?.attemptId;
   const accepted = markStageAccepted(runState, stageKey, stageLabel, {
-    attemptId: options?.attemptId,
+    attemptId: resolvedAttemptId,
     now: options?.now,
   });
   if (!accepted) return null;
@@ -329,5 +350,13 @@ export function updateRetrievalStatus(
 
 export function hasAcceptedCurrentStage(runState: GenerationRunState | null): boolean {
   const attempt = getCurrentStageAttempt(runState);
+  return attempt?.status === 'accepted';
+}
+
+export function hasAcceptedStage(
+  runState: GenerationRunState | null,
+  stageKey?: string | null,
+): boolean {
+  const attempt = getStageAttempt(runState, stageKey);
   return attempt?.status === 'accepted';
 }

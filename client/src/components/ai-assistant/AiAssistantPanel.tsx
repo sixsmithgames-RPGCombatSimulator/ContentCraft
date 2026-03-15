@@ -44,8 +44,8 @@ import { getWorkflowRetryBadgeLabel, getWorkflowRetryDetail } from '../../servic
 import AiProviderSettings from './AiProviderSettings';
 import ModeSelectionDialog from './ModeSelectionDialog';
 import {
-  getCurrentStageAttempt,
-  hasAcceptedCurrentStage,
+  getStageAttempt,
+  hasAcceptedStage,
   markStageError as markRunStageError,
   upsertStageAttempt,
 } from '../../../../src/shared/generation/workflowRunState';
@@ -273,7 +273,7 @@ export default function AiAssistantPanel() {
   const effectiveStageKey = workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest?.stageKey || null;
   const hasActiveAutomatedStage = Boolean(workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest);
   const workflowRunState = workflowContext?.runState || null;
-  const currentRunAttempt = getCurrentStageAttempt(workflowRunState);
+  const currentRunAttempt = getStageAttempt(workflowRunState, effectiveStageKey);
   const currentRunAttemptStatus = currentRunAttempt?.status || null;
   const currentRunAttemptId = currentRunAttempt?.attemptId || null;
   const currentRetrySource = currentRunAttempt?.retrySource || null;
@@ -850,7 +850,7 @@ export default function AiAssistantPanel() {
       }
       
       setStageRunnerState('complete');
-      updateWorkflowRunAttempt('applying', {
+      updateWorkflowRunAttempt('complete', {
         stageKey: confirmedStageKey,
         stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
       });
@@ -1068,7 +1068,7 @@ export default function AiAssistantPanel() {
       return;
     }
 
-    if (!currentRunAttemptId || currentRunAttemptStatus !== 'applying' || hasAcceptedCurrentStage(workflowRunState)) {
+    if (!currentRunAttemptId || currentRunAttemptStatus !== 'applying' || hasAcceptedStage(workflowRunState, effectiveStageKey)) {
       clearStallTimer();
       return;
     }

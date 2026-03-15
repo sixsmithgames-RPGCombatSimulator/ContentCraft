@@ -185,6 +185,7 @@ import {
 import ModeSelectionDialog from '../components/ai-assistant/ModeSelectionDialog';
 import { buildManualStagePrompt } from '../services/workflowTransport';
 import {
+  getStageAttempt,
   markRunAwaitingUserDecisions,
   markRunComplete,
   markStageAccepted,
@@ -833,6 +834,11 @@ export default function ManualGenerator() {
       return;
     }
 
+    if (assistMode === 'integrated') {
+      previousAcceptedStageIndexRef.current = currentStageIndex;
+      return;
+    }
+
     const workflowType = resolveWorkflowTypeFromConfigType(config.type);
     const previousStage = STAGES[previousStageIndex];
     const previousRunStage = getCurrentWorkflowStageIdentity(workflowType, previousStage);
@@ -842,7 +848,7 @@ export default function ManualGenerator() {
     }
 
     previousAcceptedStageIndexRef.current = currentStageIndex;
-  }, [config, currentStageIndex, STAGES]);
+  }, [assistMode, config, currentStageIndex, STAGES]);
 
   useEffect(() => {
     if (!config) return;
@@ -853,24 +859,33 @@ export default function ManualGenerator() {
       : STAGES.length - 1;
     const terminalStage = terminalStageIndex >= 0 ? STAGES[terminalStageIndex] : undefined;
     const currentRunStage = getCurrentWorkflowStageIdentity(workflowType, terminalStage);
+    const currentAttemptId = currentRunStage
+      ? getStageAttempt(workflowRunState, currentRunStage.stageKey)?.attemptId
+      : undefined;
 
     if ((_sessionStatus === 'error' || error) && currentRunStage && error) {
-      setWorkflowRunState((prev) => markStageError(prev, currentRunStage.stageKey, currentRunStage.stageLabel, error));
+      setWorkflowRunState((prev) => markStageError(prev, currentRunStage.stageKey, currentRunStage.stageLabel, error, {
+        attemptId: currentAttemptId,
+      }));
       return;
     }
 
     if (_sessionStatus === 'awaiting_user_decisions' && currentRunStage) {
-      setWorkflowRunState((prev) => markRunAwaitingUserDecisions(prev, currentRunStage.stageKey, currentRunStage.stageLabel));
+      setWorkflowRunState((prev) => markRunAwaitingUserDecisions(prev, currentRunStage.stageKey, currentRunStage.stageLabel, {
+        attemptId: currentAttemptId,
+      }));
       return;
     }
 
     if ((_sessionStatus === 'complete' || isComplete) && currentRunStage) {
       setWorkflowRunState((prev) => {
-        const accepted = markStageAccepted(prev, currentRunStage.stageKey, currentRunStage.stageLabel);
+        const accepted = markStageAccepted(prev, currentRunStage.stageKey, currentRunStage.stageLabel, {
+          attemptId: currentAttemptId,
+        });
         return markRunComplete(accepted);
       });
     }
-  }, [config, _sessionStatus, error, isComplete, currentStageIndex, STAGES]);
+  }, [config, _sessionStatus, error, isComplete, currentStageIndex, STAGES, workflowRunState]);
 
   // Push workflow context into AI Assistant whenever relevant state changes
   useEffect(() => {
