@@ -150,7 +150,7 @@ export type SubmitPipelineResponseCallback = (
   rawText: string,
   parsedJson?: Record<string, unknown>,
   metadata?: SubmitPipelineStageMetadata,
-) => Promise<void>;
+) => Promise<{ status: 'accepted' | 'review_required' | 'error'; message?: string }>;
 
 export type WorkflowRunStateDispatcher = Dispatch<SetStateAction<GenerationRunState | null>>;
 

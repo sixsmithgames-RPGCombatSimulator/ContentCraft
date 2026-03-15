@@ -87,6 +87,7 @@ export default function ReviewAdjustModal({
   const { isPanelOpen } = useAiAssistant();
   const [proposalAnswers, setProposalAnswers] = useState<Record<string, string>>({});
   const [selectedIssues, setSelectedIssues] = useState<Set<number>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset and initialize state when modal opens or stageOutput changes
   useEffect(() => {
@@ -94,6 +95,7 @@ export default function ReviewAdjustModal({
       // Clear state when modal closes
       setProposalAnswers({});
       setSelectedIssues(new Set());
+      setIsSubmitting(false);
       return;
     }
 
@@ -101,6 +103,7 @@ export default function ReviewAdjustModal({
       // Don't pre-fill answers - user should explicitly choose
       setProposalAnswers({});
       setSelectedIssues(new Set()); // Clear selected issues
+      setIsSubmitting(false);
     }
   }, [isOpen, stageOutput]);
 
@@ -130,6 +133,10 @@ export default function ReviewAdjustModal({
   };
 
   const handleRetry = () => {
+    if (isSubmitting) {
+      return;
+    }
+
     // Collect all answered proposals
     const answers: Record<string, string> = {};
     proposals.forEach((proposal, index: number) => {
@@ -151,10 +158,15 @@ export default function ReviewAdjustModal({
       }
     });
 
+    setIsSubmitting(true);
     onRetry(answers, issuesToAddress);
   };
 
   const handleAccept = () => {
+    if (isSubmitting) {
+      return;
+    }
+
     // Collect all answered proposals
     const answers: Record<string, string> = {};
     proposals.forEach((proposal, index: number) => {
@@ -165,6 +177,7 @@ export default function ReviewAdjustModal({
       }
     });
 
+    setIsSubmitting(true);
     onAccept(answers);
   };
 
@@ -192,6 +205,7 @@ export default function ReviewAdjustModal({
           </div>
           <button
             onClick={onClose}
+            disabled={isSubmitting}
             className="text-gray-400 hover:text-gray-600"
           >
             <X className="w-6 h-6" />
@@ -547,7 +561,8 @@ export default function ReviewAdjustModal({
         <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-100"
+            disabled={isSubmitting}
+            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
@@ -556,7 +571,8 @@ export default function ReviewAdjustModal({
             {!stageError && ((proposals.length === 0 && criticalIssues.length === 0) || allProposalsAnswered) ? (
               <button
                 onClick={handleAccept}
-                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
+                disabled={isSubmitting}
+                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
               >
                 {allProposalsAnswered && proposals.length > 0
                   ? 'Accept with Answers & Continue'
@@ -565,7 +581,7 @@ export default function ReviewAdjustModal({
             ) : null}
             <button
               onClick={handleRetry}
-              disabled={!canProceed}
+              disabled={!canProceed || isSubmitting}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
             >
               Retry Stage with Answers

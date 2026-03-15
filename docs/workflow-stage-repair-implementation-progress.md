@@ -30,6 +30,9 @@ Implement a shared, app-controlled stage response repair pipeline so integrated 
 - [x] Clear stale compiled-request state and stale failed-attempt gating before same-stage retries so reviewed retries rebuild and run cleanly
 - [x] Reject NPC character-build outputs that still use placeholder `+0` modifiers for listed skill proficiencies and saving throws
 - [x] Recognize placeholder all-10 stats even when the model emits long-form ability keys such as `strength` and `dexterity`
+- [x] Clear stale review payload, retry notice, and retry-source state when retrying, advancing, or completing a stage
+- [x] Prevent duplicate review-triggered retries from re-issuing the same corrected request signature from the client
+- [x] Keep integrated AI stage status in review/error when the local workflow pipeline pauses after server patch acceptance
 
 ## Risks
 - Shared normalization may change accepted payload shape for existing stages
@@ -45,8 +48,10 @@ Implement a shared, app-controlled stage response repair pipeline so integrated 
 - Follow-up targeted Vitest run: `client/src/services/generatorWorkflow.test.ts`, `client/src/services/workflowTransport.test.ts`, `src/shared/generation/workflowStageRepair.test.ts`, `src/server/routes/ai.keyword.test.ts`
 - Follow-up targeted Vitest run: `client/src/services/generatorWorkflow.test.ts`, `client/src/services/workflowStageResponse.test.ts`, `client/src/services/workflowUiTransition.test.ts`, `src/shared/generation/workflowRunState.test.ts`
 - Follow-up targeted Vitest run: `client/src/services/workflowStageResponse.test.ts`
+- Follow-up targeted Vitest run: `client/src/services/workflowUiTransition.test.ts`, `client/src/services/workflowStageResponse.test.ts`
 - Full project build
 
 ## Known Limitations
 - Live provider behavior still depends on prompt quality; this implementation should make response handling resilient to repairable formatting drift
 - Semantically weak but schema-valid NPC mechanics still need continued archetype-specific hardening beyond the placeholder cases now covered
+- Final workflow acceptance is still split across server and client; the latest hardening prevents false-success UI states, but more of that acceptance contract should still move into shared server/runtime code over time

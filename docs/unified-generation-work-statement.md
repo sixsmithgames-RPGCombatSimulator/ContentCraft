@@ -346,7 +346,10 @@ The NPC workflow now behaves as a shared, stateless stage pipeline rather than a
 
 - Review preparation deduplicates conflicts and proposals before deciding whether to pause.
 - Same-stage retries now clear stale compiled-request state so a retry always creates a fresh compiled attempt.
+- Retry, advance, and completion transitions now also clear stale review payload, retry notice, and retry-source state so corrected stages do not leak old review context into later runs.
+- Review-triggered retries are now treated as one-shot client actions until the workflow returns a fresh review/error state, which prevents duplicate corrected retries from being re-issued with the same signature.
 - The AI assistant runner now allows a fresh compiled request to proceed even if the previous attempt for that stage ended in `error`.
+- Integrated execution now distinguishes between server patch acceptance and true local workflow acceptance: if the browser pipeline pauses for review or local validation after the patch is applied, the assistant keeps the run in an error/review-required state instead of reporting a false success.
 - This prevents retry deadlocks such as `attempt not ready (error)` and avoids stale attempt state blocking reviewed retries.
 
 ### 7. Acceptance is stronger, but still not fully centralized

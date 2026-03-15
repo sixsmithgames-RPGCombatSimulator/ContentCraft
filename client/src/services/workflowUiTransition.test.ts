@@ -26,6 +26,7 @@ describe('workflowUiTransition', () => {
     })).toEqual({
       modalMode: null,
       skipMode: false,
+      showReviewModal: false,
       isMultiPartGeneration: false,
       clearWorkflowChunking: true,
       currentGroupIndex: 0,
@@ -33,6 +34,9 @@ describe('workflowUiTransition', () => {
       currentStageChunk: 0,
       totalStageChunks: 0,
       clearAccumulatedChunkResults: true,
+      clearStageOutput: true,
+      promptNotice: null,
+      retrySource: null,
     });
   });
 
@@ -44,6 +48,7 @@ describe('workflowUiTransition', () => {
     })).toEqual({
       modalMode: undefined,
       skipMode: undefined,
+      showReviewModal: false,
       isMultiPartGeneration: undefined,
       clearWorkflowChunking: undefined,
       currentGroupIndex: undefined,
@@ -51,14 +56,21 @@ describe('workflowUiTransition', () => {
       currentStageChunk: undefined,
       totalStageChunks: undefined,
       clearAccumulatedChunkResults: undefined,
+      clearStageOutput: true,
+      promptNotice: null,
+      retrySource: null,
     });
   });
 
   it('builds a completion transition', () => {
     expect(buildWorkflowCompletionUiTransition()).toEqual({
       modalMode: null,
+      showReviewModal: false,
       sessionStatus: 'complete',
       clearCompiledStageRequest: true,
+      clearStageOutput: true,
+      promptNotice: null,
+      retrySource: null,
     });
   });
 
@@ -67,6 +79,9 @@ describe('workflowUiTransition', () => {
       showReviewModal: false,
       sessionStatus: 'running',
       clearCompiledStageRequest: true,
+      clearStageOutput: true,
+      promptNotice: null,
+      retrySource: null,
     });
   });
 });

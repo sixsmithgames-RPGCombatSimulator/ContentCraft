@@ -14,6 +14,7 @@ export interface WorkflowUiTransitionPlan {
   showReviewModal?: boolean;
   sessionStatus?: WorkflowSessionStatus;
   clearCompiledStageRequest?: boolean;
+  clearStageOutput?: boolean;
   promptNotice?: WorkflowPromptNotice | null;
   retrySource?: WorkflowRetrySource | null;
   clearCanonNarrowing?: boolean;
@@ -47,6 +48,7 @@ export function buildWorkflowAdvanceUiTransition(input: {
   return {
     modalMode: input.closeModal === false ? undefined : null,
     skipMode: input.clearSkipMode === false ? undefined : false,
+    showReviewModal: false,
     isMultiPartGeneration: input.resetMultiPart === false ? undefined : false,
     clearWorkflowChunking: input.resetMultiPart === false ? undefined : true,
     currentGroupIndex: input.resetMultiPart === false ? undefined : 0,
@@ -54,14 +56,21 @@ export function buildWorkflowAdvanceUiTransition(input: {
     currentStageChunk: input.resetStageChunking ? 0 : undefined,
     totalStageChunks: input.resetStageChunking ? 0 : undefined,
     clearAccumulatedChunkResults: input.resetStageChunking ? true : undefined,
+    clearStageOutput: true,
+    promptNotice: null,
+    retrySource: null,
   };
 }
 
 export function buildWorkflowCompletionUiTransition(): WorkflowUiTransitionPlan {
   return {
     modalMode: null,
+    showReviewModal: false,
     sessionStatus: 'complete',
     clearCompiledStageRequest: true,
+    clearStageOutput: true,
+    promptNotice: null,
+    retrySource: null,
   };
 }
 
@@ -72,5 +81,8 @@ export function buildWorkflowRetryUiTransition(input: {
     showReviewModal: input.closeReviewModal === false ? undefined : false,
     sessionStatus: 'running',
     clearCompiledStageRequest: true,
+    clearStageOutput: true,
+    promptNotice: null,
+    retrySource: null,
   };
 }

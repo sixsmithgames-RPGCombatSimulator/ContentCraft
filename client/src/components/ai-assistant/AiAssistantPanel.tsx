@@ -900,14 +900,37 @@ export default function AiAssistantPanel() {
       });
       setExtractedPayload(sanitizedPayload);
       applyStagePatch(confirmedStageKey, sanitizedPayload);
-      
+      let pipelineResult: { status: 'accepted' | 'review_required' | 'error'; message?: string } = {
+        status: 'accepted',
+      };
+
       if (submitPipelineResponse) {
         // Submit the actual payload to the generator pipeline
-        await submitPipelineResponse(JSON.stringify(sanitizedPayload), sanitizedPayload, {
+        pipelineResult = await submitPipelineResponse(JSON.stringify(sanitizedPayload), sanitizedPayload, {
           ...confirmedStage,
           requestId: body.requestId,
           stageRunId: body.stageRunId,
         });
+      }
+
+      if (pipelineResult.status !== 'accepted') {
+        const pipelineMessage = pipelineResult.message || 'This stage needs review before it can continue.';
+
+        setAutoRetryEligible(false);
+        setStageRunnerError(pipelineMessage);
+        setStageRunnerState('error');
+        updateWorkflowRunAttempt('error', {
+          error: pipelineMessage,
+          stageKey: confirmedStageKey,
+          stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+        });
+        console.warn('[AI Runner][Pipeline Outcome]', {
+          stageKey: confirmedStageKey,
+          runId,
+          pipelineResult,
+          workflow: body.workflow ?? null,
+        });
+        return;
       }
       
       setAutoRetryEligible(false);
