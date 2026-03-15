@@ -55,4 +55,25 @@ describe('workflowStageRepair', () => {
     expect(repaired.payload.species).toBe('Aasimar');
     expect(repaired.payload.race).toBe('Aasimar');
   });
+
+  it('normalizes stats speed values into schema-safe strings', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'stats',
+      workflowType: 'npc',
+      payload: {
+        ability_scores: { str: 10, dex: 18, con: 12, int: 13, wis: 11, cha: 14 },
+        proficiency_bonus: 3,
+        speed: { walk: 30, climb: '20 ft.' },
+        armor_class: 15,
+        hit_points: 38,
+        senses: [],
+      },
+    });
+
+    expect(repaired.payload.speed).toEqual({
+      walk: '30 ft.',
+      climb: '20 ft.',
+    });
+    expect(validateWorkflowStageContractPayload('stats', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
 });

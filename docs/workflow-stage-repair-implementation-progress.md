@@ -15,7 +15,12 @@ Implement a shared, app-controlled stage response repair pipeline so integrated 
 - [x] Route integrated workflow execution through shared repair before rejection
 - [x] Unify manual workflow stage normalization with shared repair pipeline
 - [x] Add regression coverage for repaired malformed payloads
-- [ ] Run targeted tests and full build
+- [x] Run targeted tests and full build
+
+## Follow-up Fixes
+- [x] Correct shared `stats` repair so movement speeds remain schema-safe strings for integrated validation
+- [x] Stop integrated auto-retry from re-sending non-retryable or review-required failures
+- [x] Add focused regressions for stats speed repair and integrated failure retry gating
 
 ## Risks
 - Shared normalization may change accepted payload shape for existing stages
@@ -27,6 +32,7 @@ Implement a shared, app-controlled stage response repair pipeline so integrated 
 - Focused workflow normalization tests
 - Server route tests for repaired integrated payloads
 - Targeted Vitest run: `client/src/services/workflowStageResponse.test.ts`, `src/shared/generation/workflowStageRepair.test.ts`, `src/server/routes/ai.keyword.test.ts`
+- Follow-up targeted Vitest run: `client/src/services/workflowTransport.test.ts`, `client/src/services/workflowStageResponse.test.ts`, `src/shared/generation/workflowStageRepair.test.ts`, `src/server/routes/ai.keyword.test.ts`
 - Full project build
 
 ## Known Limitations

@@ -26,6 +26,8 @@ export type WorkflowTransportStageResponse =
   | WorkflowExecutionSuccessResponse
   | WorkflowExecutionFailureResponse;
 
+type WorkflowTransportFailureResponse = Extract<WorkflowTransportStageResponse, { ok: false }>;
+
 export interface ConfirmedWorkflowStageMetadata {
   stageId: string;
   stageKey: string;
@@ -102,6 +104,38 @@ export function getConfirmedIntegratedStageMetadata(
     rawAllowedKeyCount: 0,
     retryContext: undefined,
   };
+}
+
+export function shouldAutoRetryIntegratedFailure(
+  responseBody: WorkflowTransportStageResponse,
+): boolean {
+  if (responseBody.ok !== false) {
+    return false;
+  }
+
+  const failureBody = responseBody as WorkflowTransportFailureResponse;
+
+  if (failureBody.error?.type === 'RATE_LIMIT') {
+    return false;
+  }
+
+  if (failureBody.error?.retryable === false) {
+    return false;
+  }
+
+  if (failureBody.workflow?.outcome === 'review_required') {
+    return false;
+  }
+
+  if (failureBody.workflow?.retryContext?.retryable === false) {
+    return false;
+  }
+
+  if (failureBody.workflow?.retryContext?.duplicateRetryBlocked) {
+    return false;
+  }
+
+  return Boolean(failureBody.error?.retryable);
 }
 
 export function buildManualStagePrompt(

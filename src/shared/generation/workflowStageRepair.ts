@@ -26,6 +26,8 @@ export interface WorkflowStageRepairResult {
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const STATS_SPEED_KEYS = ['walk', 'fly', 'swim', 'climb', 'burrow', 'hover'] as const;
+
 const normalizeStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -359,22 +361,23 @@ export const inferSpeciesFromWorkflowContext = (input: {
   return null;
 };
 
-const coerceSpeedNumbers = (value: unknown): Record<string, number> | null => {
+const normalizeSpeedStrings = (value: unknown): Record<string, string> | null => {
   if (!isRecord(value)) {
     return null;
   }
 
-  const result: Record<string, number> = {};
-  for (const [key, entry] of Object.entries(value)) {
+  const result: Record<string, string> = {};
+  for (const key of STATS_SPEED_KEYS) {
+    const entry = value[key];
     if (typeof entry === 'number') {
-      result[key] = entry;
+      result[key] = `${entry} ft.`;
       continue;
     }
 
     if (typeof entry === 'string') {
-      const parsed = Number.parseInt(entry, 10);
-      if (!Number.isNaN(parsed)) {
-        result[key] = parsed;
+      const trimmed = entry.trim();
+      if (trimmed.length > 0) {
+        result[key] = trimmed;
       }
     }
   }
@@ -455,10 +458,10 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
   }
 
   if (contractKey === 'stats' && payload.speed !== undefined) {
-    const coercedSpeed = coerceSpeedNumbers(payload.speed);
-    if (coercedSpeed) {
-      payload = { ...payload, speed: coercedSpeed };
-      appliedRepairs.push('stats:coerce_speed');
+    const normalizedSpeed = normalizeSpeedStrings(payload.speed);
+    if (normalizedSpeed) {
+      payload = { ...payload, speed: normalizedSpeed };
+      appliedRepairs.push('stats:normalize_speed');
     }
   }
 

@@ -3,6 +3,7 @@ import {
   buildIntegratedStageRequest,
   buildManualStagePrompt,
   getConfirmedIntegratedStageMetadata,
+  shouldAutoRetryIntegratedFailure,
 } from './workflowTransport';
 import type { AiAssistantWorkflowContext } from '../contexts/AiAssistantContext';
 
@@ -185,5 +186,58 @@ describe('workflow transport', () => {
         duplicateRetryBlocked: true,
       },
     });
+  });
+
+  it('does not auto-retry non-retryable integrated failures', () => {
+    expect(shouldAutoRetryIntegratedFailure({
+      ok: false,
+      requestId: 'req-3',
+      stageRunId: 'run-3',
+      workflow: {
+        stageId: 'stats',
+        stageKey: 'stats',
+        workflowType: 'npc',
+        outcome: 'invalid_response',
+        accepted: false,
+        allowedKeyCount: 6,
+        rawAllowedKeyCount: 6,
+        retryContext: {
+          reason: 'schema_validation_failed',
+          retryable: false,
+        },
+      },
+      error: {
+        type: 'INVALID_RESPONSE',
+        message: '/speed/walk must be string',
+        retryable: false,
+      },
+    })).toBe(false);
+  });
+
+  it('does not auto-retry review-required failures', () => {
+    expect(shouldAutoRetryIntegratedFailure({
+      ok: false,
+      requestId: 'req-4',
+      stageRunId: 'run-4',
+      workflow: {
+        stageId: 'stats',
+        stageKey: 'stats',
+        workflowType: 'npc',
+        outcome: 'review_required',
+        accepted: false,
+        allowedKeyCount: 6,
+        rawAllowedKeyCount: 6,
+        retryContext: {
+          reason: 'duplicate_retry_signature',
+          retryable: false,
+          duplicateRetryBlocked: true,
+        },
+      },
+      error: {
+        type: 'ABORTED',
+        message: 'Duplicate retry signature detected; review required before retrying.',
+        retryable: false,
+      },
+    })).toBe(false);
   });
 });

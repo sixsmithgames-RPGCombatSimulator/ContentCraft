@@ -38,6 +38,7 @@ import {
   buildIntegratedStageRequest,
   executeIntegratedStageRequest,
   getConfirmedIntegratedStageMetadata,
+  shouldAutoRetryIntegratedFailure,
 } from '../../services/workflowTransport';
 import type { WorkflowTransportStageResponse } from '../../services/workflowTransport';
 import { getWorkflowRetryBadgeLabel, getWorkflowRetryDetail } from '../../services/workflowRetryNotice';
@@ -249,6 +250,7 @@ export default function AiAssistantPanel() {
   const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null);
   const [showModeDialog, setShowModeDialog] = useState(false);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
+  const [autoRetryEligible, setAutoRetryEligible] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -332,11 +334,13 @@ export default function AiAssistantPanel() {
       setStageRunnerError(null);
       setExtractedPayload(null);
       setHasAutoStarted(false);
+      setAutoRetryEligible(false);
       return;
     }
     setStageRunId(crypto.randomUUID());
     setStageRunnerState('idle');
     setStageRunnerError(null);
+    setAutoRetryEligible(false);
     setHasAutoStarted(false);
   }, [effectiveStageKey, workflowContext?.compiledStageRequest?.requestId, workflowContext?.compiledStageRequest?.prompt]);
 
@@ -710,6 +714,7 @@ export default function AiAssistantPanel() {
     setStageRunId(runId);
     setStageRunnerState('sending');
     setStageRunnerError(null);
+    setAutoRetryEligible(false);
     updateWorkflowRunAttempt('sending', {
       stageKey,
       stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
@@ -759,6 +764,7 @@ export default function AiAssistantPanel() {
         const failureBody = isWorkflowFailureResponse(body) ? body : null;
         const message = failureBody?.error?.message || `Request failed (${response.status})`;
         const failedStageKey = failureBody?.workflow?.stageKey || stageKey;
+        setAutoRetryEligible(failureBody ? shouldAutoRetryIntegratedFailure(failureBody) : false);
         console.warn('[AI Runner][Response][Error]', {
           status: response.status,
           message,
@@ -816,6 +822,7 @@ export default function AiAssistantPanel() {
 
       if (!validated.ok) {
         const failure = validated as { ok: false; message: string };
+        setAutoRetryEligible(false);
         setStageRunnerError(failure.message);
         setStageRunnerState('error');
         updateWorkflowRunAttempt('error', {
@@ -849,6 +856,7 @@ export default function AiAssistantPanel() {
         });
       }
       
+      setAutoRetryEligible(false);
       setStageRunnerState('complete');
       updateWorkflowRunAttempt('complete', {
         stageKey: confirmedStageKey,
@@ -877,6 +885,7 @@ export default function AiAssistantPanel() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('[AI Runner][Exception]', message);
+      setAutoRetryEligible(false);
       setStageRunnerError(message);
       setStageRunnerState('error');
       updateWorkflowRunAttempt('error', {
@@ -1024,6 +1033,10 @@ export default function AiAssistantPanel() {
       return; // Do not auto-retry when router key is missing
     }
 
+    if (!autoRetryEligible) {
+      return;
+    }
+
     setRetryCountdown(5);
     setStageRunnerError((prev) => prev || 'Stage failed. Auto-retrying shortly.');
 
@@ -1035,6 +1048,7 @@ export default function AiAssistantPanel() {
           clearInterval(interval);
           retryTimerRef.current = null;
           setRetryCountdown(null);
+          setAutoRetryEligible(false);
           setStageRunnerError(null);
           setStageRunnerState('idle');
           // Allow state to settle before retrying
@@ -1051,7 +1065,7 @@ export default function AiAssistantPanel() {
       clearInterval(interval);
       retryTimerRef.current = null;
     };
-  }, [stageRunnerState, stageRunnerError, currentRunAttemptStatus, runStageWithGemini]);
+  }, [stageRunnerState, stageRunnerError, currentRunAttemptStatus, autoRetryEligible, runStageWithGemini]);
 
   // Stall watchdog: only retry if the same explicit attempt never gets accepted.
   useEffect(() => {
