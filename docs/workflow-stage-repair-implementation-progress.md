@@ -28,6 +28,8 @@ Implement a shared, app-controlled stage response repair pipeline so integrated 
 - [x] Keep NPC `Combat` routing enabled when `class_levels` arrives as a string such as `Rogue (Assassin) 5`
 - [x] Stop NPC relationships review from falsely flagging populated string-array payloads as empty
 - [x] Clear stale compiled-request state and stale failed-attempt gating before same-stage retries so reviewed retries rebuild and run cleanly
+- [x] Reject NPC character-build outputs that still use placeholder `+0` modifiers for listed skill proficiencies and saving throws
+- [x] Recognize placeholder all-10 stats even when the model emits long-form ability keys such as `strength` and `dexterity`
 
 ## Risks
 - Shared normalization may change accepted payload shape for existing stages
@@ -42,7 +44,9 @@ Implement a shared, app-controlled stage response repair pipeline so integrated 
 - Follow-up targeted Vitest run: `client/src/services/workflowTransport.test.ts`, `client/src/services/workflowStageResponse.test.ts`, `src/shared/generation/workflowStageRepair.test.ts`, `src/server/routes/ai.keyword.test.ts`
 - Follow-up targeted Vitest run: `client/src/services/generatorWorkflow.test.ts`, `client/src/services/workflowTransport.test.ts`, `src/shared/generation/workflowStageRepair.test.ts`, `src/server/routes/ai.keyword.test.ts`
 - Follow-up targeted Vitest run: `client/src/services/generatorWorkflow.test.ts`, `client/src/services/workflowStageResponse.test.ts`, `client/src/services/workflowUiTransition.test.ts`, `src/shared/generation/workflowRunState.test.ts`
+- Follow-up targeted Vitest run: `client/src/services/workflowStageResponse.test.ts`
 - Full project build
 
 ## Known Limitations
 - Live provider behavior still depends on prompt quality; this implementation should make response handling resilient to repairable formatting drift
+- Semantically weak but schema-valid NPC mechanics still need continued archetype-specific hardening beyond the placeholder cases now covered

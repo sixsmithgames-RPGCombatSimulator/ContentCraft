@@ -186,6 +186,99 @@ describe('workflowStageResponse', () => {
     expect(result.parsed.organizations).toEqual(expect.arrayContaining(['The Obsidian Veil']));
   });
 
+  it('rejects placeholder npc stats even when ability scores use long-form keys', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        ability_scores: {
+          strength: 10,
+          dexterity: 10,
+          constitution: 10,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 10,
+        },
+        proficiency_bonus: 3,
+        speed: 30,
+        armor_class: 15,
+        hit_points: 32,
+        senses: {
+          passive_perception: 10,
+        },
+      }),
+      stageName: 'Creator: Stats',
+      stageIdentity: 'stats',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Malakor Vane',
+          class_levels: 'Rogue (Assassin) 5',
+          race: 'Tiefling',
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const failure = result as { ok: false; error: string };
+
+    expect(failure.error).toContain('placeholder defaults');
+  });
+
+  it('rejects placeholder +0 proficiency and save modifiers for character builds', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        class_features: [
+          { name: 'Sneak Attack (3d6)', description: 'Deal extra precision damage once per turn.' },
+        ],
+        subclass_features: [
+          { name: 'Assassinate', description: 'Gain advantage against creatures that have not acted yet.' },
+        ],
+        racial_features: [
+          { name: 'Darkvision', description: 'See in darkness out to 60 feet.' },
+        ],
+        feats: [
+          { name: 'Piercer', description: 'Improve piercing damage output.' },
+        ],
+        fighting_styles: [],
+        skill_proficiencies: [
+          { name: 'Stealth', value: '+0' },
+          { name: 'Perception', value: '+0' },
+        ],
+        saving_throws: [
+          { name: 'Dexterity', value: '+0' },
+          { name: 'Intelligence', value: '+0' },
+        ],
+      }),
+      stageName: 'Creator: Character Build',
+      stageIdentity: 'character_build',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Malakor Vane',
+          class_levels: 'Rogue (Assassin) 5',
+          race: 'Tiefling',
+        },
+        'creator:_stats': {
+          ability_scores: {
+            strength: 10,
+            dexterity: 18,
+            constitution: 14,
+            intelligence: 12,
+            wisdom: 10,
+            charisma: 16,
+          },
+          proficiency_bonus: 3,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const failure = result as { ok: false; error: string };
+
+    expect(failure.error).toContain('placeholder modifiers');
+  });
+
   it('passes through visual map html without JSON parsing', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: '<section>map html</section>',

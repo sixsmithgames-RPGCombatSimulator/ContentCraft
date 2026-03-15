@@ -297,6 +297,64 @@ The current approach improves correctness without forcing a destabilizing backen
 - integrated/manual behavior diverging as completely separate systems
 - hidden retry reasons with no provenance
 
+## Current NPC Workflow Process
+
+The NPC workflow now behaves as a shared, stateless stage pipeline rather than a loosely connected sequence of prompts.
+
+### 1. Prompt compilation is app-owned
+
+- `ManualGenerator.tsx` compiles the authoritative stage request before execution.
+- The compiled request carries a stable `requestId`, prompt-budget metadata, stage identity, and workflow context.
+- Integrated and manual execution both depend on that compiled request rather than ad hoc prompt assembly at send time.
+
+### 2. Stage execution is stateless and contract-driven
+
+- Each NPC stage runs against an explicit stage contract and only the minimal prior stage context required for that stage.
+- The app, not the model, is the authoritative memory for prior outputs, retry provenance, and unresolved decisions.
+- Stage routing is determined from app-owned stage results rather than from implicit chat continuity.
+
+### 3. Shared repair runs before acceptance
+
+- Integrated server execution and manual/client parsing now both run through the shared workflow stage repair pipeline.
+- That repair layer handles deterministic cleanup such as:
+  - parsing stringified JSON fields
+  - pruning disallowed keys
+  - normalizing malformed `character_build` arrays into schema-safe object arrays
+  - flattening malformed core-details personality structures
+  - normalizing planner retrieval/proposal payload shape
+- Repairs are explicit, bounded, and logged rather than hidden fallbacks.
+
+### 4. Schema-invalid output gets one bounded automatic correction retry
+
+- If integrated execution returns schema-invalid structured data after deterministic repair, the server classifies that as `INVALID_RESPONSE` with retry metadata.
+- The server returns a calmer user-facing message plus a hidden `retryContext.correctionPrompt`.
+- The client automatically replays the same stage once with that hidden correction prompt and a bounded `correctionAttempt` count.
+- If the corrected response is still schema-invalid, the run moves to review-required behavior instead of looping.
+
+### 5. NPC-specific routing and validation are stricter and more realistic
+
+- NPC routing now treats `class_levels` as valid whether it arrives as:
+  - an object map
+  - an array of class entries
+  - a normalized string such as `Rogue (Assassin) 5`
+- This prevents false skipping of `Combat` and `Spellcasting` when the model uses a different but still meaningful representation.
+- NPC validation now also recognizes populated relationship/equipment arrays even when the entries are plain strings instead of object records.
+- NPC character-build validation rejects clearly placeholder mechanical output such as listed skill proficiencies or saving throws that are all `+0`.
+- NPC stats validation now recognizes placeholder default ability-score blocks even when the model uses long-form keys like `strength` and `dexterity` instead of abbreviated keys.
+
+### 6. Review and retry behavior are explicit
+
+- Review preparation deduplicates conflicts and proposals before deciding whether to pause.
+- Same-stage retries now clear stale compiled-request state so a retry always creates a fresh compiled attempt.
+- The AI assistant runner now allows a fresh compiled request to proceed even if the previous attempt for that stage ended in `error`.
+- This prevents retry deadlocks such as `attempt not ready (error)` and avoids stale attempt state blocking reviewed retries.
+
+### 7. Acceptance is stronger, but still not fully centralized
+
+- The client and server now share much more of the same acceptance logic than before.
+- Structural repair, contract validation, routing, retry provenance, and review preparation are materially more aligned.
+- The remaining architectural direction is still to move more final acceptance responsibility into the shared server runtime so browser-local logic becomes thinner over time.
+
 ## Next Steps
 
 The next steps below are ordered by architectural leverage and user impact.

@@ -32,6 +32,29 @@ function hasNonEmptyObjectArray(value: unknown): boolean {
     });
 }
 
+function hasOnlyPlaceholderModifiers(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length < 2) {
+    return false;
+  }
+
+  const modifiers = value
+    .map((item) => {
+      if (typeof item === 'string') {
+        return item.trim();
+      }
+
+      if (!isRecord(item) || typeof item.value !== 'string') {
+        return '';
+      }
+
+      return item.value.trim();
+    })
+    .filter((item) => item.length > 0);
+
+  return modifiers.length === value.length
+    && modifiers.every((item) => item === '+0' || item === '0' || item === '-0');
+}
+
 function getClassLevelTexts(value: unknown): string[] {
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -71,8 +94,14 @@ function getClassLevelTexts(value: unknown): string[] {
 
 function hasDefaultAbilityScores(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  const keys = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
-  return keys.every((key) => value[key] === 10);
+
+  const shortKeys = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
+  const longKeys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const;
+
+  const hasShortDefaults = shortKeys.every((key) => value[key] === 10);
+  const hasLongDefaults = longKeys.every((key) => value[key] === 10);
+
+  return hasShortDefaults || hasLongDefaults;
 }
 
 function hasClassNamed(output: Record<string, unknown>, className: string): boolean {
@@ -172,10 +201,14 @@ function validateCharacterBuildStage(output: Record<string, unknown>): Validatio
 
   if (!hasNonEmptyObjectArray(output.skill_proficiencies)) {
     warnings.push('Skill proficiencies are empty.');
+  } else if (hasOnlyPlaceholderModifiers(output.skill_proficiencies)) {
+    errors.push('Skill proficiencies use placeholder modifiers (+0). Provide real signed modifiers for the listed proficient skills.');
   }
 
   if (!hasNonEmptyObjectArray(output.saving_throws)) {
     warnings.push('Saving throws are empty.');
+  } else if (hasOnlyPlaceholderModifiers(output.saving_throws)) {
+    errors.push('Saving throws use placeholder modifiers (+0). Provide real signed modifiers for the listed saving throw proficiencies.');
   }
 
   return {
