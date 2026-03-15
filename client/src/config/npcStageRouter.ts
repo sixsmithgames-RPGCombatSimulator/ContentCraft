@@ -20,7 +20,7 @@ export type StageRoutingDecision = Record<RoutedNpcStageKey, StageRequirement>;
 
 interface BasicInfoOutput {
   challenge_rating?: number | string;
-  class_levels?: Array<{ class?: string; name?: string; level?: number | string }> | Record<string, number>;
+  class_levels?: string | Array<{ class?: string; name?: string; level?: number | string }> | Record<string, number>;
   race?: string;
   description?: string;
   subtype?: string;
@@ -92,6 +92,10 @@ function parseChallenge(cr: unknown): number {
  * Check if character has class levels
  */
 function hasClasses(classLevels: unknown): boolean {
+  if (typeof classLevels === 'string') {
+    return classLevels.trim().length > 0;
+  }
+
   if (!classLevels || typeof classLevels !== 'object') return false;
 
   if (Array.isArray(classLevels)) {
@@ -116,6 +120,11 @@ function hasClasses(classLevels: unknown): boolean {
 }
 
 function getClassLevelNames(classLevels: unknown): string[] {
+  if (typeof classLevels === 'string') {
+    const trimmed = classLevels.trim();
+    return trimmed.length > 0 ? [trimmed] : [];
+  }
+
   if (!classLevels || typeof classLevels !== 'object') {
     return [];
   }

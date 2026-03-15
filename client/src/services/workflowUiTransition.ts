@@ -71,5 +71,6 @@ export function buildWorkflowRetryUiTransition(input: {
   return {
     showReviewModal: input.closeReviewModal === false ? undefined : false,
     sessionStatus: 'running',
+    clearCompiledStageRequest: true,
   };
 }

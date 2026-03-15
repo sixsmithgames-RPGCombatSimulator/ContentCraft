@@ -23,7 +23,50 @@ function getStringArray(value: unknown): string[] {
 
 function hasNonEmptyObjectArray(value: unknown): boolean {
   return Array.isArray(value)
-    && value.some((item) => isRecord(item) && Object.keys(item).length > 0);
+    && value.some((item) => {
+      if (typeof item === 'string') {
+        return item.trim().length > 0;
+      }
+
+      return isRecord(item) && Object.keys(item).length > 0;
+    });
+}
+
+function getClassLevelTexts(value: unknown): string[] {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? [trimmed] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (typeof entry === 'string') {
+          return entry.trim();
+        }
+
+        if (!isRecord(entry)) {
+          return '';
+        }
+
+        if (typeof entry.class === 'string' && entry.class.trim().length > 0) {
+          return entry.class.trim();
+        }
+
+        if (typeof entry.name === 'string' && entry.name.trim().length > 0) {
+          return entry.name.trim();
+        }
+
+        return '';
+      })
+      .filter((entry) => entry.length > 0);
+  }
+
+  if (isRecord(value)) {
+    return Object.keys(value).filter((entry) => entry.trim().length > 0);
+  }
+
+  return [];
 }
 
 function hasDefaultAbilityScores(value: unknown): boolean {
@@ -33,9 +76,8 @@ function hasDefaultAbilityScores(value: unknown): boolean {
 }
 
 function hasClassNamed(output: Record<string, unknown>, className: string): boolean {
-  const classLevels = output.class_levels;
-  if (!Array.isArray(classLevels)) return false;
-  return classLevels.some((entry) => isRecord(entry) && typeof entry.class === 'string' && entry.class.toLowerCase().includes(className.toLowerCase()));
+  return getClassLevelTexts(output.class_levels)
+    .some((entry) => entry.toLowerCase().includes(className.toLowerCase()));
 }
 
 /**
@@ -88,6 +130,8 @@ export function validateCoreDetailsStage(output: Record<string, unknown>): Valid
 function validateStatsStage(output: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const hasSenses = getStringArray(output.senses).length > 0
+    || (isRecord(output.senses) && Object.keys(output.senses).length > 0);
 
   if (!isRecord(output.ability_scores)) {
     errors.push('Missing ability_scores object.');
@@ -103,7 +147,7 @@ function validateStatsStage(output: Record<string, unknown>): ValidationResult {
     errors.push('Missing hit_points.');
   }
 
-  if (getStringArray(output.senses).length === 0) {
+  if (!hasSenses) {
     warnings.push('Senses are empty or missing.');
   }
 

@@ -12,6 +12,7 @@ import {
   markRunAwaitingUserDecisions,
   markRunComplete,
   markStageAccepted,
+  markStageError,
   syncCurrentStage,
   updateRetrievalStatus,
 } from './workflowRunState';
@@ -137,6 +138,30 @@ describe('workflow run state', () => {
     expect(getStageAttempt(withRetroactiveAcceptance, 'planner')?.status).toBe('compiled');
     expect(getStageAttempt(withRetroactiveAcceptance, 'keyword_extractor')?.status).toBe('accepted');
     expect(withRetroactiveAcceptance?.attempts.filter((attempt) => attempt.stageKey === 'keyword_extractor')).toHaveLength(1);
+  });
+
+  it('surfaces the newest compiled attempt when the same stage is retried after an error', () => {
+    const run = createGenerationRunState({
+      workflowType: 'npc',
+      workflowLabel: 'NPC Creator',
+      executionMode: 'integrated',
+      stageSequence: ['relationships'],
+      stageLabels: {
+        relationships: 'Creator: Relationships',
+      },
+      now: 1000,
+    });
+
+    const firstCompiled = syncCurrentStage(run, 'relationships', 'Creator: Relationships', 'req-1', { now: 1100 });
+    const failed = markStageError(firstCompiled, 'relationships', 'Creator: Relationships', 'Relationships stage is empty.', {
+      attemptId: firstCompiled?.currentAttemptId,
+      now: 1200,
+    });
+    const retried = syncCurrentStage(failed, 'relationships', 'Creator: Relationships', 'req-2', { now: 1300 });
+
+    expect(getStageAttempt(retried, 'relationships')?.compiledRequestId).toBe('req-2');
+    expect(getStageAttempt(retried, 'relationships')?.status).toBe('compiled');
+    expect(retried?.attempts.filter((attempt) => attempt.stageKey === 'relationships')).toHaveLength(2);
   });
 
   it('tracks canon grounding and warning state explicitly', () => {

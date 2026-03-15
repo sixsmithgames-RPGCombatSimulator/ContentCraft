@@ -112,6 +112,23 @@ describe('generator workflow service', () => {
     expect(plan.dynamicStages.some((stage) => stage.name === 'Creator: Combat')).toBe(true);
   });
 
+  it('keeps combat included when class_levels are provided as a string', () => {
+    const plan = buildNpcDynamicStagePlan({
+      basicInfoOutput: {
+        name: 'Malakor Vane',
+        race: 'Tiefling',
+        challenge_rating: 0,
+        description: 'A lethal infiltrator and contract killer operating from the shadows.',
+        class_levels: 'Rogue (Assassin) 5',
+      },
+      userPrompt: 'A 5th level rogue assassin, tiefling.',
+      catalog: stageCatalog,
+    });
+
+    expect(plan.routingDecision.combat.required).toBe(true);
+    expect(plan.dynamicStages.some((stage) => stage.name === 'Creator: Combat')).toBe(true);
+  });
+
   it('prefers dynamic NPC stages when they are available', () => {
     const dynamicNpcStages = [createStage('Dynamic NPC Stage')];
 

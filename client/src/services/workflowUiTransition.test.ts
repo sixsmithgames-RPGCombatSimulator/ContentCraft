@@ -66,6 +66,7 @@ describe('workflowUiTransition', () => {
     expect(buildWorkflowRetryUiTransition()).toEqual({
       showReviewModal: false,
       sessionStatus: 'running',
+      clearCompiledStageRequest: true,
     });
   });
 });

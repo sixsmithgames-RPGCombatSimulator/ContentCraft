@@ -158,6 +158,34 @@ describe('workflowStageResponse', () => {
     expect(result.parsed).not.toHaveProperty('personality');
   });
 
+  it('accepts populated relationships returned as string arrays', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        allies: ['The Obsidian Veil inner circle', 'Selûnite clergy members'],
+        enemies: ['Rival assassin guilds'],
+        organizations: ['The Obsidian Veil', 'Church of Selûne'],
+        family: ['Deceased family members (avenged)'],
+        contacts: ['Noble house informants'],
+      }),
+      stageName: 'Creator: Relationships',
+      stageIdentity: 'relationships',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Malakor Vane',
+          class_levels: 'Rogue (Assassin) 5',
+          race: 'Tiefling',
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.allies).toEqual(expect.arrayContaining(['The Obsidian Veil inner circle']));
+    expect(result.parsed.organizations).toEqual(expect.arrayContaining(['The Obsidian Veil']));
+  });
+
   it('passes through visual map html without JSON parsing', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: '<section>map html</section>',

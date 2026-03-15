@@ -302,6 +302,12 @@ export default function AiAssistantPanel() {
   const currentRunAttempt = getStageAttempt(workflowRunState, effectiveStageKey);
   const currentRunAttemptStatus = currentRunAttempt?.status || null;
   const currentRunAttemptId = currentRunAttempt?.attemptId || null;
+  const currentCompiledRequestId = workflowContext?.compiledStageRequest?.requestId || null;
+  const hasFreshCompiledRequest = Boolean(
+    currentCompiledRequestId
+    && currentCompiledRequestId !== (currentRunAttempt?.compiledRequestId || null)
+  );
+  const activeAttemptId = !hasFreshCompiledRequest ? currentRunAttemptId : null;
   const currentRetrySource = currentRunAttempt?.retrySource || null;
   const currentRetryBadge = currentRetrySource ? getWorkflowRetryBadgeLabel(currentRetrySource) : null;
   const currentRetryDetail = currentRetrySource ? getWorkflowRetryDetail(currentRetrySource, 160) : null;
@@ -331,13 +337,13 @@ export default function AiAssistantPanel() {
       workflowRunStateDispatcher((prev) => {
         if (status === 'error') {
           return markRunStageError(prev, stageKey, stageLabel, options?.error || 'Stage execution failed.', {
-            attemptId: currentRunAttemptId || undefined,
+            attemptId: activeAttemptId || undefined,
             warnings: options?.warnings,
           });
         }
 
         return upsertStageAttempt(prev, {
-          attemptId: currentRunAttemptId || undefined,
+          attemptId: activeAttemptId || undefined,
           stageKey,
           stageLabel,
           status: mappedStatus,
@@ -347,7 +353,7 @@ export default function AiAssistantPanel() {
         });
       });
     },
-    [workflowRunStateDispatcher, workflowContext, effectiveStageKey, currentRunAttemptId]
+    [workflowRunStateDispatcher, workflowContext, effectiveStageKey, activeAttemptId]
   );
 
   // Reset stageRunId when stage changes (use compiled request as fallback identifier)
@@ -1047,7 +1053,7 @@ export default function AiAssistantPanel() {
       logStageRunnerGate('skip: missing stageRouterKey');
       return;
     }
-    if (currentRunAttemptStatus && currentRunAttemptStatus !== 'compiled') {
+    if (currentRunAttemptStatus && currentRunAttemptStatus !== 'compiled' && !hasFreshCompiledRequest) {
       logStageRunnerGate(`skip: attempt not ready (${currentRunAttemptStatus})`);
       return;
     }
@@ -1064,7 +1070,7 @@ export default function AiAssistantPanel() {
     setHasAutoStarted(true);
     // Add 2.5s initial delay to ensure server-side throttle window is clear
     setTimeout(() => runStageWithGemini(), 2500);
-  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus]);
+  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus, hasFreshCompiledRequest]);
 
   // Auto-retry on error with countdown (skip if missing stageRouterKey)
   useEffect(() => {
