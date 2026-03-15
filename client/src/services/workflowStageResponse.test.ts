@@ -279,6 +279,55 @@ describe('workflowStageResponse', () => {
     expect(failure.error).toContain('placeholder modifiers');
   });
 
+  it('accepts character build string entries when they include signed modifiers', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        class_features: ['Pact Magic', 'Pact Boon: Pact of the Tome'],
+        subclass_features: ['Genie\'s Vessel', 'Genie\'s Wrath'],
+        racial_features: ['Lucky', 'Brave'],
+        feats: ['Chef'],
+        fighting_styles: ['None'],
+        skill_proficiencies: ['Persuasion +8', 'Stealth +7', 'Survival +5', 'Insight +5'],
+        saving_throws: ['Wisdom +5', 'Charisma +8'],
+      }),
+      stageName: 'Creator: Character Build',
+      stageIdentity: 'character_build',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Barley Brambleberry',
+          class_levels: 'Warlock 11',
+          race: 'Lightfoot Halfling',
+        },
+        'creator:_stats': {
+          ability_scores: {
+            strength: 10,
+            dexterity: 16,
+            constitution: 14,
+            intelligence: 10,
+            wisdom: 12,
+            charisma: 18,
+          },
+          proficiency_bonus: 4,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.skill_proficiencies).toEqual([
+      { name: 'Persuasion', value: '+8' },
+      { name: 'Stealth', value: '+7' },
+      { name: 'Survival', value: '+5' },
+      { name: 'Insight', value: '+5' },
+    ]);
+    expect(result.parsed.saving_throws).toEqual([
+      { name: 'Wisdom', value: '+5' },
+      { name: 'Charisma', value: '+8' },
+    ]);
+  });
+
   it('passes through visual map html without JSON parsing', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: '<section>map html</section>',

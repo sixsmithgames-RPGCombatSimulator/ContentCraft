@@ -71,6 +71,46 @@ const coercePositiveInteger = (value: unknown): number | undefined => {
   return undefined;
 };
 
+const normalizeSignedModifier = (value: string): string => {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return '+0';
+  }
+
+  return trimmed.startsWith('+') || trimmed.startsWith('-')
+    ? trimmed
+    : `+${trimmed}`;
+};
+
+const parseNameValueStringEntry = (value: string): { name: string; modifier: string } | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const trailingModifierMatch = trimmed.match(/^(.*?)(?:\s*\(([+-]?\d+)\)|\s+([+-]?\d+))\s*$/);
+  if (!trailingModifierMatch) {
+    return {
+      name: trimmed,
+      modifier: '+0',
+    };
+  }
+
+  const name = trailingModifierMatch[1]?.trim();
+  const modifier = trailingModifierMatch[2] ?? trailingModifierMatch[3];
+  if (!name || !modifier) {
+    return {
+      name: trimmed,
+      modifier: '+0',
+    };
+  }
+
+  return {
+    name,
+    modifier: normalizeSignedModifier(modifier),
+  };
+};
+
 const normalizeNamedDescriptionEntries = (
   value: unknown,
   options?: { includeLevel?: boolean },
@@ -159,14 +199,14 @@ const normalizeNameValueEntries = (value: unknown): JsonRecord[] => {
   return value
     .map((entry) => {
       if (typeof entry === 'string') {
-        const trimmed = entry.trim();
-        if (!trimmed) {
+        const parsedEntry = parseNameValueStringEntry(entry);
+        if (!parsedEntry) {
           return null;
         }
 
         return {
-          name: trimmed,
-          value: '+0',
+          name: parsedEntry.name,
+          value: parsedEntry.modifier,
         } as JsonRecord;
       }
 
@@ -187,7 +227,7 @@ const normalizeNameValueEntries = (value: unknown): JsonRecord[] => {
 
       const normalized: JsonRecord = {
         name,
-        value: valueText,
+        value: normalizeSignedModifier(valueText),
       };
 
       const notes = coerceNonEmptyString(entry.notes);

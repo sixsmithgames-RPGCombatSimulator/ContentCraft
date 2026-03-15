@@ -100,4 +100,31 @@ describe('workflowStageRepair', () => {
     expect(repaired.payload.skill_proficiencies).toEqual([{ name: 'Athletics', value: '+0' }]);
     expect(validateWorkflowStageContractPayload('character_build', repaired.payload, 'npc')).toEqual({ ok: true });
   });
+
+  it('preserves signed modifiers when character build skills and saves arrive as strings', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'character_build',
+      workflowType: 'npc',
+      payload: {
+        class_features: ['Pact Magic'],
+        subclass_features: ['Genie\'s Vessel'],
+        racial_features: ['Lucky'],
+        feats: ['Chef'],
+        fighting_styles: ['None'],
+        skill_proficiencies: ['Persuasion +8', 'Stealth +7', 'Survival +5'],
+        saving_throws: ['Wisdom +5', 'Charisma +8'],
+      },
+    });
+
+    expect(repaired.payload.skill_proficiencies).toEqual([
+      { name: 'Persuasion', value: '+8' },
+      { name: 'Stealth', value: '+7' },
+      { name: 'Survival', value: '+5' },
+    ]);
+    expect(repaired.payload.saving_throws).toEqual([
+      { name: 'Wisdom', value: '+5' },
+      { name: 'Charisma', value: '+8' },
+    ]);
+    expect(validateWorkflowStageContractPayload('character_build', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
 });

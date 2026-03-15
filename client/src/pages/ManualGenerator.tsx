@@ -1009,10 +1009,15 @@ export default function ManualGenerator() {
 
   // Register submitPipelineResponse callback so the AI panel can trigger the pipeline
   // Initialize with a no-op to avoid TDZ issues before handleSubmit is defined
-  const handleSubmitRef = useRef<(aiResponse: string, metadata?: SubmitPipelineStageMetadata) => Promise<void>>(async () => { });
-  const pipelineSubmitOutcomeRef = useRef<{ status: 'accepted' | 'review_required' | 'error'; message?: string }>({
+  type PipelineSubmitOutcome = { status: 'accepted' | 'review_required' | 'error'; message?: string };
+  const handleSubmitRef = useRef<(aiResponse: string, metadata?: SubmitPipelineStageMetadata) => Promise<PipelineSubmitOutcome>>(async () => ({ status: 'accepted' }));
+  const pipelineSubmitOutcomeRef = useRef<PipelineSubmitOutcome>({
     status: 'accepted',
   });
+  const recordPipelineSubmitOutcome = (outcome: PipelineSubmitOutcome): PipelineSubmitOutcome => {
+    pipelineSubmitOutcomeRef.current = outcome;
+    return outcome;
+  };
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
@@ -1027,12 +1032,10 @@ export default function ManualGenerator() {
       pipelineSubmitOutcomeRef.current = { status: 'accepted' };
       // We just pass the raw text to handleSubmit, which will parse it or we can construct a JSON string
       if (parsedJson) {
-        await handleSubmitRef.current(JSON.stringify(parsedJson), metadata);
+        return handleSubmitRef.current(JSON.stringify(parsedJson), metadata);
       } else {
-        await handleSubmitRef.current(rawText, metadata);
+        return handleSubmitRef.current(rawText, metadata);
       }
-
-      return pipelineSubmitOutcomeRef.current;
     };
 
     if (registerSubmitPipelineResponse) {
@@ -3222,7 +3225,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     }
   };
 
-  async function handleSubmit(aiResponse: string, metadata?: SubmitPipelineStageMetadata) {
+  async function handleSubmit(aiResponse: string, metadata?: SubmitPipelineStageMetadata): Promise<PipelineSubmitOutcome> {
     // Clear any previous errors
     setError(null);
     pipelineSubmitOutcomeRef.current = { status: 'accepted' };
@@ -3250,7 +3253,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         const stageResponseFailure = normalizedStageResponse;
         const errorMessage = stageResponseFailure.error;
         const rawSnippet = stageResponseFailure.rawSnippet;
-        pipelineSubmitOutcomeRef.current = { status: 'error', message: errorMessage };
+        const pipelineOutcome = recordPipelineSubmitOutcome({ status: 'error', message: errorMessage });
         setError(errorMessage);
         setLastStageError({ stage: currentStage.name, message: errorMessage, rawSnippet });
         setCurrentStageOutput(buildWorkflowStageErrorOutput({
@@ -3260,7 +3263,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           parsed: stageResponseFailure.parsed,
         }));
         applyWorkflowUiTransition(buildWorkflowErrorUiTransition());
-        return;
+        return pipelineOutcome;
       }
 
       let parsed: JsonRecord = normalizedStageResponse.parsed;
@@ -3365,28 +3368,28 @@ Output: Valid JSON only. No markdown, no prose.`;
       parsed = reviewPreparation.parsed;
 
       if (reviewPreparation.shouldPauseForPlannerDecisions) {
-        pipelineSubmitOutcomeRef.current = {
+        const pipelineOutcome = recordPipelineSubmitOutcome({
           status: 'review_required',
           message: 'Planner needs user decisions before this stage can continue.',
-        };
+        });
         console.log('[Planner] Proposals present and no user decisions yet. Pausing pipeline for user input.');
         setCurrentStageOutput(parsed);
         setShowReviewModal(true);
         setCompiledStageRequest(null);
         setSessionStatus('awaiting_user_decisions');
-        return; // Do not advance until decisions provided
+        return pipelineOutcome; // Do not advance until decisions provided
       }
 
       if (reviewPreparation.shouldPauseForReview) {
-        pipelineSubmitOutcomeRef.current = {
+        const pipelineOutcome = recordPipelineSubmitOutcome({
           status: 'review_required',
           message: 'This stage needs review before it can continue.',
-        };
+        });
         setCurrentStageOutput(parsed);
         setShowReviewModal(true);
         setCompiledStageRequest(null);
         setSessionStatus('awaiting_user_decisions');
-        return; // Don't proceed to next stage yet
+        return pipelineOutcome; // Don't proceed to next stage yet
       }
 
       // Store result
@@ -3448,17 +3451,17 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         // Check if fact count exceeds user-configured threshold
         if (newFactpack.facts.length > config!.max_canon_facts) {
-          pipelineSubmitOutcomeRef.current = {
+          const pipelineOutcome = recordPipelineSubmitOutcome({
             status: 'review_required',
             message: 'Canon narrowing is required before this stage can continue.',
-          };
+          });
           console.log('[ManualGenerator] Fact count exceeds threshold - showing narrowing modal');
           setCanonNarrowingState(openInitialWorkflowCanonNarrowing({
             keywords,
             pendingFactpack: newFactpack,
           }));
           setModalMode(null); // Close the copy/paste modal
-          return; // Don't proceed to next stage yet
+          return pipelineOutcome; // Don't proceed to next stage yet
         }
 
         // Fact count is within threshold - proceed to next stage
@@ -3492,13 +3495,13 @@ Output: Valid JSON only. No markdown, no prose.`;
         const hintsResult = await processRetrievalHints(parsed, newResults, currentStage.name);
 
         if (!hintsResult.shouldProceed) {
-          pipelineSubmitOutcomeRef.current = {
+          const pipelineOutcome = recordPipelineSubmitOutcome({
             status: 'review_required',
             message: 'Canon narrowing is required before this stage can continue.',
-          };
+          });
           // Narrowing modal is showing - wait for user action
           console.log(`[Retrieval Hints] Narrowing modal shown, waiting for user action`);
-          return;
+          return pipelineOutcome;
         }
 
         // Update results after retrieval hints processing
@@ -3614,15 +3617,15 @@ Output: Valid JSON only. No markdown, no prose.`;
           // ✓ FIX: If in skip mode, DON'T auto-complete chunking
           // Allow user to paste multiple spaces, review each one
           if (skipMode) {
-            pipelineSubmitOutcomeRef.current = {
+            const pipelineOutcome = recordPipelineSubmitOutcome({
               status: 'review_required',
               message: 'Space review is required before this stage can continue.',
-            };
+            });
             console.log('[Skip Mode] Space data pasted, opening approval modal');
             setShowSpaceApprovalModal(true);
             setModalMode(null);
             // DON'T advance stage - wait for user to review and decide
-            return;
+            return pipelineOutcome;
           }
 
           // ✓ Batch Mode: Auto-accept spaces without showing approval modal
@@ -3711,15 +3714,15 @@ Output: Valid JSON only. No markdown, no prose.`;
 
           setShowSpaceApprovalModal(true);
           setModalMode(null); // Close copy-paste modal
-          pipelineSubmitOutcomeRef.current = {
+          const pipelineOutcome = recordPipelineSubmitOutcome({
             status: 'review_required',
             message: 'Space review is required before this stage can continue.',
-          };
+          });
 
           // The approval handlers (handleSpaceAccept, handleSpaceReject, handleSpaceEdit)
           // will be called when user makes a decision. Those handlers will continue
           // the chunking workflow.
-          return; // Wait for user approval before continuing
+          return pipelineOutcome; // Wait for user approval before continuing
         }
 
         // Collect this chunk's results (for non-Spaces stages or after approval)
@@ -3733,14 +3736,14 @@ Output: Valid JSON only. No markdown, no prose.`;
         const hasProposals = proposals && Array.isArray(proposals) && proposals.length > 0;
 
         if (hasProposals) {
-          pipelineSubmitOutcomeRef.current = {
+          const pipelineOutcome = recordPipelineSubmitOutcome({
             status: 'review_required',
             message: 'This stage chunk needs review before it can continue.',
-          };
+          });
           console.log(`[Stage Chunking] Chunk has ${(proposals as unknown[]).length} proposals - showing review modal`);
           setCurrentStageOutput(parsed);
           setShowReviewModal(true);
-          return; // Wait for user to answer proposals before continuing
+          return pipelineOutcome; // Wait for user to answer proposals before continuing
         }
 
         const stageChunkProgress = buildWorkflowStageChunkProgress({
@@ -3998,16 +4001,16 @@ Output: Valid JSON only. No markdown, no prose.`;
         setStageResults(mergedResults);
 
         if (mergedReviewPreparation.shouldPauseForPlannerDecisions || mergedReviewPreparation.shouldPauseForReview) {
-          pipelineSubmitOutcomeRef.current = {
+          const pipelineOutcome = recordPipelineSubmitOutcome({
             status: 'review_required',
             message: 'This stage needs review before it can continue.',
-          };
+          });
           if (mergedReviewPreparation.hasProposals) {
             console.log(`[Multi-Chunk] ${Array.isArray(mergedStageOutput.proposals) ? mergedStageOutput.proposals.length : 0} proposals remain unanswered after all chunks. Showing review modal...`);
           }
           setCurrentStageOutput(mergedStageOutput as JsonRecord);
           setShowReviewModal(true);
-          return; // Wait for user to answer
+          return pipelineOutcome; // Wait for user to answer
         }
 
         // Now process retrieval hints from the merged output (Planner or Creator only)
@@ -4019,14 +4022,14 @@ Output: Valid JSON only. No markdown, no prose.`;
           const hintsResult = await processRetrievalHints(mergedStageOutput, mergedResults, currentStage.name);
 
           if (!hintsResult.shouldProceed) {
-            pipelineSubmitOutcomeRef.current = {
+            const pipelineOutcome = recordPipelineSubmitOutcome({
               status: 'review_required',
               message: 'Canon narrowing is required before this stage can continue.',
-            };
+            });
             // Narrowing modal is showing - wait for user action
             // When user responds, they'll be taken to next stage
             console.log(`[Multi-Chunk] Retrieval hints triggered narrowing modal, waiting for user action`);
-            return;
+            return pipelineOutcome;
           }
 
           // Update results after retrieval hints processing
@@ -4206,9 +4209,10 @@ Output: Valid JSON only. No markdown, no prose.`;
           variant: 'validation_summary',
         }));
       }
+      return recordPipelineSubmitOutcome({ status: 'accepted' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error processing AI response';
-      pipelineSubmitOutcomeRef.current = { status: 'error', message };
+      const pipelineOutcome = recordPipelineSubmitOutcome({ status: 'error', message });
       console.error('[handleSubmit] Error handling AI response:', err);
       const rawSnippet = typeof aiResponse === 'string' ? aiResponse.slice(0, 500) : '';
       const stageName = STAGES[currentStageIndex]?.name ?? 'Unknown stage';
@@ -4221,7 +4225,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         rawSnippet,
       }));
       applyWorkflowUiTransition(buildWorkflowErrorUiTransition());
-      return;
+      return pipelineOutcome;
     }
   };
 

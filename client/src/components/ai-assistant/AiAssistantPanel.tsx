@@ -899,7 +899,6 @@ export default function AiAssistantPanel() {
         stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
       });
       setExtractedPayload(sanitizedPayload);
-      applyStagePatch(confirmedStageKey, sanitizedPayload);
       let pipelineResult: { status: 'accepted' | 'review_required' | 'error'; message?: string } = {
         status: 'accepted',
       };
@@ -911,6 +910,8 @@ export default function AiAssistantPanel() {
           requestId: body.requestId,
           stageRunId: body.stageRunId,
         });
+      } else {
+        applyStagePatch(confirmedStageKey, sanitizedPayload);
       }
 
       if (pipelineResult.status !== 'accepted') {
