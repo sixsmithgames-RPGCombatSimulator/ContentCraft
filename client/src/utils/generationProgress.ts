@@ -198,6 +198,73 @@ function compactFactpack(
   };
 }
 
+function compactGenerationConfig(config: GenerationConfig, aggressive: boolean): GenerationConfig {
+  return {
+    ...config,
+    prompt: typeof config.prompt === 'string'
+      ? truncateString(config.prompt, aggressive ? 2_000 : 8_000)
+      : config.prompt,
+  };
+}
+
+function compactMultiChunkState(
+  multiChunkState: MultiChunkState,
+  aggressive: boolean,
+): MultiChunkState {
+  return {
+    ...multiChunkState,
+    factGroups: Array.isArray(multiChunkState.factGroups)
+      ? compactUnknown(multiChunkState.factGroups, {
+        maxDepth: aggressive ? 2 : 3,
+        maxArrayItems: aggressive ? 8 : 20,
+        maxObjectKeys: aggressive ? 8 : 16,
+        maxStringChars: aggressive ? 200 : 500,
+      }) as MultiChunkState['factGroups']
+      : multiChunkState.factGroups,
+  };
+}
+
+function compactWorkflowRunState(
+  runState: GenerationRunState | undefined,
+  aggressive: boolean,
+): GenerationRunState | undefined {
+  if (!runState) {
+    return runState;
+  }
+
+  return {
+    ...runState,
+    stageSequence: runState.stageSequence.slice(0, aggressive ? 12 : 24),
+    stageLabels: Object.fromEntries(
+      Object.entries(runState.stageLabels).slice(0, aggressive ? 12 : 24),
+    ),
+    attempts: runState.attempts.slice(-(aggressive ? 8 : 16)).map((attempt) => ({
+      ...attempt,
+      error: typeof attempt.error === 'string' ? truncateString(attempt.error, MAX_ERROR_MESSAGE_CHARS) : attempt.error,
+      warnings: Array.isArray(attempt.warnings)
+        ? attempt.warnings.slice(0, aggressive ? 4 : 8).map((warning) => truncateString(warning, 400))
+        : attempt.warnings,
+      retrySource: attempt.retrySource
+        ? {
+          ...attempt.retrySource,
+          summary: truncateString(attempt.retrySource.summary, aggressive ? 300 : 800),
+          label: truncateString(attempt.retrySource.label, 200),
+          userReason: typeof attempt.retrySource.userReason === 'string'
+            ? truncateString(attempt.retrySource.userReason, aggressive ? 300 : 800)
+            : attempt.retrySource.userReason,
+        }
+        : attempt.retrySource,
+    })),
+    warnings: runState.warnings.slice(0, aggressive ? 8 : 16).map((warning) => truncateString(warning, 400)),
+    retrieval: {
+      ...runState.retrieval,
+      warningMessage: typeof runState.retrieval.warningMessage === 'string'
+        ? truncateString(runState.retrieval.warningMessage, aggressive ? 300 : 800)
+        : runState.retrieval.warningMessage,
+    },
+  };
+}
+
 function compactCompiledStageRequest(
   request: AiCompiledStageRequest | undefined,
   aggressive: boolean,
@@ -270,6 +337,8 @@ function compactStageChunkState(
 export function prepareProgressForPersistence(session: GenerationProgress): GenerationProgress {
   const buildPersisted = (aggressive: boolean): GenerationProgress => ({
     ...session,
+    config: compactGenerationConfig(session.config, aggressive),
+    multiChunkState: compactMultiChunkState(session.multiChunkState, aggressive),
     progress: compactProgressEntries(session.progress, {
       maxEntries: aggressive ? MAX_PROGRESS_ENTRIES_AGGRESSIVE : MAX_PROGRESS_ENTRIES,
       maxPromptChars: aggressive ? MAX_PROMPT_CHARS_AGGRESSIVE : MAX_PROMPT_CHARS,
@@ -277,6 +346,7 @@ export function prepareProgressForPersistence(session: GenerationProgress): Gene
     }),
     stageResults: compactStageResults(session.stageResults, aggressive),
     factpack: compactFactpack(session.factpack, aggressive),
+    workflowRunState: compactWorkflowRunState(session.workflowRunState, aggressive),
     compiledStageRequest: compactCompiledStageRequest(session.compiledStageRequest, aggressive),
     stageChunkState: compactStageChunkState(session.stageChunkState, aggressive),
     liveMapSpaces: compactUnknown(session.liveMapSpaces, {
@@ -538,6 +608,10 @@ export async function saveProgressToFile(
   const persistedSession = prepareProgressForPersistence(session);
   const originalChars = estimateJsonChars(session);
   const persistedChars = estimateJsonChars(persistedSession);
+  const requestChars = estimateJsonChars({
+    filename: fn,
+    data: persistedSession,
+  });
 
   try {
     if (persistedChars < originalChars) {
@@ -556,13 +630,19 @@ export async function saveProgressToFile(
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to save progress: ${response.statusText}`);
+      throw new Error(`Failed to save progress: ${response.status} ${response.statusText} (requestChars=${requestChars}, sessionChars=${persistedChars}, originalChars=${originalChars})`);
     }
 
     const result = await response.json();
     return result.filepath || fn;
   } catch (error) {
-    console.error('Error saving progress:', error);
+    console.error('[Progress] Error saving progress:', {
+      sessionId: session.sessionId,
+      requestChars,
+      persistedChars,
+      originalChars,
+      error,
+    });
     throw error;
   }
 }
