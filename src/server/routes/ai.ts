@@ -1014,6 +1014,21 @@ function buildSpellcastingSemanticCorrectionPrompt(basePrompt: string, issues: s
   });
 }
 
+function buildContractCorrectionPrompt(
+  basePrompt: string,
+  stageKey: string,
+  validationErrors: string,
+  requiredFields: string[],
+): string {
+  const issues = validationErrors.split(/;\s*/).filter((issue) => issue.trim().length > 0);
+
+  if (stageKey === 'spellcasting') {
+    return buildSpellcastingSemanticCorrectionPrompt(basePrompt, issues);
+  }
+
+  return buildCorrectionPrompt(basePrompt, issues, { requiredFields });
+}
+
 function shouldOfferAutomaticSchemaCorrectionRetry(body: GeminiRequestBody): boolean {
   return getCorrectionAttemptCount(body) < MAX_SCHEMA_CORRECTION_ATTEMPTS;
 }
@@ -1666,12 +1681,45 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
       const contractValidation = validateSharedWorkflowStageContractPayload(body.stageId, prunedPayload, generatorType);
       if (contractValidation.ok === false) {
         const failure = contractValidation;
+
+        const scopedDefinition = getWorkflowStageDefinition(resolveWorkflowContentType(generatorType), body.stageId)
+          ?? getWorkflowStageDefinition(resolveWorkflowContentType(generatorType), stageKey);
+        const requiredFields = scopedDefinition?.contract?.requiredKeys
+          ? [...scopedDefinition.contract.requiredKeys]
+          : [];
+
+        if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
+          const correctionPrompt = buildContractCorrectionPrompt(body.prompt, stageKey, failure.error, requiredFields);
+          return respondWithWorkflowFailure(422, {
+            type: 'INVALID_RESPONSE',
+            message: stageKey === 'spellcasting'
+              ? 'Spellcasting response used the wrong field structure. Retrying automatically with repair instructions.'
+              : `${body.stageId} returned malformed structured data. Retrying automatically with repair instructions.`,
+            retryable: true,
+            outcome: 'retry_required',
+            allowedKeyCount: allowedKeys.length,
+            rawAllowedKeyCount,
+            retryContext: {
+              reason: 'contract_validation_failed',
+              retryable: true,
+              correctionPrompt,
+            },
+          });
+        }
+
         return respondWithWorkflowFailure(422, {
           type: 'INVALID_RESPONSE',
-          message: failure.error,
+          message: stageKey === 'spellcasting'
+            ? 'Spellcasting response still used the wrong field structure after automatic repair. Review required before retrying.'
+            : `${body.stageId} returned malformed structured data after automatic repair. Review required before retrying.`,
           retryable: false,
+          outcome: 'review_required',
           allowedKeyCount: allowedKeys.length,
           rawAllowedKeyCount,
+          retryContext: {
+            reason: 'contract_validation_failed_after_correction',
+            retryable: false,
+          },
         });
       }
 
@@ -1924,6 +1972,7 @@ aiRouter.post('/workflow/chat', async (req: Request, res: ExpressResponse) => {
 
 export {
   aiRouter,
+  buildContractCorrectionPrompt,
   buildSchemaCorrectionPrompt,
   buildSpellcastingSemanticCorrectionPrompt,
   evaluateKeywordExtractorCompliance,

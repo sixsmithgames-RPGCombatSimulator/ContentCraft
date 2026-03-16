@@ -50,8 +50,10 @@ interface ReviewAdjustModalProps {
   isOpen: boolean;
   stageName: string;
   stageOutput?: StageOutput | null;
-  onRetry: (answers: Record<string, string>, issuesToAddress: string[]) => void;
+  onRetry: (answers: Record<string, string>, issuesToAddress: string[], additionalDirection: string) => void;
   onAccept: (answers: Record<string, string>) => void;
+  onManualRecovery?: (answers: Record<string, string>, issuesToAddress: string[], additionalDirection: string) => void;
+  onSkipStage?: () => void;
   onClose: () => void;
 }
 
@@ -82,12 +84,15 @@ export default function ReviewAdjustModal({
   stageOutput,
   onRetry,
   onAccept,
+  onManualRecovery,
+  onSkipStage,
   onClose,
 }: ReviewAdjustModalProps) {
   const { isPanelOpen } = useAiAssistant();
   const [proposalAnswers, setProposalAnswers] = useState<Record<string, string>>({});
   const [selectedIssues, setSelectedIssues] = useState<Set<number>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [additionalDirection, setAdditionalDirection] = useState('');
 
   // Reset and initialize state when modal opens or stageOutput changes
   useEffect(() => {
@@ -96,6 +101,7 @@ export default function ReviewAdjustModal({
       setProposalAnswers({});
       setSelectedIssues(new Set());
       setIsSubmitting(false);
+      setAdditionalDirection('');
       return;
     }
 
@@ -104,6 +110,7 @@ export default function ReviewAdjustModal({
       setProposalAnswers({});
       setSelectedIssues(new Set()); // Clear selected issues
       setIsSubmitting(false);
+      setAdditionalDirection('');
     }
   }, [isOpen, stageOutput]);
 
@@ -132,12 +139,7 @@ export default function ReviewAdjustModal({
     setSelectedIssues(newSelected);
   };
 
-  const handleRetry = () => {
-    if (isSubmitting) {
-      return;
-    }
-
-    // Collect all answered proposals
+  const collectProposalAnswers = (): Record<string, string> => {
     const answers: Record<string, string> = {};
     proposals.forEach((proposal, index: number) => {
       const key = proposal.id || proposal.question || `proposal-${index}`;
@@ -146,8 +148,10 @@ export default function ReviewAdjustModal({
         answers[key] = ans;
       }
     });
+    return answers;
+  };
 
-    // Collect selected issues
+  const collectIssuesToAddress = (): string[] => {
     const issuesToAddress: string[] = [];
     criticalIssues.forEach((issue, index: number) => {
       if (selectedIssues.has(index)) {
@@ -157,9 +161,40 @@ export default function ReviewAdjustModal({
         }
       }
     });
+    return issuesToAddress;
+  };
+
+  const handleRetry = () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    const answers = collectProposalAnswers();
+    const issuesToAddress = collectIssuesToAddress();
 
     setIsSubmitting(true);
-    onRetry(answers, issuesToAddress);
+    onRetry(answers, issuesToAddress, additionalDirection.trim());
+  };
+
+  const handleManualRecovery = () => {
+    if (isSubmitting || !onManualRecovery) {
+      return;
+    }
+
+    const answers = collectProposalAnswers();
+    const issuesToAddress = collectIssuesToAddress();
+
+    setIsSubmitting(true);
+    onManualRecovery(answers, issuesToAddress, additionalDirection.trim());
+  };
+
+  const handleSkipStage = () => {
+    if (isSubmitting || !onSkipStage) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    onSkipStage();
   };
 
   const handleAccept = () => {
@@ -189,6 +224,7 @@ export default function ReviewAdjustModal({
     return key in proposalAnswers;
   });
   const canProceed = stageError !== null || (allProposalsAnswered && (criticalIssues.length === 0 || selectedIssues.size > 0));
+  const showFailureRecoveryActions = stageError !== null && (Boolean(onManualRecovery) || Boolean(onSkipStage));
   const panelOffsetClass = isPanelOpen ? 'lg:pr-[24rem]' : '';
   const modalMaxWidthClass = isPanelOpen ? 'max-w-3xl xl:max-w-4xl' : 'max-w-4xl';
 
@@ -227,6 +263,21 @@ export default function ReviewAdjustModal({
                   <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words">{stageOutput.rawResponseSnippet}</pre>
                 </div>
               )}
+            </div>
+          )}
+
+          {stageError && (
+            <div className="border border-amber-300 bg-amber-50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-amber-900 mb-2">Additional guidance for the next attempt</h3>
+              <p className="text-sm text-amber-800 mb-3">
+                Add any clarifications or rewording you want included if you retry or switch to manual recovery.
+              </p>
+              <textarea
+                value={additionalDirection}
+                onChange={(e) => setAdditionalDirection(e.target.value)}
+                placeholder="Example: Keep the same structure, but make the spell lists concrete and valid for a warlock."
+                className="w-full min-h-[120px] px-3 py-2 border border-amber-300 rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
             </div>
           )}
 
@@ -577,6 +628,24 @@ export default function ReviewAdjustModal({
                 {allProposalsAnswered && proposals.length > 0
                   ? 'Accept with Answers & Continue'
                   : 'Accept & Continue'}
+              </button>
+            ) : null}
+            {showFailureRecoveryActions && onSkipStage ? (
+              <button
+                onClick={handleSkipStage}
+                disabled={isSubmitting}
+                className="px-6 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+              >
+                Skip Stage
+              </button>
+            ) : null}
+            {showFailureRecoveryActions && onManualRecovery ? (
+              <button
+                onClick={handleManualRecovery}
+                disabled={!canProceed || isSubmitting}
+                className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+              >
+                Switch to Manual Recovery
               </button>
             ) : null}
             <button

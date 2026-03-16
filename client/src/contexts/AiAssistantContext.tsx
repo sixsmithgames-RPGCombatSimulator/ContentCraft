@@ -19,7 +19,11 @@ import {
   type SetStateAction,
 } from 'react';
 import type { GenerationRunState, WorkflowContentType } from '../../../src/shared/generation/workflowTypes';
-import type { WorkflowExecutionOutcome, WorkflowExecutionRetryContext } from '../../../src/server/services/workflowExecutionService';
+import type {
+  WorkflowExecutionFailureResponse,
+  WorkflowExecutionOutcome,
+  WorkflowExecutionRetryContext,
+} from '../../../src/server/services/workflowExecutionService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -152,6 +156,18 @@ export type SubmitPipelineResponseCallback = (
   metadata?: SubmitPipelineStageMetadata,
 ) => Promise<{ status: 'accepted' | 'review_required' | 'error'; message?: string }>;
 
+export type WorkflowStageFailureCallback = (
+  failure: WorkflowExecutionFailureResponse,
+  metadata?: {
+    displayMessage?: string;
+    stageId?: string;
+    stageKey?: string;
+    workflowType?: string;
+    requestId?: string;
+    stageRunId?: string;
+  },
+) => Promise<{ status: 'review_required' | 'error'; message?: string }>;
+
 export type WorkflowRunStateDispatcher = Dispatch<SetStateAction<GenerationRunState | null>>;
 
 // ─── Context Shape ───────────────────────────────────────────────────────────
@@ -176,6 +192,10 @@ interface AiAssistantContextValue {
   /** Callback the active workflow registers so the panel can trigger the pipeline */
   submitPipelineResponse: SubmitPipelineResponseCallback | null;
   registerSubmitPipelineResponse: (cb: SubmitPipelineResponseCallback | null) => void;
+
+  /** Callback the active workflow registers so the panel can hand off integrated failures for review/manual recovery */
+  workflowStageFailureHandler: WorkflowStageFailureCallback | null;
+  registerWorkflowStageFailureHandler: (cb: WorkflowStageFailureCallback | null) => void;
 
   /** Dispatcher the active workflow registers so the panel can update workflow run-state */
   workflowRunStateDispatcher: WorkflowRunStateDispatcher | null;
@@ -229,6 +249,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const [workflowContext, setWorkflowContext] = useState<AiAssistantWorkflowContext | null>(null);
   const [applyChanges, setApplyChanges] = useState<ApplyChangesCallback | null>(null);
   const [submitPipelineResponse, setSubmitPipelineResponse] = useState<SubmitPipelineResponseCallback | null>(null);
+  const [workflowStageFailureHandler, setWorkflowStageFailureHandler] = useState<WorkflowStageFailureCallback | null>(null);
   const [workflowRunStateDispatcher, setWorkflowRunStateDispatcherState] = useState<WorkflowRunStateDispatcher | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [providerConfig, setProviderConfigState] = useState<AiProviderConfig>(loadProviderConfig);
@@ -245,6 +266,10 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
 
   const registerSubmitPipelineResponse = useCallback((cb: SubmitPipelineResponseCallback | null) => {
     setSubmitPipelineResponse(() => cb);
+  }, []);
+
+  const registerWorkflowStageFailureHandler = useCallback((cb: WorkflowStageFailureCallback | null) => {
+    setWorkflowStageFailureHandler(() => cb);
   }, []);
 
   const registerWorkflowRunStateDispatcher = useCallback((cb: WorkflowRunStateDispatcher | null) => {
@@ -283,6 +308,8 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         registerApplyChanges,
         submitPipelineResponse,
         registerSubmitPipelineResponse,
+        workflowStageFailureHandler,
+        registerWorkflowStageFailureHandler,
         workflowRunStateDispatcher,
         registerWorkflowRunStateDispatcher,
         messages,

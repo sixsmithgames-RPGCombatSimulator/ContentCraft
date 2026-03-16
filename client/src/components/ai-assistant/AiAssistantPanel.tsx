@@ -47,7 +47,6 @@ import ModeSelectionDialog from './ModeSelectionDialog';
 import {
   getStageAttempt,
   hasAcceptedStage,
-  markStageError as markRunStageError,
   upsertStageAttempt,
 } from '../../../../src/shared/generation/workflowRunState';
 
@@ -68,6 +67,14 @@ function getWorkflowFailureDisplayMessage(
   const retryReason = failureBody.workflow?.retryContext?.reason;
   if (retryReason === 'schema_validation_failed_after_correction') {
     return 'The AI returned malformed structured data twice for this stage. Review the stage and retry when ready.';
+  }
+
+  if (retryReason === 'contract_validation_failed_after_correction') {
+    return 'The AI kept returning the wrong JSON field structure for this stage. Review the stage and choose how to continue.';
+  }
+
+  if (retryReason === 'spellcasting_semantic_validation_failed_after_correction') {
+    return 'The AI still could not produce complete spellcasting data after automatic repair. Review the stage and choose how to continue.';
   }
 
   if (retryReason === 'duplicate_retry_signature') {
@@ -246,6 +253,7 @@ export default function AiAssistantPanel() {
     workflowContext,
     applyChanges,
     submitPipelineResponse,
+    workflowStageFailureHandler,
     workflowRunStateDispatcher,
     providerConfig,
     assistMode,
@@ -304,11 +312,13 @@ export default function AiAssistantPanel() {
   const currentRunAttemptStatus = currentRunAttempt?.status || null;
   const currentRunAttemptId = currentRunAttempt?.attemptId || null;
   const currentCompiledRequestId = workflowContext?.compiledStageRequest?.requestId || null;
-  const hasFreshCompiledRequest = Boolean(
+  const currentRunAttemptCompiledRequestId = currentRunAttempt?.compiledRequestId || null;
+  const hasAuthorizedCompiledRequest = Boolean(
     currentCompiledRequestId
-    && currentCompiledRequestId !== (currentRunAttempt?.compiledRequestId || null)
+    && currentRunAttemptStatus === 'compiled'
+    && currentRunAttemptCompiledRequestId === currentCompiledRequestId
   );
-  const activeAttemptId = !hasFreshCompiledRequest ? currentRunAttemptId : null;
+  const activeAttemptId = currentRunAttemptCompiledRequestId === currentCompiledRequestId ? currentRunAttemptId : null;
   const currentRetrySource = currentRunAttempt?.retrySource || null;
   const currentRetryBadge = currentRetrySource ? getWorkflowRetryBadgeLabel(currentRetrySource) : null;
   const currentRetryDetail = currentRetrySource ? getWorkflowRetryDetail(currentRetrySource, 160) : null;
@@ -322,6 +332,7 @@ export default function AiAssistantPanel() {
       const stageKey = options?.stageKey || effectiveStageKey || workflowContext.compiledStageRequest?.stageKey;
       if (!stageKey) return;
       const stageLabel = options?.stageLabel || workflowContext.currentStage || workflowContext.compiledStageRequest?.stageLabel || stageKey;
+      const compiledRequestId = currentCompiledRequestId || workflowContext.compiledStageRequest?.requestId;
       const mappedStatus =
         status === 'sending'
           ? 'sending'
@@ -336,25 +347,19 @@ export default function AiAssistantPanel() {
           : 'accepted';
 
       workflowRunStateDispatcher((prev) => {
-        if (status === 'error') {
-          return markRunStageError(prev, stageKey, stageLabel, options?.error || 'Stage execution failed.', {
-            attemptId: activeAttemptId || undefined,
-            warnings: options?.warnings,
-          });
-        }
-
         return upsertStageAttempt(prev, {
           attemptId: activeAttemptId || undefined,
           stageKey,
           stageLabel,
           status: mappedStatus,
+          compiledRequestId: compiledRequestId || undefined,
           warnings: options?.warnings,
           error: options?.error,
           transport: 'integrated',
         });
       });
     },
-    [workflowRunStateDispatcher, workflowContext, effectiveStageKey, activeAttemptId]
+    [workflowRunStateDispatcher, workflowContext, effectiveStageKey, activeAttemptId, currentCompiledRequestId]
   );
 
   // Reset stageRunId when stage changes (use compiled request as fallback identifier)
@@ -840,19 +845,40 @@ export default function AiAssistantPanel() {
         }
         if (failureBody?.error?.type === 'RATE_LIMIT') {
           const cooldown = typeof failureBody.error.retryAfterMs === 'number' ? Math.max(failureBody.error.retryAfterMs, 5000) : 10_000;
+          const rateLimitMessage = `Rate limited. Auto-retry in ${(cooldown / 1000).toFixed(0)}s.`;
           setRateLimitCooldownMs(cooldown);
           setCooldownEndsAt(Date.now() + cooldown);
-          setStageRunnerError(`Rate limited. Auto-retry in ${(cooldown / 1000).toFixed(0)}s.`);
+          setStageRunnerError(rateLimitMessage);
           setHasAutoStarted(false);
+          setStageRunnerState('error');
+          updateWorkflowRunAttempt('error', {
+            error: rateLimitMessage,
+            stageKey: failedStageKey,
+            stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+          });
         } else {
-          setStageRunnerError(message);
+          let resolvedMessage = message;
+          if (failureBody && workflowStageFailureHandler) {
+            const handledFailure = await workflowStageFailureHandler(failureBody, {
+              displayMessage: message,
+              stageId: failureBody.workflow?.stageId || stageKey,
+              stageKey: failedStageKey,
+              workflowType: failureBody.workflow?.workflowType,
+              requestId: failureBody.requestId,
+              stageRunId: failureBody.stageRunId,
+            });
+            if (handledFailure?.message) {
+              resolvedMessage = handledFailure.message;
+            }
+          }
+          setStageRunnerError(resolvedMessage);
+          setStageRunnerState('error');
+          updateWorkflowRunAttempt('error', {
+            error: resolvedMessage,
+            stageKey: failedStageKey,
+            stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+          });
         }
-        setStageRunnerState('error');
-        updateWorkflowRunAttempt('error', {
-          error: message,
-          stageKey: failedStageKey,
-          stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
-        });
         inFlightRef.current = false;
         return;
       }
@@ -1082,11 +1108,15 @@ export default function AiAssistantPanel() {
       logStageRunnerGate('skip: missing stageRouterKey');
       return;
     }
-    if (currentRunAttemptStatus && currentRunAttemptStatus !== 'compiled' && !hasFreshCompiledRequest) {
-      logStageRunnerGate(`skip: attempt not ready (${currentRunAttemptStatus})`);
+    if (!currentCompiledRequestId) {
+      logStageRunnerGate('skip: awaiting compiled request id');
       return;
     }
-    if (currentCompiledRequestId && lastAttemptedCompiledRequestIdRef.current === currentCompiledRequestId && !hasFreshCompiledRequest) {
+    if (!hasAuthorizedCompiledRequest) {
+      logStageRunnerGate(`skip: attempt not ready (${currentRunAttemptStatus || 'none'})`);
+      return;
+    }
+    if (lastAttemptedCompiledRequestIdRef.current === currentCompiledRequestId) {
       logStageRunnerGate('skip: compiled request already attempted');
       return;
     }
@@ -1103,7 +1133,7 @@ export default function AiAssistantPanel() {
     setHasAutoStarted(true);
     // Add 2.5s initial delay to ensure server-side throttle window is clear
     setTimeout(() => runStageWithGemini(), 2500);
-  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus, hasFreshCompiledRequest, currentCompiledRequestId]);
+  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus, currentCompiledRequestId, hasAuthorizedCompiledRequest]);
 
   // Auto-retry on error with countdown (skip if missing stageRouterKey)
   useEffect(() => {

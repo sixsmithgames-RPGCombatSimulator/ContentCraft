@@ -40,7 +40,7 @@ import { reduceStageInputs } from '../utils/stageInputReducer';
 import { getStageContract as getNpcStageContract } from '../config/npcStageContracts';
 import { getNpcSectionChunks, type NpcSectionChunk } from '../config/npcSectionChunks';
 import type { LiveMapSpace } from '../types/liveMapTypes';
-import { synchronizeReciprocalDoors, type SpaceLike } from '../utils/doorSync';
+import { synchronizeReciprocalDoors } from '../utils/doorSync';
 import { projectApi, API_BASE_URL } from '../services/api';
 import type { Project } from '../types';
 import { useAiAssistant } from '../contexts/AiAssistantContext';
@@ -55,7 +55,6 @@ import {
   getGeneratorStages,
   getWorkflowLabel,
   resolveWorkflowSessionMetadata,
-  resolveWorkflowStageIdentity,
   resolveWorkflowTypeFromConfigType,
   shouldShowLocationMapForStage,
   type GeneratorStage,
@@ -72,75 +71,6 @@ import { buildLocationSpaceRetryGuidance } from '../services/locationSpaceRetry'
 import type { WorkflowPromptNotice } from '../types/workflowUi';
 import { MANUAL_GENERATOR_STAGE_CATALOG } from '../services/manualGeneratorStageCatalog';
 import { buildWorkflowRetryPromptNotice } from '../services/workflowRetryNotice';
-import {
-  assembleFinalWorkflowContent,
-  resolveCompletedWorkflowOutput,
-  restoreUploadedWorkflowContent,
-} from '../services/workflowContentAssembler';
-import {
-  buildResolvedWorkflowFinalContent,
-  buildWorkflowCompletionAlertMessage,
-  getWorkflowCompletionTitle,
-  logWorkflowCompletionResult,
-} from '../services/workflowCompletionPresentation';
-import {
-  extractRetrievalHintKeywords,
-  searchWorkflowCanonByKeywords,
-  type CanonFact,
-  type Factpack,
-} from '../services/workflowCanonRetrieval';
-import {
-  buildWorkflowFilteredFactpack,
-  createEmptyWorkflowCanonNarrowingState,
-  isWorkflowRetrievalHintNarrowing,
-  openInitialWorkflowCanonNarrowing,
-  openRetrievalHintWorkflowCanonNarrowing,
-  updateWorkflowCanonNarrowingSearch,
-  type WorkflowCanonFactSelection,
-  type WorkflowCanonNarrowingState,
-} from '../services/workflowCanonNarrowing';
-import {
-  deduplicateWorkflowFactpack as deduplicateFactpack,
-  formatWorkflowCanonFacts as formatCanonFacts,
-  groupWorkflowFacts as groupFactsIntelligently,
-  mergeWorkflowFactpacks as mergeFactpacks,
-  type WorkflowFactGroup as FactGroup,
-} from '../services/workflowFactpack';
-import {
-  buildWorkflowChunkInfo,
-  buildWorkflowFactGroupFactpack,
-  closeWorkflowChunkingModal,
-  createEmptyWorkflowChunkingState,
-  isNpcSectionWorkflowChunking,
-  openFactWorkflowChunking,
-  openNpcSectionWorkflowChunking,
-  resetWorkflowChunkingState,
-  type WorkflowChunkInfo,
-  type WorkflowChunkingState,
-} from '../services/workflowChunking';
-import {
-  getNextWorkflowFactChunkStep,
-  getNextWorkflowNpcSectionStep,
-  mergeWorkflowChunkOutputs,
-  mergeWorkflowNpcSections,
-} from '../services/workflowMultiPartRuntime';
-import { buildWorkflowStageChunkProgress } from '../services/workflowStageChunkProgress';
-import {
-  buildWorkflowStageChunkInfoForIndex,
-  getNextWorkflowStageChunkStep,
-  mergeWorkflowStageChunks,
-} from '../services/workflowStageChunkRuntime';
-import {
-  buildWorkflowStageErrorOutput,
-  filterAnsweredWorkflowProposals,
-  prepareWorkflowStageForReview,
-  type WorkflowStageProposal,
-} from '../services/workflowStageReview';
-import {
-  buildWorkflowCompletionResult,
-  getWorkflowStageProgression,
-} from '../services/workflowStageTransition';
-import { resolveWorkflowStageContinuation } from '../services/workflowStageContinuation';
 import {
   buildWorkflowAdvancePlan,
   buildWorkflowCanonContinuationPlan,
@@ -195,6 +125,74 @@ import {
   updateRetrievalStatus,
 } from '../../../src/shared/generation/workflowRunState';
 import type { ExecutionMode, GenerationRunState, WorkflowContentType, WorkflowRetrySource } from '../../../src/shared/generation/workflowTypes';
+import type { WorkflowExecutionFailureResponse } from '../../../src/server/services/workflowExecutionService';
+
+import {
+  assembleFinalWorkflowContent,
+  resolveCompletedWorkflowOutput,
+  restoreUploadedWorkflowContent,
+} from '../services/workflowContentAssembler';
+import {
+  buildResolvedWorkflowFinalContent,
+  buildWorkflowCompletionAlertMessage,
+  logWorkflowCompletionResult,
+} from '../services/workflowCompletionPresentation';
+import {
+  extractRetrievalHintKeywords,
+  searchWorkflowCanonByKeywords,
+  type CanonFact,
+  type Factpack,
+} from '../services/workflowCanonRetrieval';
+import {
+  buildWorkflowFilteredFactpack,
+  createEmptyWorkflowCanonNarrowingState,
+  isWorkflowRetrievalHintNarrowing,
+  openInitialWorkflowCanonNarrowing,
+  openRetrievalHintWorkflowCanonNarrowing,
+  updateWorkflowCanonNarrowingSearch,
+  type WorkflowCanonFactSelection,
+  type WorkflowCanonNarrowingState,
+} from '../services/workflowCanonNarrowing';
+import {
+  formatWorkflowCanonFacts as formatCanonFacts,
+  groupWorkflowFacts as groupFactsIntelligently,
+  mergeWorkflowFactpacks as mergeFactpacks,
+  type WorkflowFactGroup as FactGroup,
+} from '../services/workflowFactpack';
+import {
+  buildWorkflowChunkInfo,
+  buildWorkflowFactGroupFactpack,
+  closeWorkflowChunkingModal,
+  createEmptyWorkflowChunkingState,
+  isNpcSectionWorkflowChunking,
+  openFactWorkflowChunking,
+  openNpcSectionWorkflowChunking,
+  resetWorkflowChunkingState,
+  type WorkflowChunkInfo,
+  type WorkflowChunkingState,
+} from '../services/workflowChunking';
+import {
+  getNextWorkflowFactChunkStep,
+  getNextWorkflowNpcSectionStep,
+  mergeWorkflowChunkOutputs,
+  mergeWorkflowNpcSections,
+} from '../services/workflowMultiPartRuntime';
+import { buildWorkflowStageChunkProgress } from '../services/workflowStageChunkProgress';
+import {
+  buildWorkflowStageChunkInfoForIndex,
+  mergeWorkflowStageChunks,
+} from '../services/workflowStageChunkRuntime';
+import {
+  buildWorkflowStageErrorOutput,
+  filterAnsweredWorkflowProposals,
+  prepareWorkflowStageForReview,
+  type WorkflowStageProposal,
+} from '../services/workflowStageReview';
+import {
+  buildWorkflowCompletionResult,
+  getWorkflowStageProgression,
+} from '../services/workflowStageTransition';
+import { resolveWorkflowStageContinuation } from '../services/workflowStageContinuation';
 
 type JsonRecord = Record<string, unknown>;
 type StageResults = Record<string, JsonRecord>;
@@ -281,12 +279,6 @@ const getLocationParentStructure = (source: StageResults | null | undefined): Pa
   };
 };
 
-const getEmbeddedObject = (source: JsonRecord | null | undefined, key: string, nestedKey: string): JsonRecord | undefined => {
-  const parent = getObject(source, key);
-  if (!parent) return undefined;
-  return getObject(parent, nestedKey);
-};
-
 const getJsonRecordList = (value: unknown): JsonRecord[] => {
   if (Array.isArray(value)) {
     return value.filter(isRecord);
@@ -298,12 +290,6 @@ const getJsonRecordList = (value: unknown): JsonRecord[] => {
 };
 
 const setStageArrayValue = <T extends JsonRecord>(items: T[]): JsonRecord => ({ items });
-
-const getObject = (source: JsonRecord | null | undefined, key: string): JsonRecord | undefined => {
-  if (!source) return undefined;
-  const value = source[key];
-  return isRecord(value) ? value : undefined;
-};
 
 const asJsonRecordArray = (value: unknown): JsonRecord[] =>
   Array.isArray(value) ? value.filter(isRecord) : [];
@@ -752,6 +738,7 @@ export default function ManualGenerator() {
     setWorkflowContext,
     registerApplyChanges,
     registerSubmitPipelineResponse,
+    registerWorkflowStageFailureHandler,
     registerWorkflowRunStateDispatcher,
     assistMode,
     setAssistMode,
@@ -1019,6 +1006,7 @@ export default function ManualGenerator() {
     return outcome;
   };
   const acceptPipelineSubmitOutcome = (): PipelineSubmitOutcome => recordPipelineSubmitOutcome({ status: 'accepted' });
+  const activeStageName = STAGES[currentStageIndex]?.name || null;
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
@@ -1056,6 +1044,46 @@ export default function ManualGenerator() {
       }
     };
   }, [registerSubmitPipelineResponse]); // Rely on ref to avoid infinite dependency loops
+
+  useEffect(() => {
+    const handleWorkflowStageFailure = async (
+      _failure: WorkflowExecutionFailureResponse,
+      metadata?: {
+        displayMessage?: string;
+        stageId?: string;
+        stageKey?: string;
+        workflowType?: string;
+        requestId?: string;
+        stageRunId?: string;
+      },
+    ): Promise<{ status: 'review_required' | 'error'; message?: string }> => {
+      const stageName = activeStageName || metadata?.stageId || metadata?.stageKey || 'Current Stage';
+      const displayMessage = typeof metadata?.displayMessage === 'string' && metadata.displayMessage.trim().length > 0
+        ? metadata.displayMessage.trim()
+        : 'This stage returned data the app could not accept automatically. Review the stage and choose how to continue.';
+
+      setError(displayMessage);
+      setLastStageError({ stage: stageName, message: displayMessage, rawSnippet: undefined });
+      setCurrentStageOutput(buildWorkflowStageErrorOutput({
+        stageName,
+        errorMessage: displayMessage,
+      }));
+      setShowReviewModal(true);
+      setSessionStatus('awaiting_user_decisions');
+
+      return { status: 'review_required', message: displayMessage };
+    };
+
+    if (registerWorkflowStageFailureHandler) {
+      registerWorkflowStageFailureHandler(handleWorkflowStageFailure);
+    }
+
+    return () => {
+      if (registerWorkflowStageFailureHandler) {
+        registerWorkflowStageFailureHandler(null);
+      }
+    };
+  }, [activeStageName, registerWorkflowStageFailureHandler]);
   // ─── End AI Assistant Integration
 
   const resetPipelineState = () => {
@@ -4320,7 +4348,85 @@ Output: Valid JSON only. No markdown, no prose.`;
     }
   };
 
-  const handleRetryWithAnswers = (answers: Record<string, string>, issuesToAddress: string[]) => {
+  const buildRetryAdditionalInstructions = (
+    stageForRetry: Stage | undefined,
+    answers: Record<string, string>,
+    issuesToAddress: string[],
+    additionalDirection?: string,
+  ): string => {
+    const trimmedDirection = typeof additionalDirection === 'string' ? additionalDirection.trim() : '';
+
+    if (stageForRetry?.name === 'Planner') {
+      const fixList = issuesToAddress.length > 0
+        ? [...issuesToAddress]
+        : ['Return proposals as []', 'Return flags_echo'];
+
+      if (trimmedDirection.length > 0) {
+        fixList.push(`Honor this user direction while revising the stage: ${trimmedDirection}`);
+      }
+
+      return JSON.stringify({ fix: fixList }, null, 2);
+    }
+
+    let additionalInstructions = 'ADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY):\n\n';
+
+    if (trimmedDirection.length > 0) {
+      additionalInstructions += 'USER DIRECTION FOR THIS NEXT ATTEMPT:\n';
+      additionalInstructions += `${trimmedDirection}\n\n`;
+      additionalInstructions += 'Treat this direction as authoritative when revising the stage output.\n\n';
+    }
+
+    if (Object.keys(answers).length > 0) {
+      additionalInstructions += 'NEW ANSWERS TO PROPOSALS:\n';
+      Object.entries(answers).forEach(([question, answer]) => {
+        additionalInstructions += `Q: ${question}\nA: ${answer}\n\n`;
+      });
+      additionalInstructions += 'Use these answers as final decisions. Do not ask follow-up questions about the same topics.\n\n';
+    }
+
+    if (issuesToAddress.length > 0) {
+      additionalInstructions += 'CRITICAL ISSUES YOU MUST FIX IN THIS RESPONSE:\n';
+      issuesToAddress.forEach((issue, i) => {
+        additionalInstructions += `${i + 1}. ${issue}\n`;
+      });
+      additionalInstructions += '\nRevise your response to fix every listed issue completely.\n';
+      additionalInstructions += 'Do not repeat any missing field, empty field, placeholder value, or invalid structure described above.\n';
+    }
+
+    if (stageForRetry?.name === 'Creator: Core Details') {
+      additionalInstructions += '\nMANDATORY OUTPUT FOR CORE DETAILS (no omissions allowed):\n';
+      additionalInstructions += '- Provide ALL personality fields as non-empty arrays: personality_traits, ideals, bonds, flaws, goals, fears, quirks, voice_mannerisms, hooks.\n';
+      additionalInstructions += '- Do NOT collapse into hooks-only or summaries. Each field must be distinct and populated.\n';
+      additionalInstructions += '- If any field was missing previously, you MUST supply it now with concrete content. Placeholders/empty values are not acceptable.\n';
+    }
+
+    if (stageForRetry?.name === 'Creator: Spellcasting') {
+      additionalInstructions += '\nMANDATORY OUTPUT FOR SPELLCASTING:\n';
+      additionalInstructions += '- Provide spellcasting_ability, spell_attack_bonus, spell_save_dc, and spell_slots when the class can cast spells.\n';
+      additionalInstructions += '- Include at least one populated spell list: prepared_spells, always_prepared_spells, innate_spells, or spells_known.\n';
+      additionalInstructions += '- Warlocks and other known casters must include spells_known as an array of concrete spell names.\n';
+      additionalInstructions += '- Do NOT return empty scaffolding or omit required spell data.\n';
+    }
+
+    if (stageForRetry?.name === 'Creator: Relationships') {
+      additionalInstructions += '\nMANDATORY OUTPUT FOR RELATIONSHIPS:\n';
+      additionalInstructions += '- Provide concrete allies, enemies, organizations, family, or contacts tied to this character.\n';
+      additionalInstructions += '- Do NOT return only generic personality repetition or empty arrays.\n';
+    }
+
+    additionalInstructions += '\nFINAL RETRY INSTRUCTIONS:\n';
+    additionalInstructions += '- Follow the required output format exactly.\n';
+    additionalInstructions += '- Return the same JSON object shape required for this stage.\n';
+    additionalInstructions += '- Replace missing, empty, or invalid fields in place. Do not add new keys.\n';
+    additionalInstructions += '- Fix every listed issue in this response.\n';
+    additionalInstructions += '- Fill every required field with concrete content.\n';
+    additionalInstructions += '- Do not return placeholders, empty scaffolding, or unrelated extra structures.\n';
+    additionalInstructions += '- Do not repeat the previous invalid response.\n';
+
+    return additionalInstructions;
+  };
+
+  const handleRetryWithAnswers = (answers: Record<string, string>, issuesToAddress: string[], additionalDirection = '') => {
     // Close review modal
     setError(null);
     setLastStageError(null);
@@ -4336,63 +4442,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     console.log('[ManualGenerator] Accumulated answers after retry:', updatedAnswers);
 
     const stageForRetry = STAGES[currentStageIndex];
-
-    // Planner retries must stay tiny: no failed output echo, no QA restatement
-    let additionalInstructions = '';
-    if (stageForRetry?.name === 'Planner') {
-      const fixList = issuesToAddress.length > 0
-        ? issuesToAddress
-        : ['Return proposals as []', 'Return flags_echo'];
-      additionalInstructions = JSON.stringify({ fix: fixList }, null, 2);
-    } else {
-      additionalInstructions = 'ADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY):\n\n';
-
-      if (Object.keys(answers).length > 0) {
-        additionalInstructions += 'NEW ANSWERS TO PROPOSALS:\n';
-        Object.entries(answers).forEach(([question, answer]) => {
-          additionalInstructions += `Q: ${question}\nA: ${answer}\n\n`;
-        });
-        additionalInstructions += 'Use these answers as final decisions. Do not ask follow-up questions about the same topics.\n\n';
-      }
-
-      if (issuesToAddress.length > 0) {
-        additionalInstructions += 'CRITICAL ISSUES YOU MUST FIX IN THIS RESPONSE:\n';
-        issuesToAddress.forEach((issue, i) => {
-          additionalInstructions += `${i + 1}. ${issue}\n`;
-        });
-        additionalInstructions += '\nRevise your response to fix every listed issue completely.\n';
-        additionalInstructions += 'Do not repeat any missing field, empty field, placeholder value, or invalid structure described above.\n';
-      }
-
-      // Stage-specific hard requirements for retries (keep minimal to avoid prompt bloat)
-      if (stageForRetry?.name === 'Creator: Core Details') {
-        additionalInstructions += '\nMANDATORY OUTPUT FOR CORE DETAILS (no omissions allowed):\n';
-        additionalInstructions += '- Provide ALL personality fields as non-empty arrays: personality_traits, ideals, bonds, flaws, goals, fears, quirks, voice_mannerisms, hooks.\n';
-        additionalInstructions += '- Do NOT collapse into hooks-only or summaries. Each field must be distinct and populated.\n';
-        additionalInstructions += '- If any field was missing previously, you MUST supply it now with concrete content. Placeholders/empty values are not acceptable.\n';
-      }
-
-      if (stageForRetry?.name === 'Creator: Spellcasting') {
-        additionalInstructions += '\nMANDATORY OUTPUT FOR SPELLCASTING:\n';
-        additionalInstructions += '- Provide spellcasting_ability, spells_known, and spell_slots if the class can cast spells.\n';
-        additionalInstructions += '- Do NOT return empty scaffolding or omit required spell data.\n';
-      }
-
-      if (stageForRetry?.name === 'Creator: Relationships') {
-        additionalInstructions += '\nMANDATORY OUTPUT FOR RELATIONSHIPS:\n';
-        additionalInstructions += '- Provide concrete allies, enemies, organizations, family, or contacts tied to this character.\n';
-        additionalInstructions += '- Do NOT return only generic personality repetition or empty arrays.\n';
-      }
-
-      additionalInstructions += '\nFINAL RETRY INSTRUCTIONS:\n';
-      additionalInstructions += '- Follow the required output format exactly.\n';
-      additionalInstructions += '- Return the same JSON object shape required for this stage.\n';
-      additionalInstructions += '- Replace missing, empty, or invalid fields in place. Do not add new keys.\n';
-      additionalInstructions += '- Fix every listed issue in this response.\n';
-      additionalInstructions += '- Fill every required field with concrete content.\n';
-      additionalInstructions += '- Do not return placeholders, empty scaffolding, or unrelated extra structures.\n';
-      additionalInstructions += '- Do not repeat the previous invalid response.\n';
-    }
+    const additionalInstructions = buildRetryAdditionalInstructions(stageForRetry, answers, issuesToAddress, additionalDirection);
 
     const launchPlan: WorkflowStageLaunchPlan = {
       kind: 'show_stage',
@@ -4407,6 +4457,60 @@ Output: Valid JSON only. No markdown, no prose.`;
       overrideDecisions: updatedAnswers,
       additionalGuidance: additionalInstructions,
     });
+  };
+
+  const handleManualRecoveryFromReview = (answers: Record<string, string>, issuesToAddress: string[], additionalDirection = '') => {
+    if (currentStageIndex < 0 || !config) {
+      return;
+    }
+
+    setAssistMode('manual');
+    setError(null);
+    setLastStageError(null);
+    applyWorkflowUiTransition(buildWorkflowRetryUiTransition());
+
+    const updatedAnswers = {
+      ...accumulatedAnswers,
+      ...answers,
+    };
+    setAccumulatedAnswers(updatedAnswers);
+
+    const stageForRetry = STAGES[currentStageIndex];
+    const additionalInstructions = buildRetryAdditionalInstructions(stageForRetry, answers, issuesToAddress, additionalDirection);
+    const launchPlan: WorkflowStageLaunchPlan = {
+      kind: 'show_stage',
+      stageIndex: currentStageIndex,
+      stageResults,
+      factpack,
+      chunkInfo: currentChunkInfo || undefined,
+    };
+
+    executeWorkflowStageLaunch(launchPlan, {
+      runtimeConfig: config,
+      overrideDecisions: updatedAnswers,
+      additionalGuidance: additionalInstructions,
+      promptOverrides: {
+        promptNotice: {
+          title: 'Manual recovery mode',
+          message: 'Copy this stage prompt into your AI tool of choice. You can reword it before sending, then paste the JSON response back here to resume the workflow.',
+          tone: 'warning',
+        },
+        retrySource: currentStageRetrySource,
+      },
+    });
+  };
+
+  const handleSkipStageFromReview = () => {
+    setAssistMode('manual');
+    setError(null);
+    setLastStageError(null);
+    applyWorkflowUiTransition({
+      showReviewModal: false,
+      sessionStatus: 'running',
+      clearStageOutput: true,
+    });
+    _setSkipMode(true);
+    setModalMode('input');
   };
 
   const handleAcceptWithIssues = (answers: Record<string, string>) => {
@@ -5499,6 +5603,8 @@ Output: Valid JSON only. No markdown, no prose.`;
         stageOutput={currentStageOutput}
         onRetry={handleRetryWithAnswers}
         onAccept={handleAcceptWithIssues}
+        onManualRecovery={handleManualRecoveryFromReview}
+        onSkipStage={handleSkipStageFromReview}
         onClose={() => setShowReviewModal(false)}
       />
 

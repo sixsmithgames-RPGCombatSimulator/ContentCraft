@@ -140,6 +140,15 @@ export function shouldAutoRetryIntegratedFailure(
     return false;
   }
 
+  if (failureBody.workflow?.outcome !== 'retry_required') {
+    return false;
+  }
+
+  const correctionPrompt = failureBody.workflow?.retryContext?.correctionPrompt;
+  if (typeof correctionPrompt !== 'string' || correctionPrompt.trim().length === 0) {
+    return false;
+  }
+
   return Boolean(failureBody.error?.retryable);
 }
 

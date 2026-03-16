@@ -292,6 +292,59 @@ describe('workflow transport', () => {
     })).toBe(true);
   });
 
+  it('does not auto-retry retry-required failures when the correction prompt is missing', () => {
+    expect(shouldAutoRetryIntegratedFailure({
+      ok: false,
+      requestId: 'req-5b',
+      stageRunId: 'run-5b',
+      workflow: {
+        stageId: 'character_build',
+        stageKey: 'character_build',
+        workflowType: 'npc',
+        outcome: 'retry_required',
+        accepted: false,
+        allowedKeyCount: 8,
+        rawAllowedKeyCount: 8,
+        retryContext: {
+          reason: 'schema_validation_failed',
+          retryable: true,
+        },
+      },
+      error: {
+        type: 'INVALID_RESPONSE',
+        message: 'character_build returned malformed structured data. Review required before retrying.',
+        retryable: true,
+      },
+    })).toBe(false);
+  });
+
+  it('does not auto-retry retry-required failures when the correction prompt is blank', () => {
+    expect(shouldAutoRetryIntegratedFailure({
+      ok: false,
+      requestId: 'req-5c',
+      stageRunId: 'run-5c',
+      workflow: {
+        stageId: 'character_build',
+        stageKey: 'character_build',
+        workflowType: 'npc',
+        outcome: 'retry_required',
+        accepted: false,
+        allowedKeyCount: 8,
+        rawAllowedKeyCount: 8,
+        retryContext: {
+          reason: 'schema_validation_failed',
+          retryable: true,
+          correctionPrompt: '   ',
+        },
+      },
+      error: {
+        type: 'INVALID_RESPONSE',
+        message: 'character_build returned malformed structured data. Review required before retrying.',
+        retryable: true,
+      },
+    })).toBe(false);
+  });
+
   it('allows auto-retry for repairable spellcasting semantic failures carrying correction prompts', () => {
     expect(shouldAutoRetryIntegratedFailure({
       ok: false,
