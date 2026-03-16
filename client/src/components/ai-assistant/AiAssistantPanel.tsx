@@ -1129,6 +1129,20 @@ export default function AiAssistantPanel() {
       logStageRunnerGate('skip: awaiting compiled request id');
       return;
     }
+    // If we have a compiled request but no compiled attempt recorded yet, sync it now so auto-start can proceed
+    if (!hasAuthorizedCompiledRequest && workflowRunStateDispatcher && workflowContext?.compiledStageRequest) {
+      workflowRunStateDispatcher((prev) =>
+        upsertStageAttempt(prev, {
+          stageKey: effectiveStageKey,
+          stageLabel: workflowContext.currentStage || workflowContext.compiledStageRequest?.stageLabel || effectiveStageKey,
+          status: 'compiled',
+          compiledRequestId: currentCompiledRequestId,
+          transport: assistMode === 'integrated' ? 'integrated' : undefined,
+        }),
+      );
+      logStageRunnerGate('sync: created compiled attempt for current request');
+      return;
+    }
     if (!hasAuthorizedCompiledRequest) {
       logStageRunnerGate(`skip: attempt not ready (${currentRunAttemptStatus || 'none'})`);
       return;
