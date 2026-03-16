@@ -800,16 +800,26 @@ export default function ManualGenerator() {
       return;
     }
 
-    setWorkflowRunState((prev) => syncCurrentStage(
-      prev,
-      runStage.stageKey,
-      runStage.stageLabel,
-      compiledStageRequest.requestId,
-      {
-        transport: getWorkflowExecutionMode(),
-        retrySource: currentStageRetrySource || undefined,
-      },
-    ));
+    const definition = buildWorkflowRunDefinitionFromStages({
+      workflowType,
+      stages: STAGES,
+      executionMode: getWorkflowExecutionMode(),
+      projectId: projectId !== 'default' ? projectId : undefined,
+    });
+
+    setWorkflowRunState((prev) => {
+      const synchronized = syncGenerationRunDefinition(prev, definition);
+      return syncCurrentStage(
+        synchronized,
+        runStage.stageKey,
+        runStage.stageLabel,
+        compiledStageRequest.requestId,
+        {
+          transport: getWorkflowExecutionMode(),
+          retrySource: currentStageRetrySource || undefined,
+        },
+      );
+    });
   }, [compiledStageRequest, config, currentStageIndex, STAGES, assistMode, currentStageRetrySource]);
 
   useEffect(() => {
