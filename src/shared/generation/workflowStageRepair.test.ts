@@ -127,4 +127,29 @@ describe('workflowStageRepair', () => {
     ]);
     expect(validateWorkflowStageContractPayload('character_build', repaired.payload, 'npc')).toEqual({ ok: true });
   });
+
+  it('normalizes spellcasting arrays and slot strings into contract-compliant maps', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'spellcasting',
+      workflowType: 'npc',
+      payload: {
+        spellcasting_ability: 'Charisma',
+        spell_save_dc: 16,
+        spell_attack_bonus: 8,
+        spell_slots: '3 slots at 5th Level',
+        spells_known: ['Eldritch Blast', 'Fog Cloud'],
+        always_prepared_spells: ['Fog Cloud', 'Blur'],
+        innate_spells: ['Conjure Elemental (1/Day via Mystic Arcanum)'],
+      },
+    });
+
+    expect(repaired.payload.spell_slots).toEqual({ '5': 3 });
+    expect(repaired.payload.always_prepared_spells).toEqual({
+      always: ['Fog Cloud', 'Blur'],
+    });
+    expect(repaired.payload.innate_spells).toEqual({
+      special: ['Conjure Elemental (1/Day via Mystic Arcanum)'],
+    });
+    expect(validateWorkflowStageContractPayload('spellcasting', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
 });

@@ -1004,7 +1004,11 @@ function buildSchemaCorrectionPrompt(basePrompt: string, validationErrors: strin
 function buildSpellcastingSemanticCorrectionPrompt(basePrompt: string, issues: string[]): string {
   return buildCorrectionPrompt(basePrompt, issues, {
     extraRules: [
-      'If the NPC is a slot-based caster, include spell_slots with at least one slot.',
+      'If the NPC is a slot-based caster, include spell_slots as an object map with at least one slot (example: {"5": 3}).',
+      'prepared_spells must be an object map from spell level to arrays of spell names.',
+      'always_prepared_spells must be an object map from source to arrays of spell names.',
+      'innate_spells must be an object map from usage to arrays of spell names.',
+      'Do not return bare arrays for prepared_spells, always_prepared_spells, or innate_spells.',
       'Include at least one populated spell list: prepared_spells, always_prepared_spells, innate_spells, or spells_known.',
       'Known casters such as warlocks must include spells_known.',
       'Prepared casters must include prepared_spells or always_prepared_spells.',
@@ -1612,6 +1616,14 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
       }
 
       if (isSpellcastingStage) {
+        const spellcastingRepairResult = repairWorkflowStagePayload({
+          stageIdOrName: body.stageId,
+          workflowType: generatorType,
+          payload: prunedPayload,
+          pruneToContractKeys: false,
+        });
+        prunedPayload = spellcastingRepairResult.payload;
+
         const derived = deriveSpellcastingFromContext(prunedPayload);
         if (Object.keys(derived).length > 0) {
           console.log(`[AI][DERIVED][${body.stageId}]`, { stageRunId: body.stageRunId, keys: Object.keys(derived) });

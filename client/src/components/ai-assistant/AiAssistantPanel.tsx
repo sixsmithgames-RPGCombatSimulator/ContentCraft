@@ -434,10 +434,29 @@ export default function AiAssistantPanel() {
 
   // ─── Handlers ────────────────────────────────────────────────────────────
 
+  const resetIntegratedRunner = useCallback(() => {
+    inFlightRef.current = false;
+    setStageRunId(crypto.randomUUID());
+    setStageRunnerState('idle');
+    setStageRunnerError(null);
+    setExtractedPayload(null);
+    setAutoRetryEligible(false);
+    setHasAutoStarted(false);
+    setRateLimitSecondsLeft(null);
+    setCooldownEndsAt(null);
+    lastAttemptedCompiledRequestIdRef.current = null;
+  }, []);
+
   const handleModeSelection = useCallback((mode: 'integrated' | 'manual') => {
+    resetIntegratedRunner();
     setAssistMode(mode);
     setShowModeDialog(false);
-  }, [setAssistMode]);
+  }, [resetIntegratedRunner, setAssistMode]);
+
+  const handleAssistModeToggle = useCallback(() => {
+    resetIntegratedRunner();
+    setAssistMode(assistMode === 'integrated' ? 'manual' : 'integrated');
+  }, [assistMode, resetIntegratedRunner, setAssistMode]);
 
   const handleTogglePanel = useCallback(() => {
     togglePanel();
@@ -1511,7 +1530,7 @@ export default function AiAssistantPanel() {
               Mode: <span className="font-medium text-gray-700">{assistMode === 'integrated' ? 'Integrated AI' : 'Manual Copy/Paste'}</span>
             </span>
             <button
-              onClick={() => setAssistMode(assistMode === 'integrated' ? 'manual' : 'integrated')}
+              onClick={handleAssistModeToggle}
               className="text-xs text-primary-600 hover:text-primary-800 font-medium transition-colors"
             >
               Switch to {assistMode === 'integrated' ? 'Manual' : 'Integrated'}

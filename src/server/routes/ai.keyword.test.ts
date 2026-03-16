@@ -189,6 +189,8 @@ describe('evaluateKeywordExtractorCompliance', () => {
     expect(prompt).toContain('Return spellcasting JSON.');
     expect(prompt).toContain('No spells provided');
     expect(prompt).toContain('spell_slots must include at least one slot');
+    expect(prompt).toContain('spell_slots as an object map');
+    expect(prompt).toContain('Do not return bare arrays for prepared_spells, always_prepared_spells, or innate_spells.');
     expect(prompt).toContain('Known casters such as warlocks must include spells_known.');
     expect(prompt).toContain('Prepared casters must include prepared_spells or always_prepared_spells.');
   });

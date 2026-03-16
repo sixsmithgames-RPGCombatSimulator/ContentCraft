@@ -2412,7 +2412,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         ? stageContract
         : stageContract
         ? `Allowed keys: ${stageContract.allowedKeys.join(', ')}\nRequired keys: ${stageContract.requiredKeys.join(', ')}${isSpellcastingStageContract
-          ? '\nSpellcasting requirements: include spell_slots for slot-based casters and include at least one populated spell list. Known casters such as warlocks must include spells_known. Prepared casters must include prepared_spells or always_prepared_spells. Do not return only spellcasting_ability, spell_save_dc, and spell_attack_bonus.'
+          ? '\nSpellcasting requirements: spell_slots must be an object map like {"5": 3}. prepared_spells must be an object map like {"1st": ["Armor of Agathys"]}. always_prepared_spells must be an object map like {"Marid": ["Fog Cloud"]}. innate_spells must be an object map like {"1/day": ["Conjure Elemental"]}. Known casters such as warlocks must include spells_known. Do not return bare arrays for prepared_spells, always_prepared_spells, or innate_spells. Do not return only spellcasting_ability, spell_save_dc, and spell_attack_bonus.'
           : ''}`
         : '';
     const packedRequiredKeys =
@@ -4403,6 +4403,8 @@ Output: Valid JSON only. No markdown, no prose.`;
     if (stageForRetry?.name === 'Creator: Spellcasting') {
       additionalInstructions += '\nMANDATORY OUTPUT FOR SPELLCASTING:\n';
       additionalInstructions += '- Provide spellcasting_ability, spell_attack_bonus, spell_save_dc, and spell_slots when the class can cast spells.\n';
+      additionalInstructions += '- spell_slots must be an object map like {"5": 3}, not a sentence like "3 slots at 5th Level".\n';
+      additionalInstructions += '- prepared_spells, always_prepared_spells, and innate_spells must be object maps whose values are arrays of spell names, not bare arrays.\n';
       additionalInstructions += '- Include at least one populated spell list: prepared_spells, always_prepared_spells, innate_spells, or spells_known.\n';
       additionalInstructions += '- Warlocks and other known casters must include spells_known as an array of concrete spell names.\n';
       additionalInstructions += '- Do NOT return empty scaffolding or omit required spell data.\n';

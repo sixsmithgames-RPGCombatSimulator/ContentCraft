@@ -140,7 +140,9 @@ Return JSON with ONLY these keys (if the class can cast spells):
 Rules:
 - Keep values minimal; no descriptions, no extra keys, no nested objects beyond the maps above.
 - If the NPC is a slot-based caster, include spell_slots with at least one slot.
+- spell_slots must be an object map such as { "5": 3 }, not a sentence.
 - Include at least one populated spell list: prepared_spells, always_prepared_spells, innate_spells, or spells_known.
+- prepared_spells, always_prepared_spells, and innate_spells must be object maps whose values are arrays of spell names; do not return bare arrays.
 - Known casters such as warlocks must include spells_known.
 - Prepared casters must include prepared_spells or always_prepared_spells.
 - If a field is not applicable, omit it.

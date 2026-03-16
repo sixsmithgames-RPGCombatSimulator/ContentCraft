@@ -603,6 +603,113 @@ const normalizeSpeedStrings = (value: unknown): Record<string, string> | null =>
   return Object.keys(result).length > 0 ? result : null;
 };
 
+const normalizeSpellListMap = (value: unknown, fallbackKey: string): JsonRecord => {
+  if (isRecord(value)) {
+    const normalizedEntries = Object.entries(value).reduce<JsonRecord>((acc, [key, entryValue]) => {
+      const normalizedKey = coerceNonEmptyString(key);
+      if (!normalizedKey) {
+        return acc;
+      }
+
+      if (Array.isArray(entryValue)) {
+        const normalizedList = normalizeStringArray(entryValue);
+        if (normalizedList.length > 0) {
+          acc[normalizedKey] = normalizedList;
+        }
+        return acc;
+      }
+
+      const singleValue = coerceNonEmptyString(entryValue);
+      if (singleValue) {
+        acc[normalizedKey] = [singleValue];
+      }
+
+      return acc;
+    }, {});
+
+    return normalizedEntries;
+  }
+
+  if (Array.isArray(value)) {
+    const normalizedList = normalizeStringArray(value);
+    return normalizedList.length > 0 ? { [fallbackKey]: normalizedList } : {};
+  }
+
+  const singleValue = coerceNonEmptyString(value);
+  return singleValue ? { [fallbackKey]: [singleValue] } : {};
+};
+
+const normalizeSpellSlotsMap = (value: unknown): JsonRecord => {
+  if (isRecord(value)) {
+    return Object.entries(value).reduce<JsonRecord>((acc, [level, slotCount]) => {
+      const normalizedLevel = coerceNonEmptyString(level);
+      const normalizedCount = coercePositiveInteger(slotCount);
+      if (normalizedLevel && normalizedCount !== undefined) {
+        acc[normalizedLevel] = normalizedCount;
+      }
+      return acc;
+    }, {});
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return {};
+    }
+
+    const slotMatch = trimmed.match(/(\d+)\s*slots?.*?(\d+)(?:st|nd|rd|th)?\s*level/i)
+      ?? trimmed.match(/(\d+)(?:st|nd|rd|th)?\s*level.*?(\d+)\s*slots?/i);
+
+    if (slotMatch) {
+      const first = Number.parseInt(slotMatch[1] ?? '', 10);
+      const second = Number.parseInt(slotMatch[2] ?? '', 10);
+      const count = trimmed.toLowerCase().includes('level') && slotMatch[0] === trimmed && trimmed.match(/slots?.*level/i)
+        ? first
+        : second;
+      const level = trimmed.toLowerCase().includes('level') && slotMatch[0] === trimmed && trimmed.match(/slots?.*level/i)
+        ? second
+        : first;
+
+      if (Number.isFinite(count) && count > 0 && Number.isFinite(level) && level > 0) {
+        return { [String(level)]: count };
+      }
+    }
+  }
+
+  return {};
+};
+
+const normalizeSpellcastingPayload = (payload: JsonRecord): JsonRecord => {
+  const normalized: JsonRecord = { ...payload };
+
+  if (Object.prototype.hasOwnProperty.call(normalized, 'spell_slots')) {
+    normalized.spell_slots = normalizeSpellSlotsMap(normalized.spell_slots);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalized, 'prepared_spells')) {
+    normalized.prepared_spells = normalizeSpellListMap(normalized.prepared_spells, 'prepared');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalized, 'always_prepared_spells')) {
+    normalized.always_prepared_spells = normalizeSpellListMap(normalized.always_prepared_spells, 'always');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalized, 'innate_spells')) {
+    normalized.innate_spells = normalizeSpellListMap(normalized.innate_spells, 'special');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalized, 'spells_known')) {
+    if (Array.isArray(normalized.spells_known)) {
+      normalized.spells_known = normalizeStringArray(normalized.spells_known);
+    } else {
+      const singleValue = coerceNonEmptyString(normalized.spells_known);
+      normalized.spells_known = singleValue ? [singleValue] : [];
+    }
+  }
+
+  return normalized;
+};
+
 export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): WorkflowStageRepairResult {
   const appliedRepairs: string[] = [];
   const contractKey = resolveWorkflowStageContractKey(input.stageIdOrName, input.workflowType);
@@ -628,6 +735,14 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     const normalized = normalizeCharacterBuildPayload(payload);
     if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
       appliedRepairs.push('character_build:normalize');
+    }
+    payload = normalized;
+  }
+
+  if (contractKey === 'spellcasting') {
+    const normalized = normalizeSpellcastingPayload(payload);
+    if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
+      appliedRepairs.push('spellcasting:normalize');
     }
     payload = normalized;
   }
