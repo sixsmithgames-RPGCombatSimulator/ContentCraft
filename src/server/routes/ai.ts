@@ -956,13 +956,62 @@ function getCorrectionAttemptCount(body: GeminiRequestBody): number {
   return Math.trunc(rawAttempt);
 }
 
-function buildSchemaCorrectionPrompt(validationErrors: string, requiredFields: string[]): string {
-  return `Output ONLY valid JSON. NO markdown. NO prose.
+function buildCorrectionPrompt(
+  basePrompt: string,
+  issues: string[],
+  options?: { requiredFields?: string[]; extraRules?: string[] },
+): string {
+  const normalizedIssues = issues
+    .map((issue) => issue.trim())
+    .filter((issue) => issue.length > 0);
+  const retryInstructions = [
+    'ADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY):',
+    '',
+    'CRITICAL ISSUES YOU MUST FIX IN THIS RESPONSE:',
+    ...normalizedIssues.map((issue, index) => `${index + 1}. ${issue}`),
+    '',
+    'Revise your response to fix every listed issue completely.',
+    'Do not repeat any missing field, empty field, placeholder value, or invalid structure described above.',
+    '',
+    'FINAL RETRY INSTRUCTIONS:',
+    '- Follow the required output format exactly.',
+    '- Return the same JSON object shape required for this stage.',
+    '- Replace missing, empty, or invalid fields in place. Do not add new keys.',
+    '- Fix every listed issue in this response.',
+    '- Fill every required field with concrete content.',
+    '- Do not return placeholders, empty scaffolding, or unrelated extra structures.',
+    '- Do not repeat the previous invalid response.',
+    ...((options?.extraRules ?? []).map((rule) => `- ${rule}`)),
+    ...(options?.requiredFields && options.requiredFields.length > 0
+      ? [`- Make sure these required fields are present: ${options.requiredFields.join(', ')}`]
+      : []),
+  ].join('\n');
 
-Your previous response was incomplete. Fix ONLY these missing/invalid fields:
-${validationErrors}
+  const trimmedPrompt = basePrompt.trim();
+  return trimmedPrompt.length > 0
+    ? `${trimmedPrompt}\n\n${retryInstructions}`
+    : retryInstructions;
+}
 
-Make sure to include required fields: ${requiredFields.join(', ')}`;
+function buildSchemaCorrectionPrompt(basePrompt: string, validationErrors: string, requiredFields: string[]): string {
+  return buildCorrectionPrompt(
+    basePrompt,
+    validationErrors.split(/;\s*/).filter((issue) => issue.trim().length > 0),
+    { requiredFields },
+  );
+}
+
+function buildSpellcastingSemanticCorrectionPrompt(basePrompt: string, issues: string[]): string {
+  return buildCorrectionPrompt(basePrompt, issues, {
+    extraRules: [
+      'If the NPC is a slot-based caster, include spell_slots with at least one slot.',
+      'Include at least one populated spell list: prepared_spells, always_prepared_spells, innate_spells, or spells_known.',
+      'Known casters such as warlocks must include spells_known.',
+      'Prepared casters must include prepared_spells or always_prepared_spells.',
+      'Do not return only spellcasting_ability, spell_save_dc, and spell_attack_bonus.',
+    ],
+    requiredFields: ['spellcasting_ability', 'spell_save_dc', 'spell_attack_bonus'],
+  });
 }
 
 function shouldOfferAutomaticSchemaCorrectionRetry(body: GeminiRequestBody): boolean {
@@ -1567,14 +1616,40 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
         });
 
         if (issues.length > 0 || synthesizedHeavy) {
+          const spellcastingIssues = issues.length > 0
+            ? issues
+            : ['Spellcasting output was too synthesized. Return concrete spellcasting data from the requested character context.'];
+
+          if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
+            const correctionPrompt = buildSpellcastingSemanticCorrectionPrompt(body.prompt, spellcastingIssues);
+            return respondWithWorkflowFailure(422, {
+              type: 'INVALID_RESPONSE',
+              message: 'Spellcasting response was incomplete. Retrying automatically with repair instructions.',
+              retryable: true,
+              outcome: 'retry_required',
+              allowedKeyCount: allowedKeys.length,
+              rawAllowedKeyCount,
+              retryContext: {
+                reason: 'spellcasting_semantic_validation_failed',
+                retryable: true,
+                correctionPrompt,
+              },
+            });
+          }
+
           return respondWithWorkflowFailure(422, {
             type: 'INVALID_RESPONSE',
             message: issues.length > 0
-              ? `Spellcasting validation failed: ${issues.join('; ')}`
-              : 'Spellcasting output too synthesized (insufficient raw fields).',
+              ? `Spellcasting validation failed after automatic repair: ${issues.join('; ')}`
+              : 'Spellcasting output too synthesized after automatic repair.',
             retryable: false,
+            outcome: 'review_required',
             allowedKeyCount: allowedKeys.length,
             rawAllowedKeyCount,
+            retryContext: {
+              reason: 'spellcasting_semantic_validation_failed_after_correction',
+              retryable: false,
+            },
           });
         }
       }
@@ -1646,7 +1721,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
         const requiredFields = (validate.schema as any)?.required || [];
 
         if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
-          const correctionPrompt = buildSchemaCorrectionPrompt(validationErrors, requiredFields);
+          const correctionPrompt = buildSchemaCorrectionPrompt(body.prompt, validationErrors, requiredFields);
           return respondWithWorkflowFailure(422, {
             type: 'INVALID_RESPONSE',
             message: `${body.stageId} returned malformed structured data. Retrying automatically with repair instructions.`,
@@ -1850,6 +1925,7 @@ aiRouter.post('/workflow/chat', async (req: Request, res: ExpressResponse) => {
 export {
   aiRouter,
   buildSchemaCorrectionPrompt,
+  buildSpellcastingSemanticCorrectionPrompt,
   evaluateKeywordExtractorCompliance,
   getNormalizedStageKey,
   getStageAllowedKeys,

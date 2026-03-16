@@ -283,6 +283,7 @@ export default function AiAssistantPanel() {
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const stallTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoRetryScheduledRef = useRef<boolean>(false);
+  const lastAttemptedCompiledRequestIdRef = useRef<string | null>(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -365,6 +366,7 @@ export default function AiAssistantPanel() {
       setExtractedPayload(null);
       setHasAutoStarted(false);
       setAutoRetryEligible(false);
+      lastAttemptedCompiledRequestIdRef.current = null;
       return;
     }
     setStageRunId(crypto.randomUUID());
@@ -372,6 +374,7 @@ export default function AiAssistantPanel() {
     setStageRunnerError(null);
     setAutoRetryEligible(false);
     setHasAutoStarted(false);
+    lastAttemptedCompiledRequestIdRef.current = null;
   }, [effectiveStageKey, workflowContext?.compiledStageRequest?.requestId, workflowContext?.compiledStageRequest?.prompt]);
 
   // Avoid hard error when stageRouterKey is temporarily missing; rely on compiled stage key if present
@@ -742,11 +745,13 @@ export default function AiAssistantPanel() {
     }
 
     const stageKey = stageKeyForRun || compiledStageRequest.stageKey;
+    const compiledRequestId = compiledStageRequest.requestId || null;
     const runId = stageRunId || crypto.randomUUID();
     setStageRunId(runId);
     setStageRunnerState('sending');
     setStageRunnerError(null);
     setAutoRetryEligible(false);
+    lastAttemptedCompiledRequestIdRef.current = compiledRequestId;
     updateWorkflowRunAttempt('sending', {
       stageKey,
       stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
@@ -1081,6 +1086,10 @@ export default function AiAssistantPanel() {
       logStageRunnerGate(`skip: attempt not ready (${currentRunAttemptStatus})`);
       return;
     }
+    if (currentCompiledRequestId && lastAttemptedCompiledRequestIdRef.current === currentCompiledRequestId && !hasFreshCompiledRequest) {
+      logStageRunnerGate('skip: compiled request already attempted');
+      return;
+    }
     if (stageRunnerState !== 'idle') {
       logStageRunnerGate(`skip: runner not idle (${stageRunnerState})`);
       return;
@@ -1094,7 +1103,7 @@ export default function AiAssistantPanel() {
     setHasAutoStarted(true);
     // Add 2.5s initial delay to ensure server-side throttle window is clear
     setTimeout(() => runStageWithGemini(), 2500);
-  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus, hasFreshCompiledRequest]);
+  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus, hasFreshCompiledRequest, currentCompiledRequestId]);
 
   // Auto-retry on error with countdown (skip if missing stageRouterKey)
   useEffect(() => {

@@ -196,12 +196,14 @@ function reduceEquipmentInputs(results: StageResults): Record<string, unknown> {
  */
 function reduceSpellcastingInputs(results: StageResults): Record<string, unknown> {
   return {
+    ...getFields(results, 'basic_info', ['name', 'species', 'race', 'alignment', 'background', 'class_levels', 'level']),
+    ...getFields(results, 'creator:_basic_info', ['name', 'species', 'race', 'alignment', 'background', 'class_levels', 'level']),
     ...getFields(results, 'core_details', ['class_levels', 'level']),
     ...getFields(results, 'creator:_core_details', ['class_levels', 'level']),
     ...getFields(results, 'stats', ['ability_scores', 'proficiency_bonus']),
     ...getFields(results, 'creator:_stats', ['ability_scores', 'proficiency_bonus']),
-    ...getFields(results, 'character_build', ['class_features', 'subclass_features']),
-    ...getFields(results, 'creator:_character_build', ['class_features', 'subclass_features']),
+    ...getFields(results, 'character_build', ['class_features', 'subclass_features', 'racial_features', 'feats']),
+    ...getFields(results, 'creator:_character_build', ['class_features', 'subclass_features', 'racial_features', 'feats']),
   };
 }
 

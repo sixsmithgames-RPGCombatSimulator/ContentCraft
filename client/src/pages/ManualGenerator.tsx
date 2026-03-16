@@ -1018,6 +1018,7 @@ export default function ManualGenerator() {
     pipelineSubmitOutcomeRef.current = outcome;
     return outcome;
   };
+  const acceptPipelineSubmitOutcome = (): PipelineSubmitOutcome => recordPipelineSubmitOutcome({ status: 'accepted' });
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
@@ -1031,11 +1032,18 @@ export default function ManualGenerator() {
       console.log('[AI Assistant] Submitting response to pipeline');
       pipelineSubmitOutcomeRef.current = { status: 'accepted' };
       // We just pass the raw text to handleSubmit, which will parse it or we can construct a JSON string
-      if (parsedJson) {
-        return handleSubmitRef.current(JSON.stringify(parsedJson), metadata);
-      } else {
-        return handleSubmitRef.current(rawText, metadata);
+      const pipelineOutcome = parsedJson
+        ? await handleSubmitRef.current(JSON.stringify(parsedJson), metadata)
+        : await handleSubmitRef.current(rawText, metadata);
+
+      if (pipelineOutcome && typeof pipelineOutcome.status === 'string') {
+        return pipelineOutcome;
       }
+
+      return recordPipelineSubmitOutcome({
+        status: 'error',
+        message: 'Pipeline submit did not report a completion outcome.',
+      });
     };
 
     if (registerSubmitPipelineResponse) {
@@ -2362,23 +2370,30 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     // Check if this stage has a minimal contract (new prompt packer system)
     const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
-    const stageContract =
+    const sharedStageContract =
       getWorkflowStageContract(stage.workflowStageKey || stageLookupKey, config?.type) ||
-      getWorkflowStageContract(normalizedStageName, config?.type) ||
+      getWorkflowStageContract(normalizedStageName, config?.type);
+    const stageContract =
+      sharedStageContract ||
       getNpcStageContract(stageLookupKey) ||
       getNpcStageContract(normalizedStageName) ||
       null;
+    const isSpellcastingStageContract = stageLookupKey === 'spellcasting' || normalizedStageName.toLowerCase() === 'spellcasting';
     const packedStageContract =
       typeof stageContract === 'string'
         ? stageContract
         : stageContract
-        ? `Allowed keys: ${stageContract.allowedKeys.join(', ')}\nRequired keys: ${stageContract.requiredKeys.join(', ')}`
+        ? `Allowed keys: ${stageContract.allowedKeys.join(', ')}\nRequired keys: ${stageContract.requiredKeys.join(', ')}${isSpellcastingStageContract
+          ? '\nSpellcasting requirements: include spell_slots for slot-based casters and include at least one populated spell list. Known casters such as warlocks must include spells_known. Prepared casters must include prepared_spells or always_prepared_spells. Do not return only spellcasting_ability, spell_save_dc, and spell_attack_bonus.'
+          : ''}`
         : '';
     const packedRequiredKeys =
       typeof stageContract === 'string'
         ? ''
         : stageContract
-        ? stageContract.requiredKeys.join(', ')
+        ? isSpellcastingStageContract
+          ? 'spellcasting_ability, spell_save_dc, spell_attack_bonus, spell_slots, and at least one populated spell list (prepared_spells, always_prepared_spells, innate_spells, or spells_known)'
+          : stageContract.requiredKeys.join(', ')
         : '';
     // Use packed prompt for ANY stage that has a contract (not just NPC), except subsequent chunks
     const usePackedPrompt = !!stageContract && !isSubsequentChunk;
@@ -3232,9 +3247,10 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     try {
       const currentStage = STAGES[currentStageIndex];
+      const currentStageName: string = currentStage.name;
       const logAi = shouldLogAiPayload();
 
-      if (logAi && currentStage.name !== 'Visual Map') {
+      if (logAi && currentStageName !== 'Visual Map') {
         console.log(`[AI][RAW][${currentStage.name}] (${aiResponse.length} chars)`, aiResponse);
       }
 
@@ -3268,7 +3284,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
       let parsed: JsonRecord = normalizedStageResponse.parsed;
 
-      if (currentStage.name === 'Visual Map') {
+      if (currentStageName === 'Visual Map') {
         console.log('[Visual Map] Processing raw HTML output (no JSON parsing)');
       } else if (logAi) {
         console.log(`[AI][PARSED][${currentStage.name}]`, parsed);
@@ -3328,7 +3344,7 @@ Output: Valid JSON only. No markdown, no prose.`;
             runtimeConfig: config,
             plan: launchPlan,
           });
-          return;
+          return acceptPipelineSubmitOutcome();
         }
 
         console.log(`[Homebrew] All ${homebrewProgress.chunkResults.length} chunks processed. Merging...`);
@@ -3355,7 +3371,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           }
         }, 200);
 
-        return;
+        return acceptPipelineSubmitOutcome();
       }
 
       const reviewPreparation = prepareWorkflowStageForReview({
@@ -3395,10 +3411,10 @@ Output: Valid JSON only. No markdown, no prose.`;
       // Store result
       let newResults: StageResults = {
         ...stageResults,
-        [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: parsed,
+        [currentStageName.toLowerCase().replace(/\s+/g, '_')]: parsed,
       };
 
-      if (config!.type === 'nonfiction' && currentStage.name === 'Purpose') {
+      if (config!.type === 'nonfiction' && currentStageName === 'Purpose') {
         const keywords = toStringArray((parsed as JsonRecord).keywords);
         if (keywords.length > 0) {
           console.log('[ManualGenerator] Extracted keywords:', keywords);
@@ -3416,7 +3432,10 @@ Output: Valid JSON only. No markdown, no prose.`;
             }));
             setModalMode(null);
             await saveStageResults(newResults, currentStageIndex);
-            return;
+            return recordPipelineSubmitOutcome({
+              status: 'review_required',
+              message: 'Canon narrowing is required before this stage can continue.',
+            });
           }
 
           if (currentStageIndex < STAGES.length - 1) {
@@ -3435,12 +3454,13 @@ Output: Valid JSON only. No markdown, no prose.`;
             await saveStageResults(newResults, currentStageIndex);
             executeWorkflowStageNavigation(navigationPlan);
           }
-          return;
+          return acceptPipelineSubmitOutcome();
         }
       }
 
+
       // Special handling for Keyword Extractor stage
-      if (currentStage.name === 'Keyword Extractor') {
+      if (currentStageName === 'Keyword Extractor') {
         // Extract keywords and search canon
         const keywords = toStringArray(parsed.keywords);
         console.log('[ManualGenerator] Extracted keywords:', keywords);
@@ -3484,13 +3504,13 @@ Output: Valid JSON only. No markdown, no prose.`;
           // Show next stage with the NEW factpack
           executeWorkflowStageNavigation(navigationPlan);
         }
-        return; // Exit early for keyword extractor
+        return acceptPipelineSubmitOutcome();
       }
 
       // Check for retrieval_hints from Planner or Creator stages
       // IMPORTANT: Skip retrieval hints processing in multi-chunk mode
       // Process them ONLY after all chunks are merged
-      if ((currentStage.name === 'Planner' || currentStage.name === 'Creator' || (config!.type === 'nonfiction' && (currentStage.name === 'Outline & Structure' || currentStage.name === 'Draft'))) && !isMultiPartGeneration) {
+      if ((currentStageName === 'Planner' || currentStageName === 'Creator' || (config!.type === 'nonfiction' && (currentStageName === 'Outline & Structure' || currentStageName === 'Draft'))) && !isMultiPartGeneration) {
         console.log(`[Retrieval Hints] Processing hints for ${currentStage.name} stage...`);
         const hintsResult = await processRetrievalHints(parsed, newResults, currentStage.name);
 
@@ -3524,10 +3544,10 @@ Output: Valid JSON only. No markdown, no prose.`;
           }));
           executeWorkflowStageNavigation(navigationPlan);
         }
-        return; // Exit early after processing retrieval hints
+        return acceptPipelineSubmitOutcome();
       }
 
-      if (isMultiPartGeneration && (currentStage.name === 'Planner' || currentStage.name === 'Creator' || (config!.type === 'nonfiction' && (currentStage.name === 'Outline & Structure' || currentStage.name === 'Draft')))) {
+      if (isMultiPartGeneration && (currentStageName === 'Planner' || currentStageName === 'Creator' || (config!.type === 'nonfiction' && (currentStageName === 'Outline & Structure' || currentStageName === 'Draft')))) {
         console.log(`[Multi-Chunk] Skipping retrieval hints processing - will process after all chunks merged`);
         // In multi-chunk mode, we'll process retrieval hints after merging all chunks
       }
@@ -3541,7 +3561,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       let effectiveTotalChunks = totalStageChunks;
       let effectiveCurrentChunk = currentStageChunk;
 
-      if (!isStageChunking && currentStage.name === 'Spaces' && config!.type === 'location') {
+      if (!isStageChunking && currentStageName === 'Spaces' && config!.type === 'location') {
         // Check if we have accumulated chunks, indicating we're mid-workflow
         if (accumulatedChunkResults.length > 0) {
           console.warn('[Stage Chunking] ⚠️ Detected accumulated spaces but isStageChunking=false. Re-deriving...');
@@ -3606,7 +3626,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         // before adding space to accumulated results. This allows users to
         // accept, reject, or edit each space before continuing generation.
         // ====================================================================
-        if (currentStage.name === 'Spaces' && config!.type === 'location') {
+        if (currentStageName === 'Spaces' && config!.type === 'location') {
           console.log(`[Space Approval] Showing approval modal for space #${effectiveCurrentChunk + 1}`);
 
           // Store the pending space and show approval modal
@@ -3670,7 +3690,7 @@ Output: Valid JSON only. No markdown, no prose.`;
               executeWorkflowStageLaunch(launchPlan, {
                 runtimeConfig: config!,
               });
-              return;
+              return acceptPipelineSubmitOutcome();
             }
 
             console.log(`[Batch Mode] All ${effectiveTotalChunks} spaces auto-accepted. Finalizing...`);
@@ -3709,7 +3729,7 @@ Output: Valid JSON only. No markdown, no prose.`;
                 }),
               }));
             }
-            return;
+            return acceptPipelineSubmitOutcome();
           }
 
           setShowSpaceApprovalModal(true);
@@ -3781,7 +3801,7 @@ Output: Valid JSON only. No markdown, no prose.`;
             runtimeConfig: config!,
           });
 
-          return;
+          return acceptPipelineSubmitOutcome();
         }
 
         console.log(`[Stage Chunking] All ${totalStageChunks} chunks complete for ${currentStage.name}. Finalizing...`);
@@ -3809,7 +3829,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       }
 
       // NPC SECTION CHUNKING: Handle section completion and merging
-      if (isNpcSectionChunking && currentStage.name === 'Creator') {
+      if (isNpcSectionChunking && currentStageName === 'Creator') {
         console.log(`[NPC Section Chunking] Section ${currentNpcSectionIndex + 1}/${npcSectionChunks.length} complete: ${npcSectionChunks[currentNpcSectionIndex]?.chunkLabel}`);
 
         const { mergedSections, cleanedSections } = mergeWorkflowNpcSections(accumulatedNpcSections, parsed);
@@ -3844,7 +3864,7 @@ Output: Valid JSON only. No markdown, no prose.`;
             runtimeConfig: config!,
           });
 
-          return; // Don't proceed to next stage yet
+          return acceptPipelineSubmitOutcome();
         }
 
         // All NPC sections complete - finalize
@@ -3877,7 +3897,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           });
         }
 
-        return; // Exit after handling NPC section completion
+        return acceptPipelineSubmitOutcome();
       }
 
       // Check if we're in multi-chunk mode (fact-based) and have more chunks to process for THIS stage
@@ -3903,8 +3923,10 @@ Output: Valid JSON only. No markdown, no prose.`;
 
         const nextChunkStep = getNextWorkflowFactChunkStep(factGroups, currentGroupIndex);
         if (!nextChunkStep) {
+          const message = 'Expected the next fact chunk, but no next step could be built.';
           console.warn('[Multi-Chunk] Expected a next fact chunk, but no next step could be built.');
-          return;
+          setError(message);
+          return recordPipelineSubmitOutcome({ status: 'error', message });
         }
 
         const {
@@ -3935,7 +3957,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           unansweredProposals,
         });
 
-        return; // Don't proceed to next stage yet
+        return acceptPipelineSubmitOutcome();
       }
 
       // If multi-chunk mode and this was the last chunk for this stage, merge chunk results
@@ -3949,7 +3971,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         let mergedStageOutput = mergeWorkflowChunkOutputs(chunkResults, currentStage.name);
 
         // VALIDATION: Check Stats stage for refusal to create stats
-        if (currentStage.name.toLowerCase().includes('stats')) {
+        if (currentStageName.toLowerCase().includes('stats')) {
           const statsFields = ['ability_scores', 'armor_class', 'hit_points'];
           const missingStats = statsFields.filter(field => !(field in mergedStageOutput));
 
@@ -4016,7 +4038,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         // Now process retrieval hints from the merged output (Planner or Creator only)
         // Only do this if there are NO unanswered proposals
         let factpackAfterHints = factpack;
-        if (currentStage.name === 'Planner' || currentStage.name === 'Creator' || (config!.type === 'nonfiction' && (currentStage.name === 'Outline & Structure' || currentStage.name === 'Draft'))) {
+        if (currentStageName === 'Planner' || currentStageName === 'Creator' || (config!.type === 'nonfiction' && (currentStageName === 'Outline & Structure' || currentStageName === 'Draft'))) {
           console.log(`[Multi-Chunk] Processing retrieval hints from merged ${currentStage.name} output...`);
           const initialFactCount = factpack!.facts.length;
           const hintsResult = await processRetrievalHints(mergedStageOutput, mergedResults, currentStage.name);
@@ -4094,7 +4116,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           }));
           await saveStageResults(mergedResults, STAGES.length - 1);
         }
-        return;
+        return acceptPipelineSubmitOutcome();
       }
 
       // Move to next stage or finish (for all other stages - non-chunked flow)
@@ -4183,7 +4205,7 @@ Output: Valid JSON only. No markdown, no prose.`;
                 runtimeConfig: config!,
               });
 
-              return; // Don't set isComplete to true or show completion message
+              return acceptPipelineSubmitOutcome();
             }
 
             // User chose to stop - show final results from all chunks processed so far
@@ -4705,7 +4727,11 @@ Output: Valid JSON only. No markdown, no prose.`;
   };
 
   // Helper function to process retrieval_hints from stage outputs
-  const processRetrievalHints = async (stageOutput: JsonRecord, newResults: StageResults, stageName: string) => {
+  async function processRetrievalHints(
+    stageOutput: JsonRecord,
+    newResults: StageResults,
+    stageName: string,
+  ): Promise<{ shouldProceed: boolean; newResults: StageResults; factpack: Factpack | null }> {
     const retrievalHints = isRecord(stageOutput.retrieval_hints) ? stageOutput.retrieval_hints : null;
     const hintsKeywords = extractRetrievalHintKeywords(stageOutput);
 
@@ -4747,7 +4773,7 @@ Output: Valid JSON only. No markdown, no prose.`;
     setFactpack(mergedFactpack);
 
     return { shouldProceed: true, newResults, factpack: mergedFactpack };
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

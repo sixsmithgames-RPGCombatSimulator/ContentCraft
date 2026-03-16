@@ -291,4 +291,31 @@ describe('workflow transport', () => {
       },
     })).toBe(true);
   });
+
+  it('allows auto-retry for repairable spellcasting semantic failures carrying correction prompts', () => {
+    expect(shouldAutoRetryIntegratedFailure({
+      ok: false,
+      requestId: 'req-6',
+      stageRunId: 'run-6',
+      workflow: {
+        stageId: 'spellcasting',
+        stageKey: 'spellcasting',
+        workflowType: 'npc',
+        outcome: 'retry_required',
+        accepted: false,
+        allowedKeyCount: 9,
+        rawAllowedKeyCount: 4,
+        retryContext: {
+          reason: 'spellcasting_semantic_validation_failed',
+          retryable: true,
+          correctionPrompt: 'Return spellcasting JSON.\n\nADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY):',
+        },
+      },
+      error: {
+        type: 'INVALID_RESPONSE',
+        message: 'Spellcasting response was incomplete. Retrying automatically with repair instructions.',
+        retryable: true,
+      },
+    })).toBe(true);
+  });
 });

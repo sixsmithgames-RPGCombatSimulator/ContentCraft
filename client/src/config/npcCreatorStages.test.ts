@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NPC_CREATOR_BASIC_INFO,
   NPC_CREATOR_EQUIPMENT,
+  NPC_CREATOR_SPELLCASTING,
 } from './npcCreatorStages';
 
 describe('npc creator stage prompts', () => {
@@ -79,5 +80,11 @@ describe('npc creator stage prompts', () => {
     expect(parsed.relevant_canon).toEqual({
       facts: [{ text: 'Rods of the Pact Keeper are prized by pact-bound warlocks.', source: 'canon' }],
     });
+  });
+
+  it('keeps spellcasting fallback instructions aligned with spell-list requirements', () => {
+    expect(NPC_CREATOR_SPELLCASTING.systemPrompt).toContain('Include at least one populated spell list');
+    expect(NPC_CREATOR_SPELLCASTING.systemPrompt).toContain('Known casters such as warlocks must include spells_known.');
+    expect(NPC_CREATOR_SPELLCASTING.systemPrompt).toContain('If the NPC is a slot-based caster, include spell_slots with at least one slot.');
   });
 });

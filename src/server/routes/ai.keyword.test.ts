@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildSchemaCorrectionPrompt,
+  buildSpellcastingSemanticCorrectionPrompt,
   evaluateKeywordExtractorCompliance,
   getStageAllowedKeys,
   shouldOfferAutomaticSchemaCorrectionRetry,
@@ -171,10 +172,24 @@ describe('evaluateKeywordExtractorCompliance', () => {
   });
 
   it('builds a hidden schema correction prompt with validation details', () => {
-    const prompt = buildSchemaCorrectionPrompt('/speed/walk must be string', ['ability_scores', 'speed']);
+    const prompt = buildSchemaCorrectionPrompt('Return stats JSON.', '/speed/walk must be string', ['ability_scores', 'speed']);
 
-    expect(prompt).toContain('Output ONLY valid JSON');
+    expect(prompt).toContain('Return stats JSON.');
+    expect(prompt).toContain('ADDITIONAL_CRITICAL_INSTRUCTIONS (RETRY)');
     expect(prompt).toContain('/speed/walk must be string');
     expect(prompt).toContain('ability_scores, speed');
+  });
+
+  it('builds a spellcasting semantic correction prompt with targeted spell-list guidance', () => {
+    const prompt = buildSpellcastingSemanticCorrectionPrompt('Return spellcasting JSON.', [
+      'No spells provided (prepared, always_prepared, innate, or spells_known).',
+      'spell_slots must include at least one slot for slot-based casters.',
+    ]);
+
+    expect(prompt).toContain('Return spellcasting JSON.');
+    expect(prompt).toContain('No spells provided');
+    expect(prompt).toContain('spell_slots must include at least one slot');
+    expect(prompt).toContain('Known casters such as warlocks must include spells_known.');
+    expect(prompt).toContain('Prepared casters must include prepared_spells or always_prepared_spells.');
   });
 });
