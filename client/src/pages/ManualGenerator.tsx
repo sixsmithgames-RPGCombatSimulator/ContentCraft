@@ -693,6 +693,7 @@ export default function ManualGenerator() {
   const prevConfigKeyRef = useRef<string | null>(null);
   const prevFactpackKeyRef = useRef<string | null>(null);
   const prevCompiledStageRequestKeyRef = useRef<string | null>(null);
+  const prevWorkflowRunStateKeyRef = useRef<string | null>(null);
   const dynamicNpcStagesRef = useRef<Stage[] | null>(null);
 
   useEffect(() => {
@@ -896,6 +897,7 @@ export default function ManualGenerator() {
       prevConfigKeyRef.current = null;
       prevFactpackKeyRef.current = null;
       prevCompiledStageRequestKeyRef.current = null;
+      prevWorkflowRunStateKeyRef.current = null;
       return;
     }
 
@@ -923,8 +925,10 @@ export default function ManualGenerator() {
       })
       : null;
     const compiledStageRequestChanged = prevCompiledStageRequestKeyRef.current !== compiledStageRequestKey;
+    const workflowRunStateKey = workflowRunState ? JSON.stringify(workflowRunState) : null;
+    const workflowRunStateChanged = prevWorkflowRunStateKeyRef.current !== workflowRunStateKey;
 
-    const shouldUpdate = stageResultsChanged || configChanged || stageIndexChanged || factpackChanged || compiledStageRequestChanged;
+    const shouldUpdate = stageResultsChanged || configChanged || stageIndexChanged || factpackChanged || compiledStageRequestChanged || workflowRunStateChanged;
     if (!shouldUpdate) return;
 
     prevStageResultsRef.current = stageResults;
@@ -932,6 +936,7 @@ export default function ManualGenerator() {
     prevConfigKeyRef.current = configKey;
     prevFactpackKeyRef.current = factpackKey;
     prevCompiledStageRequestKeyRef.current = compiledStageRequestKey;
+    prevWorkflowRunStateKeyRef.current = workflowRunStateKey;
 
     const wfType = resolveWorkflowTypeFromConfigType(config.type);
     const currentStage = STAGES[currentStageIndex];
