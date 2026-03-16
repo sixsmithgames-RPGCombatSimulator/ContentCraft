@@ -262,11 +262,14 @@ export function resolveWorkflowHomebrewChunkProgress(input: {
 
   const nextBaseStageResults: StageResults = {
     ...input.stageResults,
-    ...mergedMechanics,
     [input.stageKey]: input.parsed,
     [`${input.stageKey}_chunks`]: setStageArrayValue(chunkResults),
     homebrew_chunk_results: setStageArrayValue(chunkResults),
   };
+
+  if (mergedMechanics.resolved_mechanics) {
+    nextBaseStageResults.resolved_mechanics = mergedMechanics.resolved_mechanics;
+  }
 
   const nextChunkIndex = currentChunkIndex + 1;
   if (nextChunkIndex < homebrewChunks.length) {

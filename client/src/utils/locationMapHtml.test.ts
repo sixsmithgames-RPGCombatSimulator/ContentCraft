@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { LiveMapSpace } from '../types/liveMapTypes';
 import {
   buildLocationEditorProviderKey,
   buildLocationMapSpacesHash,
@@ -7,7 +8,7 @@ import {
 
 describe('locationMapHtml', () => {
   it('generates inline and full HTML map output from shared room previews', () => {
-    const spaces = [
+    const spaces: LiveMapSpace[] = [
       {
         name: 'Hall',
         function: 'Hallway',
@@ -27,7 +28,7 @@ describe('locationMapHtml', () => {
   });
 
   it('treats door geometry and room wall settings as meaningful preview hash changes', () => {
-    const baseSpaces = [
+    const baseSpaces: LiveMapSpace[] = [
       {
         name: 'Hall',
         size_ft: { width: 20, height: 20 },
@@ -54,7 +55,7 @@ describe('locationMapHtml', () => {
   });
 
   it('uses door geometry, positions, and wall metadata in the editor provider key', () => {
-    const baseSpaces = [
+    const baseSpaces: LiveMapSpace[] = [
       {
         name: 'Hall',
         size_ft: { width: 20, height: 20 },

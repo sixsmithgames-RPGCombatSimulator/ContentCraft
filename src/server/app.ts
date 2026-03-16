@@ -45,7 +45,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
@@ -61,12 +61,12 @@ if (isProduction) {
   app.use(express.static(clientBuildPath));
 
   // Handle client-side routing - serve index.html for all non-API routes
-  app.get('*', (req, res) => {
+  app.get('*', (_req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
 } else {
   // Development mode - just show API info on root
-  app.get('/', (req, res) => {
+  app.get('/', (_req, res) => {
     res.json({
       success: true,
       message: 'ContentCraft API Server',
@@ -75,7 +75,7 @@ if (isProduction) {
     });
   });
 
-  app.use('*', (req, res) => {
+  app.use('*', (_req, res) => {
     res.status(404).json({
       success: false,
       error: 'Route not found'
@@ -84,7 +84,7 @@ if (isProduction) {
 }
 
 // Error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err);
   res.status(500).json({
     success: false,

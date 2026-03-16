@@ -126,6 +126,14 @@ export default function InteractiveLocationEditor({
   const ftToPx = (ft: number): number => ft * PIXELS_PER_FOOT;
   const pxToFt = (px: number): number => px / PIXELS_PER_FOOT;
 
+  const hasPosition = (space: Space): space is Space & { position: { x: number; y: number } } => (
+    !!space.position
+    && typeof space.position.x === 'number'
+    && Number.isFinite(space.position.x)
+    && typeof space.position.y === 'number'
+    && Number.isFinite(space.position.y)
+  );
+
   const getSVGCoordinates = (e: React.MouseEvent<SVGSVGElement>): { x: number; y: number } => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const svg = canvasRef.current;
@@ -402,7 +410,7 @@ export default function InteractiveLocationEditor({
   };
 
   const renderRoom = (space: Space) => {
-    if (!space.position) return null;
+    if (!hasPosition(space)) return null;
 
     const roomId = getRoomId(space);
     const isSelected = state.selectedRoomId === roomId;
@@ -513,9 +521,7 @@ export default function InteractiveLocationEditor({
                     cy={interiorY + interiorH / 2}
                     rx={interiorW / 2 + halfWallThickness / 2}
                     ry={interiorH / 2 + halfWallThickness / 2}
-                    fill="none"
-                    stroke={`url(#${hatchId})`}
-                    strokeWidth={halfWallThickness}
+                    fill={`url(#${hatchId})`}
                     opacity="1"
                   />
                 </>
@@ -910,7 +916,7 @@ export default function InteractiveLocationEditor({
 
           // Find the target space
           const targetSpace = state.spaces.find(s => s.name === door.leads_to || s.code === door.leads_to);
-          if (!targetSpace || !targetSpace.position) {
+          if (!targetSpace || !hasPosition(targetSpace)) {
             return null;
           }
 

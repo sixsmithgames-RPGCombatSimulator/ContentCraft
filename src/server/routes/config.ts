@@ -12,7 +12,7 @@ export const configRouter = Router();
  * GET /api/config/authority
  * Get the authority configuration document
  */
-configRouter.get('/authority', async (req, res, next) => {
+configRouter.get('/authority', async (_req, res, next) => {
   try {
     const db = getDb();
     const authorityCollection = db.collection<{ _id: string; [key: string]: unknown }>('authority');
@@ -53,7 +53,7 @@ configRouter.put('/authority', async (req, res, next) => {
  * GET /api/config/schemas
  * List available content type schemas
  */
-configRouter.get('/schemas', async (req, res, next) => {
+configRouter.get('/schemas', async (_req, res, next) => {
   try {
     const schemas = [
       {

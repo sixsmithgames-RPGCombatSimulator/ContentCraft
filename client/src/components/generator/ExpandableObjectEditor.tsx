@@ -219,24 +219,21 @@ export default function ExpandableObjectEditor({
                 </div>
 
                 {/* Nested array editor */}
-                {((): JSX.Element | null => {
-                  if (!Array.isArray(val)) return null;
-                  return (
-                    <div className="ml-6 mt-1">
-                      <ExpandableArrayEditor
-                        label={key}
-                        value={val as unknown[]}
-                        onChange={(newVal) => handleFieldChange(key, newVal)}
-                        path={`${path}.${key}`}
-                        defaultExpanded={false}
-                        itemType="auto"
-                      />
-                    </div>
-                  );
-                })()}
+                {Array.isArray(val) ? (
+                  <div className="ml-6 mt-1">
+                    <ExpandableArrayEditor
+                      label={key}
+                      value={val as unknown[]}
+                      onChange={(newVal) => handleFieldChange(key, newVal)}
+                      path={`${path}.${key}`}
+                      defaultExpanded={false}
+                      itemType="auto"
+                    />
+                  </div>
+                ) : null}
 
                 {/* Nested object editor */}
-                {val && typeof val === 'object' && !Array.isArray(val) && (
+                {val && typeof val === 'object' && !Array.isArray(val) ? (
                   <div className="ml-6 mt-1">
                     <ExpandableObjectEditor
                       label={key}
@@ -246,7 +243,7 @@ export default function ExpandableObjectEditor({
                       defaultExpanded={false}
                     />
                   </div>
-                )}
+                ) : null}
               </div>
             ))
           ) : (

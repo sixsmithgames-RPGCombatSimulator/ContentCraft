@@ -15,7 +15,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { validateNpcStrict, validateNpcSafe } from '../validation/npcValidator.js';
+import { validateNpcSafe } from '../validation/npcValidator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -78,28 +78,6 @@ export interface MappingResult {
   errors: string[];
   warnings: string[];
   unmappedFields: string[];
-}
-
-/**
- * Get nested value from object using dot notation
- */
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  return path.split('.').reduce((current: any, key) => current?.[key], obj);
-}
-
-/**
- * Set nested value in object using dot notation
- */
-function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
-  const keys = path.split('.');
-  const lastKey = keys.pop()!;
-  const target = keys.reduce((current: any, key) => {
-    if (!(key in current)) {
-      current[key] = {};
-    }
-    return current[key];
-  }, obj);
-  target[lastKey] = value;
 }
 
 /**

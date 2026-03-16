@@ -67,7 +67,7 @@ describe('workflowCompletionPresentation', () => {
         content: { title: 'Barley' },
         logLabel: 'NPC: intelligently merged creator stage results',
         logDetails: { totalFields: 12 },
-        conflicts: [{ field: 'name', resolvedValue: 'Barley', resolution: 'latest', stages: [] }],
+        conflicts: [{ field: 'name', resolvedValue: 'Barley', resolution: 'last-wins', stages: [] }],
       },
       baseContent: { title: 'Barley' },
       proposals: [],

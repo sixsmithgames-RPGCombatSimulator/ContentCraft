@@ -106,7 +106,7 @@ function getFiniteNumber(value: unknown): number | undefined {
 
 function getLocationTemplate(context: StageContext): LocationTemplate | undefined {
   const templateId = context.config.flags?.template_id as string | undefined;
-  return getTemplateById(templateId);
+  return getTemplateById(templateId) ?? undefined;
 }
 
 function getSpaceName(space: PromptSpaceRecord): string | undefined {

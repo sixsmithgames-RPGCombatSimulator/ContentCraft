@@ -49,7 +49,8 @@ export function getWorkflowStageProgression(
 export function buildWorkflowCompletionResult(
   input: WorkflowCompletionInput,
 ): WorkflowCompletionResult {
-  const assembledContent = assembleFinalWorkflowContent(input.workflowType, input.stageResults);
+  const workflowType = input.workflowType ?? 'unknown';
+  const assembledContent = assembleFinalWorkflowContent(workflowType, input.stageResults);
   const baseContent = input.baseContentOverride
     ? { ...input.baseContentOverride }
     : { ...assembledContent.content };
@@ -60,16 +61,16 @@ export function buildWorkflowCompletionResult(
 
   const finalContent = input.strategy === 'resolved'
     ? resolveCompletedWorkflowOutput({
-      workflowType: input.workflowType,
-      fallbackType: input.workflowType,
+      workflowType,
+      fallbackType: workflowType,
       stageResults: input.stageResults,
       ruleBase: input.ruleBase,
     })
     : buildFinalWorkflowOutput({
       baseContent,
       stageResults: input.stageResults,
-      workflowType: input.workflowType,
-      fallbackType: input.workflowType,
+      workflowType,
+      fallbackType: workflowType,
       proposals,
       ruleBase: input.ruleBase,
     });

@@ -6,7 +6,6 @@
 import { Router } from 'express';
 import { getDb } from '../config/mongo.js';
 import type { CanonEntity } from '../models/CanonEntity.js';
-import { ObjectId } from 'mongodb';
 import fs from 'fs/promises';
 import path from 'path';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
@@ -285,7 +284,7 @@ router.post('/dedupe', async (req, res) => {
 
     // Filter claims
     const originalClaimCount = entity.claims?.length || 0;
-    const filteredClaims = (entity.claims || []).filter((claim, index) => {
+    const filteredClaims = (entity.claims || []).filter((_, index) => {
       const chunk_id = `${entity_id}#c${index + 1}`;
       return !chunkIdsToRemove.has(chunk_id);
     });
@@ -365,7 +364,7 @@ router.post('/bulk-dedupe', async (req, res) => {
 
       // Filter claims
       const originalClaimCount = entity.claims?.length || 0;
-      const filteredClaims = (entity.claims || []).filter((claim, index) => {
+      const filteredClaims = (entity.claims || []).filter((_, index) => {
         const chunk_id = `${entity_id}#c${index + 1}`;
         return !chunkIdsToRemove.has(chunk_id);
       });

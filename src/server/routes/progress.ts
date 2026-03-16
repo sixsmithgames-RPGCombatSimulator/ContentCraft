@@ -19,6 +19,8 @@ export const progressRouter = Router();
 // Apply auth middleware to all routes
 progressRouter.use(authMiddleware);
 
+type ProgressEntryLike = Record<string, unknown>;
+
 // Directory to store progress files
 // Use /tmp on serverless platforms (Vercel), local dir otherwise
 const PROGRESS_DIR = process.env.VERCEL 
@@ -145,7 +147,9 @@ progressRouter.get('/list-progress', async (req: Request, res: Response) => {
           const filepath = path.join(PROGRESS_DIR, filename);
           const content = await fs.readFile(filepath, 'utf-8');
           const data = JSON.parse(content);
-          const progressEntries = Array.isArray(data.progress) ? data.progress : [];
+          const progressEntries: ProgressEntryLike[] = Array.isArray(data.progress)
+            ? data.progress.filter((entry: unknown): entry is ProgressEntryLike => typeof entry === 'object' && entry !== null)
+            : [];
           const pendingEntry = progressEntries.find(
             (entry) => entry?.status === 'pending' && entry?.response === null,
           );

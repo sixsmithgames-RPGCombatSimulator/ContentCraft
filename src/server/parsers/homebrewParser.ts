@@ -100,8 +100,6 @@ function parseListItem(line: string): { name: string; description: string } {
  * Determine if content is narrative lore vs mechanical rules
  */
 function isLore(text: string): boolean {
-  const lowerText = text.toLowerCase();
-
   // Lore indicators: narrative language, past tense, personality, story elements
   const lorePatterns = [
     /once (a|an|the)/i,
@@ -188,7 +186,7 @@ function generateTags(title: string, description: string, contextHeading?: strin
  * Determine entry type based on context and content
  */
 function determineType(
-  itemName: string,
+  _itemName: string,
   description: string,
   contextHeading: string,
   parentHeading?: string

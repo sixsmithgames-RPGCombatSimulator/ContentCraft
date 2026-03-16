@@ -4,6 +4,8 @@ import type { RetrievalGroundingStatus, WorkflowContentType } from '../../../src
 
 type JsonRecord = Record<string, unknown>;
 
+export type WorkflowCanonFetch = (url: string) => Promise<Response>;
+
 export interface CanonEntityClaim {
   text?: string;
 }
@@ -20,6 +22,12 @@ export interface CanonEntity {
   [key: string]: unknown;
 }
 
+export interface Factpack {
+  facts: CanonFact[];
+  entities: string[];
+  gaps: string[];
+}
+
 export interface CanonFact {
   chunk_id: string;
   text: string;
@@ -32,12 +40,6 @@ export interface CanonFact {
   tags?: string[];
 }
 
-export interface Factpack {
-  facts: CanonFact[];
-  entities: string[];
-  gaps: string[];
-}
-
 export interface WorkflowCanonEntitiesResult {
   entities: CanonEntity[];
   scope: 'project' | 'library';
@@ -48,7 +50,7 @@ export interface WorkflowCanonSearchInput {
   keywords: string[];
   projectId?: string;
   apiBaseUrl?: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: WorkflowCanonFetch;
   workflowType?: WorkflowContentType;
 }
 
@@ -89,7 +91,7 @@ function slugify(value: string): string {
 
 async function parseEntitiesResponse(
   url: string,
-  fetchImpl: typeof fetch,
+  fetchImpl: WorkflowCanonFetch,
 ): Promise<CanonEntity[] | null> {
   const response = await fetchImpl(url);
   if (!response.ok) {
@@ -105,10 +107,10 @@ async function parseEntitiesResponse(
 export async function fetchWorkflowCanonEntitiesForSearch(input: {
   projectId?: string;
   apiBaseUrl?: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: WorkflowCanonFetch;
 }): Promise<WorkflowCanonEntitiesResult> {
   const apiBaseUrl = input.apiBaseUrl ?? API_BASE_URL;
-  const fetchImpl = input.fetchImpl ?? fetch;
+  const fetchImpl: WorkflowCanonFetch = input.fetchImpl ?? ((url) => fetch(url));
 
   if (input.projectId && input.projectId !== 'default') {
     const projectEntities = await parseEntitiesResponse(`${apiBaseUrl}/canon/projects/${input.projectId}/entities`, fetchImpl);

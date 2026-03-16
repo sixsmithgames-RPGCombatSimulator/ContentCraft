@@ -43,7 +43,15 @@ function reconstructChunksFromProgress(
   accumulatedChunks: JsonRecord[];
   totalStageChunks: number;
 } {
-  const spacesStageKey = resolveWorkflowStageKey(workflowType, 'Spaces');
+  const normalizedWorkflowType = typeof workflowType === 'string' ? workflowType : '';
+  if (!normalizedWorkflowType) {
+    return {
+      accumulatedChunks: [],
+      totalStageChunks: 0,
+    };
+  }
+
+  const spacesStageKey = resolveWorkflowStageKey(normalizedWorkflowType, 'Spaces');
   if (!spacesStageKey) {
     return {
       accumulatedChunks: [],
@@ -52,7 +60,7 @@ function reconstructChunksFromProgress(
   }
 
   const spacesEntries = progress.filter((entry) =>
-    resolveWorkflowStageKey(workflowType, entry.stage) === spacesStageKey
+    resolveWorkflowStageKey(normalizedWorkflowType, entry.stage) === spacesStageKey
       && entry.status === 'completed'
       && typeof entry.response === 'string'
       && entry.response.length > 0,

@@ -19,7 +19,6 @@ function expect(cond: any, msg: string, errors: string[]) {
 export async function runRulesGuard(draft: any, run: Run): Promise<GuardResult> {
   const errors: string[] = [];
   const flags: string[] = [];
-  const ruleBase = run.flags.rule_base ?? '2024RAW';
 
   // Common required fields
   expect(

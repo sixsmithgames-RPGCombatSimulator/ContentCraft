@@ -252,7 +252,7 @@ export class ContentBlockModel {
       'DELETE FROM content_blocks WHERE id = ? AND user_id = ?',
       [id, userId]
     );
-    return result.changes > 0;
+    return (result.changes ?? 0) > 0;
   }
 
   static async reorder(userId: string, projectId: string, blockIds: string[]): Promise<boolean> {

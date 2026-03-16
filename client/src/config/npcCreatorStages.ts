@@ -245,11 +245,16 @@ export const NPC_CREATOR_SPELLCASTING = {
     const subclass = (classLevels?.[0]?.subclass as string | undefined) || extractSubclass(primaryClassRaw);
     const className = subclass ? extractClass(primaryClassRaw) : primaryClassRaw;
 
-    const abilityScores = stats?.ability_scores || {};
+    const abilityScores =
+      stats?.ability_scores && typeof stats.ability_scores === 'object' && stats.ability_scores !== null && !Array.isArray(stats.ability_scores)
+        ? stats.ability_scores as Record<string, unknown>
+        : null;
     const spellcastingAbility = inferSpellcastingAbility(className, subclass);
-    const abilityScore = typeof abilityScores?.[spellcastingAbility?.toLowerCase?.() || ''] === 'number'
-      ? (abilityScores as Record<string, number>)[spellcastingAbility.toLowerCase()]
+    const spellcastingAbilityKey = typeof spellcastingAbility === 'string' ? spellcastingAbility.toLowerCase() : null;
+    const abilityScoreValue = spellcastingAbilityKey && abilityScores
+      ? abilityScores[spellcastingAbilityKey]
       : undefined;
+    const abilityScore = typeof abilityScoreValue === 'number' ? abilityScoreValue : undefined;
     const abilityModifier = abilityScore !== undefined ? Math.floor((abilityScore - 10) / 2) : undefined;
     const proficiencyBonus = typeof stats?.proficiency_bonus === 'number' ? stats.proficiency_bonus : undefined;
 

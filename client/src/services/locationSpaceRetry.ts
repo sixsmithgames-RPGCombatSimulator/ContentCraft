@@ -53,8 +53,6 @@ function getGeometrySuggestionLabel(category: GeometryProposal['category']): str
       return 'Use wall thickness issue';
     case 'dimensions':
       return 'Use sizing issue';
-    case 'placement':
-      return 'Use placement issue';
     case 'connections':
       return 'Use connection issue';
     default:

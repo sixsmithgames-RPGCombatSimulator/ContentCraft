@@ -50,17 +50,28 @@ export function convertEditorSpacesToLiveMapSpaces(spaces: Space[]): LiveMapSpac
   return spaces.map((space) => {
     const normalizedSize = { width: space.size_ft.width, height: space.size_ft.height };
     const dimensions = { width: normalizedSize.width, height: normalizedSize.height, unit: 'ft' };
-
-    return {
-      ...(space as unknown as Record<string, unknown>),
+    const preservedFields = space as unknown as Record<string, unknown>;
+    const liveMapSpace: LiveMapSpace = {
+      ...preservedFields,
+      name: space.name,
+      code: space.code,
+      purpose: space.purpose,
+      description: space.description,
       size_ft: normalizedSize,
       dimensions,
       function: space.purpose,
+      doors: Array.isArray(space.doors) ? space.doors.map((door) => ({ ...door })) : undefined,
+      features: Array.isArray(space.features) ? [...space.features] : undefined,
+      position: space.position ? { ...space.position } : undefined,
       connections: Array.isArray(space.doors)
         ? space.doors
           .map((door: Door) => door.leads_to)
           .filter((value): value is string => typeof value === 'string' && value.length > 0)
         : [],
+      wall_thickness_ft: space.wall_thickness_ft,
+      wall_material: space.wall_material,
     };
+
+    return liveMapSpace;
   });
 }

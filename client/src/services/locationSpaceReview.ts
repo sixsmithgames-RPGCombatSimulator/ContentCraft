@@ -7,6 +7,8 @@ import {
 import { getNormalizedWallMetadata } from '../utils/locationWallMetadata';
 
 type JsonRecord = Record<string, unknown>;
+type GeometryReviewSpace = Parameters<typeof validateSpaceGeometry>[0];
+type GeometryReviewDoor = NonNullable<GeometryReviewSpace['doors']>[number];
 
 interface LocationGeometryReviewInput extends JsonRecord {
   id?: string;
@@ -84,14 +86,14 @@ function normalizeConnections(space: LocationGeometryReviewInput): string[] | un
   return undefined;
 }
 
-function normalizeDoors(space: LocationGeometryReviewInput) {
+function normalizeDoors(space: LocationGeometryReviewInput): GeometryReviewSpace['doors'] {
   if (!Array.isArray(space.doors)) {
     return undefined;
   }
 
   const doors = space.doors
     .filter(isRecord)
-    .map((door) => {
+    .map((door): GeometryReviewDoor | null => {
       if (
         (door.wall !== 'north' && door.wall !== 'south' && door.wall !== 'east' && door.wall !== 'west') ||
         typeof door.position_on_wall_ft !== 'number' ||
@@ -111,7 +113,7 @@ function normalizeDoors(space: LocationGeometryReviewInput) {
         leads_to: door.leads_to,
       };
     })
-    .filter((door): door is NonNullable<typeof door> => door !== null);
+    .filter((door): door is GeometryReviewDoor => door !== null);
 
   return doors.length > 0 ? doors : undefined;
 }
@@ -146,7 +148,7 @@ export function buildLocationGeometryReview(
 
   const candidateWallMetadata = getNormalizedWallMetadata(candidateSpace);
 
-  const normalizedCandidate = {
+  const normalizedCandidate: GeometryReviewSpace = {
     name: candidateSpace.name,
     dimensions: normalizeDimensions(candidateSpace.dimensions, candidateSpace.size_ft),
     floor: candidateSpace.floor,
@@ -156,9 +158,9 @@ export function buildLocationGeometryReview(
     wall_material: candidateWallMetadata.wallMaterial,
   };
 
-  const normalizedExisting = existingSpaces
+  const normalizedExisting: GeometryReviewSpace[] = existingSpaces
     .filter((space) => !matchesIdentity(space, options?.exclude))
-    .map((space) => {
+    .map((space): GeometryReviewSpace => {
       const wallMetadata = getNormalizedWallMetadata(space);
 
       return {

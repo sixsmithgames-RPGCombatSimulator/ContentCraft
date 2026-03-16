@@ -88,8 +88,6 @@ function getWorkflowFailureDisplayMessage(
   return failureBody.error.message || fallbackMessage;
 }
 
-type AIProvider = 'gemini' | 'openai' | 'ollama' | 'openrouter' | 'manual';
-
 type StageRunnerState =
   | 'idle'
   | 'sending'
@@ -783,7 +781,7 @@ export default function AiAssistantPanel() {
       console.info('[AI Runner][Request]', {
         stageKey,
         runId,
-        generatorType: requestBody.clientContext.generatorType,
+        generatorType: requestBody.clientContext?.generatorType ?? null,
         schemaVersion: requestBody.schemaVersion,
         promptChars: effectivePrompt.length,
         promptMode: compiledStageRequest.promptBudget.mode,

@@ -4,10 +4,7 @@
  */
 
 import { dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { existsSync, mkdirSync } from 'fs';
-
-const __filename = fileURLToPath(import.meta.url);
 
 // SQLite doesn't work on Vercel (read-only filesystem except /tmp)
 // Only initialize if not running on Vercel

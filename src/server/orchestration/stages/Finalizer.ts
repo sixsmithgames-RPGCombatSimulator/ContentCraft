@@ -7,7 +7,7 @@ import type { StageOutput } from '../Orchestrator.js';
 import type { FactPack, ContinuityLedger, CanonDelta } from '../../models/Artifact.js';
 
 export async function runFinalizer(
-  run: any,
+  _run: any,
   inputs: Record<string, any>
 ): Promise<StageOutput> {
   const styled: any = inputs.stylist;

@@ -199,6 +199,6 @@ export class ProjectModel {
       'DELETE FROM projects WHERE id = ? AND user_id = ?',
       [id, userId]
     );
-    return result.changes > 0;
+    return (result.changes ?? 0) > 0;
   }
 }

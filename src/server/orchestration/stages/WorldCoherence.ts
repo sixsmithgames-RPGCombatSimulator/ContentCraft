@@ -8,7 +8,7 @@ import type { StageOutput } from '../Orchestrator.js';
 import type { Brief, FactPack } from '../../models/Artifact.js';
 
 export async function runWorldCoherence(
-  run: any,
+  _run: any,
   inputs: Record<string, any>,
   phase: 'pre' | 'post'
 ): Promise<StageOutput> {

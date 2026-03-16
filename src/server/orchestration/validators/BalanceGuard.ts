@@ -5,21 +5,12 @@
 
 type GuardResult = { ok: boolean; errors: string[]; flags: string[] };
 
-function tierFromPartyLevel(avg: number) {
-  if (avg <= 4) return 1;
-  if (avg <= 8) return 2;
-  if (avg <= 12) return 3;
-  return 4;
-}
-
 export async function runBalanceGuard(draft: any): Promise<GuardResult> {
   const errors: string[] = [];
   const flags: string[] = [];
 
   // Encounter heuristics
   if (draft.combatants || draft.difficulty_tier) {
-    const difficultyTier = draft.difficulty_tier || 'standard';
-
     // Save DC sanity
     if (draft.combatants) {
       draft.combatants.forEach((combatant: any) => {

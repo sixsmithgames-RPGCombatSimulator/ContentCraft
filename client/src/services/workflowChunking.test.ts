@@ -44,7 +44,14 @@ describe('workflowChunking', () => {
 
   it('opens npc section chunking and marks the mode correctly', () => {
     const state = openNpcSectionWorkflowChunking([
-      { key: 'basic_info', chunkLabel: 'Basic Info', description: 'Basics', allowedFields: ['name'] },
+      {
+        chunkLabel: 'Basic Info',
+        sectionName: 'basic_info',
+        instructions: 'Basics',
+        schemaSection: '{"type":"object"}',
+        includePreviousSections: false,
+        outputFields: ['name'],
+      },
     ]);
 
     expect(state.mode).toBe('npc_sections');

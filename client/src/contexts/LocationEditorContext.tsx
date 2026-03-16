@@ -70,7 +70,6 @@ function computeAutoLayout(
 ): Space[] {
   if (spaces.length === 0) return spaces;
 
-  const snapToGrid = (value: number): number => Math.round(value / gridSize) * gridSize;
   const getRoomId = (space: Space): string => space.code || space.name;
 
   const byId = new Map<string, Space>();
@@ -188,7 +187,7 @@ function computeAutoLayout(
     }
 
     const chosen = bestRoom || result[0];
-    console.log('[computeAutoLayout] ✓ Seed room selected:', getRoomId(chosen), `(${chosen.name})`, `with ${maxConnections} valid connections`);
+    console.log('[computeAutoLayout] Seed room selected:', getRoomId(chosen), `(${chosen.name})`, `with ${maxConnections} valid connections`);
     return getRoomId(chosen);
   })();
 
@@ -267,9 +266,9 @@ function computeAutoLayout(
       queue.push(targetId);
 
       if (reciprocalDoor) {
-        console.log(`  ✓ Placed "${targetSpace.name}" at (${newPos.x}, ${newPos.y}) via ${door.wall} door (aligned ${placement.fromDoorPositionFt}ft ↔ ${placement.toDoorPositionFt}ft)`);
+        console.log(`  Placed "${targetSpace.name}" at (${newPos.x}, ${newPos.y}) via ${door.wall} door (aligned ${placement.fromDoorPositionFt}ft ${placement.toDoorPositionFt}ft)`);
       } else {
-        console.log(`  ✓ Placed "${targetSpace.name}" at (${newPos.x}, ${newPos.y}) via ${door.wall} door (no reciprocal, projected at ${placement.toDoorPositionFt}ft)`);
+        console.log(`  Placed "${targetSpace.name}" at (${newPos.x}, ${newPos.y}) via ${door.wall} door (no reciprocal, projected at ${placement.toDoorPositionFt}ft)`);
       }
     }
   }
@@ -448,7 +447,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
           : space
       );
 
-      console.log(`[ADD_DOOR] ✓ Added door to ${targetRoom.name} on ${door.wall} wall at ${door.position_on_wall_ft}ft (center, width: ${door.width_ft}ft)`);
+      console.log(`[ADD_DOOR] Added door to ${targetRoom.name} on ${door.wall} wall at ${door.position_on_wall_ft}ft (center, width: ${door.width_ft}ft)`);
 
       if (!action.payload.skipReciprocal) {
         newSpaces = synchronizeReciprocalDoors(newSpaces as any[]) as unknown as Space[];
@@ -473,8 +472,6 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         return state;
       }
 
-      // Get the door being removed
-      const doorToRemove = (targetRoom.doors || [])[action.payload.doorIndex];
       const remainingDoors = (targetRoom.doors || []).filter((_, idx) => idx !== action.payload.doorIndex);
       const hasAccessPoint = !!(targetRoom as any).access_point;
 

@@ -60,6 +60,8 @@ export interface NpcResolvedMechanicsHint {
   legendary?: { has_legendary?: boolean };
 }
 
+type GeneratorStageCatalogListKey = Exclude<keyof GeneratorStageCatalog, 'npcStageRouterMap'>;
+
 const LOCATION_MAP_STAGE_NAMES = new Set(['Spaces', 'Details', 'Accuracy Refinement']);
 const NPC_PREFIX_STAGE_NAMES = ['Keyword Extractor', 'Planner'] as const;
 const NPC_ROUTED_STAGE_ORDER: RoutedNpcStageKey[] = [
@@ -73,7 +75,7 @@ const NPC_ROUTED_STAGE_ORDER: RoutedNpcStageKey[] = [
   'relationships',
   'equipment',
 ];
-const GENERATOR_STAGE_CATALOG_KEYS = {
+const GENERATOR_STAGE_CATALOG_KEYS: Partial<Record<WorkflowContentType, GeneratorStageCatalogListKey>> = {
   nonfiction: 'nonfictionStages',
   outline: 'nonfictionStages',
   chapter: 'nonfictionStages',
@@ -86,7 +88,7 @@ const GENERATOR_STAGE_CATALOG_KEYS = {
   item: 'itemStages',
   story_arc: 'storyArcStages',
   location: 'locationStages',
-} satisfies Partial<Record<string, keyof GeneratorStageCatalog>>;
+};
 
 function normalizeStageName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -121,16 +123,18 @@ export function getGeneratorStages(
   catalog: GeneratorStageCatalog,
   dynamicNpcStages?: GeneratorStage[] | null,
 ): GeneratorStage[] {
-  if (!type) return catalog.genericStages;
+  const workflowType = resolveWorkflowTypeFromConfigType(type);
 
-  if (type === 'npc') {
+  if (workflowType === 'unknown') return catalog.genericStages;
+
+  if (workflowType === 'npc') {
     if (dynamicNpcStages && dynamicNpcStages.length > 0) {
       return dynamicNpcStages;
     }
     return [...getNpcPrefixStages(catalog.genericStages), ...catalog.npcStages];
   }
 
-  const catalogKey = GENERATOR_STAGE_CATALOG_KEYS[type];
+  const catalogKey = GENERATOR_STAGE_CATALOG_KEYS[workflowType];
   if (catalogKey) {
     return catalog[catalogKey];
   }

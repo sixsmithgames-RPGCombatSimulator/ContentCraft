@@ -5,7 +5,7 @@
  * and reciprocal-door synchronization all agree on one coordinate model.
  */
 
-import type { Door, Space, WallSettings } from '../contexts/locationEditorTypes';
+import type { Door, WallSettings } from '../contexts/locationEditorTypes';
 
 type Wall = Door['wall'];
 
@@ -18,6 +18,10 @@ interface SpaceWithGeometry {
 }
 
 type WallSettingsLike = Pick<WallSettings, 'thickness_ft'> | number | undefined;
+
+const isWallSettingsObject = (
+  value: WallSettingsLike,
+): value is Pick<WallSettings, 'thickness_ft'> => typeof value === 'object' && value !== null;
 
 export interface SpaceOuterBoundsFt {
   x: number;
@@ -83,7 +87,7 @@ export function getEffectiveWallThicknessFt(
   }
 
   if (
-    globalWallSettings &&
+    isWallSettingsObject(globalWallSettings) &&
     typeof globalWallSettings.thickness_ft === 'number' &&
     Number.isFinite(globalWallSettings.thickness_ft) &&
     globalWallSettings.thickness_ft > 0

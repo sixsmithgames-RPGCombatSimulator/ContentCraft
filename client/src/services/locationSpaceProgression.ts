@@ -92,7 +92,7 @@ function normalizeDoors(record: Record<string, unknown>): Door[] | undefined {
 
   const doors = record.doors
     .filter(isRecord)
-    .map((doorRecord) => {
+    .map((doorRecord): Door | null => {
       if (
         (doorRecord.wall !== 'north' && doorRecord.wall !== 'south' && doorRecord.wall !== 'east' && doorRecord.wall !== 'west') ||
         typeof doorRecord.leads_to !== 'string'
@@ -100,22 +100,34 @@ function normalizeDoors(record: Record<string, unknown>): Door[] | undefined {
         return null;
       }
 
-      return {
+      const normalizedDoor: Door = {
         wall: doorRecord.wall,
         position_on_wall_ft: getNumber(doorRecord.position_on_wall_ft) ?? 0,
         width_ft: getNumber(doorRecord.width_ft) ?? 5,
         leads_to: doorRecord.leads_to,
-        style: typeof doorRecord.style === 'string' ? doorRecord.style as Door['style'] : undefined,
-        door_type: typeof doorRecord.door_type === 'string' ? doorRecord.door_type : undefined,
-        material: typeof doorRecord.material === 'string' ? doorRecord.material : undefined,
-        state: typeof doorRecord.state === 'string' ? doorRecord.state as Door['state'] : undefined,
-        color: typeof doorRecord.color === 'string' ? doorRecord.color : undefined,
         is_reciprocal: doorRecord.is_reciprocal === true,
-        reciprocal_parent_signature:
-          typeof doorRecord.reciprocal_parent_signature === 'string'
-            ? doorRecord.reciprocal_parent_signature
-            : undefined,
-      } satisfies Door;
+      };
+
+      if (typeof doorRecord.style === 'string') {
+        normalizedDoor.style = doorRecord.style as NonNullable<Door['style']>;
+      }
+      if (typeof doorRecord.door_type === 'string') {
+        normalizedDoor.door_type = doorRecord.door_type;
+      }
+      if (typeof doorRecord.material === 'string') {
+        normalizedDoor.material = doorRecord.material;
+      }
+      if (typeof doorRecord.state === 'string') {
+        normalizedDoor.state = doorRecord.state as NonNullable<Door['state']>;
+      }
+      if (typeof doorRecord.color === 'string') {
+        normalizedDoor.color = doorRecord.color;
+      }
+      if (typeof doorRecord.reciprocal_parent_signature === 'string') {
+        normalizedDoor.reciprocal_parent_signature = doorRecord.reciprocal_parent_signature;
+      }
+
+      return normalizedDoor;
     })
     .filter((door): door is Door => door !== null);
 
