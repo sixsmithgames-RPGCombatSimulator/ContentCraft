@@ -45,10 +45,12 @@ import { getWorkflowRetryBadgeLabel, getWorkflowRetryDetail } from '../../servic
 import AiProviderSettings from './AiProviderSettings';
 import ModeSelectionDialog from './ModeSelectionDialog';
 import {
+  createGenerationRunState,
   getStageAttempt,
   hasAcceptedStage,
   upsertStageAttempt,
 } from '../../../../src/shared/generation/workflowRunState';
+import type { ExecutionMode } from '../../../../src/shared/generation/workflowTypes';
 
 function isWorkflowFailureResponse(
   body: WorkflowTransportStageResponse,
@@ -1131,15 +1133,28 @@ export default function AiAssistantPanel() {
     }
     // If we have a compiled request but no compiled attempt recorded yet, sync it now so auto-start can proceed
     if (!hasAuthorizedCompiledRequest && workflowRunStateDispatcher && workflowContext?.compiledStageRequest) {
-      workflowRunStateDispatcher((prev) =>
-        upsertStageAttempt(prev, {
+      const stageLabel = workflowContext.currentStage || workflowContext.compiledStageRequest?.stageLabel || effectiveStageKey;
+      const executionMode: ExecutionMode = assistMode === 'integrated' ? 'integrated' : 'manual';
+
+      workflowRunStateDispatcher((prev) => {
+        const seeded = prev
+          ?? createGenerationRunState({
+            workflowType: workflowContext.workflowType,
+            workflowLabel: workflowContext.workflowLabel,
+            executionMode,
+            stageSequence: [effectiveStageKey],
+            stageLabels: { [effectiveStageKey]: stageLabel },
+            projectId: workflowContext.projectId,
+          });
+
+        return upsertStageAttempt(seeded, {
           stageKey: effectiveStageKey,
-          stageLabel: workflowContext.currentStage || workflowContext.compiledStageRequest?.stageLabel || effectiveStageKey,
+          stageLabel,
           status: 'compiled',
           compiledRequestId: currentCompiledRequestId,
-          transport: assistMode === 'integrated' ? 'integrated' : undefined,
-        }),
-      );
+          transport: executionMode,
+        });
+      });
       logStageRunnerGate('sync: created compiled attempt for current request');
       return;
     }
