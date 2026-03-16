@@ -286,11 +286,12 @@ export default function AiAssistantPanel() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const inFlightRef = useRef<boolean>(false);
+  const inFlightRef = useRef(false);
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const stallTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const autoRetryScheduledRef = useRef<boolean>(false);
+  const autoRetryScheduledRef = useRef(false);
+  const lastGateLogSignatureRef = useRef<string | null>(null);
   const lastAttemptedCompiledRequestIdRef = useRef<string | null>(null);
 
   // Auto-scroll to bottom on new messages
@@ -400,7 +401,7 @@ export default function AiAssistantPanel() {
 
   const logStageRunnerGate = useCallback(
     (reason: string) => {
-      console.info('[AI Runner][Gate]', reason, {
+      const payload = {
         isPanelOpen,
         assistMode,
         providerType: providerConfig.type,
@@ -418,7 +419,13 @@ export default function AiAssistantPanel() {
             issueType: currentRetrySource.issueType,
           }
           : null,
-      });
+      };
+      const signature = JSON.stringify({ reason, ...payload });
+      if (lastGateLogSignatureRef.current === signature) {
+        return;
+      }
+      lastGateLogSignatureRef.current = signature;
+      console.info('[AI Runner][Gate]', reason, payload);
     },
     [
       assistMode,

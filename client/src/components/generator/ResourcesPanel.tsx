@@ -49,7 +49,6 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadResources = useCallback(async () => {
-    console.log('[ResourcesPanel] loadResources called - scopeTab:', scopeTab);
     try {
       setLoading(true);
       setErrorMessage(null);
@@ -65,7 +64,6 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
       }
 
       const response = await fetch(url);
-      console.log('[ResourcesPanel] Fetch response status:', response.status);
 
       let data: unknown = null;
       try {
@@ -91,7 +89,6 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
         return;
       }
 
-      console.log('[ResourcesPanel] Loaded', data.length, 'resources for scope:', scopeTab);
       setResources(data as Resource[]);
     } catch (error) {
       console.error('[ResourcesPanel] Failed to load resources:', error);
@@ -268,8 +265,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
     }
   }, [typeFilter, availableTypes]);
 
-  const handleEntitiesLinked = (entityIds: string[]) => {
-    console.log('[ResourcesPanel] Entities linked:', entityIds);
+  const handleEntitiesLinked = (_entityIds: string[]) => {
     // Switch to project tab to show newly linked entities
     setScopeTab('project');
     // Reload to show the newly linked entities
@@ -684,7 +680,6 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
         projectId={projectId}
         onClose={() => setShowUploadModal(false)}
         onSuccess={() => {
-          console.log('[ResourcesPanel] onSuccess called - reloading resources');
           refreshPanelData();
         }}
       />
