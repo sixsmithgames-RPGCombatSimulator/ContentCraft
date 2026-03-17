@@ -4,6 +4,7 @@ import {
   buildSpellcastingSemanticCorrectionPrompt,
   evaluateKeywordExtractorCompliance,
   getStageAllowedKeys,
+  shouldApplyDuplicateRetryGuard,
   shouldOfferAutomaticSchemaCorrectionRetry,
   validateWorkflowStageContractPayload,
 } from './ai.js';
@@ -169,6 +170,32 @@ describe('evaluateKeywordExtractorCompliance', () => {
         correctionAttempt: 1,
       },
     })).toBe(false);
+  });
+
+  it('applies duplicate retry blocking only to correction retries, not first-pass stage runs', () => {
+    expect(shouldApplyDuplicateRetryGuard({
+      projectId: 'project-1',
+      stageId: 'planner',
+      stageRunId: 'run-1',
+      prompt: 'Return planner JSON.',
+      schemaVersion: 'v1.1-client',
+      clientContext: {
+        generatorType: 'npc',
+        correctionAttempt: 0,
+      },
+    })).toBe(false);
+
+    expect(shouldApplyDuplicateRetryGuard({
+      projectId: 'project-1',
+      stageId: 'planner',
+      stageRunId: 'run-1',
+      prompt: 'Return planner JSON.',
+      schemaVersion: 'v1.1-client',
+      clientContext: {
+        generatorType: 'npc',
+        correctionAttempt: 1,
+      },
+    })).toBe(true);
   });
 
   it('builds a hidden schema correction prompt with validation details', () => {

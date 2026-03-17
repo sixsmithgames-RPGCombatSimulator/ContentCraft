@@ -956,6 +956,10 @@ function getCorrectionAttemptCount(body: GeminiRequestBody): number {
   return Math.trunc(rawAttempt);
 }
 
+function shouldApplyDuplicateRetryGuard(body: GeminiRequestBody): boolean {
+  return getCorrectionAttemptCount(body) > 0;
+}
+
 function buildCorrectionPrompt(
   basePrompt: string,
   issues: string[],
@@ -1188,25 +1192,28 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
   }
 
   const retrySignature = computeRetrySignature(body);
-  if (isDuplicateRetry(body, retrySignature)) {
-    console.warn('[AI][Gemini] Duplicate retry signature detected; blocking auto-retry', {
-      stageId: body.stageId,
-      stageRunId: body.stageRunId,
-      projectId: body.projectId,
-    });
-    return respondWithWorkflowFailure(409, {
-      type: 'ABORTED',
-      message: 'Duplicate retry signature detected; review required before retrying.',
-      retryable: false,
-      outcome: 'review_required',
-      retryContext: {
-        reason: 'duplicate_retry_signature',
+  if (shouldApplyDuplicateRetryGuard(body)) {
+    if (isDuplicateRetry(body, retrySignature)) {
+      console.warn('[AI][Gemini] Duplicate retry signature detected; blocking auto-retry', {
+        stageId: body.stageId,
+        stageRunId: body.stageRunId,
+        projectId: body.projectId,
+      });
+      return respondWithWorkflowFailure(409, {
+        type: 'ABORTED',
+        message: 'Duplicate retry signature detected; review required before retrying.',
         retryable: false,
-        duplicateRetryBlocked: true,
-      },
-    });
+        outcome: 'review_required',
+        retryContext: {
+          reason: 'duplicate_retry_signature',
+          retryable: false,
+          duplicateRetryBlocked: true,
+        },
+      });
+    }
+
+    storeRetrySignature(body, retrySignature);
   }
-  storeRetrySignature(body, retrySignature);
 
   const validate = getValidatorForGenerator(generatorType, registry);
   if (!validate) {
@@ -1990,6 +1997,7 @@ export {
   evaluateKeywordExtractorCompliance,
   getNormalizedStageKey,
   getStageAllowedKeys,
+  shouldApplyDuplicateRetryGuard,
   shouldOfferAutomaticSchemaCorrectionRetry,
   validateSharedWorkflowStageContractPayload as validateWorkflowStageContractPayload,
 };
