@@ -43,6 +43,7 @@ interface StageOutput {
   physics_issues?: Issue[];
   conflicts?: Issue[];
   error?: string;
+  technicalErrorMessage?: string;
   rawResponseSnippet?: string;
 }
 
@@ -118,6 +119,7 @@ export default function ReviewAdjustModal({
 
   const proposals: Proposal[] = stageOutput?.proposals || [];
   const stageError = typeof stageOutput.error === 'string' ? stageOutput.error : null;
+  const technicalErrorMessage = typeof stageOutput.technicalErrorMessage === 'string' ? stageOutput.technicalErrorMessage : null;
   const criticalIssues: Issue[] = deduplicateIssues([
     ...((stageOutput?.physics_issues || []).filter((i) => i.severity === 'critical')),
     ...((stageOutput?.conflicts || []).filter((c) => c.severity === 'critical')),
@@ -251,33 +253,15 @@ export default function ReviewAdjustModal({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {stageError && (
-            <div className="border border-red-300 bg-red-50 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-red-900 mb-2 flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-red-600" />
-                Stage error
-              </h3>
-              <p className="text-sm text-red-800 whitespace-pre-wrap">{stageError}</p>
-              {stageOutput.rawResponseSnippet && (
-                <div className="mt-3 p-3 bg-white border border-red-200 rounded">
-                  <p className="text-xs font-medium text-red-700 mb-1">Raw response snippet</p>
-                  <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words">{stageOutput.rawResponseSnippet}</pre>
-                </div>
-              )}
-            </div>
-          )}
-
-          {stageError && (
             <div className="border border-amber-300 bg-amber-50 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-amber-900 mb-2">Additional guidance for the next attempt</h3>
-              <p className="text-sm text-amber-800 mb-3">
-                Add any clarifications or rewording you want included if you retry or switch to manual recovery.
+              <h3 className="text-lg font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                This attempt needs another pass
+              </h3>
+              <p className="text-sm text-amber-900 whitespace-pre-wrap">{stageError}</p>
+              <p className="text-sm text-amber-800 mt-3">
+                Review the choices and suggested fixes below. You can retry right away or add optional guidance for the next attempt.
               </p>
-              <textarea
-                value={additionalDirection}
-                onChange={(e) => setAdditionalDirection(e.target.value)}
-                placeholder="Example: Keep the same structure, but make the spell lists concrete and valid for a warlock."
-                className="w-full min-h-[120px] px-3 py-2 border border-amber-300 rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
             </div>
           )}
 
@@ -503,10 +487,10 @@ export default function ReviewAdjustModal({
             <div>
               <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-red-600" />
-                Critical Issues Found ({criticalIssues.length})
+                Suggested fixes for the next retry ({criticalIssues.length})
               </h3>
               <p className="text-sm text-gray-600 mb-4">
-                Select which issues should be addressed when retrying this stage.
+                Select the items the next attempt should prioritize.
               </p>
               <div className="space-y-3">
                 {criticalIssues.map((issue, index: number) => (
@@ -586,8 +570,45 @@ export default function ReviewAdjustModal({
             </div>
           )}
 
+          {stageError && (
+            <div className="border border-amber-300 bg-amber-50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-amber-900 mb-2">Optional guidance for the next attempt</h3>
+              <p className="text-sm text-amber-800 mb-3">
+                Add any clarifications or rewording you want included if you retry or switch to manual recovery.
+              </p>
+              <textarea
+                value={additionalDirection}
+                onChange={(e) => setAdditionalDirection(e.target.value)}
+                placeholder="Example: Keep the same structure, but make the spell lists concrete and valid for a warlock."
+                className="w-full min-h-[120px] px-3 py-2 border border-amber-300 rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+          )}
+
+          {(technicalErrorMessage || stageOutput.rawResponseSnippet) && (
+            <details className="border border-gray-200 bg-gray-50 rounded-lg p-4">
+              <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                Technical details (optional)
+              </summary>
+              <div className="mt-3 space-y-3">
+                {technicalErrorMessage && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-1">Validation detail</p>
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{technicalErrorMessage}</p>
+                  </div>
+                )}
+                {stageOutput.rawResponseSnippet && (
+                  <div className="p-3 bg-white border border-gray-200 rounded">
+                    <p className="text-xs font-medium text-gray-600 mb-1">Raw response snippet</p>
+                    <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words">{stageOutput.rawResponseSnippet}</pre>
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
+
           {/* Summary */}
-          {(proposals.length > 0 || criticalIssues.length > 0) && (
+          {(stageError || proposals.length > 0 || criticalIssues.length > 0) && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h4 className="font-medium text-blue-900 mb-2">What happens next?</h4>
               <ul className="text-sm text-blue-800 space-y-1">
@@ -653,7 +674,7 @@ export default function ReviewAdjustModal({
               disabled={!canProceed || isSubmitting}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
             >
-              Retry Stage with Answers
+              Retry Stage
             </button>
           </div>
         </div>

@@ -154,7 +154,7 @@ export type SubmitPipelineResponseCallback = (
   rawText: string,
   parsedJson?: Record<string, unknown>,
   metadata?: SubmitPipelineStageMetadata,
-) => Promise<{ status: 'accepted' | 'review_required' | 'error'; message?: string }>;
+) => Promise<{ status: 'accepted' | 'review_required' | 'error' | 'retrying'; message?: string }>;
 
 export type WorkflowStageFailureCallback = (
   failure: WorkflowExecutionFailureResponse,

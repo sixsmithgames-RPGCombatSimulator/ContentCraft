@@ -51,6 +51,12 @@ export interface PrepareWorkflowStageReviewResult {
   shouldPauseForReview: boolean;
 }
 
+export interface WorkflowStageFailureHandling {
+  userMessage: string;
+  retryIssues: string[];
+  shouldAutoRetry: boolean;
+}
+
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -356,23 +362,111 @@ export function filterAnsweredWorkflowProposals(
   return filtered.length > 0 ? filtered : undefined;
 }
 
+function deduplicateTextValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  const deduplicated: string[] = [];
+
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const normalized = trimmed.toLowerCase();
+    if (seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    deduplicated.push(trimmed);
+  }
+
+  return deduplicated;
+}
+
+function buildWorkflowStageUserMessage(stageName: string, errorMessage: string): string {
+  const normalizedStageName = stageName.trim().toLowerCase();
+  const normalizedError = errorMessage.trim().toLowerCase();
+
+  if (normalizedStageName.includes('character build') && normalizedError.includes('placeholder modifiers')) {
+    return 'The last attempt returned incomplete character mechanics. Review the suggested fixes below, then retry the stage.';
+  }
+
+  if (normalizedStageName.includes('spellcasting')) {
+    return 'The last attempt returned spellcasting data the app could not use yet. Review the suggested fixes below, then retry the stage.';
+  }
+
+  if (normalizedStageName.includes('core details')) {
+    return 'The last attempt left out some required personality details. Review the suggested fixes below, then retry the stage.';
+  }
+
+  if (normalizedError.includes('missing') || normalizedError.includes('incomplete') || normalizedError.includes('invalid')) {
+    return 'The last attempt returned incomplete structured data for this stage. Review the suggested fixes below, then retry the stage.';
+  }
+
+  return 'This stage needs another pass before it can continue. Review the suggested fixes below, then retry the stage.';
+}
+
+function collectWorkflowStageRetryIssues(parsed: JsonRecord | undefined, errorMessage: string): string[] {
+  const issuesFromParsed = Array.isArray(parsed?.conflicts)
+    ? parsed.conflicts.flatMap((issue) => {
+      if (!isRecord(issue)) {
+        return [];
+      }
+
+      const candidates = [issue.details, issue.description, issue.new_claim]
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+      return candidates.slice(0, 1);
+    })
+    : [];
+
+  if (issuesFromParsed.length > 0) {
+    return deduplicateTextValues(issuesFromParsed);
+  }
+
+  return deduplicateTextValues(errorMessage.split(/;\s*/));
+}
+
+export function resolveWorkflowStageFailureHandling(input: {
+  stageName: string;
+  errorMessage: string;
+  parsed?: JsonRecord;
+  allowAutomaticRetry: boolean;
+  automaticRetryAlreadyUsed: boolean;
+}): WorkflowStageFailureHandling {
+  const retryIssues = collectWorkflowStageRetryIssues(input.parsed, input.errorMessage);
+
+  return {
+    userMessage: buildWorkflowStageUserMessage(input.stageName, input.errorMessage),
+    retryIssues,
+    shouldAutoRetry: input.allowAutomaticRetry
+      && !input.automaticRetryAlreadyUsed
+      && Boolean(input.parsed)
+      && retryIssues.length > 0,
+  };
+}
+
 export function buildWorkflowStageErrorOutput(input: {
   stageName: string;
   errorMessage: string;
+  displayErrorMessage?: string;
+  technicalErrorMessage?: string;
   rawSnippet?: string;
   parsed?: JsonRecord;
 }): JsonRecord {
   if (input.parsed) {
     return {
       ...input.parsed,
-      error: input.errorMessage,
+      error: input.displayErrorMessage ?? input.errorMessage,
+      technicalErrorMessage: input.technicalErrorMessage,
       rawResponseSnippet: input.rawSnippet,
     };
   }
 
   return {
     stage: input.stageName,
-    error: input.errorMessage,
+    error: input.displayErrorMessage ?? input.errorMessage,
+    technicalErrorMessage: input.technicalErrorMessage,
     rawResponseSnippet: input.rawSnippet,
   };
 }

@@ -956,7 +956,7 @@ export default function AiAssistantPanel() {
         stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
       });
       setExtractedPayload(sanitizedPayload);
-      let pipelineResult: { status: 'accepted' | 'review_required' | 'error'; message?: string } = {
+      let pipelineResult: { status: 'accepted' | 'review_required' | 'error' | 'retrying'; message?: string } = {
         status: 'accepted',
       };
 
@@ -969,6 +969,20 @@ export default function AiAssistantPanel() {
         });
       } else {
         applyStagePatch(confirmedStageKey, sanitizedPayload);
+      }
+
+      if (pipelineResult.status === 'retrying') {
+        setAutoRetryEligible(false);
+        setStageRunnerError(null);
+        setStageRunnerState('idle');
+        setHasAutoStarted(false);
+        console.info('[AI Runner][Pipeline Outcome]', {
+          stageKey: confirmedStageKey,
+          runId,
+          pipelineResult,
+          workflow: body.workflow ?? null,
+        });
+        return;
       }
 
       if (pipelineResult.status !== 'accepted') {

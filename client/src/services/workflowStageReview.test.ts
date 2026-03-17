@@ -4,6 +4,7 @@ import {
   deduplicateWorkflowProposals,
   filterAnsweredWorkflowProposals,
   prepareWorkflowStageForReview,
+  resolveWorkflowStageFailureHandling,
   sanitizeWorkflowProposals,
 } from './workflowStageReview';
 
@@ -148,11 +149,54 @@ describe('workflowStageReview', () => {
     expect(buildWorkflowStageErrorOutput({
       stageName: 'Creator: Stats',
       errorMessage: 'Missing armor_class.',
+      displayErrorMessage: 'The last attempt returned incomplete structured data for this stage. Review the suggested fixes below, then retry the stage.',
+      technicalErrorMessage: 'Missing armor_class.',
       rawSnippet: '{"ability_scores":{}}',
     })).toEqual({
       stage: 'Creator: Stats',
-      error: 'Missing armor_class.',
+      error: 'The last attempt returned incomplete structured data for this stage. Review the suggested fixes below, then retry the stage.',
+      technicalErrorMessage: 'Missing armor_class.',
       rawResponseSnippet: '{"ability_scores":{}}',
     });
+  });
+
+  it('marks structured NPC validation failures as auto-retryable once and softens the user-facing message', () => {
+    expect(resolveWorkflowStageFailureHandling({
+      stageName: 'Creator: Character Build',
+      errorMessage: 'Skill proficiencies use placeholder modifiers (+0). Provide real signed modifiers for the listed proficient skills.',
+      parsed: {
+        conflicts: [
+          {
+            severity: 'critical',
+            description: 'Skill proficiencies use placeholder modifiers (+0). Provide real signed modifiers for the listed proficient skills.',
+          },
+        ],
+      },
+      allowAutomaticRetry: true,
+      automaticRetryAlreadyUsed: false,
+    })).toEqual({
+      userMessage: 'The last attempt returned incomplete character mechanics. Review the suggested fixes below, then retry the stage.',
+      retryIssues: [
+        'Skill proficiencies use placeholder modifiers (+0). Provide real signed modifiers for the listed proficient skills.',
+      ],
+      shouldAutoRetry: true,
+    });
+  });
+
+  it('does not auto-retry the same structured validation failure after the one automatic pass is used', () => {
+    expect(resolveWorkflowStageFailureHandling({
+      stageName: 'Creator: Spellcasting',
+      errorMessage: 'Known casters must include spells_known as a non-empty array of spell names.',
+      parsed: {
+        conflicts: [
+          {
+            severity: 'critical',
+            description: 'Known casters must include spells_known as a non-empty array of spell names.',
+          },
+        ],
+      },
+      allowAutomaticRetry: true,
+      automaticRetryAlreadyUsed: true,
+    }).shouldAutoRetry).toBe(false);
   });
 });

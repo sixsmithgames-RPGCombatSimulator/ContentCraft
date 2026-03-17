@@ -186,6 +186,7 @@ import {
   buildWorkflowStageErrorOutput,
   filterAnsweredWorkflowProposals,
   prepareWorkflowStageForReview,
+  resolveWorkflowStageFailureHandling,
   type WorkflowStageProposal,
 } from '../services/workflowStageReview';
 import {
@@ -472,6 +473,7 @@ export default function ManualGenerator() {
   const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
   const [isMultiPartGeneration, setIsMultiPartGeneration] = useState(false);
   const [currentChunkInfo, setCurrentChunkInfo] = useState<WorkflowChunkInfo | undefined>(undefined);
+  const localValidationAutoRetryStageKeyRef = useRef<string | null>(null);
   const clearCanonNarrowingState = () => setCanonNarrowingState(createEmptyWorkflowCanonNarrowingState<StageResults>());
   const clearWorkflowChunkingState = () => setChunkingState(resetWorkflowChunkingState());
   const applyWorkflowUiTransition = (plan: WorkflowUiTransitionPlan) => {
@@ -1011,7 +1013,7 @@ export default function ManualGenerator() {
 
   // Register submitPipelineResponse callback so the AI panel can trigger the pipeline
   // Initialize with a no-op to avoid TDZ issues before handleSubmit is defined
-  type PipelineSubmitOutcome = { status: 'accepted' | 'review_required' | 'error'; message?: string };
+  type PipelineSubmitOutcome = { status: 'accepted' | 'review_required' | 'error' | 'retrying'; message?: string };
   const handleSubmitRef = useRef<(aiResponse: string, metadata?: SubmitPipelineStageMetadata) => Promise<PipelineSubmitOutcome>>(async () => ({ status: 'accepted' }));
   const pipelineSubmitOutcomeRef = useRef<PipelineSubmitOutcome>({
     status: 'accepted',
@@ -1022,6 +1024,10 @@ export default function ManualGenerator() {
   };
   const acceptPipelineSubmitOutcome = (): PipelineSubmitOutcome => recordPipelineSubmitOutcome({ status: 'accepted' });
   const activeStageName = STAGES[currentStageIndex]?.name || null;
+  useEffect(() => {
+    localValidationAutoRetryStageKeyRef.current = null;
+  }, [currentStageIndex]);
+
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
@@ -3312,12 +3318,54 @@ Output: Valid JSON only. No markdown, no prose.`;
         const stageResponseFailure = normalizedStageResponse;
         const errorMessage = stageResponseFailure.error;
         const rawSnippet = stageResponseFailure.rawSnippet;
-        const pipelineOutcome = recordPipelineSubmitOutcome({ status: 'error', message: errorMessage });
-        setError(errorMessage);
+        const autoRetryStageKey = `${config?.type ?? 'unknown'}:${currentStage.workflowStageKey || currentStage.routerKey || currentStage.name}`;
+        const failureHandling = resolveWorkflowStageFailureHandling({
+          stageName: currentStage.name,
+          errorMessage,
+          parsed: stageResponseFailure.parsed,
+          allowAutomaticRetry: assistMode === 'integrated' && Boolean(config),
+          automaticRetryAlreadyUsed: localValidationAutoRetryStageKeyRef.current === autoRetryStageKey,
+        });
+
+        if (failureHandling.shouldAutoRetry && config) {
+          localValidationAutoRetryStageKeyRef.current = autoRetryStageKey;
+          setError(null);
+          setLastStageError(null);
+          applyWorkflowUiTransition(buildWorkflowRetryUiTransition());
+
+          const additionalInstructions = buildRetryAdditionalInstructions(
+            currentStage,
+            {},
+            failureHandling.retryIssues,
+          );
+          const launchPlan: WorkflowStageLaunchPlan = {
+            kind: 'show_stage',
+            stageIndex: currentStageIndex,
+            stageResults,
+            factpack,
+            chunkInfo: currentChunkInfo || undefined,
+          };
+
+          executeWorkflowStageLaunch(launchPlan, {
+            runtimeConfig: config,
+            overrideDecisions: accumulatedAnswers,
+            additionalGuidance: additionalInstructions,
+          });
+
+          return recordPipelineSubmitOutcome({
+            status: 'retrying',
+            message: 'Retrying this stage automatically with stronger repair instructions.',
+          });
+        }
+
+        const pipelineOutcome = recordPipelineSubmitOutcome({ status: 'error', message: failureHandling.userMessage });
+        setError(failureHandling.userMessage);
         setLastStageError({ stage: currentStage.name, message: errorMessage, rawSnippet });
         setCurrentStageOutput(buildWorkflowStageErrorOutput({
           stageName: currentStage.name,
           errorMessage,
+          displayErrorMessage: failureHandling.userMessage,
+          technicalErrorMessage: errorMessage,
           rawSnippet,
           parsed: stageResponseFailure.parsed,
         }));
@@ -4445,6 +4493,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
   const handleRetryWithAnswers = (answers: Record<string, string>, issuesToAddress: string[], additionalDirection = '') => {
     // Close review modal
+    localValidationAutoRetryStageKeyRef.current = null;
     setError(null);
     setLastStageError(null);
     applyWorkflowUiTransition(buildWorkflowRetryUiTransition());
@@ -4481,6 +4530,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       return;
     }
 
+    localValidationAutoRetryStageKeyRef.current = null;
     setAssistMode('manual');
     setError(null);
     setLastStageError(null);
