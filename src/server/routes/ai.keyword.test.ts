@@ -3,6 +3,7 @@ import {
   buildSchemaCorrectionPrompt,
   buildSpellcastingSemanticCorrectionPrompt,
   evaluateKeywordExtractorCompliance,
+  getAutomaticWorkflowRetryDelayMs,
   getStageAllowedKeys,
   shouldApplyDuplicateRetryGuard,
   shouldOfferAutomaticSchemaCorrectionRetry,
@@ -196,6 +197,11 @@ describe('evaluateKeywordExtractorCompliance', () => {
         correctionAttempt: 1,
       },
     })).toBe(true);
+  });
+
+  it('uses workflow stage retry cooldowns for automatic correction retry delays', () => {
+    expect(getAutomaticWorkflowRetryDelayMs('story_arc.characters', 'story_arc')).toBe(5000);
+    expect(getAutomaticWorkflowRetryDelayMs('unknown_stage', 'story_arc')).toBe(5000);
   });
 
   it('builds a hidden schema correction prompt with validation details', () => {

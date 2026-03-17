@@ -38,6 +38,7 @@ import {
   buildIntegratedStageRequest,
   executeIntegratedStageRequest,
   getConfirmedIntegratedStageMetadata,
+  resolveIntegratedRetryDelayMs,
   shouldAutoRetryIntegratedFailure,
 } from '../../services/workflowTransport';
 import type { WorkflowTransportStageResponse } from '../../services/workflowTransport';
@@ -283,6 +284,8 @@ export default function AiAssistantPanel() {
   const [showModeDialog, setShowModeDialog] = useState(false);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
   const [autoRetryEligible, setAutoRetryEligible] = useState(false);
+
+  const automatedRetryDelayMs = 2500;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -854,9 +857,10 @@ export default function AiAssistantPanel() {
         });
         const correctionPrompt = failureBody?.workflow?.retryContext?.correctionPrompt;
         if (failureBody && correctionPrompt && shouldAutoRetryIntegratedFailure(failureBody)) {
+          const retryDelayMs = resolveIntegratedRetryDelayMs(failureBody);
           addMessage({
             role: 'system',
-            content: 'The AI returned malformed stage data. Retrying automatically with repair instructions.',
+            content: `The AI returned malformed stage data. Retrying automatically with repair instructions in ${(retryDelayMs / 1000).toFixed(0)}s.`,
           });
           setAutoRetryEligible(false);
           setStageRunnerError(null);
@@ -866,7 +870,7 @@ export default function AiAssistantPanel() {
           setTimeout(() => runStageWithGemini({
             promptOverride: correctionPrompt,
             correctionAttempt: correctionAttempt + 1,
-          }), 0);
+          }), retryDelayMs);
           return;
         }
         if (failureBody?.error?.type === 'RATE_LIMIT') {
@@ -1236,7 +1240,7 @@ export default function AiAssistantPanel() {
           setStageRunnerError(null);
           setStageRunnerState('idle');
           // Allow state to settle before retrying
-          setTimeout(() => runStageWithGemini(), 0);
+          setTimeout(() => runStageWithGemini(), automatedRetryDelayMs);
           return null;
         }
         return next;
@@ -1249,7 +1253,7 @@ export default function AiAssistantPanel() {
       clearInterval(interval);
       retryTimerRef.current = null;
     };
-  }, [stageRunnerState, stageRunnerError, currentRunAttemptStatus, autoRetryEligible, runStageWithGemini]);
+  }, [stageRunnerState, stageRunnerError, currentRunAttemptStatus, autoRetryEligible, automatedRetryDelayMs, runStageWithGemini]);
 
   // Stall watchdog: only retry if the same explicit attempt never gets accepted.
   useEffect(() => {
@@ -1294,7 +1298,7 @@ export default function AiAssistantPanel() {
           });
           setStageRunnerState('idle');
           setHasAutoStarted(false);
-          setTimeout(() => runStageWithGemini(), 0);
+          setTimeout(() => runStageWithGemini(), automatedRetryDelayMs);
           return null;
         }
         return next;
@@ -1317,6 +1321,7 @@ export default function AiAssistantPanel() {
     effectiveStageKey,
     hasActiveAutomatedStage,
     isPanelOpen,
+    automatedRetryDelayMs,
     runStageWithGemini,
     stageRunnerState,
     updateWorkflowRunAttempt,

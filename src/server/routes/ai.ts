@@ -62,6 +62,18 @@ function getStageAllowedKeys(stageId: string, registry: StageRegistryEntry, work
   return [...(getWorkflowStageProxyAllowedKeys(stageId) ?? registry.allowedPaths)];
 }
 
+function getAutomaticWorkflowRetryDelayMs(stageId: string, workflowType?: string): number {
+  if (workflowType) {
+    const scopedDefinition = getWorkflowStageDefinition(resolveWorkflowContentType(workflowType), stageId);
+    const scopedCooldownMs = scopedDefinition?.retryPolicy?.cooldownMs;
+    if (typeof scopedCooldownMs === 'number' && Number.isFinite(scopedCooldownMs) && scopedCooldownMs > 0) {
+      return Math.max(scopedCooldownMs, MIN_REQUEST_SPACING_MS);
+    }
+  }
+
+  return Math.max(5000, MIN_REQUEST_SPACING_MS);
+}
+
 function pruneToAllowedKeys(allowedKeys: string[], payload: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(payload).filter(([key]) => allowedKeys.includes(key)));
 }
@@ -1656,16 +1668,19 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
 
           if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
             const correctionPrompt = buildSpellcastingSemanticCorrectionPrompt(body.prompt, spellcastingIssues);
+            const retryAfterMs = getAutomaticWorkflowRetryDelayMs(body.stageId, generatorType);
             return respondWithWorkflowFailure(422, {
               type: 'INVALID_RESPONSE',
               message: 'Spellcasting response was incomplete. Retrying automatically with repair instructions.',
               retryable: true,
+              retryAfterMs,
               outcome: 'retry_required',
               allowedKeyCount: allowedKeys.length,
               rawAllowedKeyCount,
               retryContext: {
                 reason: 'spellcasting_semantic_validation_failed',
                 retryable: true,
+                retryAfterMs,
                 correctionPrompt,
               },
             });
@@ -1709,18 +1724,21 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
 
         if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
           const correctionPrompt = buildContractCorrectionPrompt(body.prompt, stageKey, failure.error, requiredFields);
+          const retryAfterMs = getAutomaticWorkflowRetryDelayMs(body.stageId, generatorType);
           return respondWithWorkflowFailure(422, {
             type: 'INVALID_RESPONSE',
             message: stageKey === 'spellcasting'
               ? 'Spellcasting response used the wrong field structure. Retrying automatically with repair instructions.'
               : `${body.stageId} returned malformed structured data. Retrying automatically with repair instructions.`,
             retryable: true,
+            retryAfterMs,
             outcome: 'retry_required',
             allowedKeyCount: allowedKeys.length,
             rawAllowedKeyCount,
             retryContext: {
               reason: 'contract_validation_failed',
               retryable: true,
+              retryAfterMs,
               correctionPrompt,
             },
           });
@@ -1789,16 +1807,19 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
 
         if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
           const correctionPrompt = buildSchemaCorrectionPrompt(body.prompt, validationErrors, requiredFields);
+          const retryAfterMs = getAutomaticWorkflowRetryDelayMs(body.stageId, generatorType);
           return respondWithWorkflowFailure(422, {
             type: 'INVALID_RESPONSE',
             message: `${body.stageId} returned malformed structured data. Retrying automatically with repair instructions.`,
             retryable: true,
+            retryAfterMs,
             outcome: 'retry_required',
             allowedKeyCount: allowedKeys.length,
             rawAllowedKeyCount,
             retryContext: {
               reason: 'schema_validation_failed',
               retryable: true,
+              retryAfterMs,
               correctionPrompt,
             },
           });
@@ -1991,6 +2012,7 @@ aiRouter.post('/workflow/chat', async (req: Request, res: ExpressResponse) => {
 
 export {
   aiRouter,
+  getAutomaticWorkflowRetryDelayMs,
   buildContractCorrectionPrompt,
   buildSchemaCorrectionPrompt,
   buildSpellcastingSemanticCorrectionPrompt,

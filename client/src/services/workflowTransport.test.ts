@@ -3,6 +3,7 @@ import {
   buildIntegratedStageRequest,
   buildManualStagePrompt,
   getConfirmedIntegratedStageMetadata,
+  resolveIntegratedRetryDelayMs,
   shouldAutoRetryIntegratedFailure,
 } from './workflowTransport';
 import type { AiAssistantWorkflowContext } from '../contexts/AiAssistantContext';
@@ -370,5 +371,61 @@ describe('workflow transport', () => {
         retryable: true,
       },
     })).toBe(true);
+  });
+
+  it('resolves integrated retry delay from workflow retry metadata with a safe minimum', () => {
+    expect(resolveIntegratedRetryDelayMs({
+      ok: false,
+      requestId: 'req-7',
+      stageRunId: 'run-7',
+      workflow: {
+        stageId: 'story_arc.characters',
+        stageKey: 'story_arc.characters',
+        workflowType: 'story_arc',
+        outcome: 'retry_required',
+        accepted: false,
+        allowedKeyCount: 2,
+        rawAllowedKeyCount: 1,
+        retryContext: {
+          reason: 'contract_validation_failed',
+          retryable: true,
+          retryAfterMs: 603,
+          correctionPrompt: 'Return ONLY JSON.',
+        },
+      },
+      error: {
+        type: 'INVALID_RESPONSE',
+        message: 'story_arc.characters returned malformed structured data. Retrying automatically with repair instructions.',
+        retryable: true,
+        retryAfterMs: 603,
+      },
+    })).toBe(2500);
+  });
+
+  it('falls back to the default integrated retry delay when retry metadata is absent', () => {
+    expect(resolveIntegratedRetryDelayMs({
+      ok: false,
+      requestId: 'req-8',
+      stageRunId: 'run-8',
+      workflow: {
+        stageId: 'story_arc.characters',
+        stageKey: 'story_arc.characters',
+        workflowType: 'story_arc',
+        outcome: 'retry_required',
+        accepted: false,
+        allowedKeyCount: 2,
+        rawAllowedKeyCount: 1,
+        retryContext: {
+          reason: 'contract_validation_failed',
+          retryable: true,
+          correctionPrompt: 'Return ONLY JSON.',
+        },
+      },
+      error: {
+        type: 'INVALID_RESPONSE',
+        message: 'story_arc.characters returned malformed structured data. Retrying automatically with repair instructions.',
+        retryable: true,
+      },
+    })).toBe(5000);
   });
 });

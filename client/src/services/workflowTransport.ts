@@ -6,6 +6,9 @@ import type {
   WorkflowExecutionSuccessResponse,
 } from '../../../src/server/services/workflowExecutionService';
 
+const DEFAULT_AUTOMATED_RETRY_DELAY_MS = 5000;
+const MIN_AUTOMATED_RETRY_DELAY_MS = 2500;
+
 export interface WorkflowTransportStageRequest {
   projectId: string;
   stageId: string;
@@ -109,6 +112,33 @@ export function getConfirmedIntegratedStageMetadata(
     rawAllowedKeyCount: 0,
     retryContext: undefined,
   };
+}
+
+export function resolveIntegratedRetryDelayMs(
+  responseBody: WorkflowTransportStageResponse | null | undefined,
+  options?: { fallbackMs?: number; minimumMs?: number },
+): number {
+  const fallbackMs = options?.fallbackMs ?? DEFAULT_AUTOMATED_RETRY_DELAY_MS;
+  const minimumMs = options?.minimumMs ?? MIN_AUTOMATED_RETRY_DELAY_MS;
+
+  if (!responseBody || responseBody.ok !== false) {
+    return Math.max(fallbackMs, minimumMs);
+  }
+
+  const failureBody = responseBody as WorkflowTransportFailureResponse;
+  const retryContextDelayMs = failureBody.workflow?.retryContext?.retryAfterMs;
+  const errorDelayMs = failureBody.error?.retryAfterMs;
+  const rawDelayMs = typeof retryContextDelayMs === 'number'
+    ? retryContextDelayMs
+    : typeof errorDelayMs === 'number'
+      ? errorDelayMs
+      : fallbackMs;
+
+  if (!Number.isFinite(rawDelayMs)) {
+    return Math.max(fallbackMs, minimumMs);
+  }
+
+  return Math.max(rawDelayMs, minimumMs);
 }
 
 export function shouldAutoRetryIntegratedFailure(
