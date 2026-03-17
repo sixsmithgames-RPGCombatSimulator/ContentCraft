@@ -84,6 +84,14 @@ export interface MappingResult {
 function normalizeAbilityScores(source: Record<string, unknown>): Record<string, number> | null {
   const result: Record<string, number> = {};
   const requiredAbilities = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+  const aliasMap: Record<string, string[]> = {
+    str: ['strength', 'STR', 'Strength'],
+    dex: ['dexterity', 'DEX', 'Dexterity'],
+    con: ['constitution', 'CON', 'Constitution'],
+    int: ['intelligence', 'INT', 'Intelligence'],
+    wis: ['wisdom', 'WIS', 'Wisdom'],
+    cha: ['charisma', 'CHA', 'Charisma'],
+  };
 
   for (const abilityName of requiredAbilities) {
     // Try lowercase first (canonical)
@@ -92,17 +100,17 @@ function normalizeAbilityScores(source: Record<string, unknown>): Record<string,
       continue;
     }
 
-    // Try uppercase
-    const uppercase = abilityName.toUpperCase();
-    if (typeof source[uppercase] === 'number') {
-      result[abilityName] = source[uppercase] as number;
-      continue;
+    const aliases = aliasMap[abilityName] || [];
+    let matched = false;
+    for (const alias of aliases) {
+      if (typeof source[alias] === 'number') {
+        result[abilityName] = source[alias] as number;
+        matched = true;
+        break;
+      }
     }
 
-    // Try capitalized
-    const capitalized = abilityName.charAt(0).toUpperCase() + abilityName.slice(1);
-    if (typeof source[capitalized] === 'number') {
-      result[abilityName] = source[capitalized] as number;
+    if (matched) {
       continue;
     }
 
@@ -204,9 +212,23 @@ function normalizeClassLevels(source: Record<string, unknown>): string | Array<R
     return null;
   }
 
-  // If already a string (legacy format like "Artificer 16 / Vampire 9"), return as-is
+  // If already a string, canonicalize to the array structure expected by editors.
   if (typeof classLevels === 'string') {
-    return classLevels;
+    const normalized = classLevels.trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const levelMatch = normalized.match(/^(.*?)(?:\s+|\s*[-–]\s*)(\d+)$/);
+    const descriptor = levelMatch?.[1]?.trim() || normalized;
+    const parsedLevel = levelMatch?.[2] ? Number.parseInt(levelMatch[2], 10) : undefined;
+    const subclassMatch = descriptor.match(/^(.+?)\s*\((.+)\)$/);
+
+    return [{
+      class: (subclassMatch?.[1] || descriptor).trim(),
+      ...(Number.isFinite(parsedLevel) ? { level: parsedLevel } : {}),
+      ...(subclassMatch?.[2]?.trim() ? { subclass: subclassMatch[2].trim() } : {}),
+    }];
   }
 
   // If array, preserve object structure
@@ -397,6 +419,31 @@ export function mapToCanonicalStructure(rawData: Record<string, unknown>): Mappi
     // Start with a copy of raw data
     const mapped: Record<string, unknown> = { ...rawData };
 
+    const schemaVersionSource =
+      typeof rawData.schema_version === 'string' || typeof rawData.schema_version === 'number'
+        ? rawData.schema_version
+        : typeof rawData.schemaVersion === 'string' || typeof rawData.schemaVersion === 'number'
+          ? rawData.schemaVersion
+          : undefined;
+
+    if (typeof schemaVersionSource === 'number') {
+      const detected = schemaVersionSource === 1.1 ? '1.1' : schemaVersionSource === 1.0 ? '1.0' : undefined;
+      if (detected) {
+        mapped.schema_version = detected;
+        result.warnings.push(`Normalized schema_version from "${schemaVersionSource}" to "${detected}"`);
+      }
+    } else if (typeof schemaVersionSource === 'string') {
+      const normalized = schemaVersionSource.trim().toLowerCase();
+      const match = normalized.match(/(?:^|\b|\/)(?:v)?(\d+\.\d+)(?:\.\d+)?(?:$|\b)/);
+      const detected = match?.[1];
+      if (detected === '1.1' || detected === '1.0') {
+        mapped.schema_version = detected;
+        if (schemaVersionSource !== detected) {
+          result.warnings.push(`Normalized schema_version from "${schemaVersionSource}" to "${detected}"`);
+        }
+      }
+    }
+
     // 1. Normalize ability scores
     if (rawData.ability_scores && typeof rawData.ability_scores === 'object') {
       const abilityScores = normalizeAbilityScores(rawData.ability_scores as Record<string, unknown>);
@@ -478,8 +525,8 @@ export function mapToCanonicalStructure(rawData: Record<string, unknown>): Mappi
     const classLevels = normalizeClassLevels(rawData);
     if (classLevels !== null) {
       mapped.class_levels = classLevels;
-      if (typeof classLevels === 'string') {
-        result.warnings.push('class_levels is string format (legacy). Consider converting to array format.');
+      if (typeof rawData.class_levels === 'string') {
+        result.warnings.push('Normalized string class_levels into canonical array format');
       }
     }
 

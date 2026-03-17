@@ -663,15 +663,26 @@ const ensureObject = (value: unknown): Record<string, unknown> => {
   return {};
 };
 
+const ensureAbilityScoreValue = (source: Record<string, unknown>, keys: string[]): number | undefined => {
+  for (const key of keys) {
+    const parsed = ensureNumber(source[key]);
+    if (parsed !== undefined) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+};
+
 const ensureAbilityScores = (scores: unknown): AbilityScores => {
   const source = ensureObject(scores);
   return {
-    str: Number.isFinite(source.str as number) ? (source.str as number) : DEFAULT_ABILITY_SCORES.str,
-    dex: Number.isFinite(source.dex as number) ? (source.dex as number) : DEFAULT_ABILITY_SCORES.dex,
-    con: Number.isFinite(source.con as number) ? (source.con as number) : DEFAULT_ABILITY_SCORES.con,
-    int: Number.isFinite(source.int as number) ? (source.int as number) : DEFAULT_ABILITY_SCORES.int,
-    wis: Number.isFinite(source.wis as number) ? (source.wis as number) : DEFAULT_ABILITY_SCORES.wis,
-    cha: Number.isFinite(source.cha as number) ? (source.cha as number) : DEFAULT_ABILITY_SCORES.cha,
+    str: ensureAbilityScoreValue(source, ['str', 'strength', 'STR', 'Strength']) ?? DEFAULT_ABILITY_SCORES.str,
+    dex: ensureAbilityScoreValue(source, ['dex', 'dexterity', 'DEX', 'Dexterity']) ?? DEFAULT_ABILITY_SCORES.dex,
+    con: ensureAbilityScoreValue(source, ['con', 'constitution', 'CON', 'Constitution']) ?? DEFAULT_ABILITY_SCORES.con,
+    int: ensureAbilityScoreValue(source, ['int', 'intelligence', 'INT', 'Intelligence']) ?? DEFAULT_ABILITY_SCORES.int,
+    wis: ensureAbilityScoreValue(source, ['wis', 'wisdom', 'WIS', 'Wisdom']) ?? DEFAULT_ABILITY_SCORES.wis,
+    cha: ensureAbilityScoreValue(source, ['cha', 'charisma', 'CHA', 'Charisma']) ?? DEFAULT_ABILITY_SCORES.cha,
   };
 };
 
@@ -698,6 +709,33 @@ const normalizeFeatureList = (value: unknown): NpcFeature[] => {
       recharge: ensureString(obj.recharge),
       notes: ensureString(obj.notes),
     };
+  });
+};
+
+const normalizeClassLevels = (value: unknown): NpcClassLevel[] => {
+  return ensureArray<NpcClassLevel>(value, (entry) => {
+    if (typeof entry === 'string') {
+      const normalized = ensureString(entry);
+      if (!normalized) return undefined;
+
+      const levelMatch = normalized.match(/^(.*?)(?:\s+|\s*[-–]\s*)(\d+)$/);
+      const descriptor = levelMatch?.[1]?.trim() || normalized;
+      const parsedLevel = levelMatch?.[2] ? Number.parseInt(levelMatch[2], 10) : undefined;
+      const subclassMatch = descriptor.match(/^(.+?)\s*\((.+)\)$/);
+
+      return {
+        class: ensureString(subclassMatch?.[1] ?? descriptor),
+        level: Number.isFinite(parsedLevel) ? parsedLevel : undefined,
+        subclass: ensureString(subclassMatch?.[2]) || undefined,
+      };
+    }
+
+    const clObj = ensureObject(entry);
+    const className = ensureString(clObj.class ?? clObj.name);
+    const level = ensureNumber(clObj.level);
+    const subclass = ensureString(clObj.subclass ?? clObj.archetype);
+    if (!className && level === undefined) return undefined;
+    return { class: className, level, subclass, notes: ensureString(clObj.notes) };
   });
 };
 
@@ -811,6 +849,63 @@ const normalizeHitPoints = (value: unknown, fallbackFormula?: string): HitPoints
     formula: ensureString(obj.formula ?? fallbackFormula),
     notes: ensureString(obj.notes),
   };
+};
+
+const normalizeSpeed = (value: unknown): Record<string, unknown> => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { walk: `${value} ft.` };
+  }
+
+  if (typeof value === 'string') {
+    const normalized = ensureString(value);
+    return normalized ? { walk: normalized } : {};
+  }
+
+  const obj = ensureObject(value);
+  const normalized: Record<string, unknown> = {};
+
+  for (const [key, rawValue] of Object.entries(obj)) {
+    if (key === 'passive_perception') {
+      continue;
+    }
+
+    const numeric = ensureNumber(rawValue);
+    if (numeric !== undefined) {
+      normalized[key] = `${numeric} ft.`;
+      continue;
+    }
+
+    const text = ensureString(rawValue);
+    if (text) {
+      normalized[key] = text;
+    }
+  }
+
+  return normalized;
+};
+
+const normalizeSenses = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return ensureStringArray(value);
+  }
+
+  const obj = ensureObject(value);
+  if (Object.keys(obj).length === 0) {
+    return [];
+  }
+
+  return Object.entries(obj)
+    .filter(([key]) => key !== 'passive_perception')
+    .map(([key, rawValue]) => {
+      const numeric = ensureNumber(rawValue);
+      if (numeric !== undefined) {
+        return `${key} ${numeric} ft.`;
+      }
+
+      const text = ensureString(rawValue);
+      return text ? `${key}: ${text}` : '';
+    })
+    .filter(Boolean);
 };
 
 const normalizeSpellcasting = (value: unknown): SpellcastingDetails | undefined => {
@@ -1019,6 +1114,8 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
   const npcSource = ensureObject(rootSource.npc ?? rootSource.character ?? rootSource);
   const statBlock = ensureObject(npcSource.stat_block);
   const personalityObject = ensureObject(npcSource.personality);
+  const sensesSource = npcSource.senses ?? statBlock.senses;
+  const sensesObject = ensureObject(sensesSource);
   const topLevelSpellcasting = {
     spellcasting_ability: npcSource.spellcasting_ability,
     spell_save_dc: npcSource.spell_save_dc,
@@ -1083,26 +1180,20 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
     quirks: ensureStringArray(npcSource.quirks),
     voice_mannerisms: ensureStringArray(npcSource.voice_mannerisms),
     tactics: ensureString(npcSource.combat_tactics ?? npcSource.tactics),
-    class_levels: ensureArray<NpcClassLevel>(npcSource.class_levels, (cl) => {
-      const clObj = ensureObject(cl);
-      const className = ensureString(clObj.class ?? clObj.name);
-      const level = ensureNumber(clObj.level);
-      const subclass = ensureString(clObj.subclass ?? clObj.archetype);
-      if (!className && level === undefined) return undefined;
-      return { class: className, level, subclass, notes: ensureString(clObj.notes) };
-    }),
+    class_levels: normalizeClassLevels(npcSource.class_levels),
     ability_scores: ensureAbilityScores(npcSource.ability_scores ?? statBlock.ability_scores),
     armor_class: armorClass,
     hit_points: hitPoints,
     hit_dice: ensureString(npcSource.hit_dice ?? statBlock.hit_dice),
     proficiency_bonus: ensureNumber(npcSource.proficiency_bonus)
       ?? ensureString(npcSource.proficiency_bonus ?? statBlock.proficiency_bonus),
-    speed: ensureObject(npcSource.speed ?? statBlock.speed),
+    speed: normalizeSpeed(npcSource.speed ?? statBlock.speed),
     saving_throws: normalizeScoredList(npcSource.saving_throws ?? statBlock.saving_throws),
     skill_proficiencies: normalizeScoredList(npcSource.skills ?? npcSource.skill_proficiencies ?? statBlock.skills),
-    senses: ensureStringArray(npcSource.senses ?? statBlock.senses),
+    senses: normalizeSenses(sensesSource),
     passive_perception: ensureNumber(npcSource.passive_perception)
-      ?? ensureNumber(statBlock.passive_perception),
+      ?? ensureNumber(statBlock.passive_perception)
+      ?? ensureNumber(sensesObject.passive_perception),
     languages: ensureStringArray(npcSource.languages ?? statBlock.languages),
     damage_resistances: ensureStringArray(npcSource.damage_resistances ?? statBlock.damage_resistances),
     damage_immunities: ensureStringArray(npcSource.damage_immunities ?? statBlock.damage_immunities),
@@ -1144,10 +1235,10 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
     family: normalizeNamedEntries(npcSource.family),
     contacts: normalizeNamedEntries(npcSource.contacts),
     personality: {
-      traits: ensureStringArray(personalityObject.traits ?? personalityObject.personality_traits),
-      ideals: ensureStringArray(personalityObject.ideals),
-      bonds: ensureStringArray(personalityObject.bonds),
-      flaws: ensureStringArray(personalityObject.flaws),
+      traits: ensureStringArray(personalityObject.traits ?? personalityObject.personality_traits ?? npcSource.personality_traits),
+      ideals: ensureStringArray(personalityObject.ideals ?? npcSource.ideals),
+      bonds: ensureStringArray(personalityObject.bonds ?? npcSource.bonds),
+      flaws: ensureStringArray(personalityObject.flaws ?? npcSource.flaws),
     },
     spellcasting,
     actions: normalizeFeatureList(npcSource.actions ?? statBlock.actions),

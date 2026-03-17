@@ -212,16 +212,26 @@ export const ensureStringArray = (value: unknown): string[] =>
     return str.length ? str : undefined;
   }) as string[];
 
+const ensureAbilityScoreValue = (source: PrimitiveRecord, keys: string[]): number | undefined => {
+  for (const key of keys) {
+    const parsed = ensureNumber(source[key]);
+    if (parsed !== undefined) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+};
+
 const ensureAbilityScores = (value: unknown): AbilityScores => {
   const source = ensureObject(value);
-  // Only accept canonical lowercase field names
   return {
-    str: ensureNumber(source.str) ?? DEFAULT_ABILITY_SCORES.str,
-    dex: ensureNumber(source.dex) ?? DEFAULT_ABILITY_SCORES.dex,
-    con: ensureNumber(source.con) ?? DEFAULT_ABILITY_SCORES.con,
-    int: ensureNumber(source.int) ?? DEFAULT_ABILITY_SCORES.int,
-    wis: ensureNumber(source.wis) ?? DEFAULT_ABILITY_SCORES.wis,
-    cha: ensureNumber(source.cha) ?? DEFAULT_ABILITY_SCORES.cha,
+    str: ensureAbilityScoreValue(source, ['str', 'strength', 'STR', 'Strength']) ?? DEFAULT_ABILITY_SCORES.str,
+    dex: ensureAbilityScoreValue(source, ['dex', 'dexterity', 'DEX', 'Dexterity']) ?? DEFAULT_ABILITY_SCORES.dex,
+    con: ensureAbilityScoreValue(source, ['con', 'constitution', 'CON', 'Constitution']) ?? DEFAULT_ABILITY_SCORES.con,
+    int: ensureAbilityScoreValue(source, ['int', 'intelligence', 'INT', 'Intelligence']) ?? DEFAULT_ABILITY_SCORES.int,
+    wis: ensureAbilityScoreValue(source, ['wis', 'wisdom', 'WIS', 'Wisdom']) ?? DEFAULT_ABILITY_SCORES.wis,
+    cha: ensureAbilityScoreValue(source, ['cha', 'charisma', 'CHA', 'Charisma']) ?? DEFAULT_ABILITY_SCORES.cha,
   };
 };
 
@@ -314,6 +324,22 @@ const normalizeNamedEntries = (value: unknown): NamedEntry[] =>
 
 const normalizeClassLevels = (value: unknown): ClassLevel[] =>
   ensureArray(value, (entry) => {
+    if (typeof entry === 'string') {
+      const normalized = ensureString(entry);
+      if (!normalized) return undefined;
+
+      const levelMatch = normalized.match(/^(.*?)(?:\s+|\s*[-–]\s*)(\d+)$/);
+      const descriptor = levelMatch?.[1]?.trim() || normalized;
+      const parsedLevel = levelMatch?.[2] ? Number.parseInt(levelMatch[2], 10) : undefined;
+      const subclassMatch = descriptor.match(/^(.+?)\s*\((.+)\)$/);
+
+      return {
+        class: (subclassMatch?.[1] || descriptor) || undefined,
+        level: Number.isFinite(parsedLevel) ? parsedLevel : undefined,
+        subclass: subclassMatch?.[2]?.trim() || undefined,
+      };
+    }
+
     const obj = ensureObject(entry);
     const className = ensureString(obj.class) || ensureString(obj.name);
     const level = ensureNumber(obj.level);
@@ -325,6 +351,63 @@ const normalizeClassLevels = (value: unknown): ClassLevel[] =>
       notes: ensureString(obj.notes) || undefined,
     };
   }) as ClassLevel[];
+
+const normalizeSpeed = (value: unknown): Record<string, string> => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { walk: `${value} ft.` };
+  }
+
+  if (typeof value === 'string') {
+    const normalized = ensureString(value);
+    return normalized ? { walk: normalized } : {};
+  }
+
+  const obj = ensureObject(value);
+  const normalized: Record<string, string> = {};
+
+  for (const [key, rawValue] of Object.entries(obj)) {
+    if (key === 'passive_perception') {
+      continue;
+    }
+
+    const numeric = ensureNumber(rawValue);
+    if (numeric !== undefined) {
+      normalized[key] = `${numeric} ft.`;
+      continue;
+    }
+
+    const text = ensureString(rawValue);
+    if (text) {
+      normalized[key] = text;
+    }
+  }
+
+  return normalized;
+};
+
+const normalizeSenses = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return ensureStringArray(value);
+  }
+
+  const obj = ensureObject(value);
+  if (Object.keys(obj).length === 0) {
+    return [];
+  }
+
+  return Object.entries(obj)
+    .filter(([key]) => key !== 'passive_perception')
+    .map(([key, rawValue]) => {
+      const numeric = ensureNumber(rawValue);
+      if (numeric !== undefined) {
+        return `${key} ${numeric} ft.`;
+      }
+
+      const text = ensureString(rawValue);
+      return text ? `${key}: ${text}` : '';
+    })
+    .filter((entry) => entry.length > 0);
+};
 
 const normalizeArmorClass = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -488,11 +571,14 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
   ].filter(Boolean);
 
   const normalizedPersonality = {
-    traits: ensureStringArray(personalitySource.traits || personalitySource.personality_traits),
-    ideals: ensureStringArray(personalitySource.ideals),
-    bonds: ensureStringArray(personalitySource.bonds),
-    flaws: ensureStringArray(personalitySource.flaws),
+    traits: ensureStringArray(personalitySource.traits || personalitySource.personality_traits || npcSource.personality_traits),
+    ideals: ensureStringArray(personalitySource.ideals || npcSource.ideals),
+    bonds: ensureStringArray(personalitySource.bonds || npcSource.bonds),
+    flaws: ensureStringArray(personalitySource.flaws || npcSource.flaws),
   };
+
+  const sensesSource = npcSource.senses || statBlock.senses;
+  const sensesObject = ensureObject(sensesSource);
 
   const armorClass = normalizeArmorClass(npcSource.armor_class || statBlock.armor_class);
   const hitPoints = normalizeHitPoints(
@@ -508,7 +594,7 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
     aliases: ensureStringArray(npcSource.aliases),
     role: ensureString(npcSource.role) || undefined,
     description: ensureString(npcSource.description),
-    appearance: ensureString(npcSource.appearance) || undefined,
+    appearance: ensureString(npcSource.appearance || npcSource.physical_appearance) || undefined,
     background: ensureString(npcSource.background) || undefined,
     race: ensureString(npcSource.race || npcSource.species) || undefined,
     alignment: ensureString(npcSource.alignment) || undefined,
@@ -524,7 +610,7 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
     fears: ensureStringArray(npcSource.fears),
     quirks: ensureStringArray(npcSource.quirks),
     voiceMannerisms: ensureStringArray(npcSource.voice_mannerisms),
-    tactics: ensureString(npcSource.tactics) || undefined,
+    tactics: ensureString(npcSource.tactics || npcSource.combat_tactics) || undefined,
     classLevels: normalizeClassLevels(npcSource.class_levels),
     classFeatures: normalizeFeatureList(npcSource.class_features),
     subclassFeatures: normalizeFeatureList(npcSource.subclass_features),
@@ -548,9 +634,11 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
       typeof (proficiencyValue ?? proficiencyText) === 'string'
         ? ((proficiencyValue ?? proficiencyText) as string)
         : undefined,
-    speed: ensureObject(npcSource.speed || statBlock.speed) as Record<string, string>,
-    senses: ensureStringArray(npcSource.senses || statBlock.senses),
-    passivePerception: ensureNumber(npcSource.passive_perception) ?? ensureNumber(statBlock.passive_perception),
+    speed: normalizeSpeed(npcSource.speed || statBlock.speed),
+    senses: normalizeSenses(sensesSource),
+    passivePerception: ensureNumber(npcSource.passive_perception)
+      ?? ensureNumber(statBlock.passive_perception)
+      ?? ensureNumber(sensesObject.passive_perception),
     languages: ensureStringArray(npcSource.languages || statBlock.languages),
     savingThrows: normalizeScoredList(npcSource.saving_throws || statBlock.saving_throws),
     skills: normalizeScoredList(npcSource.skills || npcSource.skill_proficiencies || statBlock.skills),

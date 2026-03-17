@@ -369,6 +369,7 @@ contentRouter.post('/generated/save', async (req, res) => {
       deliverable_type,
       title,
       generated_content,
+      validation_content,
       persisted_content,
       resolved_proposals,
       resolved_conflicts,
@@ -386,13 +387,17 @@ contentRouter.post('/generated/save', async (req, res) => {
 
     // CRITICAL: Check for Monster content FIRST before NPC check
     // Monsters also have content_type='character' so they'd be caught by NPC validation if we check NPC first
-    let validatedContent = generated_content;
+    const storedGeneratedContent = generated_content;
+    const validationContent =
+      validation_content && typeof validation_content === 'object'
+        ? validation_content
+        : storedGeneratedContent;
     const isMonster = isMonsterContent(generated_content);
 
     if (isMonster) {
       console.log('[Generated Content] Detected Monster content, applying schema validation...');
 
-      const validation = validateMonsterStrict(generated_content);
+      const validation = validateMonsterStrict(validationContent);
 
       if (!validation.valid) {
         console.error('[Generated Content] Monster validation failed');
@@ -426,7 +431,7 @@ contentRouter.post('/generated/save', async (req, res) => {
         const npcPayloadForValidation =
           persisted_content && typeof persisted_content === 'object'
             ? persisted_content
-            : generated_content;
+            : validationContent;
 
         const validation = mapAndValidateNpc(npcPayloadForValidation);
 
@@ -449,9 +454,6 @@ contentRouter.post('/generated/save', async (req, res) => {
           });
         }
 
-        // Use validated and mapped data
-        validatedContent = validation.data!;
-
         if (validation.warnings.length > 0) {
           console.warn('[Generated Content] NPC validation warnings:', validation.warnings);
         }
@@ -469,19 +471,19 @@ contentRouter.post('/generated/save', async (req, res) => {
     if (isMonster) {
       finalContentType = 'monster';
       console.log('[Generated Content] Setting content_type to "monster" for monster content');
-    } else if (validatedContent.deliverable === 'npc') {
-      finalContentType = 'character';
     }
 
+    const storedRecord = storedGeneratedContent as Record<string, unknown>;
+
     const effectiveDeliverable =
-      (typeof validatedContent?.deliverable === 'string' && validatedContent.deliverable.trim().length > 0
-        ? validatedContent.deliverable.trim()
+      (typeof storedRecord?.deliverable === 'string' && storedRecord.deliverable.trim().length > 0
+        ? storedRecord.deliverable.trim()
         : (typeof deliverable_type === 'string' && deliverable_type.trim().length > 0
           ? deliverable_type.trim()
           : '')) || undefined;
 
-    if (effectiveDeliverable && (!validatedContent.deliverable || String(validatedContent.deliverable).trim().length === 0)) {
-      validatedContent = { ...validatedContent, deliverable: effectiveDeliverable };
+    if (effectiveDeliverable === 'npc') {
+      finalContentType = 'character';
     }
 
     const generatedDoc = {
@@ -489,22 +491,22 @@ contentRouter.post('/generated/save', async (req, res) => {
       userId: authReq.userId,
       project_id,
       content_type: finalContentType,
-      title: title || validatedContent.title || validatedContent.name || 'Untitled',
-      generated_content: validatedContent, // Use validated content
+      title: title || storedRecord.title || storedRecord.name || 'Untitled',
+      generated_content: storedGeneratedContent,
       resolved_proposals: resolved_proposals || [],
       resolved_conflicts: resolved_conflicts || [],
       metadata: {
-        sources_used: validatedContent.sources_used || [],
-        assumptions: validatedContent.assumptions || [],
-        canon_update: validatedContent.canon_update || '',
-        deliverable: effectiveDeliverable ?? validatedContent.deliverable,
-        difficulty: validatedContent.difficulty,
-        rule_base: validatedContent.rule_base,
+        sources_used: storedRecord.sources_used || [],
+        assumptions: storedRecord.assumptions || [],
+        canon_update: storedRecord.canon_update || '',
+        deliverable: effectiveDeliverable,
+        difficulty: storedRecord.difficulty,
+        rule_base: storedRecord.rule_base,
         domain:
           typeof domain === 'string' && (domain === 'rpg' || domain === 'writing')
             ? domain
-            : typeof validatedContent?.domain === 'string' && (validatedContent.domain === 'rpg' || validatedContent.domain === 'writing')
-              ? validatedContent.domain
+            : typeof storedRecord?.domain === 'string' && (storedRecord.domain === 'rpg' || storedRecord.domain === 'writing')
+              ? storedRecord.domain
               : 'rpg',
       },
       created_at: new Date(),
@@ -515,9 +517,9 @@ contentRouter.post('/generated/save', async (req, res) => {
 
     const mappedBlock = mapGeneratedContentToContentBlock({
       contentType: finalContentType, // Use the corrected content_type
-      deliverable: effectiveDeliverable ?? validatedContent.deliverable,
-      title: title || validatedContent.title || validatedContent.name || 'Untitled',
-      generatedContent: validatedContent, // Use validated content
+      deliverable: effectiveDeliverable,
+      title: title || storedRecord.title || storedRecord.name || 'Untitled',
+      generatedContent: storedGeneratedContent,
       resolvedProposals: resolved_proposals,
       resolvedConflicts: resolved_conflicts,
     });
@@ -527,7 +529,7 @@ contentRouter.post('/generated/save', async (req, res) => {
     const enhancedMetadata = {
       ...mappedBlock.metadata,
       generated_content_id: contentId,
-      full_generated_content: validatedContent, // Store validated content
+      full_generated_content: storedGeneratedContent,
       domain: (generatedDoc as any).metadata.domain,
     };
 
@@ -668,7 +670,7 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
   try {
     const authReq = req as unknown as AuthRequest;
     const { contentId } = req.params;
-    const { title, generated_content, persisted_content } = req.body;
+    const { title, generated_content, validation_content, persisted_content } = req.body;
 
     if (!title && !generated_content) {
       return res.status(400).json({
@@ -697,6 +699,10 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
 
     // Validate NPC content on update
     if (generated_content) {
+      const validationContent =
+        validation_content && typeof validation_content === 'object'
+          ? validation_content
+          : generated_content;
       const isNpcContent = existingContent.content_type?.toLowerCase().includes('npc') ||
                           existingContent.content_type?.toLowerCase().includes('character') ||
                           generated_content.deliverable?.toLowerCase().includes('npc') ||
@@ -708,7 +714,7 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
         const npcPayloadForValidation =
           persisted_content && typeof persisted_content === 'object'
             ? persisted_content
-            : generated_content;
+            : validationContent;
 
         const validation = mapAndValidateNpc(npcPayloadForValidation);
 
@@ -731,8 +737,7 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
           });
         }
 
-        // Use validated and mapped data
-        updateFields.generated_content = validation.data!;
+        updateFields.generated_content = generated_content;
 
         if (validation.warnings.length > 0) {
           console.warn('[Generated Content] NPC validation warnings on update:', validation.warnings);

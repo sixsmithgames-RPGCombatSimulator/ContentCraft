@@ -453,6 +453,9 @@ export default function SaveContentModal({
         mappedContentType === ContentType.LOCATION ||
         isLikelyLocationDeliverable;
 
+      const cloneRecord = (value: Record<string, unknown>): Record<string, unknown> =>
+        JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+
       // Clean up empty objects and arrays from the generated content
       const cleanupEmptyFields = (obj: Record<string, unknown>): Record<string, unknown> => {
         const cleaned: Record<string, unknown> = {};
@@ -513,9 +516,10 @@ export default function SaveContentModal({
         return cleaned;
       };
 
+      const rawGc = cloneRecord(asRecord(gc));
       const cleanedGc = isLocationContent
-        ? { ...asRecord(gc) }
-        : cleanupEmptyFields(asRecord(gc));
+        ? cloneRecord(rawGc)
+        : cleanupEmptyFields(cloneRecord(rawGc));
       console.log('[SaveContentModal] Cleaned content fields:', Object.keys(cleanedGc));
 
       // Log and remove problematic fields that cause validation errors
@@ -548,7 +552,7 @@ export default function SaveContentModal({
       let persistedNpcPayload: Record<string, unknown> | undefined;
 
       if (isNpcContent(deliverable, gc.content_type)) {
-        const npcRecord = asRecord(cleanedGc);
+        const npcRecord = asRecord(rawGc);
         const normalized = normalizeNpc(npcRecord);
 
         const canonicalSchemaVersion = (() => {
@@ -579,7 +583,8 @@ export default function SaveContentModal({
         content_type: mappedContentType,
         deliverable_type: deliverable,
         title,
-        generated_content: cleanedGc,
+        generated_content: rawGc,
+        validation_content: cleanedGc,
         resolved_proposals: resolvedProposals || [],
         resolved_conflicts: resolvedConflicts || [],
         domain: inferDomain,

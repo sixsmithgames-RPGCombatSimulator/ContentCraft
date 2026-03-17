@@ -109,6 +109,100 @@ function normalizeAbilityScores(source: Record<string, unknown>): Record<string,
   return result;
 }
 
+function normalizeSpeed(source: unknown): Record<string, string> | undefined {
+  if (typeof source === 'number' && Number.isFinite(source)) {
+    return { walk: `${source} ft.` };
+  }
+
+  if (typeof source === 'string' && source.trim().length > 0) {
+    return { walk: source.trim() };
+  }
+
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return undefined;
+  }
+
+  const normalized: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(source as Record<string, unknown>)) {
+    if (key === 'passive_perception') {
+      continue;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      normalized[key] = `${value} ft.`;
+      continue;
+    }
+
+    if (typeof value === 'string' && value.trim().length > 0) {
+      normalized[key] = value.trim();
+    }
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeSenses(source: unknown): { senses?: string[]; passivePerception?: number } {
+  if (Array.isArray(source)) {
+    return {
+      senses: source.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0),
+    };
+  }
+
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return {};
+  }
+
+  const senses: string[] = [];
+  let passivePerception: number | undefined;
+
+  for (const [key, value] of Object.entries(source as Record<string, unknown>)) {
+    if (key === 'passive_perception') {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        passivePerception = value;
+      }
+      continue;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      senses.push(`${key} ${value} ft.`);
+      continue;
+    }
+
+    if (typeof value === 'string' && value.trim().length > 0) {
+      senses.push(`${key}: ${value.trim()}`);
+    }
+  }
+
+  return {
+    ...(senses.length > 0 ? { senses } : {}),
+    ...(passivePerception !== undefined ? { passivePerception } : {}),
+  };
+}
+
+function normalizeClassLevels(source: unknown): Array<Record<string, unknown>> | undefined {
+  if (Array.isArray(source)) {
+    const normalized = source.filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null);
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  if (typeof source !== 'string' || source.trim().length === 0) {
+    return undefined;
+  }
+
+  const normalized = source.trim();
+  const levelMatch = normalized.match(/^(.*?)(?:\s+|\s*[-–]\s*)(\d+)$/);
+  const descriptor = levelMatch?.[1]?.trim() || normalized;
+  const parsedLevel = levelMatch?.[2] ? Number.parseInt(levelMatch[2], 10) : undefined;
+  const subclassMatch = descriptor.match(/^(.+?)\s*\((.+)\)$/);
+
+  return [{
+    class: (subclassMatch?.[1] || descriptor).trim(),
+    ...(Number.isFinite(parsedLevel) ? { level: parsedLevel } : {}),
+    ...(subclassMatch?.[2]?.trim() ? { subclass: subclassMatch[2].trim() } : {}),
+  }];
+}
+
 /**
  * Normalize equipment array
  */
@@ -306,6 +400,25 @@ export function mapToCanonicalStructure(rawData: Record<string, unknown>): Mappi
       result.warnings.push('Normalized top-level personality fields into personality object');
     }
 
+    const normalizedSpeed = normalizeSpeed(rawData.speed);
+    if (normalizedSpeed) {
+      mapped.speed = normalizedSpeed;
+      if (typeof rawData.speed === 'number' || typeof rawData.speed === 'string') {
+        result.warnings.push('Normalized scalar speed value into canonical speed object');
+      }
+    }
+
+    const normalizedSenses = normalizeSenses(rawData.senses);
+    if (normalizedSenses.senses) {
+      mapped.senses = normalizedSenses.senses;
+      if (rawData.senses && typeof rawData.senses === 'object' && !Array.isArray(rawData.senses)) {
+        result.warnings.push('Normalized object-form senses into canonical senses array');
+      }
+    }
+    if (normalizedSenses.passivePerception !== undefined && mapped.passive_perception === undefined) {
+      mapped.passive_perception = normalizedSenses.passivePerception;
+    }
+
     // 6. Map canonical_name to name if needed
     if (!rawData.name && rawData.canonical_name) {
       mapped.name = rawData.canonical_name;
@@ -316,6 +429,14 @@ export function mapToCanonicalStructure(rawData: Record<string, unknown>): Mappi
     if (!rawData.race && typeof rawData.species === 'string' && rawData.species.trim().length > 0) {
       mapped.race = rawData.species;
       result.warnings.push('Mapped "species" to canonical "race" field');
+    }
+
+    const normalizedClassLevels = normalizeClassLevels(rawData.class_levels);
+    if (normalizedClassLevels) {
+      mapped.class_levels = normalizedClassLevels;
+      if (typeof rawData.class_levels === 'string') {
+        result.warnings.push('Normalized string class_levels into canonical array format');
+      }
     }
 
     result.mapped = mapped;

@@ -117,6 +117,70 @@ describe('npcValidator.validateNpcSafe', () => {
     expect(result.warnings).toContain('Mapped "species" to canonical "race" field');
   });
 
+  it('mapAndValidateNpc normalizes raw generator NPC transport shapes used during project saves', () => {
+    const npc = {
+      schema_version: 'npc/v1.1',
+      name: 'Karoz',
+      description: 'A pragmatic and highly skilled evocation wizard with a vendetta against the drow.',
+      species: 'High Elf',
+      class_levels: 'Wizard (Evocation) 20',
+      ability_scores: {
+        strength: 10,
+        dexterity: 16,
+        constitution: 14,
+        intelligence: 20,
+        wisdom: 12,
+        charisma: 12,
+      },
+      speed: 30,
+      senses: {
+        darkvision: 60,
+        passive_perception: 17,
+      },
+      personality_traits: ['Intellectually arrogant'],
+      ideals: ['Knowledge is the ultimate currency'],
+      bonds: ['His wizard tower in Amn is his sanctuary'],
+      flaws: ['Greed often clouds his judgment'],
+      motivations: ['Destroy drow influence in the region'],
+      rule_base: '2024RAW',
+      sources_used: [],
+      assumptions: [],
+      proposals: [],
+      canon_update: 'Created Karoz as a high-level Amnian archmage with deeply personal stakes against the drow.',
+    };
+
+    const result = mapAndValidateNpc(npc as unknown as Record<string, unknown>);
+
+    expect(result.success).toBe(true);
+    expect(result.schemaVersion).toBe('1.1');
+    expect(result.data?.schema_version).toBe('1.1');
+    expect(result.data?.race).toBe('High Elf');
+    expect(result.data?.class_levels).toEqual([
+      {
+        class: 'Wizard',
+        level: 20,
+        subclass: 'Evocation',
+      },
+    ]);
+    expect(result.data?.ability_scores).toEqual({
+      str: 10,
+      dex: 16,
+      con: 14,
+      int: 20,
+      wis: 12,
+      cha: 12,
+    });
+    expect(result.data?.speed).toEqual({ walk: '30 ft.' });
+    expect(result.data?.senses).toEqual(['darkvision 60 ft.']);
+    expect(result.data?.passive_perception).toBe(17);
+    expect(result.data?.personality).toEqual({
+      traits: ['Intellectually arrogant'],
+      ideals: ['Knowledge is the ultimate currency'],
+      bonds: ['His wizard tower in Amn is his sanctuary'],
+      flaws: ['Greed often clouds his judgment'],
+    });
+  });
+
   it('defaults to v1.0 and fails when legacy required fields are missing', () => {
     const legacyNpc = {
       name: 'Legacy NPC',
