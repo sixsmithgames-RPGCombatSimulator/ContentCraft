@@ -328,6 +328,65 @@ describe('workflowStageResponse', () => {
     ]);
   });
 
+  it('accepts spellcasting responses that return spells_known as a leveled object map', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        spellcasting_ability: 'Charisma',
+        spell_save_dc: 16,
+        spell_attack_bonus: 8,
+        spell_slots: { '5th': 3 },
+        always_prepared_spells: {
+          Marid: ['Fog Cloud', 'Blur'],
+        },
+        spells_known: {
+          Cantrips: ['Eldritch Blast', 'Mage Hand', 'Prestidigitation'],
+          '1st-5th': ['Armor of Agathys', 'Hex', 'Hunger of Hadar', 'Dimension Door'],
+          '6th': ['Synaptic Static'],
+        },
+        innate_spells: {
+          '1/day': ['Investiture of Ice'],
+        },
+        spellcasting_focus: 'Genie\'s Vessel (Portable Kitchen)',
+      }),
+      stageName: 'Creator: Spellcasting',
+      stageIdentity: 'spellcasting',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Barley Brambleberry',
+          class_levels: 'Warlock 11',
+          race: 'Lightfoot Halfling',
+        },
+        'creator:_stats': {
+          ability_scores: {
+            strength: 10,
+            dexterity: 16,
+            constitution: 14,
+            intelligence: 10,
+            wisdom: 12,
+            charisma: 18,
+          },
+          proficiency_bonus: 4,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.spell_slots).toEqual({ '5th': 3 });
+    expect(result.parsed.spells_known).toEqual([
+      'Eldritch Blast',
+      'Mage Hand',
+      'Prestidigitation',
+      'Armor of Agathys',
+      'Hex',
+      'Hunger of Hadar',
+      'Dimension Door',
+      'Synaptic Static',
+    ]);
+  });
+
   it('passes through visual map html without JSON parsing', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: '<section>map html</section>',

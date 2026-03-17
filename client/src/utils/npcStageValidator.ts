@@ -275,7 +275,7 @@ function validateSpellcastingStage(output: Record<string, unknown>): ValidationR
 
     if (isKnown) {
       if (!hasKnown) {
-        errors.push('Known casters must include spells_known.');
+        errors.push('Known casters must include spells_known as a non-empty array of spell names.');
       }
       if (!hasSlots && !hasInnate) {
         errors.push('Known casters should include spell_slots (or innate_spells if purely innate).');

@@ -679,6 +679,28 @@ const normalizeSpellSlotsMap = (value: unknown): JsonRecord => {
   return {};
 };
 
+ const normalizeSpellKnownArray = (value: unknown): string[] => {
+   if (Array.isArray(value)) {
+     return normalizeStringArray(value);
+   }
+
+   if (isRecord(value)) {
+     const flattened = Object.values(value).flatMap((entryValue) => {
+       if (Array.isArray(entryValue)) {
+         return normalizeStringArray(entryValue);
+       }
+
+       const singleValue = coerceNonEmptyString(entryValue);
+       return singleValue ? [singleValue] : [];
+     });
+
+     return [...new Set(flattened)];
+   }
+
+   const singleValue = coerceNonEmptyString(value);
+   return singleValue ? [singleValue] : [];
+ };
+
 const normalizeSpellcastingPayload = (payload: JsonRecord): JsonRecord => {
   const normalized: JsonRecord = { ...payload };
 
@@ -699,12 +721,7 @@ const normalizeSpellcastingPayload = (payload: JsonRecord): JsonRecord => {
   }
 
   if (Object.prototype.hasOwnProperty.call(normalized, 'spells_known')) {
-    if (Array.isArray(normalized.spells_known)) {
-      normalized.spells_known = normalizeStringArray(normalized.spells_known);
-    } else {
-      const singleValue = coerceNonEmptyString(normalized.spells_known);
-      normalized.spells_known = singleValue ? [singleValue] : [];
-    }
+    normalized.spells_known = normalizeSpellKnownArray(normalized.spells_known);
   }
 
   return normalized;

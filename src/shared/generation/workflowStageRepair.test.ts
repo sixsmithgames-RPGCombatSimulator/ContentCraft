@@ -137,13 +137,23 @@ describe('workflowStageRepair', () => {
         spell_save_dc: 16,
         spell_attack_bonus: 8,
         spell_slots: '3 slots at 5th Level',
-        spells_known: ['Eldritch Blast', 'Fog Cloud'],
+        spells_known: {
+          Cantrips: ['Eldritch Blast'],
+          '1st-3rd': ['Fog Cloud', 'Misty Step'],
+          MysticArcanum: 'Conjure Elemental',
+        },
         always_prepared_spells: ['Fog Cloud', 'Blur'],
         innate_spells: ['Conjure Elemental (1/Day via Mystic Arcanum)'],
       },
     });
 
     expect(repaired.payload.spell_slots).toEqual({ '5': 3 });
+    expect(repaired.payload.spells_known).toEqual([
+      'Eldritch Blast',
+      'Fog Cloud',
+      'Misty Step',
+      'Conjure Elemental',
+    ]);
     expect(repaired.payload.always_prepared_spells).toEqual({
       always: ['Fog Cloud', 'Blur'],
     });
