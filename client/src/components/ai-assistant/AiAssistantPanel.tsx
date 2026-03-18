@@ -317,10 +317,13 @@ export default function AiAssistantPanel() {
   const currentRunAttemptId = currentRunAttempt?.attemptId || null;
   const currentCompiledRequestId = workflowContext?.compiledStageRequest?.requestId || null;
   const currentRunAttemptCompiledRequestId = currentRunAttempt?.compiledRequestId || null;
-  const hasAuthorizedCompiledRequest = Boolean(
+  const hasTrackedCompiledRequest = Boolean(
     currentCompiledRequestId
-    && currentRunAttemptStatus === 'compiled'
     && currentRunAttemptCompiledRequestId === currentCompiledRequestId
+  );
+  const hasAuthorizedCompiledRequest = Boolean(
+    hasTrackedCompiledRequest
+    && currentRunAttemptStatus === 'compiled'
   );
   const activeAttemptId = currentRunAttemptCompiledRequestId === currentCompiledRequestId ? currentRunAttemptId : null;
   const currentRetrySource = currentRunAttempt?.retrySource || null;
@@ -1157,7 +1160,7 @@ export default function AiAssistantPanel() {
       return;
     }
     // If we have a compiled request but no compiled attempt recorded yet, sync it now so auto-start can proceed
-    if (!hasAuthorizedCompiledRequest && workflowRunStateDispatcher && workflowContext?.compiledStageRequest) {
+    if (!hasTrackedCompiledRequest && workflowRunStateDispatcher && workflowContext?.compiledStageRequest) {
       const stageLabel = workflowContext.currentStage || workflowContext.compiledStageRequest?.stageLabel || effectiveStageKey;
       const executionMode: ExecutionMode = assistMode === 'integrated' ? 'integrated' : 'manual';
 
@@ -1204,7 +1207,7 @@ export default function AiAssistantPanel() {
     setHasAutoStarted(true);
     // Add 2.5s initial delay to ensure server-side throttle window is clear
     setTimeout(() => runStageWithGemini(), 2500);
-  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus, currentCompiledRequestId, hasAuthorizedCompiledRequest]);
+  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus, currentCompiledRequestId, hasTrackedCompiledRequest, hasAuthorizedCompiledRequest]);
 
   // Auto-retry on error with countdown (skip if missing stageRouterKey)
   useEffect(() => {
