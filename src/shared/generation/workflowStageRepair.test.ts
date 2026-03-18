@@ -77,6 +77,45 @@ describe('workflowStageRepair', () => {
     expect(validateWorkflowStageContractPayload('stats', repaired.payload, 'npc')).toEqual({ ok: true });
   });
 
+  it('normalizes mixed-form stats ability scores and prefers non-placeholder values', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'stats',
+      workflowType: 'npc',
+      payload: {
+        ability_scores: {
+          str: 10,
+          dex: 10,
+          con: 10,
+          int: 10,
+          wis: 10,
+          cha: 10,
+          strength: 18,
+          dexterity: 16,
+          constitution: 14,
+          intelligence: 12,
+          wisdom: 11,
+          charisma: 13,
+        },
+        proficiency_bonus: 3,
+        speed: { walk: 30 },
+        armor_class: 16,
+        hit_points: 45,
+        senses: ['darkvision 60 ft.'],
+      },
+    });
+
+    expect(repaired.payload.ability_scores).toEqual({
+      str: 18,
+      dex: 16,
+      con: 14,
+      int: 12,
+      wis: 11,
+      cha: 13,
+    });
+    expect(repaired.appliedRepairs).toContain('stats:normalize_ability_scores');
+    expect(validateWorkflowStageContractPayload('stats', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
+
   it('repairs malformed character build feature arrays into schema-safe object arrays', () => {
     const repaired = repairWorkflowStagePayload({
       stageIdOrName: 'character_build',

@@ -3,6 +3,7 @@ import {
   GENERIC_STAGES,
   MANUAL_GENERATOR_STAGE_CATALOG,
   NONFICTION_BOOK_STAGES,
+  type ManualGeneratorStageContext,
 } from './manualGeneratorStageCatalog';
 import type { GeneratorStage } from './generatorWorkflow';
 
@@ -51,5 +52,58 @@ describe('manual generator stage catalog', () => {
     expect(monsterStages[0]?.workflowStageKey).toBe('monster.basic_info');
     expect(locationStages[0]?.routerKey).toBe('location.purpose');
     expect(npcBasicInfoStage?.workflowStageKey).toBe('basic_info');
+  });
+
+  it('keeps the generic creator prompt stateless and compact for scene workflows', () => {
+    const creatorStage = GENERIC_STAGES.find((stage) => stage.routerKey === 'creator');
+
+    expect(creatorStage?.systemPrompt.length ?? 0).toBeLessThan(1500);
+    expect(creatorStage?.systemPrompt).toContain('Do NOT rely on prior conversation history');
+    expect(creatorStage?.buildUserPrompt).toBeTypeOf('function');
+    if (!creatorStage?.buildUserPrompt) {
+      return;
+    }
+
+    const promptContext: ManualGeneratorStageContext = {
+      config: {
+        prompt: 'Create a tense investigative scene in the catacombs beneath Blackstone Abbey.',
+        type: 'scene',
+        flags: {},
+      },
+      stageResults: {
+        planner: {
+          deliverable: 'scene',
+          title: 'Echoes Below Blackstone Abbey',
+        },
+        purpose: {
+          content_type: 'scene',
+        },
+      },
+      factpack: {
+        facts: [
+          {
+            text: 'Blackstone Abbey hides flooded catacombs beneath its ruined cloister.',
+            source: 'Blackstone Abbey',
+          },
+        ],
+      },
+      previousDecisions: {
+        tone: 'gothic suspense',
+      },
+    };
+
+    const userPrompt = JSON.parse(creatorStage.buildUserPrompt(promptContext)) as Record<string, unknown>;
+
+    expect(userPrompt.output_schema).toBeTypeOf('string');
+    expect(String(userPrompt.output_schema)).toContain('Scene output schema');
+    expect(userPrompt.relevant_canon).toMatchObject({
+      facts: [
+        {
+          text: 'Blackstone Abbey hides flooded catacombs beneath its ruined cloister.',
+          source: 'Blackstone Abbey',
+        },
+      ],
+    });
+    expect(userPrompt).not.toHaveProperty('canon_reference');
   });
 });

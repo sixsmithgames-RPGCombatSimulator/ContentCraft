@@ -224,6 +224,54 @@ describe('workflowStageResponse', () => {
     expect(failure.error).toContain('placeholder defaults');
   });
 
+  it('accepts npc stats when long-form ability scores override placeholder short-form defaults', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        ability_scores: {
+          str: 10,
+          dex: 10,
+          con: 10,
+          int: 10,
+          wis: 10,
+          cha: 10,
+          strength: 18,
+          dexterity: 16,
+          constitution: 14,
+          intelligence: 12,
+          wisdom: 11,
+          charisma: 13,
+        },
+        proficiency_bonus: 3,
+        speed: { walk: 30 },
+        armor_class: 16,
+        hit_points: 45,
+        senses: ['darkvision 60 ft.'],
+      }),
+      stageName: 'Creator: Stats',
+      stageIdentity: 'stats',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Malakor Vane',
+          class_levels: 'Rogue (Assassin) 5',
+          race: 'Tiefling',
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.ability_scores).toEqual({
+      str: 18,
+      dex: 16,
+      con: 14,
+      int: 12,
+      wis: 11,
+      cha: 13,
+    });
+  });
+
   it('rejects placeholder +0 proficiency and save modifiers for character builds', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({

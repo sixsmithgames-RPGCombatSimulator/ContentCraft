@@ -579,6 +579,60 @@ export const inferSpeciesFromWorkflowContext = (input: {
   return null;
 };
 
+const coerceFiniteNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+};
+
+const normalizeAbilityScores = (value: unknown): Record<string, number> | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const source = Object.entries(value).reduce<Record<string, unknown>>((acc, [key, entryValue]) => {
+    acc[key.trim().toLowerCase()] = entryValue;
+    return acc;
+  }, {});
+
+  const aliasMap: Record<string, string[]> = {
+    str: ['str', 'strength'],
+    dex: ['dex', 'dexterity'],
+    con: ['con', 'constitution'],
+    int: ['int', 'intelligence'],
+    wis: ['wis', 'wisdom'],
+    cha: ['cha', 'charisma'],
+  };
+
+  const normalized: Record<string, number> = {};
+
+  for (const [canonicalKey, aliases] of Object.entries(aliasMap)) {
+    const candidates = aliases
+      .map((alias) => coerceFiniteNumber(source[alias]))
+      .filter((candidate): candidate is number => candidate !== undefined);
+
+    if (candidates.length === 0) {
+      continue;
+    }
+
+    normalized[canonicalKey] = candidates.find((candidate) => candidate !== 10) ?? candidates[0];
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+};
+
 const normalizeSpeedStrings = (value: unknown): Record<string, string> | null => {
   if (!isRecord(value)) {
     return null;
@@ -917,6 +971,14 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
       appliedRepairs.push('core_details:normalize');
     }
     payload = normalized;
+  }
+
+  if (contractKey === 'stats' && payload.ability_scores !== undefined) {
+    const normalizedAbilityScores = normalizeAbilityScores(payload.ability_scores);
+    if (normalizedAbilityScores && JSON.stringify(normalizedAbilityScores) !== JSON.stringify(payload.ability_scores)) {
+      payload = { ...payload, ability_scores: normalizedAbilityScores };
+      appliedRepairs.push('stats:normalize_ability_scores');
+    }
   }
 
   if (contractKey === 'stats' && payload.speed !== undefined) {
