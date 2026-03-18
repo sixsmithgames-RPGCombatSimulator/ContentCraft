@@ -39,6 +39,7 @@ interface CopyPasteModalProps {
   totalSpacesCount?: number; // Total spaces to generate (for batch mode display)
   batchModeEnabled?: boolean; // Whether batch auto-accept mode is enabled
   lastSaveTime?: string | null; // Last auto-save timestamp for display
+  hideOutputAction?: boolean;
   onCopied?: () => void;
   onSubmit?: (input: string) => void;
   onSkip?: () => void;
@@ -73,6 +74,7 @@ export default function CopyPasteModal({
   totalSpacesCount = 0,
   batchModeEnabled = false,
   lastSaveTime = null,
+  hideOutputAction = false,
   onCopied,
   onSubmit,
   onSkip,
@@ -401,18 +403,20 @@ export default function CopyPasteModal({
                     Auto-Parse This Chunk
                   </button>
                 )}
-                <button
-                  onClick={() => {
-                    if (copied) {
-                      onCopied?.();
-                    }
-                  }}
-                  disabled={!copied}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium flex items-center gap-2"
-                >
-                  Next: Paste Response
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                {!hideOutputAction && (
+                  <button
+                    onClick={() => {
+                      if (copied) {
+                        onCopied?.();
+                      }
+                    }}
+                    disabled={!copied}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium flex items-center gap-2"
+                  >
+                    Next: Paste Response
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
               </>
             ) : (
               <button

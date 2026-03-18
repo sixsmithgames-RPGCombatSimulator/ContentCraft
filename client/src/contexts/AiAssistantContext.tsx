@@ -170,6 +170,11 @@ export type WorkflowStageFailureCallback = (
 
 export type WorkflowRunStateDispatcher = Dispatch<SetStateAction<GenerationRunState | null>>;
 
+export type PrepareWorkflowStageRequestCallback = (options?: {
+  showPromptPreview?: boolean;
+  forceRecompile?: boolean;
+}) => Promise<AiCompiledStageRequest | null>;
+
 // ─── Context Shape ───────────────────────────────────────────────────────────
 /** AI assist mode: integrated (automated) or manual (copy/paste) */
 export type AssistMode = 'integrated' | 'manual' | null;
@@ -200,6 +205,10 @@ interface AiAssistantContextValue {
   /** Dispatcher the active workflow registers so the panel can update workflow run-state */
   workflowRunStateDispatcher: WorkflowRunStateDispatcher | null;
   registerWorkflowRunStateDispatcher: (cb: WorkflowRunStateDispatcher | null) => void;
+
+  /** Callback the active workflow registers so the panel can rebuild the authoritative stage request */
+  prepareWorkflowStageRequest: PrepareWorkflowStageRequestCallback | null;
+  registerPrepareWorkflowStageRequest: (cb: PrepareWorkflowStageRequestCallback | null) => void;
 
   /** Chat history */
   messages: ChatMessage[];
@@ -251,6 +260,7 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const [submitPipelineResponse, setSubmitPipelineResponse] = useState<SubmitPipelineResponseCallback | null>(null);
   const [workflowStageFailureHandler, setWorkflowStageFailureHandler] = useState<WorkflowStageFailureCallback | null>(null);
   const [workflowRunStateDispatcher, setWorkflowRunStateDispatcherState] = useState<WorkflowRunStateDispatcher | null>(null);
+  const [prepareWorkflowStageRequest, setPrepareWorkflowStageRequest] = useState<PrepareWorkflowStageRequestCallback | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [providerConfig, setProviderConfigState] = useState<AiProviderConfig>(loadProviderConfig);
   const [assistMode, setAssistMode] = useState<AssistMode>(null);
@@ -274,6 +284,10 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
 
   const registerWorkflowRunStateDispatcher = useCallback((cb: WorkflowRunStateDispatcher | null) => {
     setWorkflowRunStateDispatcherState(() => cb);
+  }, []);
+
+  const registerPrepareWorkflowStageRequest = useCallback((cb: PrepareWorkflowStageRequestCallback | null) => {
+    setPrepareWorkflowStageRequest(() => cb);
   }, []);
 
   const addMessage = useCallback(
@@ -312,6 +326,8 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
         registerWorkflowStageFailureHandler,
         workflowRunStateDispatcher,
         registerWorkflowRunStateDispatcher,
+        prepareWorkflowStageRequest,
+        registerPrepareWorkflowStageRequest,
         messages,
         addMessage,
         clearMessages,

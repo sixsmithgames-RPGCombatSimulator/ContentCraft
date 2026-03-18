@@ -48,7 +48,7 @@ import ModeSelectionDialog from './ModeSelectionDialog';
 import {
   createGenerationRunState,
   getStageAttempt,
-  hasAcceptedStage,
+  hasAcceptedCurrentStage,
   upsertStageAttempt,
 } from '../../../../src/shared/generation/workflowRunState';
 import type { ExecutionMode } from '../../../../src/shared/generation/workflowTypes';
@@ -100,6 +100,8 @@ type StageRunnerState =
   | 'applying'
   | 'complete'
   | 'error';
+
+const MAX_INTEGRATED_CORRECTION_ATTEMPTS = 1;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -256,6 +258,7 @@ export default function AiAssistantPanel() {
     submitPipelineResponse,
     workflowStageFailureHandler,
     workflowRunStateDispatcher,
+    prepareWorkflowStageRequest,
     providerConfig,
     assistMode,
     setAssistMode,
@@ -333,13 +336,13 @@ export default function AiAssistantPanel() {
   const updateWorkflowRunAttempt = useCallback(
     (
       status: 'sending' | 'awaiting' | 'parsing' | 'applying' | 'error' | 'complete',
-      options?: { error?: string; warnings?: string[]; stageKey?: string; stageLabel?: string },
+      options?: { error?: string; warnings?: string[]; stageKey?: string; stageLabel?: string; compiledRequestId?: string; attemptId?: string },
     ) => {
       if (!workflowRunStateDispatcher || !workflowContext) return;
       const stageKey = options?.stageKey || effectiveStageKey || workflowContext.compiledStageRequest?.stageKey;
       if (!stageKey) return;
       const stageLabel = options?.stageLabel || workflowContext.currentStage || workflowContext.compiledStageRequest?.stageLabel || stageKey;
-      const compiledRequestId = currentCompiledRequestId || workflowContext.compiledStageRequest?.requestId;
+      const compiledRequestId = options?.compiledRequestId || currentCompiledRequestId || workflowContext.compiledStageRequest?.requestId;
       const mappedStatus =
         status === 'sending'
           ? 'sending'
@@ -355,7 +358,7 @@ export default function AiAssistantPanel() {
 
       workflowRunStateDispatcher((prev) => {
         return upsertStageAttempt(prev, {
-          attemptId: activeAttemptId || undefined,
+          attemptId: options?.attemptId || activeAttemptId || undefined,
           stageKey,
           stageLabel,
           status: mappedStatus,
@@ -681,6 +684,24 @@ export default function AiAssistantPanel() {
     return compiled;
   }, [workflowContext]);
 
+  const ensureCompiledStageRequest = useCallback(
+    async (forceRecompile = false) => {
+      const existingCompiledRequest = getCompiledStageRequest();
+      if (existingCompiledRequest && !forceRecompile) {
+        return existingCompiledRequest;
+      }
+
+      if (!prepareWorkflowStageRequest) {
+        return null;
+      }
+
+      return prepareWorkflowStageRequest({
+        forceRecompile,
+      });
+    },
+    [getCompiledStageRequest, prepareWorkflowStageRequest]
+  );
+
   const validatePatch = useCallback(
     (stageKey: string, patch: unknown): { ok: true; payload: Record<string, unknown> } | { ok: false; message: string } => {
       if (!isPlainObject(patch)) return { ok: false, message: 'Patch must be an object.' };
@@ -764,11 +785,28 @@ export default function AiAssistantPanel() {
       setStageRunnerState('error');
       return;
     }
-    const compiledStageRequest = getCompiledStageRequest();
+    const shouldForceRecompile =
+      !overrides?.promptOverride
+      && (
+        !workflowContext.compiledStageRequest
+        || currentRunAttemptStatus === 'error'
+        || currentRunAttemptStatus === 'awaiting_user_input'
+      );
+    const compiledStageRequest = await ensureCompiledStageRequest(shouldForceRecompile);
     if (!compiledStageRequest) {
       logStageRunnerGate('skip: awaiting compiled stage request');
+      setStageRunnerError('Current stage prompt is not ready yet. Rebuild the stage prompt and try again.');
+      setStageRunnerState('idle');
       return;
     }
+
+    const requestWorkflowContext =
+      workflowContext.compiledStageRequest?.requestId === compiledStageRequest.requestId
+        ? workflowContext
+        : {
+            ...workflowContext,
+            compiledStageRequest,
+          };
 
     const effectivePrompt = overrides?.promptOverride ?? compiledStageRequest.prompt;
     const correctionAttempt = overrides?.correctionAttempt ?? 0;
@@ -783,6 +821,8 @@ export default function AiAssistantPanel() {
 
     const stageKey = stageKeyForRun || compiledStageRequest.stageKey;
     const compiledRequestId = compiledStageRequest.requestId || null;
+    const attemptId = activeAttemptId || crypto.randomUUID();
+    const stageLabel = requestWorkflowContext.currentStage || compiledStageRequest.stageLabel;
     const runId = stageRunId || crypto.randomUUID();
     setStageRunId(runId);
     setStageRunnerState('sending');
@@ -791,12 +831,14 @@ export default function AiAssistantPanel() {
     lastAttemptedCompiledRequestIdRef.current = compiledRequestId;
     updateWorkflowRunAttempt('sending', {
       stageKey,
-      stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+      stageLabel,
+      compiledRequestId: compiledRequestId || undefined,
+      attemptId,
     });
     inFlightRef.current = true;
 
     try {
-      const requestBody = buildIntegratedStageRequest(workflowContext, stageKey, runId, providerConfig.type, {
+      const requestBody = buildIntegratedStageRequest(requestWorkflowContext, stageKey, runId, providerConfig.type, {
         promptOverride: effectivePrompt,
         correctionAttempt,
       });
@@ -806,7 +848,9 @@ export default function AiAssistantPanel() {
         updateWorkflowRunAttempt('error', {
           error: 'Unable to build a workflow stage request.',
           stageKey,
-          stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+          stageLabel,
+          compiledRequestId: compiledRequestId || undefined,
+          attemptId,
         });
         inFlightRef.current = false;
         return;
@@ -835,7 +879,9 @@ export default function AiAssistantPanel() {
       setStageRunnerState('awaiting');
       updateWorkflowRunAttempt('awaiting', {
         stageKey,
-        stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+        stageLabel,
+        compiledRequestId: compiledRequestId || undefined,
+        attemptId,
       });
 
       if (!response.ok || !body?.ok) {
@@ -843,7 +889,21 @@ export default function AiAssistantPanel() {
         const rawMessage = failureBody?.error?.message || `Request failed (${response.status})`;
         const message = getWorkflowFailureDisplayMessage(failureBody, rawMessage);
         const failedStageKey = failureBody?.workflow?.stageKey || stageKey;
-        setAutoRetryEligible(failureBody ? shouldAutoRetryIntegratedFailure(failureBody) : false);
+        const correctionPrompt = failureBody?.workflow?.retryContext?.correctionPrompt;
+        const isAutoRetryCandidate = failureBody ? shouldAutoRetryIntegratedFailure(failureBody) : false;
+        const canScheduleCorrectionRetry = Boolean(
+          failureBody
+          && correctionPrompt
+          && isAutoRetryCandidate
+          && correctionAttempt < MAX_INTEGRATED_CORRECTION_ATTEMPTS
+        );
+        const correctionRetryLimitReached = Boolean(
+          failureBody
+          && correctionPrompt
+          && isAutoRetryCandidate
+          && correctionAttempt >= MAX_INTEGRATED_CORRECTION_ATTEMPTS
+        );
+        setAutoRetryEligible(canScheduleCorrectionRetry);
         console.warn('[AI Runner][Response][Error]', {
           status: response.status,
           message: rawMessage,
@@ -858,8 +918,7 @@ export default function AiAssistantPanel() {
             }
             : null,
         });
-        const correctionPrompt = failureBody?.workflow?.retryContext?.correctionPrompt;
-        if (failureBody && correctionPrompt && shouldAutoRetryIntegratedFailure(failureBody)) {
+        if (canScheduleCorrectionRetry) {
           const retryDelayMs = resolveIntegratedRetryDelayMs(failureBody);
           addMessage({
             role: 'system',
@@ -887,13 +946,17 @@ export default function AiAssistantPanel() {
           updateWorkflowRunAttempt('error', {
             error: rateLimitMessage,
             stageKey: failedStageKey,
-            stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+            stageLabel,
+            compiledRequestId: compiledRequestId || undefined,
+            attemptId,
           });
         } else {
-          let resolvedMessage = message;
+          let resolvedMessage = correctionRetryLimitReached
+            ? 'Automatic repair was paused after one correction attempt. Review the stage and retry when ready.'
+            : message;
           if (failureBody && workflowStageFailureHandler) {
             const handledFailure = await workflowStageFailureHandler(failureBody, {
-              displayMessage: message,
+              displayMessage: resolvedMessage,
               stageId: failureBody.workflow?.stageId || stageKey,
               stageKey: failedStageKey,
               workflowType: failureBody.workflow?.workflowType,
@@ -909,7 +972,9 @@ export default function AiAssistantPanel() {
           updateWorkflowRunAttempt('error', {
             error: resolvedMessage,
             stageKey: failedStageKey,
-            stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+            stageLabel,
+            compiledRequestId: compiledRequestId || undefined,
+            attemptId,
           });
         }
         inFlightRef.current = false;
@@ -933,7 +998,9 @@ export default function AiAssistantPanel() {
       setStageRunnerState('parsing');
       updateWorkflowRunAttempt('parsing', {
         stageKey: confirmedStageKey,
-        stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+        stageLabel,
+        compiledRequestId: compiledRequestId || undefined,
+        attemptId,
       });
       const patch = body.jsonPatch as unknown;
       const validated = validatePatch(confirmedStageKey, patch);
@@ -946,7 +1013,9 @@ export default function AiAssistantPanel() {
         updateWorkflowRunAttempt('error', {
           error: failure.message,
           stageKey,
-          stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+          stageLabel,
+          compiledRequestId: compiledRequestId || undefined,
+          attemptId,
         });
         inFlightRef.current = false;
         return;
@@ -960,7 +1029,9 @@ export default function AiAssistantPanel() {
       setStageRunnerState('applying');
       updateWorkflowRunAttempt('applying', {
         stageKey: confirmedStageKey,
-        stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+        stageLabel,
+        compiledRequestId: compiledRequestId || undefined,
+        attemptId,
       });
       setExtractedPayload(sanitizedPayload);
       let pipelineResult: { status: 'accepted' | 'review_required' | 'error' | 'retrying'; message?: string } = {
@@ -1001,7 +1072,9 @@ export default function AiAssistantPanel() {
         updateWorkflowRunAttempt('error', {
           error: pipelineMessage,
           stageKey: confirmedStageKey,
-          stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+          stageLabel,
+          compiledRequestId: compiledRequestId || undefined,
+          attemptId,
         });
         console.warn('[AI Runner][Pipeline Outcome]', {
           stageKey: confirmedStageKey,
@@ -1016,7 +1089,9 @@ export default function AiAssistantPanel() {
       setStageRunnerState('complete');
       updateWorkflowRunAttempt('complete', {
         stageKey: confirmedStageKey,
-        stageLabel: workflowContext.currentStage || compiledStageRequest.stageLabel,
+        stageLabel,
+        compiledRequestId: compiledRequestId || undefined,
+        attemptId,
       });
       addMessage({
         role: 'system',
@@ -1047,7 +1122,9 @@ export default function AiAssistantPanel() {
       updateWorkflowRunAttempt('error', {
         error: message,
         stageKey: stageKeyForRun || effectiveStageKey || workflowContext?.compiledStageRequest?.stageKey || 'unknown',
-        stageLabel: workflowContext?.currentStage || workflowContext?.compiledStageRequest?.stageLabel || 'Unknown Stage',
+        stageLabel: requestWorkflowContext.currentStage || requestWorkflowContext.compiledStageRequest?.stageLabel || 'Unknown Stage',
+        compiledRequestId: compiledRequestId || undefined,
+        attemptId,
       });
       inFlightRef.current = false;
     } finally {
@@ -1056,7 +1133,7 @@ export default function AiAssistantPanel() {
   }, [
     workflowContext,
     providerConfig.type,
-    getCompiledStageRequest,
+    ensureCompiledStageRequest,
     stageRunId,
     validatePatch,
     applyStagePatch,
@@ -1064,6 +1141,8 @@ export default function AiAssistantPanel() {
     logStageRunnerGate,
     stageRunnerState,
     currentRetrySource,
+    currentRunAttemptStatus,
+    activeAttemptId,
     updateWorkflowRunAttempt,
   ]);
 
@@ -1273,7 +1352,7 @@ export default function AiAssistantPanel() {
       return;
     }
 
-    if (!currentRunAttemptId || currentRunAttemptStatus !== 'applying' || hasAcceptedStage(workflowRunState, effectiveStageKey)) {
+    if (!currentRunAttemptId || currentRunAttemptStatus !== 'applying' || hasAcceptedCurrentStage(workflowRunState)) {
       clearStallTimer();
       return;
     }

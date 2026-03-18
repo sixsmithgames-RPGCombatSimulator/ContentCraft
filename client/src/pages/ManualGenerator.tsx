@@ -3,7 +3,7 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { ChangeEvent, useEffect, useState, useRef } from 'react';
+import { ChangeEvent, useCallback, useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import GeneratorPanel, { GenerationConfig } from '../components/generator/GeneratorPanel';
 import ResourcesPanel from '../components/generator/ResourcesPanel';
@@ -485,6 +485,7 @@ export default function ManualGenerator() {
   const [config, setConfig] = useState<GenerationConfig | null>(null);
   const [currentStageIndex, setCurrentStageIndex] = useState(-1);
   const [modalMode, setModalMode] = useState<'output' | 'input' | null>(null);
+  const [showIntegratedPromptPreview, setShowIntegratedPromptPreview] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [currentPromptNotice, setCurrentPromptNotice] = useState<WorkflowPromptNotice | null>(null);
   const [currentStageRetrySource, setCurrentStageRetrySource] = useState<WorkflowRetrySource | null>(null);
@@ -519,6 +520,24 @@ export default function ManualGenerator() {
   const [isMultiPartGeneration, setIsMultiPartGeneration] = useState(false);
   const [currentChunkInfo, setCurrentChunkInfo] = useState<WorkflowChunkInfo | undefined>(undefined);
   const localValidationAutoRetryStageKeyRef = useRef<string | null>(null);
+  const compiledStageRequestRef = useRef<AiCompiledStageRequest | null>(null);
+  const {
+    setWorkflowContext,
+    registerApplyChanges,
+    registerSubmitPipelineResponse,
+    registerWorkflowStageFailureHandler,
+    registerWorkflowRunStateDispatcher,
+    registerPrepareWorkflowStageRequest,
+    assistMode,
+    setAssistMode,
+    openPanel,
+    providerConfig,
+  } = useAiAssistant();
+  const [showModeSelection, setShowModeSelection] = useState(false);
+  const [pendingGenerationConfig, setPendingGenerationConfig] = useState<GenerationConfig | null>(null);
+  const [workflowRunState, setWorkflowRunState] = useState<GenerationRunState | null>(null);
+
+  const getWorkflowExecutionMode = (): ExecutionMode => (assistMode === 'integrated' ? 'integrated' : 'manual');
   const clearCanonNarrowingState = () => setCanonNarrowingState(createEmptyWorkflowCanonNarrowingState<StageResults>());
   const clearWorkflowChunkingState = () => setChunkingState(resetWorkflowChunkingState());
   const applyWorkflowUiTransition = (plan: WorkflowUiTransitionPlan) => {
@@ -571,6 +590,16 @@ export default function ManualGenerator() {
       setAccumulatedChunkResults([]);
     }
   };
+  useEffect(() => {
+    compiledStageRequestRef.current = compiledStageRequest;
+  }, [compiledStageRequest]);
+
+  useEffect(() => {
+    if (assistMode !== 'integrated' || modalMode !== 'output') {
+      setShowIntegratedPromptPreview(false);
+    }
+  }, [assistMode, modalMode]);
+
   const executeWorkflowStageNavigation = (
     plan: WorkflowStageNavigationPlan,
     options?: {
@@ -679,6 +708,7 @@ export default function ManualGenerator() {
       alert(plan.alertMessage);
     }
   };
+
   const applyNpcDynamicRoutingPlan = (routingPlan?: NpcDynamicStagePlan) => {
     if (!routingPlan) {
       return;
@@ -698,43 +728,35 @@ export default function ManualGenerator() {
   const pendingChunkingFactpack = chunkingState.pendingFactpack;
   const isNpcSectionChunking = isNpcSectionWorkflowChunking(chunkingState);
 
-  // NPC Section-based chunking state
   const [currentNpcSectionIndex, setCurrentNpcSectionIndex] = useState(0);
   const [accumulatedNpcSections, setAccumulatedNpcSections] = useState<JsonRecord>({});
 
-  // Stage-based chunking state (for Location Spaces iteration)
   const [isStageChunking, setIsStageChunking] = useState(false);
   const [currentStageChunk, setCurrentStageChunk] = useState(0);
   const [totalStageChunks, setTotalStageChunks] = useState(0);
   const [accumulatedChunkResults, setAccumulatedChunkResults] = useState<JsonRecord[]>([]);
 
-  // Live visual map state (for Location generation)
   const [showLiveMap, setShowLiveMap] = useState(false);
   const [liveMapSpaces, setLiveMapSpaces] = useState<LiveMapSpace[]>([]);
 
-  // Space approval workflow state (for Location Spaces stage)
   const [showSpaceApprovalModal, setShowSpaceApprovalModal] = useState(false);
   const [pendingSpace, setPendingSpace] = useState<JsonRecord | null>(null);
   const [_rejectedSpaces, setRejectedSpaces] = useState<Array<{ space: JsonRecord; reason?: string; retrySource?: WorkflowRetrySource }>>([]);
-  const [reviewingSpaceIndex, setReviewingSpaceIndex] = useState<number>(-1); // Index in accumulatedChunkResults, -1 = new space
-  const [savedNewSpace, setSavedNewSpace] = useState<JsonRecord | null>(null); // Save new space when navigating away
-  const [mapUpdateCounter, setMapUpdateCounter] = useState(0); // Force map re-renders
-  const [batchModeEnabled, setBatchModeEnabled] = useState(false); // Auto-accept spaces without individual approval
+  const [reviewingSpaceIndex, setReviewingSpaceIndex] = useState<number>(-1);
+  const [savedNewSpace, setSavedNewSpace] = useState<JsonRecord | null>(null);
+  const [mapUpdateCounter, setMapUpdateCounter] = useState(0);
+  const [batchModeEnabled, setBatchModeEnabled] = useState(false);
 
-  // Auto-save progress state
   const [progressSession, setProgressSession] = useState<GenerationProgress | null>(null);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [lastSaveTime, setLastSaveTime] = useState<string | null>(null);
   const [showResumeModal, setShowResumeModal] = useState(false);
 
-  // Smart stage routing state (for NPC generation)
   const [dynamicNpcStages, setDynamicNpcStages] = useState<Stage[] | null>(null);
   const [stageRoutingDecision, setStageRoutingDecision] = useState<StageRoutingDecision | null>(null);
 
-  // Get appropriate stages based on content type
   const STAGES = getGeneratorStages(config?.type, STAGE_CATALOG, dynamicNpcStages);
 
-  // Track previous values to avoid unnecessary context updates
   const prevStageResultsRef = useRef<StageResults | null>(null);
   const prevStageIndexRef = useRef<number>(-1);
   const prevConfigKeyRef = useRef<string | null>(null);
@@ -780,24 +802,6 @@ export default function ManualGenerator() {
       cancelled = true;
     };
   }, [projectId]);
-
-  // ─── AI Assistant Integration ──────────────────────────────────────────────
-  const {
-    setWorkflowContext,
-    registerApplyChanges,
-    registerSubmitPipelineResponse,
-    registerWorkflowStageFailureHandler,
-    registerWorkflowRunStateDispatcher,
-    assistMode,
-    setAssistMode,
-    openPanel,
-    providerConfig
-  } = useAiAssistant();
-  const [showModeSelection, setShowModeSelection] = useState(false);
-  const [pendingGenerationConfig, setPendingGenerationConfig] = useState<GenerationConfig | null>(null);
-  const [workflowRunState, setWorkflowRunState] = useState<GenerationRunState | null>(null);
-
-  const getWorkflowExecutionMode = (): ExecutionMode => (assistMode === 'integrated' ? 'integrated' : 'manual');
 
   useEffect(() => {
     if (!config) {
@@ -1152,9 +1156,130 @@ export default function ManualGenerator() {
   }, [activeStageName, registerWorkflowStageFailureHandler]);
   // ─── End AI Assistant Integration
 
+  const buildCurrentStageLaunchPlan = useCallback((): WorkflowStageLaunchPlan | null => {
+    if (currentStageIndex < 0) {
+      return null;
+    }
+
+    return buildWorkflowSameStageLaunchPlan({
+      stageIndex: currentStageIndex,
+      stageResults,
+      factpack,
+      chunkInfo: currentChunkInfo,
+      currentGroupIndex: isMultiPartGeneration ? currentGroupIndex : undefined,
+      currentNpcSectionIndex: isNpcSectionChunking ? currentNpcSectionIndex : undefined,
+      accumulatedNpcSections: isNpcSectionChunking ? accumulatedNpcSections : undefined,
+    });
+  }, [
+    accumulatedNpcSections,
+    currentChunkInfo,
+    currentGroupIndex,
+    currentNpcSectionIndex,
+    currentStageIndex,
+    factpack,
+    isMultiPartGeneration,
+    isNpcSectionChunking,
+    stageResults,
+  ]);
+
+  const waitForPreparedStageRequest = useCallback((previousRequestId: string | null) => {
+    return new Promise<AiCompiledStageRequest | null>((resolve) => {
+      const startedAt = Date.now();
+
+      const poll = () => {
+        const nextRequest = compiledStageRequestRef.current;
+        if (nextRequest && (!previousRequestId || nextRequest.requestId !== previousRequestId)) {
+          resolve(nextRequest);
+          return;
+        }
+
+        if (Date.now() - startedAt >= 5000) {
+          resolve(null);
+          return;
+        }
+
+        window.setTimeout(poll, 50);
+      };
+
+      poll();
+    });
+  }, []);
+
+  const prepareCurrentStageRequest = useCallback(async (options?: {
+    showPromptPreview?: boolean;
+    forceRecompile?: boolean;
+  }): Promise<AiCompiledStageRequest | null> => {
+    if (currentStageIndex < 0 || !config) {
+      return null;
+    }
+
+    const existingRequest = compiledStageRequestRef.current;
+    if (existingRequest && !options?.forceRecompile) {
+      if (options?.showPromptPreview) {
+        if (assistMode === 'integrated') {
+          setShowIntegratedPromptPreview(true);
+        }
+        setModalMode('output');
+      }
+      return existingRequest;
+    }
+
+    const launchPlan = buildCurrentStageLaunchPlan();
+    if (!launchPlan) {
+      return null;
+    }
+
+    const promptOverrides: StagePromptOverrides | undefined =
+      currentPromptNotice || currentStageRetrySource
+        ? {
+            promptNotice: currentPromptNotice,
+            retrySource: currentStageRetrySource,
+          }
+        : undefined;
+
+    const previousRequestId = existingRequest?.requestId ?? null;
+
+    setError(null);
+    setLastStageError(null);
+    setShowIntegratedPromptPreview(false);
+    applyWorkflowUiTransition(buildWorkflowRetryUiTransition());
+    executeWorkflowStageLaunch(launchPlan, {
+      runtimeConfig: config,
+      promptOverrides,
+    });
+
+    const nextRequest = await waitForPreparedStageRequest(previousRequestId);
+    if (nextRequest && options?.showPromptPreview) {
+      if (assistMode === 'integrated') {
+        setShowIntegratedPromptPreview(true);
+      }
+      setModalMode('output');
+    }
+
+    return nextRequest;
+  }, [
+    assistMode,
+    applyWorkflowUiTransition,
+    buildCurrentStageLaunchPlan,
+    config,
+    currentPromptNotice,
+    currentStageIndex,
+    currentStageRetrySource,
+    executeWorkflowStageLaunch,
+    waitForPreparedStageRequest,
+  ]);
+
+  useEffect(() => {
+    registerPrepareWorkflowStageRequest(prepareCurrentStageRequest);
+    return () => {
+      registerPrepareWorkflowStageRequest(null);
+    };
+  }, [prepareCurrentStageRequest, registerPrepareWorkflowStageRequest]);
+
   const resetPipelineState = () => {
     setCurrentStageIndex(-1);
     setModalMode(null);
+    setShowIntegratedPromptPreview(false);
     _setSkipMode(false);
     setStageResults({});
     setFactpack(null);
@@ -2451,17 +2576,13 @@ Output: Valid JSON only. No markdown, no prose.`;
       console.log(`📦 Chunk ${chunkInfo!.currentChunk}/${chunkInfo!.totalChunks}: Using full prompt (Spaces stage requires it)`);
     }
 
-    // Hard guard for Planner prompt size on retries and primary runs
-    if (stage.name === 'Planner') {
-      const systemChars = systemPromptToUse.length;
-      const userChars = userPromptToUse.length;
-      const totalChars = systemChars + userChars;
-      if (totalChars > 7200) {
-        setError(`Planner prompt exceeds safe limit: ${totalChars.toLocaleString()} chars (system: ${systemChars.toLocaleString()}, user: ${userChars.toLocaleString()}). Shorten the prompt or flags and retry.`);
-        setSessionStatus('error');
-        return;
-      }
-    }
+    const plannerPromptMetrics = stage.name === 'Planner'
+      ? {
+          systemChars: systemPromptToUse.length,
+          userChars: userPromptToUse.length,
+          totalChars: systemPromptToUse.length + userPromptToUse.length,
+        }
+      : null;
 
     // Check if this stage has a minimal contract (new prompt packer system)
     const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
@@ -2492,6 +2613,16 @@ Output: Valid JSON only. No markdown, no prose.`;
         : '';
     // Use packed prompt for ANY stage that has a contract (not just NPC), except subsequent chunks
     const usePackedPrompt = !!stageContract && !isSubsequentChunk;
+
+    if (plannerPromptMetrics && plannerPromptMetrics.totalChars > 7200 && !usePackedPrompt) {
+      setError(`Planner prompt exceeds safe limit: ${plannerPromptMetrics.totalChars.toLocaleString()} chars (system: ${plannerPromptMetrics.systemChars.toLocaleString()}, user: ${plannerPromptMetrics.userChars.toLocaleString()}). Shorten the prompt or flags and retry.`);
+      setSessionStatus('error');
+      return;
+    }
+
+    if (plannerPromptMetrics && plannerPromptMetrics.totalChars > 7200 && usePackedPrompt) {
+      console.warn(`[Planner] Prompt is above the pre-pack safe limit (${plannerPromptMetrics.totalChars.toLocaleString()} chars). Continuing with packed prompt compilation.`);
+    }
 
     if (usePackedPrompt) {
       console.log(`[Prompt Packer] Using packed prompt for stage: ${stage.name}`);
@@ -2757,7 +2888,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         const context: StageContext = {
           config: effectiveConfig,
           stageResults: results,
-          factpack: trimmedFactpack,
+          factpack: limitedFactpack,
           chunkInfo: chunkInfo || currentChunkInfo,
           previousDecisions: limitedDecisions,
           unansweredProposals: unansweredProposals,
@@ -4428,19 +4559,14 @@ Output: Valid JSON only. No markdown, no prose.`;
   };
 
   const handleRetryCurrentStage = () => {
-    if (currentStageIndex >= 0 && config) {
-      setError(null);
-      setLastStageError(null);
-      applyWorkflowUiTransition(buildWorkflowRetryUiTransition());
-      const launchPlan = buildWorkflowJumpToStageLaunchPlan({
-        stageIndex: currentStageIndex,
-        stageResults,
-        factpack,
-      });
-      executeWorkflowStageLaunch(launchPlan, {
-        runtimeConfig: config,
-      });
-    }
+    void prepareCurrentStageRequest({
+      showPromptPreview: true,
+    });
+  };
+
+  const handleIntegratedPromptPreviewClose = () => {
+    setShowIntegratedPromptPreview(false);
+    setModalMode(null);
   };
 
   const handleBack = () => {
@@ -5508,7 +5634,7 @@ Output: Valid JSON only. No markdown, no prose.`;
 
       {/* Copy/Paste Modal - hidden in integrated AI mode */}
       <CopyPasteModal
-        isOpen={modalMode !== null && !showReviewModal && assistMode !== 'integrated'}
+        isOpen={modalMode !== null && !showReviewModal && (assistMode !== 'integrated' || showIntegratedPromptPreview)}
         mode={modalMode || 'output'}
         stageName={STAGES[currentStageIndex]?.name || ''}
         stageNumber={currentStageIndex + 1}
@@ -5654,7 +5780,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           })()
         }
         onAutoParse={handleAutoParse}
-        onCopied={handleCopied}
+        onCopied={assistMode === 'integrated' && showIntegratedPromptPreview ? undefined : handleCopied}
         onSubmit={handleSubmit}
         onSkip={handleSkip}
         onBack={handleBack}
@@ -5707,7 +5833,8 @@ Output: Valid JSON only. No markdown, no prose.`;
             alert('Auto-save is disabled or no session exists. Enable auto-save to use this feature.');
           }
         }}
-        onClose={handleClose}
+        hideOutputAction={assistMode === 'integrated' && showIntegratedPromptPreview}
+        onClose={assistMode === 'integrated' && showIntegratedPromptPreview ? handleIntegratedPromptPreviewClose : handleClose}
       />
 
       {/* Review & Adjust Modal */}
