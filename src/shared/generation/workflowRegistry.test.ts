@@ -35,4 +35,15 @@ describe('workflowRegistry', () => {
     expect(getWorkflowStageDefinition('nonfiction', 'outline_&_structure')?.key).toBe('outline_&_structure');
     expect(getWorkflowStageDefinition('outline', 'editorAndStyle')?.key).toBe('editor_&_style');
   });
+
+  it('resolves the live generic scene workflow stages through the shared registry', () => {
+    expect(resolveWorkflowStageKey('scene', 'Purpose')).toBe('purpose');
+    expect(resolveWorkflowStageKey('scene', 'Fact Checker')).toBe('fact_checker');
+    expect(resolveWorkflowStageKey('scene', 'Stylist')).toBe('stylist');
+    expect(resolveWorkflowStageKey('scene', 'Canon Validator')).toBe('canon_validator');
+    expect(resolveWorkflowStageKey('scene', 'Physics Validator')).toBe('physics_validator');
+    expect(getWorkflowStageDefinition('scene', 'purpose')?.contract?.outputAllowedKeys).toEqual(
+      expect.arrayContaining(['content_type', 'generation_mode', 'game_system']),
+    );
+  });
 });

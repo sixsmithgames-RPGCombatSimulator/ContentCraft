@@ -5,6 +5,7 @@ import {
   evaluateKeywordExtractorCompliance,
   getAutomaticWorkflowRetryDelayMs,
   getStageAllowedKeys,
+  shouldApplyGeneratorSchemaValidation,
   shouldApplyDuplicateRetryGuard,
   shouldOfferAutomaticSchemaCorrectionRetry,
   validateWorkflowStageContractPayload,
@@ -50,6 +51,39 @@ describe('evaluateKeywordExtractorCompliance', () => {
     } as any;
 
     expect(getStageAllowedKeys('unknown_stage', registry)).toEqual(['foo', 'bar']);
+  });
+
+  it('uses shared contract keys for generic purpose stages', () => {
+    const registry = {
+      allowedPaths: ['title', 'description', 'scene_type'],
+      schemaVersion: 'v1.1-client',
+      schema: {},
+    } as any;
+
+    const allowedKeys = getStageAllowedKeys('purpose', registry, 'scene');
+
+    expect(allowedKeys).toEqual(expect.arrayContaining([
+      'content_type',
+      'generation_mode',
+      'game_system',
+      'detail_level',
+      'special_requirements',
+      'interpretation',
+    ]));
+    expect(allowedKeys).not.toContain('title');
+  });
+
+  it('skips generator-schema validation for contract-only generic report stages', () => {
+    const registry = {
+      allowedPaths: ['title', 'description', 'scene_type', 'rule_base'],
+      schemaVersion: 'v1.1-client',
+      schema: {},
+    } as any;
+
+    expect(shouldApplyGeneratorSchemaValidation('fact_checker', 'scene', registry)).toBe(false);
+    expect(shouldApplyGeneratorSchemaValidation('canon_validator', 'scene', registry)).toBe(false);
+    expect(shouldApplyGeneratorSchemaValidation('physics_validator', 'scene', registry)).toBe(false);
+    expect(shouldApplyGeneratorSchemaValidation('creator', 'scene', registry)).toBe(true);
   });
 
   it('validates planner payload structure through shared contracts', () => {

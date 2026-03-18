@@ -433,6 +433,7 @@ Choose conservative defaults. Output ONLY valid JSON.`,
   },
   {
     name: 'Creator',
+    routerKey: 'creator',
     systemPrompt: `You are the Creator for D&D content generation.
 
 ⚠️ CRITICAL OUTPUT REQUIREMENT ⚠️
@@ -614,6 +615,7 @@ Failing to incorporate user decisions is a critical error - the user already ans
   },
   {
     name: 'Fact Checker',
+    routerKey: 'fact_checker',
     systemPrompt: `You are the Canon Fact Checker for game content generation.
 Evaluate the Creator draft against the Relevant Canon facts.
 
@@ -692,6 +694,7 @@ Output STRICT JSON:
   },
   {
     name: 'Stylist',
+    routerKey: 'stylist',
     systemPrompt: `You are the Stylist for game content generation.
 Your job is to improve prose, apply tone, AND normalize the JSON structure to match our standard schema.
 
@@ -1287,6 +1290,7 @@ Failing to incorporate user decisions during normalization is a critical error!`
   },
   {
     name: 'Canon Validator',
+    routerKey: 'canon_validator',
     systemPrompt: `You are the Canon Validator for game content generation.
 Your job is to detect conflicts between the generated content and existing canon facts.
 
@@ -1370,6 +1374,7 @@ Output the SAME JSON content with added fields:
   },
   {
     name: 'Physics Validator',
+    routerKey: 'physics_validator',
     systemPrompt: `You are the Physics & Logic Validator for game content generation.
 Your job is to ensure the content is internally consistent and follows game physics/logic.
 

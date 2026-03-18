@@ -307,6 +307,25 @@ function normalizeArmorClass(container: Record<string, unknown>): void {
   }
 }
 
+function shouldApplyGeneratorSchemaValidation(
+  stageId: string,
+  workflowType: string | undefined,
+  registry: StageRegistryEntry,
+): boolean {
+  if (!workflowType) {
+    return true;
+  }
+
+  const scopedDefinition = getWorkflowStageDefinition(resolveWorkflowContentType(workflowType), stageId);
+  const scopedContract = scopedDefinition?.contract;
+  if (!scopedContract) {
+    return true;
+  }
+
+  const registryAllowedKeys = new Set(registry.allowedPaths);
+  return scopedContract.outputAllowedKeys.some((key) => registryAllowedKeys.has(key));
+}
+
 interface StageRegistryEntry {
   allowedPaths: string[];
   schemaVersion: string;
@@ -366,6 +385,7 @@ addFormats(ajv);
 /** Load and cache per-generator schema for allowlist and validation */
 const schemaCache: Record<string, StageRegistryEntry | undefined> = {};
 const validatorCache: Record<string, ValidateFunction | undefined> = {};
+let baseSchemaPropertiesCache: Record<string, unknown> | null | undefined;
 const idempotencyCache: Map<
   string,
   { status: number; payload: GeminiSuccessResponse | GeminiFailureResponse; expiresAt: number }
@@ -422,32 +442,104 @@ function storeRetrySignature(body: GeminiRequestBody, signature: string): void {
   retrySignatureCache.set(key, { signature, expiresAt: Date.now() + IDEMPOTENCY_TTL_MS });
 }
 
-function loadSchemaForGenerator(generatorType: string): StageRegistryEntry | null {
-  if (schemaCache[generatorType]) return schemaCache[generatorType] || null;
-  try {
-    const raw = readFileSync(path.join(process.cwd(), `schema/${generatorType}/v1.1-client.json`), 'utf-8');
-    const schema = JSON.parse(raw);
-    const properties = schema.properties || {};
-    
-    // Inject generic workflow fields that are used during generation but stripped before final save
-    properties['keywords'] = { type: 'array', items: { type: 'string' } };
-    properties['retrieval_hints'] = { type: 'object' };
-    properties['_meta'] = { type: 'object' };
-    schema.properties = properties; // Ensure they are on the actual schema object
+function loadBaseSchemaProperties(): Record<string, unknown> {
+  if (baseSchemaPropertiesCache !== undefined) {
+    return baseSchemaPropertiesCache ?? {};
+  }
 
-    const allowedPaths = Object.keys(properties);
-    const entry: StageRegistryEntry = {
-      allowedPaths,
-      schemaVersion: 'v1.1-client',
-      schema,
-    };
-    schemaCache[generatorType] = entry;
-    return entry;
+  try {
+    const raw = readFileSync(path.join(process.cwd(), 'src/server/schemas/base.schema.json'), 'utf-8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const definitions = isRecord(parsed.definitions) ? parsed.definitions : {};
+    const baseOutput = isRecord(definitions.baseOutput) ? definitions.baseOutput : {};
+    const properties = isRecord(baseOutput.properties) ? baseOutput.properties : {};
+    baseSchemaPropertiesCache = { ...properties };
+    return baseSchemaPropertiesCache;
   } catch (err) {
-    console.error('[AI][Gemini] Failed to load schema for generator', generatorType, err);
-    schemaCache[generatorType] = undefined;
+    console.error('[AI][Gemini] Failed to load legacy base schema properties', err);
+    baseSchemaPropertiesCache = null;
+    return {};
+  }
+}
+
+function extractSchemaProperties(schema: Record<string, unknown>): Record<string, unknown> {
+  const properties = isRecord(schema.properties) ? { ...schema.properties } : {};
+  const allOf = Array.isArray(schema.allOf) ? schema.allOf : [];
+
+  for (const entry of allOf) {
+    if (isRecord(entry) && entry.$ref === 'base.schema.json#/definitions/baseOutput') {
+      Object.assign(properties, loadBaseSchemaProperties());
+    }
+  }
+
+  return properties;
+}
+
+function buildContractOnlyRegistry(
+  stageId: string,
+  generatorType: string,
+  schemaVersion: string,
+): StageRegistryEntry | null {
+  const workflowType = resolveWorkflowContentType(generatorType);
+  const scopedDefinition = getWorkflowStageDefinition(workflowType, stageId);
+  const scopedContract = scopedDefinition?.contract;
+  if (!scopedContract) {
     return null;
   }
+
+  const allowedPaths = [...(scopedContract.proxyAllowedKeys ?? scopedContract.outputAllowedKeys)];
+  return {
+    allowedPaths,
+    schemaVersion,
+    schema: {
+      properties: Object.fromEntries(allowedPaths.map((key) => [key, {}])),
+    },
+  };
+}
+
+function loadSchemaForGenerator(generatorType: string): StageRegistryEntry | null {
+  if (schemaCache[generatorType]) return schemaCache[generatorType] || null;
+
+  const candidates = [
+    {
+      filePath: path.join(process.cwd(), `schema/${generatorType}/v1.1-client.json`),
+      schemaVersion: 'v1.1-client',
+    },
+    {
+      filePath: path.join(process.cwd(), `src/server/schemas/${generatorType}.schema.json`),
+      schemaVersion: 'v1.1-client',
+    },
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const raw = readFileSync(candidate.filePath, 'utf-8');
+      const schema = JSON.parse(raw) as Record<string, unknown>;
+      const properties = extractSchemaProperties(schema);
+
+      properties.keywords = { type: 'array', items: { type: 'string' } };
+      properties.retrieval_hints = { type: 'object' };
+      properties._meta = { type: 'object' };
+      schema.properties = properties;
+
+      const entry: StageRegistryEntry = {
+        allowedPaths: Object.keys(properties),
+        schemaVersion: candidate.schemaVersion,
+        schema,
+      };
+      schemaCache[generatorType] = entry;
+      return entry;
+    } catch (err) {
+      const code = err instanceof Error && 'code' in err ? String((err as NodeJS.ErrnoException).code) : undefined;
+      if (code === 'ENOENT') {
+        continue;
+      }
+      console.error('[AI][Gemini] Failed to load schema for generator', generatorType, candidate.filePath, err);
+    }
+  }
+
+  schemaCache[generatorType] = undefined;
+  return null;
 }
 
 function normalizeScalarStrings(container: Record<string, unknown>, fields: string[]): void {
@@ -1130,7 +1222,10 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
     });
   }
 
-  const registry = loadSchemaForGenerator(generatorType);
+  let registry = loadSchemaForGenerator(generatorType);
+  if (!registry) {
+    registry = buildContractOnlyRegistry(body.stageId, generatorType, body.schemaVersion);
+  }
   if (!registry) {
     return respondWithWorkflowFailure(500, {
       type: 'PROVIDER_ERROR',
@@ -1227,8 +1322,9 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
     storeRetrySignature(body, retrySignature);
   }
 
-  const validate = getValidatorForGenerator(generatorType, registry);
-  if (!validate) {
+  const shouldValidateAgainstGeneratorSchema = shouldApplyGeneratorSchemaValidation(body.stageId, generatorType, registry);
+  const validate = shouldValidateAgainstGeneratorSchema ? getValidatorForGenerator(generatorType, registry) : null;
+  if (shouldValidateAgainstGeneratorSchema && !validate) {
     return respondWithWorkflowFailure(500, {
       type: 'PROVIDER_ERROR',
       message: 'Validator could not be created.',
@@ -1786,63 +1882,68 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
         return res.status(200).json(successPayload);
       }
 
-      // Strip disallowed top-level fields for this stage.
-      for (const key of payloadKeys) {
-        if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
-          console.warn(`[AI][Gemini] Stripping disallowed field '${key}' from stage '${body.stageId}'`);
-          delete prunedPayload[key];
+      if (shouldValidateAgainstGeneratorSchema) {
+        for (const key of payloadKeys) {
+          if (key !== '_meta' && !registry.allowedPaths.includes(key)) {
+            console.warn(`[AI][Gemini] Stripping disallowed field '${key}' from stage '${body.stageId}'`);
+            delete prunedPayload[key];
+          }
         }
       }
 
       console.log(`[AI][NORMALIZED][${body.stageId}]`, prunedPayload);
-      const isValid = validate(prunedPayload);
-      console.log(`[AI][VALIDATION_SCHEMA][${body.stageId}]`, {
-        stageRunId: body.stageRunId,
-        valid: isValid,
-        errors: validate.errors,
-      });
-      if (!isValid) {
-        const validationErrors = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
-        const requiredFields = (validate.schema as any)?.required || [];
+      if (shouldValidateAgainstGeneratorSchema && validate) {
+        const isValid = validate(prunedPayload);
+        console.log(`[AI][VALIDATION_SCHEMA][${body.stageId}]`, {
+          stageRunId: body.stageRunId,
+          valid: isValid,
+          errors: validate.errors,
+        });
+        if (!isValid) {
+          const validationErrors = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
+          const requiredFields = (validate.schema as any)?.required || [];
 
-        if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
-          const correctionPrompt = buildSchemaCorrectionPrompt(body.prompt, validationErrors, requiredFields);
-          const retryAfterMs = getAutomaticWorkflowRetryDelayMs(body.stageId, generatorType);
+          if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
+            const correctionPrompt = buildSchemaCorrectionPrompt(body.prompt, validationErrors, requiredFields);
+            const retryAfterMs = getAutomaticWorkflowRetryDelayMs(body.stageId, generatorType);
+            return respondWithWorkflowFailure(422, {
+              type: 'INVALID_RESPONSE',
+              message: `${body.stageId} returned malformed structured data. Retrying automatically with repair instructions.`,
+              retryable: true,
+              retryAfterMs,
+              outcome: 'retry_required',
+              allowedKeyCount: allowedKeys.length,
+              rawAllowedKeyCount,
+              retryContext: {
+                reason: 'schema_validation_failed',
+                retryable: true,
+                retryAfterMs,
+                correctionPrompt,
+              },
+            });
+          }
+
           return respondWithWorkflowFailure(422, {
             type: 'INVALID_RESPONSE',
-            message: `${body.stageId} returned malformed structured data. Retrying automatically with repair instructions.`,
-            retryable: true,
-            retryAfterMs,
-            outcome: 'retry_required',
+            message: `${body.stageId} returned malformed structured data after automatic repair. Review required before retrying.`,
+            retryable: false,
+            outcome: 'review_required',
             allowedKeyCount: allowedKeys.length,
             rawAllowedKeyCount,
             retryContext: {
-              reason: 'schema_validation_failed',
-              retryable: true,
-              retryAfterMs,
-              correctionPrompt,
+              reason: 'schema_validation_failed_after_correction',
+              retryable: false,
             },
           });
         }
-
-        return respondWithWorkflowFailure(422, {
-          type: 'INVALID_RESPONSE',
-          message: `${body.stageId} returned malformed structured data after automatic repair. Review required before retrying.`,
-          retryable: false,
-          outcome: 'review_required',
-          allowedKeyCount: allowedKeys.length,
-          rawAllowedKeyCount,
-          retryContext: {
-            reason: 'schema_validation_failed_after_correction',
-            retryable: false,
-          },
-        });
       }
 
       console.log(`[AI][VALIDATION_PASSED][${body.stageId}]`, {
         stageRunId: body.stageRunId,
         keys: Object.keys(prunedPayload),
       });
+
+      extraction.patch[body.stageId] = prunedPayload;
 
       const successPayload: GeminiSuccessResponse = createWorkflowExecutionSuccess({
         provider: 'gemini',
@@ -2019,6 +2120,7 @@ export {
   evaluateKeywordExtractorCompliance,
   getNormalizedStageKey,
   getStageAllowedKeys,
+  shouldApplyGeneratorSchemaValidation,
   shouldApplyDuplicateRetryGuard,
   shouldOfferAutomaticSchemaCorrectionRetry,
   validateSharedWorkflowStageContractPayload as validateWorkflowStageContractPayload,

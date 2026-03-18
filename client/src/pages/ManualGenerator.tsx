@@ -307,6 +307,51 @@ const getStageLookupKey = (stage: Stage): string => {
   return stage.name;
 };
 
+const getCanonicalStageResultKeys = (stage: Stage): string[] => {
+  const storageKey = getStageStorageKey(stage);
+  const lookupKey = getStageLookupKey(stage);
+  const workflowStageKey = typeof stage.workflowStageKey === 'string' && stage.workflowStageKey.trim().length > 0
+    ? stage.workflowStageKey
+    : undefined;
+  const keys = [
+    storageKey,
+    lookupKey,
+    workflowStageKey,
+    lookupKey.includes('.') ? lookupKey.replace(/\./g, '_') : undefined,
+    workflowStageKey?.includes('.') ? workflowStageKey.replace(/\./g, '_') : undefined,
+  ];
+
+  return Array.from(new Set(keys.filter((key): key is string => typeof key === 'string' && key.trim().length > 0)));
+};
+
+const storeStageResult = (results: StageResults, stage: Stage, payload: JsonRecord): StageResults => {
+  const nextResults: StageResults = { ...results };
+  for (const key of getCanonicalStageResultKeys(stage)) {
+    nextResults[key] = payload;
+  }
+  return nextResults;
+};
+
+const getPackedStageInputs = (
+  stage: Stage,
+  authoredUserPromptContent: string,
+  results: StageResults,
+): Record<string, unknown> => {
+  try {
+    const parsed = JSON.parse(authoredUserPromptContent);
+    if (isRecord(parsed)) {
+      const stageInputs = { ...parsed };
+      delete stageInputs.relevant_canon;
+      delete stageInputs.canon_reference;
+      return stageInputs;
+    }
+  } catch (err) {
+    console.warn(`[Prompt Packer] Failed to parse authored stage payload for ${stage.name}; falling back to reduced stage inputs.`, err);
+  }
+
+  return reduceStageInputs(getStageLookupKey(stage), results);
+};
+
 const isPositionRecord = (value: unknown): value is { x?: number; y?: number } => isRecord(value);
 
 const summarizeForAiMemory = (value: unknown, depth = 0): unknown => {
@@ -2300,7 +2345,8 @@ Validation will reject incorrect field names or missing required fields.`;
     }
 
     // Build user prompt and log its size
-    let userPromptContent = stage.buildUserPrompt(context);
+    const authoredUserPromptContent = stage.buildUserPrompt(context);
+    let userPromptContent = authoredUserPromptContent;
     let guidanceToAppend = additionalGuidance?.trim() || '';
 
     // For Planner, merge fix list directly into JSON to keep payload tiny
@@ -2451,7 +2497,31 @@ Output: Valid JSON only. No markdown, no prose.`;
       console.log(`[Prompt Packer] Using packed prompt for stage: ${stage.name}`);
       const logAi = shouldLogAiPayload();
 
-      const reducedStageInputs = reduceStageInputs(stageLookupKey, results);
+      const packedStageInputs = getPackedStageInputs(stage, authoredUserPromptContent, results);
+      const inferredSpeciesValue = inferSpecies({
+        original_user_request: effectiveConfig.prompt,
+        previous_decisions: limitedDecisions,
+      }) || undefined;
+      const stageInputs: Record<string, unknown> = {
+        ...packedStageInputs,
+      };
+
+      if (
+        !Object.prototype.hasOwnProperty.call(stageInputs, 'original_user_request')
+        && !Object.prototype.hasOwnProperty.call(stageInputs, 'user_request')
+        && !Object.prototype.hasOwnProperty.call(stageInputs, 'user_prompt')
+        && !Object.prototype.hasOwnProperty.call(stageInputs, 'prompt')
+      ) {
+        stageInputs.original_user_request = effectiveConfig.prompt;
+      }
+
+      if (inferredSpeciesValue && !Object.prototype.hasOwnProperty.call(stageInputs, 'inferred_species')) {
+        stageInputs.inferred_species = inferredSpeciesValue;
+      }
+
+      if (additionalGuidance && additionalGuidance.trim().length > 0) {
+        stageInputs.additional_critical_instructions = additionalGuidance.trim();
+      }
 
       // Build packed prompt config - stage contracts already contain required keys
       const packConfig: PromptPackConfig = {
@@ -2459,17 +2529,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           stageContract: packedStageContract,
           outputFormat: 'Output ONLY valid JSON. NO markdown. NO prose.',
           requiredKeys: packedRequiredKeys,
-          stageInputs: {
-            original_user_request: effectiveConfig.prompt,
-            inferred_species: inferSpecies({
-              original_user_request: effectiveConfig.prompt,
-              previous_decisions: limitedDecisions,
-            }) || undefined,
-            ...reducedStageInputs,
-            ...(additionalGuidance && additionalGuidance.trim().length > 0
-              ? { additional_critical_instructions: additionalGuidance.trim() }
-              : {}),
-          },
+          stageInputs,
         },
         shouldHave: {
           canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
@@ -2697,7 +2757,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         const context: StageContext = {
           config: effectiveConfig,
           stageResults: results,
-          factpack: limitedFactpack,
+          factpack: trimmedFactpack,
           chunkInfo: chunkInfo || currentChunkInfo,
           previousDecisions: limitedDecisions,
           unansweredProposals: unansweredProposals,
@@ -3500,10 +3560,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       }
 
       // Store result
-      let newResults: StageResults = {
-        ...stageResults,
-        [currentStageName.toLowerCase().replace(/\s+/g, '_')]: parsed,
-      };
+      let newResults: StageResults = storeStageResult(stageResults, currentStage, parsed);
 
       if (config!.type === 'nonfiction' && currentStageName === 'Purpose') {
         const keywords = toStringArray((parsed as JsonRecord).keywords);
@@ -4004,8 +4061,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         // Update the main stage output with the latest response
         // This way the next chunk will reference the UPDATED data
         const updatedResults: StageResults = {
-          ...newResults,
-          [stageKey]: parsed, // Use latest chunk's output as the "current" output
+          ...storeStageResult(newResults, currentStage, parsed),
           [`${stageKey}_chunks`]: setStageArrayValue(chunkResults), // Also keep chunk history for merging later
         };
         setStageResults(updatedResults);
@@ -4093,10 +4149,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           }
         }
 
-        let mergedResults: StageResults = {
-          ...stageResults,
-          [stageKey]: mergedStageOutput,
-        };
+        let mergedResults: StageResults = storeStageResult(stageResults, currentStage, mergedStageOutput as JsonRecord);
         setStageResults(mergedResults);
 
         const mergedReviewPreparation = prepareWorkflowStageForReview({
@@ -4107,10 +4160,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           isMultiPartGeneration: false,
         });
         mergedStageOutput = mergedReviewPreparation.parsed;
-        mergedResults = {
-          ...stageResults,
-          [stageKey]: mergedStageOutput,
-        };
+        mergedResults = storeStageResult(stageResults, currentStage, mergedStageOutput as JsonRecord);
         setStageResults(mergedResults);
 
         if (mergedReviewPreparation.shouldPauseForPlannerDecisions || mergedReviewPreparation.shouldPauseForReview) {
@@ -4614,10 +4664,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       };
     }
 
-    const newResults: StageResults = {
-      ...stageResults,
-      [currentStage.name.toLowerCase().replace(/\s+/g, '_')]: filteredOutput || {},
-    };
+    const newResults: StageResults = storeStageResult(stageResults, currentStage, (filteredOutput || {}) as JsonRecord);
 
     const continuation = resolveWorkflowStageContinuation({
       currentStageIndex,

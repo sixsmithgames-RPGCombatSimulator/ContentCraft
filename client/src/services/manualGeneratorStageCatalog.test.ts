@@ -12,6 +12,11 @@ describe('manual generator stage catalog', () => {
     expect(GENERIC_STAGES[0]?.name).toBe('Purpose');
     expect(GENERIC_STAGES[1]?.name).toBe('Keyword Extractor');
     expect(GENERIC_STAGES[2]?.name).toBe('Planner');
+    expect(GENERIC_STAGES[3]?.routerKey).toBe('creator');
+    expect(GENERIC_STAGES[4]?.routerKey).toBe('fact_checker');
+    expect(GENERIC_STAGES[5]?.routerKey).toBe('stylist');
+    expect(GENERIC_STAGES[6]?.routerKey).toBe('canon_validator');
+    expect(GENERIC_STAGES[7]?.routerKey).toBe('physics_validator');
   });
 
   it('exports the nonfiction writing workflow stages through the shared catalog', () => {
