@@ -53,7 +53,7 @@ Preserve supported facts, apply required revisions from fact_check, and avoid in
 Return content that matches normalized_output_schema exactly.`;
 
 const LEGACY_DELIVERABLE_SCHEMA_HINTS: Record<string, string> = {
-  scene: 'Scene output schema: type, deliverable, title, description, scene_type, setting { location, time_of_day, atmosphere, sensory_details { sights, sounds, smells, tactile }, mood }, narration { opening, player_perspective, gm_secrets[] }, npcs_present[{ name, role, disposition, goals[], secrets[] }], events[{ trigger, description, outcomes[] }], skill_checks[{ skill, dc, purpose, success_result, failure_result }], branching_paths[{ player_choice, consequence, leads_to }], clues_information[], hooks[], transitions { from_previous, to_next[] }, estimated_duration, era, region, rule_base, sources_used[], assumptions[], proposals[], canon_update.',
+  scene: 'Scene output schema: type, deliverable, title, description, scene_type (social|exploration|investigation|travel|downtime|cutscene), location { name, description, region, ambiance, sensory_details { sights[], sounds[], smells[] } }, participants[{ name, role, goals[], disposition }], objectives[], hooks[], skill_challenges[{ description, suggested_skills[], dc, consequences { success, failure } }], dialogue[{ speaker, line, context }], discoveries[], transitions { entry, exit }, gm_notes, era, region, rule_base, sources_used[], assumptions[], proposals[], canon_update.',
   story_arc: 'Story arc output schema: type, deliverable, title, description, premise, themes[], scope { estimated_sessions, level_range, geographic_scope, stakes }, hook { initial_hook, personal_connections[], urgency }, acts[{ act_number, title, summary, key_events[], major_npcs[], locations[], estimated_sessions, act_climax }], major_npcs[{ name, role, motivation, arc }], key_locations[{ name, significance, when_visited }], central_conflict { antagonist, goal, methods[], weakness }, climax { description, location, stakes, victory_conditions[], failure_outcomes[] }, resolution_options[{ outcome, requirements[], consequences }], subplots[{ title, description, resolution }], pacing { introduction, rising_action, climax, falling_action }, era, region, rule_base, sources_used[], assumptions[], proposals[], canon_update.',
   adventure: 'Adventure output schema: type, deliverable, title, subtitle, description, premise, scope { estimated_sessions, level_range, player_count, difficulty }, adventure_structure { introduction { hook, starting_location, initial_scenes[] }, acts[{ act_number, title, summary, encounters[], scenes[], key_npcs[], locations[], act_objective }], climax { title, description, final_encounter, resolution_options[] }, conclusion { epilogue, rewards[], sequel_hooks[] } }, major_npcs[{ name, role, brief_stats, key_motivations[] }], key_locations[{ name, description, encounters[], points_of_interest[] }], magic_items[{ name, where_found, brief_description }], appendices { npcs, items, maps[], handouts[] }, gm_guidance { preparation_notes[], pacing_tips[], common_pitfalls[], improvisation_tips[] }, themes[], era, region, rule_base, sources_used[], assumptions[], proposals[], canon_update.',
   encounter: 'Encounter output schema: type, deliverable, title, description, encounter_type, objective, environment { location, terrain_features[], hazards[], lighting, weather, cover_terrain[] }, participants[{ name, role, objective, tactics[] }], tactics { enemy_strategy, reinforcements, retreat_conditions, special_phases[] }, rewards { treasure[], experience, story_rewards[] }, hooks[], escalation[], era, region, rule_base, sources_used[], assumptions[], proposals[], canon_update.',
@@ -609,8 +609,8 @@ Choose conservative defaults. Output ONLY valid JSON.`,
       if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
         userPrompt.previous_decisions = context.previousDecisions;
         userPrompt.CRITICAL_INSTRUCTION = `⚠️ MANDATORY: The previous_decisions object contains ${Object.keys(context.previousDecisions).length} decisions already made by the user. You MUST:
-1. INCORPORATE these decisions into your stat block/content (e.g., if user answered "AC 19", set armor_class: 19)
-2. UPDATE relevant fields based on these answers (e.g., if user chose "Option B: Blueblood Charm", include that ability)
+1. INCORPORATE these decisions directly into the structured output for this deliverable
+2. UPDATE the relevant fields so the output reflects those answers exactly
 3. NOT create proposals[] entries for ANY of these topics
 4. NOT ask similar or related questions
 Failing to incorporate user decisions is a critical error - the user already answered these questions!`;
@@ -761,8 +761,8 @@ Output STRICT JSON:
       if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {
         userPrompt.previous_decisions = context.previousDecisions;
         userPrompt.CRITICAL_INSTRUCTION = `⚠️ MANDATORY: The previous_decisions object contains ${Object.keys(context.previousDecisions).length} user decisions. While normalizing:
-1. INCORPORATE these decisions into the normalized output (e.g., if user chose "AC 19", ensure armor_class: 19)
-2. PRESERVE all details from user answers (e.g., if user specified ability details, include them)
+1. INCORPORATE these decisions into the normalized output exactly as answered
+2. PRESERVE all relevant details from those user answers in the final structure
 3. DO NOT create new proposals for these topics
 Failing to incorporate user decisions during normalization is a critical error!`;
       }

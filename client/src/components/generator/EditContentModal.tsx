@@ -12,9 +12,77 @@ import { LocationEditorProvider } from '../../contexts/LocationEditorContext';
 
 type JsonRecord = Record<string, unknown>;
 
+const isJsonRecord = (value: unknown): value is JsonRecord =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeDeliverableType = (value: unknown): string => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  const lower = value.toLowerCase();
+  if (lower.includes('story arc') || lower.includes('story-arc') || lower.includes('story_arc') || lower.includes('plot arc')) {
+    return 'story_arc';
+  }
+  if (lower.includes('npc') || lower.includes('character')) return 'npc';
+  if (lower.includes('monster') || lower.includes('creature')) return 'monster';
+  if (lower.includes('encounter')) return 'encounter';
+  if (lower.includes('item')) return 'item';
+  if (lower.includes('scene')) return 'scene';
+  if (lower.includes('adventure')) return 'adventure';
+  if (lower.includes('location') || lower.includes('castle') || lower.includes('dungeon')) return 'location';
+  return lower.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+};
+
+const hasAnyDefinedKey = (record: JsonRecord, keys: string[]): boolean =>
+  keys.some((key) => record[key] !== undefined);
+
+const inferGeneratedContentType = (record: JsonRecord, hint?: string): string => {
+  const explicitMatch = [hint, record.deliverable, record.type, record.content_type]
+    .map((candidate) => normalizeDeliverableType(candidate))
+    .find((candidate) => candidate.length > 0);
+  if (explicitMatch) {
+    return explicitMatch;
+  }
+
+  if (isJsonRecord(record.story_arc) || isJsonRecord(record.storyArc) || isJsonRecord(record.arc)) {
+    return 'story_arc';
+  }
+  if (isJsonRecord(record.scene)) {
+    return 'scene';
+  }
+  if (isJsonRecord(record.npc) || isJsonRecord(record.character)) {
+    return 'npc';
+  }
+  if (hasAnyDefinedKey(record, ['scene_type', 'location', 'participants', 'objectives', 'skill_challenges', 'discoveries'])) {
+    return 'scene';
+  }
+  if (hasAnyDefinedKey(record, ['synopsis', 'summary', 'theme', 'setting', 'acts', 'beats', 'characters', 'premise', 'scope', 'hook', 'major_npcs', 'key_locations', 'central_conflict', 'clues_and_secrets'])) {
+    return 'story_arc';
+  }
+  if (hasAnyDefinedKey(record, ['adventure_structure', 'appendices', 'gm_guidance'])) {
+    return 'adventure';
+  }
+  if (hasAnyDefinedKey(record, ['location_type', 'spaces', 'rooms', 'points_of_interest'])) {
+    return 'location';
+  }
+  if (hasAnyDefinedKey(record, ['environment', 'encounter_type', 'tactics', 'rewards'])) {
+    return 'encounter';
+  }
+  if (hasAnyDefinedKey(record, ['item_type', 'rarity', 'properties', 'mechanics'])) {
+    return 'item';
+  }
+  if (hasAnyDefinedKey(record, ['ability_scores', 'armor_class', 'hit_points', 'actions'])) {
+    return 'npc';
+  }
+
+  return '';
+};
+
 interface EditContentModalProps {
   isOpen: boolean;
   generatedContent: unknown;
+  contentTypeHint?: string;
   onSave: (editedContent: unknown) => void | Promise<void>;
   onClose: () => void;
 }
@@ -22,6 +90,7 @@ interface EditContentModalProps {
 export default function EditContentModal({
   isOpen,
   generatedContent,
+  contentTypeHint,
   onSave,
   onClose,
 }: EditContentModalProps) {
@@ -70,6 +139,8 @@ export default function EditContentModal({
       setContent({});
       return;
     }
+
+    const resolvedDeliverable = inferGeneratedContentType(gc, contentTypeHint);
 
     if (Object.keys(gc).length === 0) {
       const warning = 'Empty generatedContent received - object has no keys';
@@ -347,6 +418,184 @@ export default function EditContentModal({
       }
     }
 
+    const nestedSceneContainer = isPlainObject(normalized.scene)
+      ? (normalized.scene as JsonRecord)
+      : null;
+
+    if (nestedSceneContainer) {
+      const keysToLift = [
+        'title',
+        'description',
+        'scene_type',
+        'location',
+        'participants',
+        'objectives',
+        'hooks',
+        'skill_challenges',
+        'dialogue',
+        'discoveries',
+        'transitions',
+        'gm_notes',
+        'setting',
+        'narration',
+        'npcs_present',
+        'events',
+        'skill_checks',
+        'branching_paths',
+        'clues_information',
+        'estimated_duration',
+        'era',
+        'region',
+      ];
+
+      for (const key of keysToLift) {
+        liftIfMissing('scene', nestedSceneContainer, key);
+      }
+    }
+
+    const nestedStoryArcContainer =
+      (isPlainObject(normalized.story_arc) ? (normalized.story_arc as JsonRecord) : null) ||
+      (isPlainObject(normalized.storyArc) ? (normalized.storyArc as JsonRecord) : null) ||
+      (isPlainObject(normalized.arc) ? (normalized.arc as JsonRecord) : null);
+
+    if (nestedStoryArcContainer) {
+      const keysToLift = [
+        'title',
+        'description',
+        'premise',
+        'synopsis',
+        'summary',
+        'theme',
+        'themes',
+        'setting',
+        'scope',
+        'hook',
+        'acts',
+        'beats',
+        'characters',
+        'major_npcs',
+        'key_locations',
+        'central_conflict',
+        'climax',
+        'resolution_options',
+        'subplots',
+        'pacing',
+        'clues_and_secrets',
+        'rewards',
+        'dm_notes',
+        'era',
+        'region',
+      ];
+
+      for (const key of keysToLift) {
+        liftIfMissing('story_arc', nestedStoryArcContainer, key);
+      }
+    }
+
+    if (normalized.location === undefined && isPlainObject(normalized.setting)) {
+      const setting = normalized.setting as JsonRecord;
+      const location: JsonRecord = {};
+      if (typeof setting.location === 'string' && setting.location.trim().length > 0) {
+        location.name = setting.location;
+      } else if (typeof setting.name === 'string' && setting.name.trim().length > 0) {
+        location.name = setting.name;
+      }
+      if (typeof setting.description === 'string' && setting.description.trim().length > 0) {
+        location.description = setting.description;
+      } else if (typeof setting.atmosphere === 'string' && setting.atmosphere.trim().length > 0) {
+        location.description = setting.atmosphere;
+      } else if (typeof normalized.description === 'string' && normalized.description.trim().length > 0) {
+        location.description = normalized.description;
+      }
+      if (typeof setting.atmosphere === 'string' && setting.atmosphere.trim().length > 0) {
+        location.ambiance = setting.atmosphere;
+      }
+      if (isPlainObject(setting.sensory_details)) {
+        location.sensory_details = setting.sensory_details;
+      }
+      if (Object.keys(location).length > 0) {
+        normalized.location = location;
+        normalizedFields.push('setting → location');
+      }
+    }
+
+    if (normalized.participants === undefined && normalized.npcs_present !== undefined) {
+      normalized.participants = normalized.npcs_present;
+      normalizedFields.push('npcs_present → participants');
+    }
+
+    if (normalized.objectives === undefined && normalized.hooks !== undefined) {
+      normalized.objectives = normalized.hooks;
+      normalizedFields.push('hooks → objectives');
+    }
+
+    if (normalized.skill_challenges === undefined && normalized.skill_checks !== undefined) {
+      normalized.skill_challenges = normalized.skill_checks;
+      normalizedFields.push('skill_checks → skill_challenges');
+    }
+
+    if (normalized.discoveries === undefined && normalized.clues_information !== undefined) {
+      normalized.discoveries = normalized.clues_information;
+      normalizedFields.push('clues_information → discoveries');
+    }
+
+    if (normalized.synopsis === undefined && normalized.summary !== undefined) {
+      normalized.synopsis = normalized.summary;
+      normalizedFields.push('summary → synopsis');
+    }
+
+    const transitions = isPlainObject(normalized.transitions)
+      ? (normalized.transitions as JsonRecord)
+      : null;
+    if (transitions) {
+      const normalizedTransitions: JsonRecord = { ...transitions };
+      let updated = false;
+      if (normalizedTransitions.entry === undefined && typeof transitions.from_previous === 'string' && transitions.from_previous.trim().length > 0) {
+        normalizedTransitions.entry = transitions.from_previous;
+        updated = true;
+      }
+      if (normalizedTransitions.exit === undefined) {
+        const exitValue = typeof transitions.to_next === 'string'
+          ? transitions.to_next
+          : Array.isArray(transitions.to_next)
+            ? transitions.to_next
+              .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+              .join('; ')
+            : '';
+        if (exitValue.trim().length > 0) {
+          normalizedTransitions.exit = exitValue;
+          updated = true;
+        }
+      }
+      if (updated) {
+        normalized.transitions = normalizedTransitions;
+        normalizedFields.push('transitions.from_previous/to_next → transitions.entry/exit');
+      }
+    }
+
+    if (normalized.gm_notes === undefined && isPlainObject(normalized.narration)) {
+      const narration = normalized.narration as JsonRecord;
+      if (typeof narration.gm_secrets === 'string' && narration.gm_secrets.trim().length > 0) {
+        normalized.gm_notes = narration.gm_secrets;
+        normalizedFields.push('narration.gm_secrets → gm_notes');
+      } else if (Array.isArray(narration.gm_secrets)) {
+        normalized.gm_notes = narration.gm_secrets
+          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+          .join('\n');
+        normalizedFields.push('narration.gm_secrets[] → gm_notes');
+      }
+    }
+
+    if (resolvedDeliverable && normalized.deliverable === undefined) {
+      normalized.deliverable = resolvedDeliverable;
+      normalizedFields.push(`inferred deliverable → ${resolvedDeliverable}`);
+    }
+
+    if (resolvedDeliverable && normalized.type === undefined) {
+      normalized.type = resolvedDeliverable;
+      normalizedFields.push(`inferred type → ${resolvedDeliverable}`);
+    }
+
     // Normalize alternative field names for relationships
     if (!normalized.allies_friends && normalized.allies) {
       normalized.allies_friends = normalized.allies;
@@ -369,40 +618,40 @@ export default function EditContentModal({
 
     // Auto-expand relevant sections based on content
     const sections = new Set(['basic']);
-    const deliverable = String(gc.deliverable || '').toLowerCase();
+    const deliverable = inferGeneratedContentType(normalized, resolvedDeliverable);
 
-    if (deliverable.includes('npc') || deliverable.includes('character')) {
+    if (deliverable === 'npc') {
       sections.add('npc_core');
       sections.add('npc_stats');
       sections.add('npc_combat');
       sections.add('npc_relationships');
       sections.add('npc_magic_items');
       sections.add('npc_spellcasting');
-    } else if (deliverable.includes('monster') || deliverable.includes('creature')) {
+    } else if (deliverable === 'monster') {
       sections.add('monster_core');
       sections.add('monster_stats');
       sections.add('monster_combat');
-    } else if (deliverable.includes('encounter')) {
+    } else if (deliverable === 'encounter') {
       sections.add('encounter_core');
       sections.add('encounter_environment');
       sections.add('encounter_enemies');
-    } else if (deliverable.includes('item')) {
+    } else if (deliverable === 'item') {
       sections.add('item_core');
       sections.add('item_properties');
       sections.add('item_lore');
-    } else if (deliverable.includes('scene')) {
+    } else if (deliverable === 'scene') {
       sections.add('scene_core');
       sections.add('scene_setting');
       sections.add('scene_npcs');
-    } else if (deliverable.includes('story_arc') || deliverable.includes('arc')) {
+    } else if (deliverable === 'story_arc') {
       sections.add('arc_core');
       sections.add('arc_acts');
       sections.add('arc_npcs');
-    } else if (deliverable.includes('adventure')) {
+    } else if (deliverable === 'adventure') {
       sections.add('adventure_core');
       sections.add('adventure_structure');
       sections.add('adventure_resources');
-    } else if (deliverable.includes('location') || deliverable.includes('castle') || deliverable.includes('dungeon')) {
+    } else if (deliverable === 'location') {
       sections.add('location_core');
       sections.add('location_structure');
       sections.add('location_spaces');
@@ -412,7 +661,7 @@ export default function EditContentModal({
     sections.add('sources');
 
     setExpandedSections(sections);
-  }, [isOpen, generatedContent]);
+  }, [contentTypeHint, isOpen, generatedContent]);
 
   // All useCallback hooks MUST be defined before any conditional returns
   const updateField = useCallback((path: string, value: unknown) => {
@@ -485,16 +734,21 @@ export default function EditContentModal({
   // Check if content is empty
   const isContentEmpty = !content || Object.keys(content).length === 0;
 
-  const deliverable = String(content.deliverable || '').toLowerCase();
-  const isNpc = deliverable.includes('npc') || deliverable.includes('character');
-  const isMonster = deliverable.includes('monster') || deliverable.includes('creature');
+  const deliverable = inferGeneratedContentType(content, contentTypeHint);
+  const isNpc = deliverable === 'npc';
+  const isMonster = deliverable === 'monster';
   const isCreature = isNpc || isMonster; // Both NPCs and monsters share most stat block fields
-  const isEncounter = deliverable.includes('encounter');
-  const isItem = deliverable.includes('item');
-  const isScene = deliverable.includes('scene');
-  const isStoryArc = deliverable.includes('story_arc') || deliverable.includes('arc');
-  const isAdventure = deliverable.includes('adventure');
-  const isLocation = deliverable.includes('location') || deliverable.includes('castle') || deliverable.includes('dungeon');
+  const isEncounter = deliverable === 'encounter';
+  const isItem = deliverable === 'item';
+  const isScene = deliverable === 'scene';
+  const isStoryArc = deliverable === 'story_arc';
+  const isAdventure = deliverable === 'adventure';
+  const isLocation = deliverable === 'location';
+  const storyArcSynopsisPath = 'synopsis';
+  const storyArcCharacterPath = content.characters !== undefined ? 'characters' : 'major_npcs';
+  const storyArcCharacterLabel = storyArcCharacterPath === 'characters'
+    ? 'Characters (name, role, goals, knownBarriers, unknownBarriers)'
+    : 'Major NPCs (name, role, motivation, arc)';
 
   const armorClassInlineIssue = (() => {
     if (!isCreature) return '';
@@ -1879,35 +2133,84 @@ export default function EditContentModal({
                 <SectionHeader title="Scene Core" section="scene_core" />
                 {expandedSections.has('scene_core') && (
                   <div className="space-y-3 p-4 bg-gray-50 rounded-md border border-gray-200">
-                    <TextField label="Scene Type" path="scene_type" placeholder="roleplay, investigation, exploration, social" />
-                    <TextField label="Estimated Duration" path="estimated_duration" placeholder="e.g., 20-30 minutes" />
+                    <TextField label="Scene Type" path="scene_type" placeholder="social, exploration, investigation, travel, downtime, cutscene" />
+                    <StringArrayEditor label="Objectives" path="objectives" placeholder="What the scene should accomplish" />
                     <StringArrayEditor label="Hooks" path="hooks" />
-                    <StringArrayEditor label="Clues/Information" path="clues_information" />
-                    <ObjectEditor label="Transitions (from_previous, to_next)" path="transitions" />
+                    <StringArrayEditor label="Discoveries" path="discoveries" placeholder="Information, clues, or tangible finds" />
+                    <ExpandableObjectEditor
+                      label="Transitions (entry, exit)"
+                      value={ensureObject(content.transitions)}
+                      onChange={(val) => updateField('transitions', val)}
+                      path="transitions"
+                    />
+                    <TextField label="GM Notes" path="gm_notes" rows={4} placeholder="Private guidance for the GM" />
+                    {content.estimated_duration !== undefined && (
+                      <TextField label="Estimated Duration" path="estimated_duration" placeholder="e.g., 20-30 minutes" />
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Scene Setting */}
               <div className="space-y-2">
-                <SectionHeader title="Setting & Narration" section="scene_setting" />
+                <SectionHeader title="Location & Dialogue" section="scene_setting" />
                 {expandedSections.has('scene_setting') && (
                   <div className="space-y-3 p-4 bg-gray-50 rounded-md border border-gray-200">
-                    <ObjectEditor label="Setting (location, time_of_day, atmosphere, sensory_details, mood)" path="setting" />
-                    <ObjectEditor label="Narration (opening, player_perspective, gm_secrets)" path="narration" />
+                    <ExpandableObjectEditor
+                      label="Location (name, description, region, ambiance, sensory_details)"
+                      value={ensureObject(content.location)}
+                      onChange={(val) => updateField('location', val)}
+                      path="location"
+                    />
+                    <ExpandableArrayEditor
+                      label="Dialogue (speaker, line, context)"
+                      value={ensureAnyArray(content.dialogue)}
+                      onChange={(val) => updateField('dialogue', val)}
+                      path="dialogue"
+                    />
+                    {content.setting !== undefined && !content.location && (
+                      <ObjectEditor label="Legacy Setting" path="setting" />
+                    )}
+                    {content.narration !== undefined && !content.gm_notes && !content.dialogue && (
+                      <ObjectEditor label="Legacy Narration" path="narration" />
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Scene NPCs & Events */}
               <div className="space-y-2">
-                <SectionHeader title="NPCs & Events" section="scene_npcs" />
+                <SectionHeader title="Participants & Challenges" section="scene_npcs" />
                 {expandedSections.has('scene_npcs') && (
                   <div className="space-y-3 p-4 bg-gray-50 rounded-md border border-gray-200">
-                    <ObjectEditor label="NPCs Present (name, role, disposition, goals, secrets)" path="npcs_present" />
-                    <ObjectEditor label="Events (trigger, description, outcomes)" path="events" />
-                    <ObjectEditor label="Skill Checks (skill, dc, purpose, success_result, failure_result)" path="skill_checks" />
-                    <ObjectEditor label="Branching Paths (player_choice, consequence, leads_to)" path="branching_paths" />
+                    <ExpandableArrayEditor
+                      label="Participants (name, role, goals, disposition)"
+                      value={ensureAnyArray(content.participants)}
+                      onChange={(val) => updateField('participants', val)}
+                      path="participants"
+                    />
+                    <ExpandableArrayEditor
+                      label="Skill Challenges (description, suggested_skills, dc, consequences)"
+                      value={ensureAnyArray(content.skill_challenges)}
+                      onChange={(val) => updateField('skill_challenges', val)}
+                      path="skill_challenges"
+                    />
+                    {content.events !== undefined && (
+                      <ExpandableArrayEditor
+                        label="Legacy Events"
+                        value={ensureAnyArray(content.events)}
+                        onChange={(val) => updateField('events', val)}
+                        path="events"
+                      />
+                    )}
+                    {content.branching_paths !== undefined && (
+                      <ExpandableArrayEditor
+                        label="Legacy Branching Paths"
+                        value={ensureAnyArray(content.branching_paths)}
+                        onChange={(val) => updateField('branching_paths', val)}
+                        path="branching_paths"
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -1922,8 +2225,11 @@ export default function EditContentModal({
                 <SectionHeader title="Story Arc Core" section="arc_core" />
                 {expandedSections.has('arc_core') && (
                   <div className="space-y-3 p-4 bg-gray-50 rounded-md border border-gray-200">
+                    <TextField label="Synopsis" path={storyArcSynopsisPath} rows={3} placeholder="High-level summary of the arc" />
                     <TextField label="Premise" path="premise" rows={2} placeholder="Core concept in 1-2 sentences" />
+                    <TextField label="Theme" path="theme" placeholder="Central emotional or narrative throughline" />
                     <StringArrayEditor label="Themes" path="themes" placeholder="betrayal, redemption, mystery..." />
+                    <TextField label="Setting" path="setting" placeholder="Primary locale or backdrop" />
                     <ObjectEditor label="Scope (estimated_sessions, level_range, geographic_scope, stakes)" path="scope" />
                     <ObjectEditor label="Hook (initial_hook, personal_connections, urgency)" path="hook" />
                     <ObjectEditor label="Pacing (introduction, rising_action, climax, falling_action)" path="pacing" />
@@ -1936,22 +2242,73 @@ export default function EditContentModal({
                 <SectionHeader title="Acts & Climax" section="arc_acts" />
                 {expandedSections.has('arc_acts') && (
                   <div className="space-y-3 p-4 bg-gray-50 rounded-md border border-gray-200">
-                    <ObjectEditor label="Acts (act_number, title, summary, key_events, major_npcs, locations, estimated_sessions, act_climax)" path="acts" />
+                    <ExpandableArrayEditor
+                      label="Acts"
+                      value={ensureAnyArray(content.acts)}
+                      onChange={(val) => updateField('acts', val)}
+                      path="acts"
+                    />
+                    <ExpandableArrayEditor
+                      label="Story Beats"
+                      value={ensureAnyArray(content.beats)}
+                      onChange={(val) => updateField('beats', val)}
+                      path="beats"
+                    />
                     <ObjectEditor label="Climax (description, location, stakes, victory_conditions, failure_outcomes)" path="climax" />
-                    <ObjectEditor label="Resolution Options (outcome, requirements, consequences)" path="resolution_options" />
-                    <ObjectEditor label="Subplots (title, description, resolution)" path="subplots" />
+                    <ExpandableArrayEditor
+                      label="Resolution Options"
+                      value={ensureAnyArray(content.resolution_options)}
+                      onChange={(val) => updateField('resolution_options', val)}
+                      path="resolution_options"
+                    />
+                    <ExpandableArrayEditor
+                      label="Subplots"
+                      value={ensureAnyArray(content.subplots)}
+                      onChange={(val) => updateField('subplots', val)}
+                      path="subplots"
+                    />
                   </div>
                 )}
               </div>
 
               {/* Story Arc NPCs & Locations */}
               <div className="space-y-2">
-                <SectionHeader title="NPCs & Locations" section="arc_npcs" />
+                <SectionHeader title="Characters, Secrets & Locations" section="arc_npcs" />
                 {expandedSections.has('arc_npcs') && (
                   <div className="space-y-3 p-4 bg-gray-50 rounded-md border border-gray-200">
-                    <ObjectEditor label="Major NPCs (name, role, motivation, arc)" path="major_npcs" />
-                    <ObjectEditor label="Key Locations (name, significance, when_visited)" path="key_locations" />
+                    <ExpandableArrayEditor
+                      label={storyArcCharacterLabel}
+                      value={ensureAnyArray(getNestedValue(content, storyArcCharacterPath))}
+                      onChange={(val) => updateField(storyArcCharacterPath, val)}
+                      path={storyArcCharacterPath}
+                    />
+                    {content.major_npcs !== undefined && storyArcCharacterPath !== 'major_npcs' && (
+                      <ExpandableArrayEditor
+                        label="Major NPCs (name, role, motivation, arc)"
+                        value={ensureAnyArray(content.major_npcs)}
+                        onChange={(val) => updateField('major_npcs', val)}
+                        path="major_npcs"
+                      />
+                    )}
+                    <ExpandableArrayEditor
+                      label="Key Locations (name, significance, when_visited)"
+                      value={ensureAnyArray(content.key_locations)}
+                      onChange={(val) => updateField('key_locations', val)}
+                      path="key_locations"
+                    />
                     <ObjectEditor label="Central Conflict (antagonist, goal, methods, weakness)" path="central_conflict" />
+                    <ExpandableArrayEditor
+                      label="Secrets & Clues"
+                      value={ensureAnyArray(content.clues_and_secrets)}
+                      onChange={(val) => updateField('clues_and_secrets', val)}
+                      path="clues_and_secrets"
+                    />
+                    <ExpandableArrayEditor
+                      label="Rewards"
+                      value={ensureAnyArray(content.rewards)}
+                      onChange={(val) => updateField('rewards', val)}
+                      path="rewards"
+                    />
                   </div>
                 )}
               </div>

@@ -6054,6 +6054,10 @@ Output: Valid JSON only. No markdown, no prose.`;
         <EditContentModal
           isOpen={showEditModal}
           generatedContent={editedContent || finalOutput}
+          contentTypeHint={(() => {
+            const modalContent = isRecord(editedContent) ? editedContent : isRecord(finalOutput) ? finalOutput : undefined;
+            return getString(modalContent, 'deliverable') || getString(modalContent, 'type');
+          })()}
           onClose={() => setShowEditModal(false)}
           onSave={(edited) => {
             setEditedContent(edited);

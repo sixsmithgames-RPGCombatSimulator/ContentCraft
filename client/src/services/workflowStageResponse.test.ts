@@ -376,6 +376,59 @@ describe('workflowStageResponse', () => {
     ]);
   });
 
+  it('accepts character build entries when modifiers arrive as numeric bonus aliases', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        class_features: ['Sneak Attack (4d6)', 'Cunning Action'],
+        subclass_features: ['Assassinate'],
+        racial_features: ['Darkvision'],
+        feats: ['Alert'],
+        fighting_styles: [],
+        skill_proficiencies: [
+          { skill: 'Stealth', bonus: 8 },
+          { name: 'Perception', modifier: 5 },
+        ],
+        saving_throws: [
+          { ability: 'Dexterity', bonus: 8 },
+          { save: 'Intelligence', modifier: 5 },
+        ],
+      }),
+      stageName: 'Creator: Character Build',
+      stageIdentity: 'character_build',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Malakor Vane',
+          class_levels: 'Rogue (Assassin) 7',
+          race: 'Tiefling',
+        },
+        'creator:_stats': {
+          ability_scores: {
+            strength: 10,
+            dexterity: 18,
+            constitution: 14,
+            intelligence: 16,
+            wisdom: 12,
+            charisma: 14,
+          },
+          proficiency_bonus: 3,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.skill_proficiencies).toEqual([
+      { name: 'Stealth', value: '+8' },
+      { name: 'Perception', value: '+5' },
+    ]);
+    expect(result.parsed.saving_throws).toEqual([
+      { name: 'Dexterity', value: '+8' },
+      { name: 'Intelligence', value: '+5' },
+    ]);
+  });
+
   it('accepts spellcasting responses that return spells_known as a leveled object map', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({

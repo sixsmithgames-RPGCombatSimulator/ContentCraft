@@ -150,10 +150,16 @@ export function createWorkflowStagePromptPayload(options: BuildWorkflowStageProm
     userPrompt.flags = context.config.flags;
   }
 
-  if (plannerReferenceMessage && context.stageResults.planner) {
-    userPrompt[plannerReferenceKey] = plannerReferenceMessage;
-  } else if (context.factpack) {
+  if (context.factpack) {
     userPrompt[factpackKey] = createMinimalFactpack(context.factpack, factpackMaxChars);
+  }
+
+  if (
+    plannerReferenceMessage
+    && context.stageResults.planner
+    && plannerReferenceKey !== factpackKey
+  ) {
+    userPrompt[plannerReferenceKey] = plannerReferenceMessage;
   }
 
   if (context.previousDecisions && Object.keys(context.previousDecisions).length > 0) {

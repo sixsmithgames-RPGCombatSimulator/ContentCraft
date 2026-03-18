@@ -43,6 +43,9 @@
         }
       }
     },
+    "setting": {
+      "type": ["object", "string"]
+    },
     "participants": {
       "type": "array",
       "items": {
@@ -110,12 +113,33 @@
       "items": { "type": "string" },
       "description": "Information or items players can find"
     },
+    "narration": {
+      "type": "object"
+    },
+    "npcs_present": {
+      "type": "array"
+    },
+    "events": {
+      "type": "array"
+    },
+    "skill_checks": {
+      "type": "array"
+    },
+    "branching_paths": {
+      "type": "array"
+    },
+    "clues_information": {
+      "type": "array"
+    },
     "transitions": {
       "type": "object",
       "properties": {
         "entry": { "type": "string", "description": "How scene begins" },
         "exit": { "type": "string", "description": "How scene ends or transitions" }
       }
+    },
+    "estimated_duration": {
+      "type": ["string", "number"]
     },
     "gm_notes": {
       "type": "string",

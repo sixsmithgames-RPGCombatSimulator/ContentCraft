@@ -712,13 +712,21 @@ function normalizeNameValueArray(container: Record<string, unknown>, field: stri
     .map((entry) => {
       if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
         const obj = entry as Record<string, unknown>;
-        const name = typeof obj.name === 'string' ? obj.name : 'Unknown';
-        const value = typeof obj.value === 'string' ? obj.value : defaultValue;
+        const name =
+          (typeof obj.name === 'string' && obj.name.trim().length > 0 ? obj.name.trim() : null)
+          ?? (typeof obj.skill === 'string' && obj.skill.trim().length > 0 ? obj.skill.trim() : null)
+          ?? (typeof obj.save === 'string' && obj.save.trim().length > 0 ? obj.save.trim() : null)
+          ?? (typeof obj.ability === 'string' && obj.ability.trim().length > 0 ? obj.ability.trim() : null)
+          ?? 'Unknown';
+        const value = coerceModifierValue(obj.value ?? obj.modifier ?? obj.bonus, defaultValue);
         const result: Record<string, unknown> = { name, value };
         if (typeof obj.notes === 'string') result.notes = obj.notes;
         return result;
       }
-      if (typeof entry === 'string' || typeof entry === 'number') {
+      if (typeof entry === 'string') {
+        return parseNameValueStringEntry(entry, defaultValue);
+      }
+      if (typeof entry === 'number') {
         return { name: String(entry), value: defaultValue } as Record<string, unknown>;
       }
       return null;
@@ -745,6 +753,48 @@ function normalizeStringList(container: Record<string, unknown>, field: string):
     return;
   }
   (container as Record<string, unknown>)[field] = [];
+}
+
+function normalizeSignedModifier(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '+0';
+  return trimmed.startsWith('+') || trimmed.startsWith('-') ? trimmed : `+${trimmed}`;
+}
+
+function coerceModifierValue(value: unknown, defaultValue = '+0'): string {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return normalizeSignedModifier(String(Math.trunc(value)));
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      return normalizeSignedModifier(trimmed);
+    }
+  }
+
+  return defaultValue;
+}
+
+function parseNameValueStringEntry(value: string, defaultValue = '+0'): Record<string, unknown> | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(.*?)(?:\s*\(([+-]?\d+)\)|\s+([+-]?\d+))\s*$/);
+  if (!match) {
+    return { name: trimmed, value: defaultValue };
+  }
+
+  const name = match[1]?.trim();
+  const modifier = match[2] ?? match[3];
+  if (!name || !modifier) {
+    return { name: trimmed, value: defaultValue };
+  }
+
+  return {
+    name,
+    value: normalizeSignedModifier(modifier),
+  };
 }
 
 /**
@@ -2134,6 +2184,7 @@ export {
   evaluateKeywordExtractorCompliance,
   getNormalizedStageKey,
   getStageAllowedKeys,
+  normalizeNameValueArray,
   shouldApplyGeneratorSchemaValidation,
   shouldApplyDuplicateRetryGuard,
   shouldOfferAutomaticSchemaCorrectionRetry,

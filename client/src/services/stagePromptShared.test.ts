@@ -86,7 +86,7 @@ describe('stage prompt shared helpers', () => {
     });
   });
 
-  it('prefers planner canon references over embedding another factpack copy', () => {
+  it('keeps explicit factpacks even when planner canon notes are present', () => {
     const prompt = buildWorkflowStagePrompt({
       context: {
         config: {
@@ -112,6 +112,9 @@ describe('stage prompt shared helpers', () => {
       original_user_request: 'Create a storm encounter.',
       deliverable: 'encounter',
       stage: 'rewards',
+      relevant_canon: {
+        facts: [{ text: 'The harbor chains rise at dusk.' }],
+      },
       canon_reference: 'Review planner canon first.',
     });
   });
@@ -139,7 +142,7 @@ describe('stage prompt shared helpers', () => {
       deliverable: 'npc',
       stage: 'spellcasting',
       plannerReferenceMessage: 'Reuse only relevant canon spell names.',
-      plannerReferenceKey: 'compact_canon',
+      plannerReferenceKey: 'canon_reference',
       factpackKey: 'compact_canon',
       previousDecisionsKey: 'decisions',
     });
@@ -148,7 +151,10 @@ describe('stage prompt shared helpers', () => {
       original_user_request: 'Create a spellcasting knight.',
       deliverable: 'npc',
       stage: 'spellcasting',
-      compact_canon: 'Reuse only relevant canon spell names.',
+      compact_canon: {
+        facts: [{ text: 'Knights of Selune favor moon-themed prayers.' }],
+      },
+      canon_reference: 'Reuse only relevant canon spell names.',
       decisions: {
         oath: 'devotion',
       },

@@ -48,6 +48,15 @@ const normalizeStringArray = (value: unknown): string[] => {
     .filter((entry) => entry.length > 0);
 };
 
+const normalizeLooseStringArray = (value: unknown): string[] => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? [trimmed] : [];
+  }
+
+  return normalizeStringArray(value);
+};
+
 const coerceNonEmptyString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') {
     return undefined;
@@ -109,6 +118,19 @@ const parseNameValueStringEntry = (value: string): { name: string; modifier: str
     name,
     modifier: normalizeSignedModifier(modifier),
   };
+};
+
+const coerceModifierText = (value: unknown): string | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return normalizeSignedModifier(String(Math.trunc(value)));
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? normalizeSignedModifier(trimmed) : undefined;
+  }
+
+  return undefined;
 };
 
 const normalizeNamedDescriptionEntries = (
@@ -216,13 +238,15 @@ const normalizeNameValueEntries = (value: unknown): JsonRecord[] => {
 
       const name = coerceNonEmptyString(entry.name)
         ?? coerceNonEmptyString(entry.skill)
-        ?? coerceNonEmptyString(entry.save);
+        ?? coerceNonEmptyString(entry.save)
+        ?? coerceNonEmptyString(entry.ability);
       if (!name) {
         return null;
       }
 
-      const valueText = coerceNonEmptyString(entry.value)
-        ?? coerceNonEmptyString(entry.modifier)
+      const valueText = coerceModifierText(entry.value)
+        ?? coerceModifierText(entry.modifier)
+        ?? coerceModifierText(entry.bonus)
         ?? '+0';
 
       const normalized: JsonRecord = {
@@ -781,6 +805,438 @@ const normalizeSpellcastingPayload = (payload: JsonRecord): JsonRecord => {
   return normalized;
 };
 
+const SCENE_TYPE_ALIASES: Record<string, string> = {
+  roleplay: 'social',
+  role_play: 'social',
+  dialogue: 'social',
+  narrative: 'cutscene',
+  cut_scene: 'cutscene',
+};
+
+const SCENE_DISPOSITION_ALIASES: Record<string, 'hostile' | 'unfriendly' | 'neutral' | 'friendly' | 'helpful'> = {
+  ally: 'friendly',
+  allied: 'friendly',
+  friend: 'friendly',
+  enemy: 'hostile',
+  suspicious: 'unfriendly',
+};
+
+const normalizeSceneType = (value: unknown): string | undefined => {
+  const normalized = coerceNonEmptyString(value)?.toLowerCase().replace(/[\s-]+/g, '_');
+  if (!normalized) {
+    return undefined;
+  }
+
+  return SCENE_TYPE_ALIASES[normalized] ?? normalized;
+};
+
+const normalizeSceneDisposition = (value: unknown): string | undefined => {
+  const normalized = coerceNonEmptyString(value)?.toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (['hostile', 'unfriendly', 'neutral', 'friendly', 'helpful'].includes(normalized)) {
+    return normalized;
+  }
+
+  return SCENE_DISPOSITION_ALIASES[normalized];
+};
+
+const uniqueStringParts = (...groups: Array<string | string[] | undefined>): string[] => {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+
+  for (const group of groups) {
+    const values = typeof group === 'string' ? [group] : Array.isArray(group) ? group : [];
+    for (const value of values) {
+      const trimmed = value.trim();
+      const normalized = trimmed.toLowerCase();
+      if (!trimmed || seen.has(normalized)) {
+        continue;
+      }
+
+      seen.add(normalized);
+      parts.push(trimmed);
+    }
+  }
+
+  return parts;
+};
+
+const normalizeSceneSensoryDetails = (value: unknown): JsonRecord | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const sensoryDetails: JsonRecord = {};
+  const sights = normalizeLooseStringArray(value.sights);
+  const sounds = normalizeLooseStringArray(value.sounds);
+  const smells = normalizeLooseStringArray(value.smells);
+
+  if (sights.length > 0) {
+    sensoryDetails.sights = sights;
+  }
+  if (sounds.length > 0) {
+    sensoryDetails.sounds = sounds;
+  }
+  if (smells.length > 0) {
+    sensoryDetails.smells = smells;
+  }
+
+  return Object.keys(sensoryDetails).length > 0 ? sensoryDetails : undefined;
+};
+
+const normalizeSceneLocation = (payload: JsonRecord): JsonRecord | undefined => {
+  const existingLocation = isRecord(payload.location) ? payload.location : null;
+  const legacySetting = isRecord(payload.setting) ? payload.setting : null;
+
+  const name = coerceNonEmptyString(existingLocation?.name)
+    ?? coerceNonEmptyString(payload.location)
+    ?? coerceNonEmptyString(legacySetting?.location)
+    ?? coerceNonEmptyString(legacySetting?.name)
+    ?? coerceNonEmptyString(payload.title);
+  const description = coerceNonEmptyString(existingLocation?.description)
+    ?? coerceNonEmptyString(legacySetting?.description)
+    ?? coerceNonEmptyString(legacySetting?.atmosphere)
+    ?? coerceNonEmptyString(legacySetting?.mood)
+    ?? coerceNonEmptyString(payload.description);
+
+  if (!name || !description) {
+    return undefined;
+  }
+
+  const location: JsonRecord = {
+    name,
+    description,
+  };
+
+  const region = coerceNonEmptyString(existingLocation?.region)
+    ?? coerceNonEmptyString(legacySetting?.region)
+    ?? coerceNonEmptyString(payload.region);
+  const ambiance = coerceNonEmptyString(existingLocation?.ambiance)
+    ?? coerceNonEmptyString(legacySetting?.ambiance)
+    ?? coerceNonEmptyString(legacySetting?.atmosphere)
+    ?? coerceNonEmptyString(legacySetting?.mood);
+  const sensoryDetails = normalizeSceneSensoryDetails(existingLocation?.sensory_details)
+    ?? normalizeSceneSensoryDetails(legacySetting?.sensory_details);
+
+  if (region) {
+    location.region = region;
+  }
+  if (ambiance) {
+    location.ambiance = ambiance;
+  }
+  if (sensoryDetails) {
+    location.sensory_details = sensoryDetails;
+  }
+
+  return location;
+};
+
+const normalizeSceneParticipants = (value: unknown): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const name = coerceNonEmptyString(entry);
+        return name ? { name, role: 'participant' } as JsonRecord : null;
+      }
+
+      if (!isRecord(entry)) {
+        return null;
+      }
+
+      const name = coerceNonEmptyString(entry.name)
+        ?? coerceNonEmptyString(entry.character)
+        ?? coerceNonEmptyString(entry.npc);
+      if (!name) {
+        return null;
+      }
+
+      const role = coerceNonEmptyString(entry.role)
+        ?? coerceNonEmptyString(entry.function)
+        ?? 'participant';
+      const goals = uniqueStringParts(
+        normalizeLooseStringArray(entry.goals),
+        normalizeLooseStringArray(entry.goal),
+      );
+      const disposition = normalizeSceneDisposition(entry.disposition);
+
+      const participant: JsonRecord = { name, role };
+      if (goals.length > 0) {
+        participant.goals = goals;
+      }
+      if (disposition) {
+        participant.disposition = disposition;
+      }
+
+      return participant;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null);
+};
+
+const normalizeSceneSkillChallenges = (value: unknown): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const description = coerceNonEmptyString(entry);
+        return description
+          ? {
+            description,
+            suggested_skills: [],
+            dc: 10,
+          } as JsonRecord
+          : null;
+      }
+
+      if (!isRecord(entry)) {
+        return null;
+      }
+
+      const description = coerceNonEmptyString(entry.description)
+        ?? coerceNonEmptyString(entry.purpose)
+        ?? coerceNonEmptyString(entry.challenge)
+        ?? coerceNonEmptyString(entry.skill);
+      if (!description) {
+        return null;
+      }
+
+      const suggestedSkills = uniqueStringParts(
+        normalizeLooseStringArray(entry.suggested_skills),
+        normalizeLooseStringArray(entry.skills),
+        normalizeLooseStringArray(entry.skill),
+      );
+      const dc = coercePositiveInteger(entry.dc) ?? 10;
+      const challenge: JsonRecord = {
+        description,
+        suggested_skills: suggestedSkills,
+        dc: Math.min(30, Math.max(5, dc)),
+      };
+
+      const existingConsequences = isRecord(entry.consequences) ? entry.consequences : null;
+      const success = coerceNonEmptyString(existingConsequences?.success)
+        ?? coerceNonEmptyString(entry.success_result);
+      const failure = coerceNonEmptyString(existingConsequences?.failure)
+        ?? coerceNonEmptyString(entry.failure_result);
+      if (success || failure) {
+        challenge.consequences = {
+          ...(success ? { success } : {}),
+          ...(failure ? { failure } : {}),
+        } as JsonRecord;
+      }
+
+      return challenge;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null);
+};
+
+const collectSceneObjectives = (payload: JsonRecord): string[] => {
+  const canonicalObjectives = normalizeLooseStringArray(payload.objectives);
+  if (canonicalObjectives.length > 0) {
+    return canonicalObjectives;
+  }
+
+  const hooks = normalizeLooseStringArray(payload.hooks);
+  if (hooks.length > 0) {
+    return hooks;
+  }
+
+  if (Array.isArray(payload.events)) {
+    const eventObjectives = payload.events
+      .map((entry) => {
+        if (!isRecord(entry)) {
+          return null;
+        }
+
+        return coerceNonEmptyString(entry.objective)
+          ?? coerceNonEmptyString(entry.description)
+          ?? coerceNonEmptyString(entry.trigger);
+      })
+      .filter((entry): entry is string => typeof entry === 'string');
+    if (eventObjectives.length > 0) {
+      return uniqueStringParts(eventObjectives);
+    }
+  }
+
+  if (Array.isArray(payload.branching_paths)) {
+    const branchObjectives = payload.branching_paths
+      .map((entry) => {
+        if (!isRecord(entry)) {
+          return null;
+        }
+
+        return coerceNonEmptyString(entry.player_choice)
+          ?? coerceNonEmptyString(entry.consequence);
+      })
+      .filter((entry): entry is string => typeof entry === 'string');
+    if (branchObjectives.length > 0) {
+      return uniqueStringParts(branchObjectives);
+    }
+  }
+
+  const description = coerceNonEmptyString(payload.description);
+  if (!description) {
+    return [];
+  }
+
+  const firstSentence = description.match(/^[^.!?]+[.!?]?/)?.[0]?.trim() ?? description;
+  return firstSentence ? [firstSentence] : [];
+};
+
+const normalizeSceneTransitions = (value: unknown): JsonRecord | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const entry = coerceNonEmptyString(value.entry)
+    ?? coerceNonEmptyString(value.from_previous);
+  const legacyExit = uniqueStringParts(normalizeLooseStringArray(value.to_next)).join('; ');
+  const exit = coerceNonEmptyString(value.exit)
+    ?? (legacyExit.length > 0 ? legacyExit : undefined);
+
+  if (!entry && !exit) {
+    return undefined;
+  }
+
+  return {
+    ...(entry ? { entry } : {}),
+    ...(exit ? { exit } : {}),
+  };
+};
+
+const normalizeSceneGmNotes = (payload: JsonRecord): string | undefined => {
+  const narration = isRecord(payload.narration) ? payload.narration : null;
+  const notes = uniqueStringParts(
+    coerceNonEmptyString(payload.gm_notes),
+    normalizeLooseStringArray(payload.gm_notes),
+    normalizeLooseStringArray(narration?.gm_secrets),
+  );
+
+  return notes.length > 0 ? notes.join('\n') : undefined;
+};
+
+const normalizeSceneDescription = (
+  payload: JsonRecord,
+  location: JsonRecord | undefined,
+  objectives: string[],
+  hooks: string[],
+  discoveries: string[],
+): string | undefined => {
+  const narration = isRecord(payload.narration) ? payload.narration : null;
+  const firstEventText = Array.isArray(payload.events)
+    ? payload.events
+      .map((entry) => {
+        if (!isRecord(entry)) {
+          return null;
+        }
+
+        return coerceNonEmptyString(entry.description)
+          ?? coerceNonEmptyString(entry.trigger);
+      })
+      .find((entry): entry is string => typeof entry === 'string')
+    : undefined;
+
+  const parts = uniqueStringParts(
+    coerceNonEmptyString(payload.description),
+    coerceNonEmptyString(location?.description),
+    coerceNonEmptyString(narration?.opening),
+    coerceNonEmptyString(narration?.player_perspective),
+    hooks.length > 0 ? `Hooks: ${hooks.join('; ')}.` : undefined,
+    objectives.length > 0 ? `Objectives: ${objectives.join('; ')}.` : undefined,
+    discoveries.length > 0 ? `Discoveries: ${discoveries.join('; ')}.` : undefined,
+    firstEventText,
+  );
+  let description = parts.join(' ').trim();
+
+  if (description.length > 0 && description.length < 100) {
+    const locationName = coerceNonEmptyString(location?.name);
+    const fallbackSummary = uniqueStringParts(
+      coerceNonEmptyString(payload.title)
+        ? `Scene focus: ${payload.title}.`
+        : undefined,
+      locationName
+        ? `Location: ${locationName}.`
+        : undefined,
+      objectives.length > 0
+        ? `Primary objective: ${objectives.join('; ')}.`
+        : undefined,
+    ).join(' ');
+
+    if (fallbackSummary.length > 0) {
+      description = uniqueStringParts(description, fallbackSummary).join(' ');
+    }
+  }
+
+  return description.length > 0 ? description : undefined;
+};
+
+const normalizeScenePayload = (payload: JsonRecord): JsonRecord => {
+  const normalized: JsonRecord = { ...payload };
+  const hooks = normalizeLooseStringArray(payload.hooks);
+  const location = normalizeSceneLocation(payload);
+  const participants = normalizeSceneParticipants(payload.participants ?? payload.npcs_present);
+  const objectives = collectSceneObjectives(payload);
+  const skillChallenges = normalizeSceneSkillChallenges(payload.skill_challenges ?? payload.skill_checks);
+  const discoveries = uniqueStringParts(
+    normalizeLooseStringArray(payload.discoveries),
+    normalizeLooseStringArray(payload.clues_information),
+  );
+  const transitions = normalizeSceneTransitions(payload.transitions);
+  const gmNotes = normalizeSceneGmNotes(payload);
+  const sceneType = normalizeSceneType(payload.scene_type);
+  const description = normalizeSceneDescription(payload, location, objectives, hooks, discoveries);
+
+  if (sceneType) {
+    normalized.scene_type = sceneType;
+  }
+  if (location) {
+    normalized.location = location;
+  }
+  if (participants.length > 0) {
+    normalized.participants = participants;
+  }
+  if (objectives.length > 0) {
+    normalized.objectives = objectives;
+  }
+  if (hooks.length > 0 || Object.prototype.hasOwnProperty.call(payload, 'hooks')) {
+    normalized.hooks = hooks;
+  }
+  if (skillChallenges.length > 0) {
+    normalized.skill_challenges = skillChallenges;
+  }
+  if (discoveries.length > 0) {
+    normalized.discoveries = discoveries;
+  }
+  if (transitions) {
+    normalized.transitions = transitions;
+  }
+  if (gmNotes) {
+    normalized.gm_notes = gmNotes;
+  }
+  if (description) {
+    normalized.description = description;
+  }
+
+  delete normalized.setting;
+  delete normalized.narration;
+  delete normalized.npcs_present;
+  delete normalized.events;
+  delete normalized.skill_checks;
+  delete normalized.branching_paths;
+  delete normalized.clues_information;
+  delete normalized.estimated_duration;
+
+  return normalized;
+};
+
 const normalizeStoryArcSecretEntries = (value: unknown): JsonRecord[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -910,6 +1366,14 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     const normalized = normalizeSpellcastingPayload(payload);
     if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
       appliedRepairs.push('spellcasting:normalize');
+    }
+    payload = normalized;
+  }
+
+  if (input.workflowType === 'scene' && contractKey === 'creator') {
+    const normalized = normalizeScenePayload(payload);
+    if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
+      appliedRepairs.push('scene:normalize');
     }
     payload = normalized;
   }

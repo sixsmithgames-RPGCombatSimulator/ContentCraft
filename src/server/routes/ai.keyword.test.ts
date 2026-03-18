@@ -5,6 +5,7 @@ import {
   evaluateKeywordExtractorCompliance,
   getAutomaticWorkflowRetryDelayMs,
   getStageAllowedKeys,
+  normalizeNameValueArray,
   shouldApplyGeneratorSchemaValidation,
   shouldApplyDuplicateRetryGuard,
   shouldOfferAutomaticSchemaCorrectionRetry,
@@ -71,6 +72,25 @@ describe('evaluateKeywordExtractorCompliance', () => {
       'interpretation',
     ]));
     expect(allowedKeys).not.toContain('title');
+  });
+
+  it('preserves legacy scene creator keys so shared repair can normalize them', () => {
+    const registry = {
+      allowedPaths: ['title', 'description', 'scene_type', 'location', 'participants', 'setting', 'npcs_present', 'skill_checks', 'clues_information'],
+      schemaVersion: 'v1.1-client',
+      schema: {},
+    } as any;
+
+    const allowedKeys = getStageAllowedKeys('creator', registry, 'scene');
+
+    expect(allowedKeys).toEqual(expect.arrayContaining([
+      'location',
+      'participants',
+      'setting',
+      'npcs_present',
+      'skill_checks',
+      'clues_information',
+    ]));
   });
 
   it('skips generator-schema validation for contract-only generic report stages', () => {
@@ -238,6 +258,31 @@ describe('evaluateKeywordExtractorCompliance', () => {
   it('uses workflow stage retry cooldowns for automatic correction retry delays', () => {
     expect(getAutomaticWorkflowRetryDelayMs('story_arc.characters', 'story_arc')).toBe(5000);
     expect(getAutomaticWorkflowRetryDelayMs('unknown_stage', 'story_arc')).toBe(5000);
+  });
+
+  it('preserves numeric bonus aliases when normalizing character build modifiers server-side', () => {
+    const payload: Record<string, unknown> = {
+      skill_proficiencies: [
+        { skill: 'Stealth', bonus: 8 },
+        { name: 'Perception', modifier: 5 },
+      ],
+      saving_throws: [
+        { ability: 'Dexterity', bonus: 8 },
+        { save: 'Intelligence', modifier: 5 },
+      ],
+    };
+
+    normalizeNameValueArray(payload, 'skill_proficiencies');
+    normalizeNameValueArray(payload, 'saving_throws');
+
+    expect(payload.skill_proficiencies).toEqual([
+      { name: 'Stealth', value: '+8' },
+      { name: 'Perception', value: '+5' },
+    ]);
+    expect(payload.saving_throws).toEqual([
+      { name: 'Dexterity', value: '+8' },
+      { name: 'Intelligence', value: '+5' },
+    ]);
   });
 
   it('builds a hidden schema correction prompt with validation details', () => {

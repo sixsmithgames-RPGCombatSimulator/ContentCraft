@@ -167,6 +167,38 @@ describe('workflowStageRepair', () => {
     expect(validateWorkflowStageContractPayload('character_build', repaired.payload, 'npc')).toEqual({ ok: true });
   });
 
+  it('normalizes numeric bonus aliases for character build skills and saves', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'character_build',
+      workflowType: 'npc',
+      payload: {
+        class_features: ['Sneak Attack'],
+        subclass_features: ['Assassinate'],
+        racial_features: ['Darkvision'],
+        feats: ['Alert'],
+        fighting_styles: [],
+        skill_proficiencies: [
+          { skill: 'Stealth', bonus: 8 },
+          { name: 'Investigation', modifier: 4 },
+        ],
+        saving_throws: [
+          { ability: 'Dexterity', bonus: 8 },
+          { save: 'Intelligence', modifier: 4 },
+        ],
+      },
+    });
+
+    expect(repaired.payload.skill_proficiencies).toEqual([
+      { name: 'Stealth', value: '+8' },
+      { name: 'Investigation', value: '+4' },
+    ]);
+    expect(repaired.payload.saving_throws).toEqual([
+      { name: 'Dexterity', value: '+8' },
+      { name: 'Intelligence', value: '+4' },
+    ]);
+    expect(validateWorkflowStageContractPayload('character_build', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
+
   it('normalizes spellcasting arrays and slot strings into contract-compliant maps', () => {
     const repaired = repairWorkflowStagePayload({
       stageIdOrName: 'spellcasting',
@@ -200,6 +232,94 @@ describe('workflowStageRepair', () => {
       special: ['Conjure Elemental (1/Day via Mystic Arcanum)'],
     });
     expect(validateWorkflowStageContractPayload('spellcasting', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
+
+  it('normalizes legacy scene creator payloads into the live scene schema shape', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'creator',
+      workflowType: 'scene',
+      payload: {
+        title: 'Lantern Watch in the Storm',
+        description: 'The storm batters the watchtower as the harbor bells begin to ring.',
+        scene_type: 'roleplay',
+        setting: {
+          location: 'Lantern Watchtower',
+          atmosphere: 'Rain hisses across the slate roof while signal braziers gutter in the wind.',
+          sensory_details: {
+            sights: ['Blue-white lightning forks above the harbor.'],
+            sounds: ['Warning bells clash with the surf.'],
+            smells: ['Salt spray and wet ash cling to the air.'],
+          },
+        },
+        npcs_present: [{
+          name: 'Captain Mira Vale',
+          role: 'watch commander',
+          goals: ['Warn the harbor before the cult flotilla slips inside the chain.'],
+          disposition: 'friendly',
+        }],
+        hooks: ['Warn the harbor before the cult flotilla slips inside the chain.'],
+        skill_checks: [{
+          skill: 'Investigation',
+          dc: 15,
+          purpose: 'Find the altered signal code before the next warning lamp is lit.',
+          success_result: 'The party exposes the cult route across the shoals.',
+          failure_result: 'A false signal sends defenders to the wrong pier.',
+        }],
+        clues_information: ['The lantern code was changed from inside the tower less than an hour ago.'],
+        narration: {
+          opening: 'Captain Mira meets the party at the stairwell landing with seawater streaming from her cloak.',
+          gm_secrets: ['A second cult cell is hiding in the flooded cistern beneath the tower.'],
+        },
+        transitions: {
+          from_previous: 'The party arrives just as the abbey road vanishes behind a curtain of rain.',
+          to_next: ['A pursuit spills into the flooded lower docks.'],
+        },
+      },
+    });
+
+    expect(repaired.payload).toMatchObject({
+      title: 'Lantern Watch in the Storm',
+      scene_type: 'social',
+      location: {
+        name: 'Lantern Watchtower',
+        description: 'Rain hisses across the slate roof while signal braziers gutter in the wind.',
+        ambiance: 'Rain hisses across the slate roof while signal braziers gutter in the wind.',
+        sensory_details: {
+          sights: ['Blue-white lightning forks above the harbor.'],
+          sounds: ['Warning bells clash with the surf.'],
+          smells: ['Salt spray and wet ash cling to the air.'],
+        },
+      },
+      participants: [{
+        name: 'Captain Mira Vale',
+        role: 'watch commander',
+        goals: ['Warn the harbor before the cult flotilla slips inside the chain.'],
+        disposition: 'friendly',
+      }],
+      objectives: ['Warn the harbor before the cult flotilla slips inside the chain.'],
+      hooks: ['Warn the harbor before the cult flotilla slips inside the chain.'],
+      skill_challenges: [{
+        description: 'Find the altered signal code before the next warning lamp is lit.',
+        suggested_skills: ['Investigation'],
+        dc: 15,
+        consequences: {
+          success: 'The party exposes the cult route across the shoals.',
+          failure: 'A false signal sends defenders to the wrong pier.',
+        },
+      }],
+      discoveries: ['The lantern code was changed from inside the tower less than an hour ago.'],
+      transitions: {
+        entry: 'The party arrives just as the abbey road vanishes behind a curtain of rain.',
+        exit: 'A pursuit spills into the flooded lower docks.',
+      },
+      gm_notes: 'A second cult cell is hiding in the flooded cistern beneath the tower.',
+    });
+    expect(typeof repaired.payload.description).toBe('string');
+    expect((repaired.payload.description as string).length).toBeGreaterThanOrEqual(100);
+    expect(repaired.payload).not.toHaveProperty('setting');
+    expect(repaired.payload).not.toHaveProperty('npcs_present');
+    expect(repaired.payload).not.toHaveProperty('skill_checks');
+    expect(repaired.payload).not.toHaveProperty('clues_information');
   });
 
   it('normalizes story arc secrets payloads into the live contract shape', () => {

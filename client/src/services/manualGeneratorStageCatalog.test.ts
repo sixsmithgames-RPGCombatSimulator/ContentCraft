@@ -96,6 +96,10 @@ describe('manual generator stage catalog', () => {
 
     expect(userPrompt.output_schema).toBeTypeOf('string');
     expect(String(userPrompt.output_schema)).toContain('Scene output schema');
+    expect(String(userPrompt.output_schema)).toContain('location { name, description');
+    expect(String(userPrompt.output_schema)).toContain('participants[{ name, role, goals[], disposition }]');
+    expect(String(userPrompt.output_schema)).not.toContain('setting { location');
+    expect(String(userPrompt.output_schema)).not.toContain('npcs_present');
     expect(userPrompt.relevant_canon).toMatchObject({
       facts: [
         {

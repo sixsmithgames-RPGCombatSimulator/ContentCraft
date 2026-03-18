@@ -425,6 +425,7 @@ export default function GeneratedContentModal({
         <EditContentModal
           isOpen={showEditModal}
           generatedContent={content.generated_content}
+          contentTypeHint={content.metadata?.deliverable ?? content.content_type}
           onClose={() => setShowEditModal(false)}
           onSave={(editedData) => {
             // Update the content with edited data

@@ -399,6 +399,7 @@ const ContentBlockBody: React.FC<{ block: ContentBlock; onBlockUpdated?: (update
         <EditContentModal
           isOpen={showStructuredEditor}
           generatedContent={payload as Record<string, unknown>}
+          contentTypeHint={deliverable}
           onClose={() => setShowStructuredEditor(false)}
           onSave={async (editedData) => {
             const existingMetadata = (block.metadata ?? {}) as Record<string, unknown>;

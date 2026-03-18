@@ -285,7 +285,7 @@ export const NPC_CREATOR_SPELLCASTING = {
         known_item_spell_sources: [],
       },
       plannerReferenceMessage: 'Planner provided canon facts; reuse only spell names relevant to this NPC.',
-      plannerReferenceKey: 'compact_canon',
+      plannerReferenceKey: 'canon_reference',
       factpackKey: 'compact_canon',
     }), null, 2);
   },
