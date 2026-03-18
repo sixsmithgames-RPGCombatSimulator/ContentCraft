@@ -162,4 +162,35 @@ describe('workflowStageRepair', () => {
     });
     expect(validateWorkflowStageContractPayload('spellcasting', repaired.payload, 'npc')).toEqual({ ok: true });
   });
+
+  it('normalizes story arc secrets payloads into the live contract shape', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'story_arc.secrets',
+      workflowType: 'story_arc',
+      payload: {
+        clues_and_secrets: [{
+          revelation: 'Karoz\'s order once protected the same Drow enclave they now hunt.',
+          discovery_methods: ['interrogate a veteran', 'inspect the chapel records'],
+          consequence: 'Nasir realizes the feud is based on a falsified betrayal.',
+        }],
+        rewards: ['A sealed dossier naming the real conspirator'],
+        dm_notes: ['Let the reveal land after a costly compromise.'],
+      },
+    });
+
+    expect(repaired.payload).toEqual({
+      clues_and_secrets: [{
+        secret: 'Karoz\'s order once protected the same Drow enclave they now hunt.',
+        discovery_method: 'interrogate a veteran; inspect the chapel records',
+        impact: 'Nasir realizes the feud is based on a falsified betrayal.',
+      }],
+      rewards: [{
+        name: 'A sealed dossier naming the real conspirator',
+        type: 'information',
+        when: 'At a pivotal story milestone',
+      }],
+      dm_notes: ['Let the reveal land after a costly compromise.'],
+    });
+    expect(validateWorkflowStageContractPayload('story_arc.secrets', repaired.payload, 'story_arc')).toEqual({ ok: true });
+  });
 });

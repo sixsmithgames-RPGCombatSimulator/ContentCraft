@@ -186,7 +186,7 @@ You are building upon all previous stages. Add depth through hidden information 
 Your focus:
 - clues_and_secrets: Array of hidden information with:
   - secret: The hidden information itself
-  - discovery_method: How the party can discover it (investigation, NPC interrogation, exploration, etc.)
+  - discovery_method: How the party can discover it. If there are multiple viable techniques, combine them into one concise string.
   - impact: What changes when this secret is revealed
 - rewards: Array of major rewards with:
   - name: What the reward is
@@ -198,7 +198,7 @@ ${formatStoryArcSchemaForPrompt(getStoryArcSecretsSchema(), 'Secrets & Rewards')
 
 SECRETS DESIGN PRINCIPLES:
 - Layer secrets: some are easy to discover (DC 10-12), others require effort (DC 15-18), a few are deeply hidden (DC 20+)
-- Each secret should have at least 2 possible discovery methods (so the party isn't stuck)
+- Each secret should be discoverable through more than one possible approach, but summarize those approaches inside the single discovery_method field
 - Revelations should change the party's understanding of the situation or force difficult choices
 - Connect secrets to the theme and character motivations
 - At least one secret should reframe a seemingly straightforward situation

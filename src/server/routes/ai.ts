@@ -310,20 +310,14 @@ function normalizeArmorClass(container: Record<string, unknown>): void {
 function shouldApplyGeneratorSchemaValidation(
   stageId: string,
   workflowType: string | undefined,
-  registry: StageRegistryEntry,
+  _registry: StageRegistryEntry,
 ): boolean {
   if (!workflowType) {
     return true;
   }
 
   const scopedDefinition = getWorkflowStageDefinition(resolveWorkflowContentType(workflowType), stageId);
-  const scopedContract = scopedDefinition?.contract;
-  if (!scopedContract) {
-    return true;
-  }
-
-  const registryAllowedKeys = new Set(registry.allowedPaths);
-  return scopedContract.outputAllowedKeys.some((key) => registryAllowedKeys.has(key));
+  return !scopedDefinition?.contract;
 }
 
 interface StageRegistryEntry {
@@ -386,6 +380,7 @@ addFormats(ajv);
 const schemaCache: Record<string, StageRegistryEntry | undefined> = {};
 const validatorCache: Record<string, ValidateFunction | undefined> = {};
 let baseSchemaPropertiesCache: Record<string, unknown> | null | undefined;
+let baseSchemaDefinitionsCache: Record<string, unknown> | null | undefined;
 const idempotencyCache: Map<
   string,
   { status: number; payload: GeminiSuccessResponse | GeminiFailureResponse; expiresAt: number }
@@ -458,6 +453,24 @@ function loadBaseSchemaProperties(): Record<string, unknown> {
   } catch (err) {
     console.error('[AI][Gemini] Failed to load legacy base schema properties', err);
     baseSchemaPropertiesCache = null;
+    return {};
+  }
+}
+
+function loadBaseSchemaDefinitions(): Record<string, unknown> {
+  if (baseSchemaDefinitionsCache !== undefined) {
+    return baseSchemaDefinitionsCache ?? {};
+  }
+
+  try {
+    const raw = readFileSync(path.join(process.cwd(), 'src/server/schemas/base.schema.json'), 'utf-8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const definitions = isRecord(parsed.definitions) ? parsed.definitions : {};
+    baseSchemaDefinitionsCache = { ...definitions };
+    return baseSchemaDefinitionsCache;
+  } catch (err) {
+    console.error('[AI][Gemini] Failed to load legacy base schema definitions', err);
+    baseSchemaDefinitionsCache = null;
     return {};
   }
 }
@@ -893,6 +906,7 @@ function getValidatorForGenerator(generatorType: string, entry: StageRegistryEnt
   const subschema = {
     type: 'object',
     properties,
+    definitions: loadBaseSchemaDefinitions(),
     additionalProperties: false,
   } as const;
 

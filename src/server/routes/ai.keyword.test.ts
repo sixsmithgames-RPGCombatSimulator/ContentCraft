@@ -80,10 +80,12 @@ describe('evaluateKeywordExtractorCompliance', () => {
       schema: {},
     } as any;
 
+    expect(shouldApplyGeneratorSchemaValidation('purpose', 'scene', registry)).toBe(false);
     expect(shouldApplyGeneratorSchemaValidation('fact_checker', 'scene', registry)).toBe(false);
     expect(shouldApplyGeneratorSchemaValidation('canon_validator', 'scene', registry)).toBe(false);
     expect(shouldApplyGeneratorSchemaValidation('physics_validator', 'scene', registry)).toBe(false);
     expect(shouldApplyGeneratorSchemaValidation('creator', 'scene', registry)).toBe(true);
+    expect(shouldApplyGeneratorSchemaValidation('story_arc.secrets', 'story_arc', registry)).toBe(false);
   });
 
   it('validates planner payload structure through shared contracts', () => {

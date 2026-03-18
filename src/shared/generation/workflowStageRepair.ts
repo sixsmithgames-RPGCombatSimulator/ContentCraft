@@ -727,6 +727,102 @@ const normalizeSpellcastingPayload = (payload: JsonRecord): JsonRecord => {
   return normalized;
 };
 
+const normalizeStoryArcSecretEntries = (value: unknown): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const secret = coerceNonEmptyString(entry);
+        return secret
+          ? {
+            secret,
+            discovery_method: 'Investigation, conversation, or exploration',
+            impact: secret,
+          } as JsonRecord
+          : null;
+      }
+
+      if (!isRecord(entry)) {
+        return null;
+      }
+
+      const secret = coerceNonEmptyString(entry.secret)
+        ?? coerceNonEmptyString(entry.clue)
+        ?? coerceNonEmptyString(entry.revelation)
+        ?? coerceNonEmptyString(entry.name);
+      if (!secret) {
+        return null;
+      }
+
+      const discoveryMethodParts = [
+        coerceNonEmptyString(entry.discovery_method),
+        ...normalizeStringArray(entry.discovery_methods),
+        ...normalizeStringArray(entry.methods),
+      ].filter((part): part is string => typeof part === 'string' && part.length > 0);
+      const impact = coerceNonEmptyString(entry.impact)
+        ?? coerceNonEmptyString(entry.effect)
+        ?? coerceNonEmptyString(entry.consequence)
+        ?? secret;
+
+      return {
+        secret,
+        discovery_method: discoveryMethodParts.length > 0
+          ? discoveryMethodParts.join('; ')
+          : 'Investigation, conversation, or exploration',
+        impact,
+      } satisfies JsonRecord;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null);
+};
+
+const normalizeStoryArcRewards = (value: unknown): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const name = coerceNonEmptyString(entry);
+        return name
+          ? {
+            name,
+            type: 'information',
+            when: 'At a pivotal story milestone',
+          } as JsonRecord
+          : null;
+      }
+
+      if (!isRecord(entry)) {
+        return null;
+      }
+
+      const name = coerceNonEmptyString(entry.name)
+        ?? coerceNonEmptyString(entry.reward)
+        ?? coerceNonEmptyString(entry.title);
+      if (!name) {
+        return null;
+      }
+
+      return {
+        name,
+        type: coerceNonEmptyString(entry.type) ?? 'information',
+        when: coerceNonEmptyString(entry.when) ?? coerceNonEmptyString(entry.timing) ?? 'At a pivotal story milestone',
+      } satisfies JsonRecord;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null);
+};
+
+const normalizeStoryArcSecretsPayload = (payload: JsonRecord): JsonRecord => ({
+  ...payload,
+  clues_and_secrets: normalizeStoryArcSecretEntries(payload.clues_and_secrets),
+  rewards: normalizeStoryArcRewards(payload.rewards),
+  dm_notes: normalizeStringArray(payload.dm_notes),
+});
+
 export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): WorkflowStageRepairResult {
   const appliedRepairs: string[] = [];
   const contractKey = resolveWorkflowStageContractKey(input.stageIdOrName, input.workflowType);
@@ -760,6 +856,14 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     const normalized = normalizeSpellcastingPayload(payload);
     if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
       appliedRepairs.push('spellcasting:normalize');
+    }
+    payload = normalized;
+  }
+
+  if (contractKey === 'story_arc.secrets') {
+    const normalized = normalizeStoryArcSecretsPayload(payload);
+    if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
+      appliedRepairs.push('story_arc.secrets:normalize');
     }
     payload = normalized;
   }
