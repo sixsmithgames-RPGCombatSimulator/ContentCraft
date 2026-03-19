@@ -289,7 +289,7 @@ CRITICAL OUTPUT STRUCTURE:
 `,
       schemaSection: JSON.stringify(getRelationshipsSchema(), null, 2),
       includePreviousSections: true,
-      outputFields: ['allies_friends', 'foes', 'rivals', 'mentors', 'students', 'family', 'factions', 'minions', 'conflicts'],
+      outputFields: ['allies', 'enemies', 'organizations', 'contacts', 'family', 'allies_friends', 'foes', 'rivals', 'mentors', 'students', 'factions', 'minions', 'conflicts'],
     },
     {
       chunkLabel: 'Equipment & Items (final)',
@@ -314,7 +314,7 @@ CRITICAL OUTPUT STRUCTURE:
 `,
       schemaSection: JSON.stringify(getEquipmentSchema(), null, 2),
       includePreviousSections: true,
-      outputFields: ['equipment', 'magic_items', 'attuned_items', 'signature_items', 'wealth', 'resources'],
+      outputFields: ['equipment', 'magic_items', 'attuned_items', 'signature_items', 'weapons', 'armor_and_shields', 'wondrous_items', 'consumables', 'other_gear', 'wealth', 'resources'],
     },
   ];
 }

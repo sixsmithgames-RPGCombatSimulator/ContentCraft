@@ -61,11 +61,13 @@ describe('workflowStageRepair', () => {
       stageIdOrName: 'stats',
       workflowType: 'npc',
       payload: {
+        size: 'Medium',
         ability_scores: { str: 10, dex: 18, con: 12, int: 13, wis: 11, cha: 14 },
         proficiency_bonus: 3,
         speed: { walk: 30, climb: '20 ft.' },
         armor_class: 15,
         hit_points: 38,
+        hit_dice: '13d8',
         senses: [],
       },
     });
@@ -82,6 +84,7 @@ describe('workflowStageRepair', () => {
       stageIdOrName: 'stats',
       workflowType: 'npc',
       payload: {
+        size: 'Medium',
         ability_scores: {
           str: 10,
           dex: 10,
@@ -100,6 +103,7 @@ describe('workflowStageRepair', () => {
         speed: { walk: 30 },
         armor_class: 16,
         hit_points: 45,
+        hit_dice: '8d8',
         senses: ['darkvision 60 ft.'],
       },
     });
@@ -113,6 +117,26 @@ describe('workflowStageRepair', () => {
       cha: 13,
     });
     expect(repaired.appliedRepairs).toContain('stats:normalize_ability_scores');
+    expect(validateWorkflowStageContractPayload('stats', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
+
+  it('derives stats hit_dice from hit_points formulas when the explicit field is omitted', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'stats',
+      workflowType: 'npc',
+      payload: {
+        size: 'Medium',
+        ability_scores: { str: 10, dex: 18, con: 12, int: 13, wis: 11, cha: 14 },
+        proficiency_bonus: 3,
+        speed: { walk: 30 },
+        armor_class: 15,
+        hit_points: { average: 38, formula: '7d8 + 7' },
+        senses: ['darkvision 60 ft.'],
+      },
+    });
+
+    expect(repaired.payload.hit_dice).toBe('7d8');
+    expect(repaired.appliedRepairs).toContain('stats:derive_hit_dice');
     expect(validateWorkflowStageContractPayload('stats', repaired.payload, 'npc')).toEqual({ ok: true });
   });
 

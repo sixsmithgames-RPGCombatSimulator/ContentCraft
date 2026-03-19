@@ -162,6 +162,8 @@ export const NPC_CREATOR_STATS = {
       payload: {
         name: basicInfo?.name,
         species: basicInfo?.species || basicInfo?.race,
+        appearance: basicInfo?.appearance,
+        description: basicInfo?.description,
         class_levels: basicInfo?.class_levels || coreDetails?.class_levels,
         challenge_rating: basicInfo?.challenge_rating,
       },

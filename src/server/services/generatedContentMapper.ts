@@ -1049,6 +1049,11 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
     npcSource.hit_points ?? npcSource.hp ?? statBlock.hit_points,
     ensureString(statBlock.hit_points_formula),
   );
+  const derivedHitDice = (() => {
+    const formula = ensureString(hitPoints.formula);
+    return formula.match(/\b(\d+d\d+)\b/i)?.[1];
+  })();
+  const hitDice = ensureString(npcSource.hit_dice ?? statBlock.hit_dice) || derivedHitDice;
 
   const weapons = normalizeNamedEntries(npcSource.weapons);
   const armorAndShields = normalizeNamedEntries(npcSource.armor_and_shields);
@@ -1095,7 +1100,7 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
     ability_scores: ensureAbilityScores(npcSource.ability_scores ?? statBlock.ability_scores),
     armor_class: armorClass,
     hit_points: hitPoints,
-    hit_dice: ensureString(npcSource.hit_dice ?? statBlock.hit_dice),
+    hit_dice: hitDice || '',
     proficiency_bonus: ensureNumber(npcSource.proficiency_bonus)
       ?? ensureString(npcSource.proficiency_bonus ?? statBlock.proficiency_bonus),
     speed: normalizeSpeed(npcSource.speed ?? statBlock.speed),

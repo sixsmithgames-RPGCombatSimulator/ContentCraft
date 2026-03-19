@@ -125,6 +125,32 @@ function normalizeNpcMergedContent(content: JsonRecord): JsonRecord {
   const normalized: JsonRecord = { ...content };
   const species = typeof normalized.species === 'string' ? normalized.species.trim() : '';
   const race = typeof normalized.race === 'string' ? normalized.race.trim() : '';
+  const normalizeNamedArray = (value: unknown): JsonRecord[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((entry) => {
+        if (typeof entry === 'string') {
+          const text = entry.trim();
+          return text ? { name: text } as JsonRecord : null;
+        }
+        if (!isRecord(entry)) return null;
+        const name = typeof entry.name === 'string' && entry.name.trim().length > 0 ? entry.name.trim() : typeof entry.title === 'string' ? entry.title.trim() : '';
+        if (!name) return null;
+        return { ...entry, name } as JsonRecord;
+      })
+      .filter((entry): entry is JsonRecord => entry !== null);
+  };
+  const extractNames = (value: unknown): string[] => normalizeNamedArray(value)
+    .map((entry) => (typeof entry.name === 'string' ? entry.name : ''))
+    .filter((entry) => entry.length > 0);
+  const extractHitDice = (value: unknown): string | undefined => {
+    if (typeof value === 'string') {
+      return value.match(/\b(\d+d\d+)\b/i)?.[1];
+    }
+    if (!isRecord(value)) return undefined;
+    const formula = typeof value.formula === 'string' ? value.formula.trim() : '';
+    return formula.match(/\b(\d+d\d+)\b/i)?.[1];
+  };
   const normalizeCombatArray = (value: unknown, activationType: 'action' | 'bonus_action' | 'reaction'): JsonRecord[] => {
     if (!Array.isArray(value)) return [];
     return value
@@ -153,6 +179,29 @@ function normalizeNpcMergedContent(content: JsonRecord): JsonRecord {
   normalized.actions = normalizeCombatArray(normalized.actions, 'action');
   normalized.bonus_actions = normalizeCombatArray(normalized.bonus_actions, 'bonus_action');
   normalized.reactions = normalizeCombatArray(normalized.reactions, 'reaction');
+
+  if (typeof normalized.hit_dice !== 'string' || normalized.hit_dice.trim().length === 0) {
+    const derivedHitDice = extractHitDice(normalized.hit_points);
+    if (derivedHitDice) {
+      normalized.hit_dice = derivedHitDice;
+    }
+  }
+
+  const groupedEquipment = [
+    ...extractNames(normalized.weapons),
+    ...extractNames(normalized.armor_and_shields),
+    ...extractNames(normalized.wondrous_items),
+    ...extractNames(normalized.consumables),
+    ...extractNames(normalized.other_gear),
+  ];
+  if ((!Array.isArray(normalized.equipment) || normalized.equipment.length === 0) && groupedEquipment.length > 0) {
+    normalized.equipment = groupedEquipment;
+  }
+
+  const groupedMagicItems = extractNames(normalized.wondrous_items);
+  if ((!Array.isArray(normalized.magic_items) || normalized.magic_items.length === 0) && groupedMagicItems.length > 0) {
+    normalized.magic_items = groupedMagicItems;
+  }
 
   return normalized;
 }

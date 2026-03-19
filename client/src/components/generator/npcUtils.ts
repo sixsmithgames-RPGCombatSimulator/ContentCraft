@@ -571,6 +571,10 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
     npcSource.hit_points || statBlock.hit_points,
     ensureString(statBlock.hit_points_formula) || undefined,
   );
+  const derivedHitDice = (() => {
+    const formula = ensureString((hitPoints as PrimitiveRecord | undefined)?.formula);
+    return formula.match(/\b(\d+d\d+)\b/i)?.[1];
+  })();
   const proficiencyValue = ensureNumber(npcSource.proficiency_bonus);
   const proficiencyText = ensureString(npcSource.proficiency_bonus) || ensureString(statBlock.proficiency_bonus);
 
@@ -614,7 +618,7 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
     abilityScores: ensureAbilityScores(npcSource.ability_scores || statBlock.ability_scores),
     armorClass,
     hitPoints,
-    hitDice: ensureString(npcSource.hit_dice) || ensureString(statBlock.hit_dice) || undefined,
+    hitDice: ensureString(npcSource.hit_dice) || ensureString(statBlock.hit_dice) || derivedHitDice || undefined,
     proficiencyBonus: proficiencyValue ?? (proficiencyText || undefined),
     proficiencyBonusText:
       typeof (proficiencyValue ?? proficiencyText) === 'string'

@@ -743,6 +743,27 @@ const normalizeSpeedStrings = (value: unknown): Record<string, string> | null =>
   return Object.keys(result).length > 0 ? result : null;
 };
 
+const extractHitDice = (value: unknown): string | undefined => {
+  if (typeof value === 'string') {
+    const match = value.match(/\b(\d+d\d+)\b/i);
+    return match?.[1];
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const formula = coerceNonEmptyString(value.formula)
+    ?? coerceNonEmptyString(value.hit_dice)
+    ?? coerceNonEmptyString(value.hitDice);
+  if (!formula) {
+    return undefined;
+  }
+
+  const match = formula.match(/\b(\d+d\d+)\b/i);
+  return match?.[1];
+};
+
 const normalizeSpellListMap = (value: unknown, fallbackKey: string): JsonRecord => {
   if (isRecord(value)) {
     const normalizedEntries = Object.entries(value).reduce<JsonRecord>((acc, [key, entryValue]) => {
@@ -819,27 +840,27 @@ const normalizeSpellSlotsMap = (value: unknown): JsonRecord => {
   return {};
 };
 
- const normalizeSpellKnownArray = (value: unknown): string[] => {
-   if (Array.isArray(value)) {
-     return normalizeStringArray(value);
-   }
+const normalizeSpellKnownArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return normalizeStringArray(value);
+  }
 
-   if (isRecord(value)) {
-     const flattened = Object.values(value).flatMap((entryValue) => {
-       if (Array.isArray(entryValue)) {
-         return normalizeStringArray(entryValue);
-       }
+  if (isRecord(value)) {
+    const flattened = Object.values(value).flatMap((entryValue) => {
+      if (Array.isArray(entryValue)) {
+        return normalizeStringArray(entryValue);
+      }
 
-       const singleValue = coerceNonEmptyString(entryValue);
-       return singleValue ? [singleValue] : [];
-     });
+      const singleValue = coerceNonEmptyString(entryValue);
+      return singleValue ? [singleValue] : [];
+    });
 
-     return [...new Set(flattened)];
-   }
+    return [...new Set(flattened)];
+  }
 
-   const singleValue = coerceNonEmptyString(value);
-   return singleValue ? [singleValue] : [];
- };
+  const singleValue = coerceNonEmptyString(value);
+  return singleValue ? [singleValue] : [];
+};
 
 const normalizeSpellcastingPayload = (payload: JsonRecord): JsonRecord => {
   const normalized: JsonRecord = { ...payload };
@@ -1545,6 +1566,14 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     if (normalizedSpeed) {
       payload = { ...payload, speed: normalizedSpeed };
       appliedRepairs.push('stats:normalize_speed');
+    }
+  }
+
+  if (contractKey === 'stats' && payload.hit_dice === undefined) {
+    const derivedHitDice = extractHitDice(payload.hit_points);
+    if (derivedHitDice) {
+      payload = { ...payload, hit_dice: derivedHitDice };
+      appliedRepairs.push('stats:derive_hit_dice');
     }
   }
 

@@ -189,6 +189,7 @@ describe('workflowStageResponse', () => {
   it('rejects placeholder npc stats even when ability scores use long-form keys', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({
+        size: 'Medium',
         ability_scores: {
           strength: 10,
           dexterity: 10,
@@ -201,6 +202,7 @@ describe('workflowStageResponse', () => {
         speed: 30,
         armor_class: 15,
         hit_points: 32,
+        hit_dice: '5d8',
         senses: {
           passive_perception: 10,
         },
@@ -227,6 +229,7 @@ describe('workflowStageResponse', () => {
   it('accepts npc stats when long-form ability scores override placeholder short-form defaults', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({
+        size: 'Medium',
         ability_scores: {
           str: 10,
           dex: 10,
@@ -245,6 +248,7 @@ describe('workflowStageResponse', () => {
         speed: { walk: 30 },
         armor_class: 16,
         hit_points: 45,
+        hit_dice: '8d8',
         senses: ['darkvision 60 ft.'],
       }),
       stageName: 'Creator: Stats',
@@ -270,6 +274,42 @@ describe('workflowStageResponse', () => {
       wis: 11,
       cha: 13,
     });
+  });
+
+  it('derives npc stats hit_dice from a hit_points formula when the explicit field is omitted', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        size: 'Medium',
+        ability_scores: {
+          str: 10,
+          dex: 16,
+          con: 14,
+          int: 12,
+          wis: 11,
+          cha: 13,
+        },
+        proficiency_bonus: 3,
+        speed: { walk: 30 },
+        armor_class: 16,
+        hit_points: { average: 45, formula: '8d8 + 8' },
+        senses: ['darkvision 60 ft.'],
+      }),
+      stageName: 'Creator: Stats',
+      stageIdentity: 'stats',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Malakor Vane',
+          class_levels: 'Rogue (Assassin) 5',
+          race: 'Tiefling',
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.hit_dice).toBe('8d8');
   });
 
   it('rejects placeholder +0 proficiency and save modifiers for character builds', () => {

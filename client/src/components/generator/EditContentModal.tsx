@@ -81,23 +81,54 @@ export const inferGeneratedContentType = (record: JsonRecord, hint?: string): st
 
 export const synchronizeStructuredContentContainers = (record: JsonRecord): JsonRecord => {
   const synchronized: JsonRecord = { ...record };
-  const syncContainer = (containerKey: string, aliases: Array<[string, string]> = []) => {
+  const syncContainer = (containerKey: string, aliases: Array<[string, string]> = [], directKeys: string[] = []) => {
     const container = synchronized[containerKey];
     if (!isJsonRecord(container)) return;
     const updated: JsonRecord = { ...container };
     for (const key of Object.keys(updated)) {
       if (synchronized[key] !== undefined) updated[key] = synchronized[key];
     }
+    for (const key of directKeys) {
+      if (synchronized[key] !== undefined) {
+        updated[key] = synchronized[key];
+      }
+    }
     for (const [sourceKey, targetKey] of aliases) {
-      if (synchronized[sourceKey] !== undefined && updated[targetKey] !== undefined) {
+      if (synchronized[sourceKey] !== undefined) {
         updated[targetKey] = synchronized[sourceKey];
       }
     }
     synchronized[containerKey] = updated;
   };
 
-  syncContainer('npc', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies_friends', 'allies'], ['allies_friends', 'allies_and_contacts'], ['foes', 'enemies']]);
-  syncContainer('character', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies_friends', 'allies'], ['allies_friends', 'allies_and_contacts'], ['foes', 'enemies']]);
+  const npcContainerDirectKeys = [
+    'size',
+    'hit_dice',
+    'spellcasting_ability',
+    'spell_save_dc',
+    'spell_attack_bonus',
+    'spell_slots',
+    'prepared_spells',
+    'always_prepared_spells',
+    'innate_spells',
+    'spells_known',
+    'spellcasting_focus',
+    'special_attacks',
+    'equipment',
+    'magic_items',
+    'weapons',
+    'armor_and_shields',
+    'wondrous_items',
+    'consumables',
+    'other_gear',
+    'allies',
+    'enemies',
+    'organizations',
+    'contacts',
+    'family',
+  ];
+  syncContainer('npc', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies', 'allies_friends'], ['allies', 'allies_and_contacts'], ['enemies', 'foes'], ['organizations', 'factions']], npcContainerDirectKeys);
+  syncContainer('character', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies', 'allies_friends'], ['allies', 'allies_and_contacts'], ['enemies', 'foes'], ['organizations', 'factions']], npcContainerDirectKeys);
   syncContainer('monster', [['skill_proficiencies', 'skills']]);
   syncContainer('item');
   syncContainer('scene', [['participants', 'npcs_present'], ['skill_challenges', 'skill_checks'], ['discoveries', 'clues_information']]);
@@ -117,6 +148,9 @@ export const synchronizeStructuredContentContainers = (record: JsonRecord): Json
   if (baseStatBlock) {
     const updatedStatBlock: JsonRecord = { ...baseStatBlock };
     for (const key of Object.keys(updatedStatBlock)) {
+      if (synchronized[key] !== undefined) updatedStatBlock[key] = synchronized[key];
+    }
+    for (const key of ['ability_scores', 'armor_class', 'hit_points', 'hit_dice', 'speed', 'senses', 'languages', 'saving_throws', 'skill_proficiencies', 'actions', 'bonus_actions', 'reactions']) {
       if (synchronized[key] !== undefined) updatedStatBlock[key] = synchronized[key];
     }
     if (synchronized.skill_proficiencies !== undefined && updatedStatBlock.skills !== undefined) {
@@ -400,19 +434,28 @@ export default function EditContentModal({
         'bonus_actions',
         'reactions',
         'spellcasting',
+        'spellcasting_ability',
+        'spell_save_dc',
+        'spell_attack_bonus',
         'cantrips',
         'prepared_spells',
         'spell_slots',
+        'always_prepared_spells',
+        'innate_spells',
+        'spells_known',
+        'spellcasting_focus',
         'innate_spellcasting',
         'allies_friends',
         'allies',
         'allies_and_contacts',
         'foes',
         'enemies',
+        'organizations',
         'rivals',
         'mentors',
         'students',
         'family',
+        'contacts',
         'factions',
         'minions',
         'conflicts',
@@ -420,6 +463,11 @@ export default function EditContentModal({
         'magic_items',
         'attuned_items',
         'signature_items',
+        'weapons',
+        'armor_and_shields',
+        'wondrous_items',
+        'consumables',
+        'other_gear',
         'notes',
         'sources',
       ];
@@ -716,6 +764,10 @@ export default function EditContentModal({
     if (!normalized.foes && normalized.enemies) {
       normalized.foes = normalized.enemies;
       normalizedFields.push('enemies → foes');
+    }
+    if (!normalized.factions && normalized.organizations) {
+      normalized.factions = normalized.organizations;
+      normalizedFields.push('organizations → factions');
     }
 
     if (normalizedFields.length > 0) {
@@ -1675,13 +1727,25 @@ export default function EditContentModal({
                   ) : content.multiattack ? (
                     <TextField label="Multiattack" path="multiattack" rows={2} placeholder="Description of multiattack pattern" />
                   ) : null}
+
+                  {!!content.special_attacks && (
+                    <ExpandableArrayEditor
+                      label="Special Attacks"
+                      value={ensureAnyArray(content.special_attacks)}
+                      onChange={(val) => updateField('special_attacks', val)}
+                      path="special_attacks"
+                      defaultExpanded={false}
+                      itemType="object"
+                      objectTemplate={{ name: '', description: '', save_dc: '', damage: '', notes: '' }}
+                    />
+                  )}
                 </div>
               )}
             </div>
           )}
 
           {/* Creature Spellcasting (v1.1) - shared by NPCs and Monsters */}
-          {isCreature && (content.spellcasting || content.cantrips || content.prepared_spells || content.spell_slots || content.innate_spellcasting) && (
+          {isCreature && (content.spellcasting || content.spellcasting_ability || content.spell_save_dc || content.spell_attack_bonus || content.spellcasting_focus || content.cantrips || content.prepared_spells || content.always_prepared_spells || content.spell_slots || content.innate_spellcasting || content.innate_spells || content.spells_known) && (
             <div className="space-y-2">
               <SectionHeader title="Spellcasting" section={isMonster ? "monster_spellcasting" : "npc_spellcasting"} badge="v1.1" />
               {(expandedSections.has('npc_spellcasting') || expandedSections.has('monster_spellcasting')) && (
@@ -1696,6 +1760,13 @@ export default function EditContentModal({
                     />
                   )}
 
+                  <div className="grid grid-cols-2 gap-3">
+                    <TextField label="Spellcasting Ability" path="spellcasting_ability" placeholder="Intelligence, Wisdom, Charisma" />
+                    <TextField label="Spellcasting Focus" path="spellcasting_focus" placeholder="Arcane focus or holy symbol" />
+                    <NumberField label="Spell Save DC" path="spell_save_dc" />
+                    <NumberField label="Spell Attack Bonus" path="spell_attack_bonus" />
+                  </div>
+
                   {!!content.cantrips && (
                     <StringArrayEditor label="Cantrips" path="cantrips" />
                   )}
@@ -1706,6 +1777,16 @@ export default function EditContentModal({
                       value={ensureObject(content.prepared_spells)}
                       onChange={(val) => updateField('prepared_spells', val)}
                       path="prepared_spells"
+                      defaultExpanded={false}
+                    />
+                  )}
+
+                  {!!content.always_prepared_spells && (
+                    <ExpandableObjectEditor
+                      label="Always Prepared Spells"
+                      value={ensureObject(content.always_prepared_spells)}
+                      onChange={(val) => updateField('always_prepared_spells', val)}
+                      path="always_prepared_spells"
                       defaultExpanded={false}
                     />
                   )}
@@ -1728,6 +1809,20 @@ export default function EditContentModal({
                       path="innate_spellcasting"
                       defaultExpanded={false}
                     />
+                  )}
+
+                  {!!content.innate_spells && (
+                    <ExpandableObjectEditor
+                      label="Innate Spells"
+                      value={ensureObject(content.innate_spells)}
+                      onChange={(val) => updateField('innate_spells', val)}
+                      path="innate_spells"
+                      defaultExpanded={false}
+                    />
+                  )}
+
+                  {!!content.spells_known && (
+                    <StringArrayEditor label="Spells Known" path="spells_known" />
                   )}
                 </div>
               )}
@@ -1826,9 +1921,9 @@ export default function EditContentModal({
                   {/* Allies & Friends */}
                   <ExpandableArrayEditor
                     label="Allies & Friends"
-                    value={ensureAnyArray(content.allies_friends)}
-                    onChange={(val) => updateField('allies_friends', val)}
-                    path="allies_friends"
+                    value={ensureAnyArray(content.allies ?? content.allies_friends)}
+                    onChange={(val) => updateField('allies', val)}
+                    path="allies"
                     defaultExpanded={false}
                     itemType="object"
                     objectTemplate={{ name: '', type: '', relationship: '', notes: '' }}
@@ -1837,9 +1932,9 @@ export default function EditContentModal({
                   {/* Foes & Enemies */}
                   <ExpandableArrayEditor
                     label="Foes & Enemies"
-                    value={ensureAnyArray(content.foes)}
-                    onChange={(val) => updateField('foes', val)}
-                    path="foes"
+                    value={ensureAnyArray(content.enemies ?? content.foes)}
+                    onChange={(val) => updateField('enemies', val)}
+                    path="enemies"
                     defaultExpanded={false}
                     itemType="object"
                     objectTemplate={{ name: '', type: '', relationship: '', reason: '', notes: '' }}
@@ -1897,12 +1992,12 @@ export default function EditContentModal({
                     />
                   )}
 
-                  {/* Factions */}
+                  {/* Organizations */}
                   <ExpandableArrayEditor
-                    label="Factions"
-                    value={ensureAnyArray(content.factions)}
-                    onChange={(val) => updateField('factions', val)}
-                    path="factions"
+                    label="Organizations"
+                    value={ensureAnyArray(content.organizations ?? content.factions)}
+                    onChange={(val) => updateField('organizations', val)}
+                    path="organizations"
                     defaultExpanded={false}
                     itemType="object"
                     objectTemplate={{ name: '', role: '', standing: '', notes: '' }}
@@ -1950,6 +2045,56 @@ export default function EditContentModal({
                     path="equipment"
                     defaultExpanded={false}
                     itemType="auto"
+                    objectTemplate={{ name: '', quantity: 1, description: '', notes: '' }}
+                  />
+
+                  <ExpandableArrayEditor
+                    label="Weapons"
+                    value={ensureAnyArray(content.weapons)}
+                    onChange={(val) => updateField('weapons', val)}
+                    path="weapons"
+                    defaultExpanded={false}
+                    itemType="object"
+                    objectTemplate={{ name: '', properties: [], description: '', notes: '' }}
+                  />
+
+                  <ExpandableArrayEditor
+                    label="Armor & Shields"
+                    value={ensureAnyArray(content.armor_and_shields)}
+                    onChange={(val) => updateField('armor_and_shields', val)}
+                    path="armor_and_shields"
+                    defaultExpanded={false}
+                    itemType="object"
+                    objectTemplate={{ name: '', properties: [], description: '', notes: '' }}
+                  />
+
+                  <ExpandableArrayEditor
+                    label="Wondrous Items"
+                    value={ensureAnyArray(content.wondrous_items)}
+                    onChange={(val) => updateField('wondrous_items', val)}
+                    path="wondrous_items"
+                    defaultExpanded={false}
+                    itemType="object"
+                    objectTemplate={{ name: '', rarity: '', description: '', notes: '' }}
+                  />
+
+                  <ExpandableArrayEditor
+                    label="Consumables"
+                    value={ensureAnyArray(content.consumables)}
+                    onChange={(val) => updateField('consumables', val)}
+                    path="consumables"
+                    defaultExpanded={false}
+                    itemType="object"
+                    objectTemplate={{ name: '', quantity: 1, description: '', notes: '' }}
+                  />
+
+                  <ExpandableArrayEditor
+                    label="Other Gear"
+                    value={ensureAnyArray(content.other_gear)}
+                    onChange={(val) => updateField('other_gear', val)}
+                    path="other_gear"
+                    defaultExpanded={false}
+                    itemType="object"
                     objectTemplate={{ name: '', quantity: 1, description: '', notes: '' }}
                   />
 

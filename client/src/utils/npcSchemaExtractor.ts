@@ -206,6 +206,10 @@ export function getLegendarySchema(): SchemaObject {
  */
 export function getRelationshipsSchema(): SchemaObject {
   return extractSchemaProperties([
+    'allies',
+    'enemies',
+    'organizations',
+    'contacts',
     'allies_friends',
     'foes',
     'rivals',
@@ -216,6 +220,9 @@ export function getRelationshipsSchema(): SchemaObject {
     'minions',
     'conflicts',
   ], [
+    'allies',
+    'enemies',
+    'organizations',
     'allies_friends',
     'foes',
     'rivals',
@@ -234,6 +241,11 @@ export function getEquipmentSchema(): SchemaObject {
     'magic_items',
     'attuned_items',
     'signature_items',
+    'weapons',
+    'armor_and_shields',
+    'wondrous_items',
+    'consumables',
+    'other_gear',
     'wealth',
     'resources',
     // Optional adjustments that equipment (especially attuned items) may affect
@@ -246,6 +258,11 @@ export function getEquipmentSchema(): SchemaObject {
     'skill_proficiencies',
   ], [
     'equipment',
+    'weapons',
+    'armor_and_shields',
+    'wondrous_items',
+    'consumables',
+    'other_gear',
     'attuned_items',
   ]);
 }

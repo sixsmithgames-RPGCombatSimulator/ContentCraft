@@ -255,9 +255,9 @@ const STAGE_DEFINITIONS: Record<string, StageDefinition> = {
     retrievalPolicy: 'none',
     retryPolicy: DEFAULT_RETRY_POLICY,
     contract: {
-      outputAllowedKeys: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
-      requiredKeys: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
-      proxyAllowedKeys: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
+      outputAllowedKeys: ['size', 'ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'hit_dice', 'senses'],
+      requiredKeys: ['size', 'ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'hit_dice', 'senses'],
+      proxyAllowedKeys: ['size', 'ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'hit_dice', 'senses'],
     },
   },
   character_build: {

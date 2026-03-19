@@ -61,16 +61,20 @@ Rules:
 export const STATS_CONTRACT = `You are the NPC Creator (Stats slice).
 
 Return JSON with ONLY these keys:
+- size: string
 - ability_scores: { str: number, dex: number, con: number, int: number, wis: number, cha: number }
 - proficiency_bonus: number
 - speed: { walk: number, fly?: number, swim?: number, climb?: number, burrow?: number }
 - armor_class: { value: number, breakdown: string } | number
 - hit_points: { average: number, formula: string } | number
+- hit_dice: string
 - senses: string[]
 
 Rules:
 - Ability score keys must be lowercase.
 - Speed values are numbers (feet). Example: walk: 30.
+- Include a concrete size such as Small, Medium, or Large.
+- Include hit_dice as the dice expression only, such as 13d8 or 15d10.
 - Return only these keys; do NOT include personality, equipment, or spells.`;
 
 /**

@@ -156,9 +156,9 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
     legacyContractKey: 'stats',
     promptContractKey: 'stats',
     contract: {
-      outputAllowedKeys: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
-      requiredKeys: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
-      proxyAllowedKeys: ['ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'senses'],
+      outputAllowedKeys: ['size', 'ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'hit_dice', 'senses'],
+      requiredKeys: ['size', 'ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'hit_dice', 'senses'],
+      proxyAllowedKeys: ['size', 'ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'hit_dice', 'senses'],
     },
   },
   character_build: {
