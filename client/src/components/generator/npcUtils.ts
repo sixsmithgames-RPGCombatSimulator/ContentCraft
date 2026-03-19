@@ -94,6 +94,8 @@ export interface NormalizedNpc {
   appearance?: string;
   background?: string;
   race?: string;
+  subspecies?: string;
+  subtype?: string;
   alignment?: string;
   affiliation?: string;
   location?: string;
@@ -577,6 +579,11 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
   })();
   const proficiencyValue = ensureNumber(npcSource.proficiency_bonus);
   const proficiencyText = ensureString(npcSource.proficiency_bonus) || ensureString(statBlock.proficiency_bonus);
+  const explicitRace = ensureString(npcSource.race);
+  const species = ensureString(npcSource.species);
+  const resolvedSubspecies = ensureString(npcSource.subspecies)
+    || (explicitRace ? species : '')
+    || ensureString(npcSource.subtype || statBlock.subtype || statBlock.subspecies);
 
   return {
     name: ensureString(npcSource.name) || 'Unknown NPC',
@@ -586,7 +593,9 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
     description: ensureString(npcSource.description),
     appearance: ensureString(npcSource.appearance || npcSource.physical_appearance) || undefined,
     background: ensureString(npcSource.background) || undefined,
-    race: ensureString(npcSource.race || npcSource.species) || undefined,
+    race: explicitRace || species || undefined,
+    subspecies: resolvedSubspecies || undefined,
+    subtype: resolvedSubspecies || undefined,
     alignment: ensureString(npcSource.alignment) || undefined,
     affiliation: ensureString(npcSource.affiliation) || undefined,
     location: ensureString(npcSource.location) || undefined,
@@ -812,6 +821,9 @@ export const normalizedNpcToRecord = (
   assign('physical_appearance', npc.appearance);
   assign('background', npc.background);
   assign('race', npc.race);
+  assign('subspecies', npc.subspecies || npc.subtype);
+  assign('species', npc.subspecies || npc.subtype);
+  assign('subtype', npc.subspecies || npc.subtype);
   assign('alignment', npc.alignment);
   assign('affiliation', npc.affiliation);
   assign('location', npc.location);
@@ -866,6 +878,7 @@ export const normalizedNpcToRecord = (
   assign('enemies', npc.enemiesDetailed.length > 0 ? npc.enemiesDetailed : npc.foes.map((name) => ({ name, relationship: 'enemy' })));
   assign('foes', npc.foes);
   assign('organizations', npc.organizations);
+  assign('factions', npc.organizations.map((entry) => ({ ...entry, role: entry.role || 'member' })));
   assign('family', npc.family);
   assign('contacts', npc.contacts);
   assign('personality_traits', npc.personality.traits);

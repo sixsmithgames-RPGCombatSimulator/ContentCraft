@@ -1,7 +1,7 @@
 # NPC Schema Documentation
 
-**Version:** v1
-**Schema Location:** `schema/npc/v1-flat.json`
+**Version:** v1.1
+**Schema Location:** `schema/npc/v1.1-server.json` (save validation), `schema/npc/v1.1-client.json` (editor/UI)
 **Generated Types:** `client/src/types/npc/generated.ts`
 **Validator:** `src/server/validation/npcValidator.ts`
 
@@ -60,9 +60,10 @@ The NPC schema defines the complete structure for D&D 5th Edition Non-Player Cha
 - `role` (string): Narrative role in the story
 - `appearance` (string): Detailed physical description
 - `background` (string): Personal history and backstory
+- `subspecies` (string): Detailed lineage used by the editor when a broader `race` is also present (e.g., race `Elf`, subspecies `Drow`)
 - `size` (string): Creature size ("Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan")
 - `creature_type` (string): Creature type ("Humanoid", "Undead", "Fiend", etc.)
-- `subtype` (string): Creature subtype
+- `subtype` (string): Legacy compatibility field mirrored from `subspecies` for older save/generator paths
 - `alignment` (string): Alignment ("Lawful Good", "Chaotic Evil", etc.)
 - `affiliation` (string): Faction or organization
 - `location` (string): Current or home location
@@ -108,6 +109,12 @@ Each ability/action object contains:
 - `relationships` (array): Relationships with other entities
   - `entity` (string): Related entity name
   - `relationship` (string): Nature of relationship
+  - `notes` (string, optional): Additional context
+- `organizations` (array of objects): Canonical relationship-network entries for affiliations, orders, churches, guilds, and similar groups
+- `factions` (array of objects): Legacy compatibility alias mirrored from `organizations`; save validation expects object entries, not raw strings
+  - `name` (string): Organization or faction name
+  - `role` (string): Relationship or standing within the group (for compatibility repairs, bare strings are promoted to `role: "member"`)
+  - `standing` (string, optional): Reputation or standing with the group
   - `notes` (string, optional): Additional context
 
 ### Spellcasting
@@ -211,7 +218,7 @@ Proposals represent unresolved questions during generation:
 3. If invalid, show errors and reject edit
 4. If valid, normalize with `normalizeNpc()`
 5. User edits in form
-6. On save, convert with `normalizedNpcToRecord()`
+6. On save, convert with `normalizedNpcToRecord()` while synchronizing `subspecies` ↔ `subtype` compatibility fields and emitting schema-safe `organizations` / `factions` object arrays
 7. Validate again before persisting
 8. Update `schemaVersion` and `updated_at`
 

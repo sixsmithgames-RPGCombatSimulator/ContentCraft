@@ -37,6 +37,52 @@ const normalizeDeliverableType = (value: unknown): string => {
 const hasAnyDefinedKey = (record: JsonRecord, keys: string[]): boolean =>
   keys.some((key) => record[key] !== undefined);
 
+const ensureScalarString = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim();
+  }
+  return '';
+};
+
+const normalizeNamedObjectArray = (value: unknown, defaultFields: JsonRecord = {}): JsonRecord[] => {
+  const entries = Array.isArray(value)
+    ? value
+    : value === undefined || value === null
+      ? []
+      : [value];
+
+  return entries.flatMap((entry) => {
+    const name = typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean'
+      ? ensureScalarString(entry)
+      : isJsonRecord(entry)
+        ? ensureScalarString(entry.name ?? entry.entity ?? entry.title)
+        : '';
+
+    if (!name) {
+      return [];
+    }
+
+    const normalized: JsonRecord = {
+      ...defaultFields,
+      name,
+    };
+
+    if (isJsonRecord(entry)) {
+      for (const [key, fieldValue] of Object.entries(entry)) {
+        if (fieldValue === undefined || key === 'name' || key === 'entity' || key === 'title') {
+          continue;
+        }
+        normalized[key] = fieldValue;
+      }
+    }
+
+    return [normalized];
+  });
+};
+
 export const inferGeneratedContentType = (record: JsonRecord, hint?: string): string => {
   const explicitMatch = [hint, record.deliverable, record.type, record.content_type]
     .map((candidate) => normalizeDeliverableType(candidate))
@@ -81,6 +127,35 @@ export const inferGeneratedContentType = (record: JsonRecord, hint?: string): st
 
 export const synchronizeStructuredContentContainers = (record: JsonRecord): JsonRecord => {
   const synchronized: JsonRecord = { ...record };
+  const deliverable = inferGeneratedContentType(synchronized);
+
+  if (deliverable === 'npc') {
+    const explicitRace = ensureScalarString(synchronized.race);
+    const explicitSpecies = ensureScalarString(synchronized.species);
+    const explicitSubspecies = ensureScalarString(synchronized.subspecies);
+    const explicitSubtype = ensureScalarString(synchronized.subtype);
+
+    if (!explicitRace && explicitSpecies) {
+      synchronized.race = explicitSpecies;
+    }
+
+    const resolvedSubspecies = explicitSubspecies || (explicitRace ? explicitSpecies : '') || explicitSubtype;
+    if (resolvedSubspecies) {
+      synchronized.subspecies = resolvedSubspecies;
+      synchronized.species = resolvedSubspecies;
+      synchronized.subtype = resolvedSubspecies;
+    }
+
+    const normalizedOrganizations = normalizeNamedObjectArray(
+      synchronized.organizations ?? synchronized.factions,
+      { role: 'member' },
+    );
+    if (normalizedOrganizations.length > 0) {
+      synchronized.organizations = normalizedOrganizations;
+      synchronized.factions = normalizedOrganizations;
+    }
+  }
+
   const syncContainer = (containerKey: string, aliases: Array<[string, string]> = [], directKeys: string[] = []) => {
     const container = synchronized[containerKey];
     if (!isJsonRecord(container)) return;
@@ -102,6 +177,10 @@ export const synchronizeStructuredContentContainers = (record: JsonRecord): Json
   };
 
   const npcContainerDirectKeys = [
+    'race',
+    'species',
+    'subspecies',
+    'subtype',
     'size',
     'hit_dice',
     'spellcasting_ability',
@@ -124,11 +203,12 @@ export const synchronizeStructuredContentContainers = (record: JsonRecord): Json
     'allies',
     'enemies',
     'organizations',
+    'factions',
     'contacts',
     'family',
   ];
-  syncContainer('npc', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies', 'allies_friends'], ['allies', 'allies_and_contacts'], ['enemies', 'foes'], ['organizations', 'factions']], npcContainerDirectKeys);
-  syncContainer('character', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies', 'allies_friends'], ['allies', 'allies_and_contacts'], ['enemies', 'foes'], ['organizations', 'factions']], npcContainerDirectKeys);
+  syncContainer('npc', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies', 'allies_friends'], ['allies', 'allies_and_contacts'], ['enemies', 'foes']], npcContainerDirectKeys);
+  syncContainer('character', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies', 'allies_friends'], ['allies', 'allies_and_contacts'], ['enemies', 'foes']], npcContainerDirectKeys);
   syncContainer('monster', [['skill_proficiencies', 'skills']]);
   syncContainer('item');
   syncContainer('scene', [['participants', 'npcs_present'], ['skill_challenges', 'skill_checks'], ['discoveries', 'clues_information']]);
@@ -400,6 +480,8 @@ export default function EditContentModal({
         'appearance',
         'physical_appearance',
         'background',
+        'species',
+        'subspecies',
         'race',
         'size',
         'creature_type',
@@ -752,6 +834,42 @@ export default function EditContentModal({
       normalizedFields.push(`inferred type → ${resolvedDeliverable}`);
     }
 
+    const explicitRace = ensureScalarString(normalized.race);
+    const explicitSpecies = ensureScalarString(normalized.species);
+    const explicitSubspecies = ensureScalarString(normalized.subspecies);
+    const explicitSubtype = ensureScalarString(normalized.subtype);
+
+    if (!explicitRace && explicitSpecies) {
+      normalized.race = explicitSpecies;
+      normalizedFields.push('species → race');
+    }
+
+    const resolvedSubspecies = explicitSubspecies || (explicitRace ? explicitSpecies : '') || explicitSubtype;
+    if (resolvedSubspecies) {
+      if (normalized.subspecies !== resolvedSubspecies) {
+        normalized.subspecies = resolvedSubspecies;
+        normalizedFields.push('species/subtype → subspecies');
+      }
+      if (normalized.species !== resolvedSubspecies) {
+        normalized.species = resolvedSubspecies;
+        normalizedFields.push('subspecies → species');
+      }
+      if (normalized.subtype !== resolvedSubspecies) {
+        normalized.subtype = resolvedSubspecies;
+        normalizedFields.push('subspecies → subtype');
+      }
+    }
+
+    const normalizedOrganizations = normalizeNamedObjectArray(
+      normalized.organizations ?? normalized.factions,
+      { role: 'member' },
+    );
+    if (normalizedOrganizations.length > 0) {
+      normalized.organizations = normalizedOrganizations;
+      normalized.factions = normalizedOrganizations;
+      normalizedFields.push('organizations/factions → object arrays');
+    }
+
     // Normalize alternative field names for relationships
     if (!normalized.allies_friends && normalized.allies) {
       normalized.allies_friends = normalized.allies;
@@ -764,10 +882,6 @@ export default function EditContentModal({
     if (!normalized.foes && normalized.enemies) {
       normalized.foes = normalized.enemies;
       normalizedFields.push('enemies → foes');
-    }
-    if (!normalized.factions && normalized.organizations) {
-      normalized.factions = normalized.organizations;
-      normalizedFields.push('organizations → factions');
     }
 
     if (normalizedFields.length > 0) {
@@ -1408,9 +1522,9 @@ export default function EditContentModal({
                   {/* Creature Info */}
                   <div className="grid grid-cols-4 gap-3">
                     <TextField label="Race" path="race" />
+                    <TextField label="Subspecies" path="subspecies" placeholder="Drow, High Elf, etc." />
                     <TextField label="Size" path="size" placeholder="Medium, Large, etc." />
                     <TextField label="Creature Type" path="creature_type" placeholder="Humanoid, Undead, etc." />
-                    <TextField label="Subtype" path="subtype" placeholder="Elf, Vampire, etc." />
                   </div>
 
                   {/* Alignment & Role */}

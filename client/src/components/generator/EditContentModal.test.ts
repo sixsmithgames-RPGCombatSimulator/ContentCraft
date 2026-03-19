@@ -5,12 +5,14 @@ describe('EditContentModal helpers', () => {
   it('synchronizes lifted npc fields without flattening structured arrays', () => {
     const synced = synchronizeStructuredContentContainers({
       appearance: 'Weathered veteran',
+      race: 'Elf',
+      species: 'Drow',
       size: 'Medium',
       hit_dice: '9d8',
       skill_proficiencies: [{ name: 'Perception', value: '+6', notes: 'keen senses' }],
       allies: ['Moonlit refugees'],
       enemies: ['Lolth priestesses'],
-      organizations: [{ name: 'Followers of Eilistraee', role: 'Scout' }],
+      organizations: ['Followers of Eilistraee'],
       actions: [{
         name: 'Saber Slash',
         description: 'Melee Weapon Attack.',
@@ -42,6 +44,10 @@ describe('EditContentModal helpers', () => {
     const npcStatBlock = npc.stat_block as Record<string, unknown>;
 
     expect(npc.physical_appearance).toBe('Weathered veteran');
+    expect(npc.race).toBe('Elf');
+    expect(npc.subspecies).toBe('Drow');
+    expect(npc.species).toBe('Drow');
+    expect(npc.subtype).toBe('Drow');
     expect(npc.size).toBe('Medium');
     expect(npc.hit_dice).toBe('9d8');
     expect(npc.skills).toEqual([{ name: 'Perception', value: '+6', notes: 'keen senses' }]);
@@ -49,8 +55,8 @@ describe('EditContentModal helpers', () => {
     expect(npc.allies_friends).toEqual(['Moonlit refugees']);
     expect(npc.enemies).toEqual(['Lolth priestesses']);
     expect(npc.foes).toEqual(['Lolth priestesses']);
-    expect(npc.organizations).toEqual([{ name: 'Followers of Eilistraee', role: 'Scout' }]);
-    expect(npc.factions).toEqual([{ name: 'Followers of Eilistraee', role: 'Scout' }]);
+    expect(npc.organizations).toEqual([{ name: 'Followers of Eilistraee', role: 'member' }]);
+    expect(npc.factions).toEqual([{ name: 'Followers of Eilistraee', role: 'member' }]);
     expect(npc.actions).toEqual([
       {
         name: 'Saber Slash',

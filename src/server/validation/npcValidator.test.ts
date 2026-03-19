@@ -67,12 +67,13 @@ describe('npcValidator.validateNpcSafe', () => {
   });
 
 
-  it('mapAndValidateNpc preserves rich manual-generator NPC fields and maps species to race', () => {
+  it('mapAndValidateNpc preserves race while mapping species to subspecies and faction strings to objects', () => {
     const npc = {
       schema_version: '1.1',
       name: 'Seraphina Vale',
       description: 'A veteran knight-captain with a measured voice, scarred shield, and a tactical mind sharpened by years on the frontier.',
-      species: 'Human',
+      race: 'Elf',
+      species: 'Drow',
       personality: {
         traits: ['Measured', 'Protective'],
         ideals: ['Duty'],
@@ -87,7 +88,7 @@ describe('npcValidator.validateNpcSafe', () => {
       fighting_styles: [{ name: 'Defense', description: 'Keeps a shield wall between danger and her allies.' }],
       weapons: [{ name: 'Longsword', notes: '+1 blade from her order' }],
       armor_and_shields: [{ name: 'Shield', notes: 'Stamped with the Silver Order crest' }],
-      organizations: [{ name: 'Silver Order', role: 'Captain', standing: 'Respected' }],
+      factions: ['Church of Eilistraee'],
       family: [{ name: 'Mira Vale', relationship: 'Sister', status: 'Alive' }],
       contacts: [{ name: 'Hollis Reed', profession: 'Quartermaster', location: 'Northwatch' }],
       legendary_resistance: { uses_per_day: 1, description: 'Can steel herself against one failed saving throw.' },
@@ -105,7 +106,9 @@ describe('npcValidator.validateNpcSafe', () => {
     const result = mapAndValidateNpc(npc as unknown as Record<string, unknown>);
 
     expect(result.success).toBe(true);
-    expect(result.data?.race).toBe('Human');
+    expect(result.data?.race).toBe('Elf');
+    expect(result.data?.subspecies).toBe('Drow');
+    expect(result.data?.subtype).toBe('Drow');
     expect(result.data?.goals).toEqual(['Keep the northern trade road open through winter']);
     expect(result.data?.fears).toEqual(['Losing soldiers because she hesitated']);
     expect(result.data?.quirks).toEqual(['Counts exits whenever she enters a room']);
@@ -113,8 +116,10 @@ describe('npcValidator.validateNpcSafe', () => {
     expect(result.data?.prepared_spells).toEqual({ '1': ['bless', 'shield of faith'], '2': ['lesser restoration'] });
     expect(result.data?.always_prepared_spells).toEqual({ Oath: ['heroism'] });
     expect(result.data?.legendary_resistance).toEqual({ uses_per_day: 1, description: 'Can steel herself against one failed saving throw.' });
-    expect(result.data?.organizations).toEqual([{ name: 'Silver Order', role: 'Captain', standing: 'Respected' }]);
-    expect(result.warnings).toContain('Mapped "species" to canonical "race" field');
+    expect(result.data?.organizations).toEqual([{ name: 'Church of Eilistraee', role: 'member' }]);
+    expect(result.data?.factions).toEqual([{ name: 'Church of Eilistraee', role: 'member' }]);
+    expect(result.warnings).toContain('Mapped "species" to canonical "subspecies" field and synchronized legacy "subtype"');
+    expect(result.warnings).toContain('Normalized organizations/factions to object array structure');
   });
 
   it('mapAndValidateNpc normalizes raw generator NPC transport shapes used during project saves', () => {

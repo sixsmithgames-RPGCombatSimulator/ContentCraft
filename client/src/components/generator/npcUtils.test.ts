@@ -8,6 +8,7 @@ describe('npcUtils.normalizeNpc', () => {
       name: 'Karoz',
       description: 'A pragmatic archmage with a tower in Amn.',
       physical_appearance: 'Tall high elf in midnight robes.',
+      race: 'Elf',
       species: 'High Elf',
       class_levels: 'Wizard (Evocation) 20',
       ability_scores: {
@@ -31,7 +32,9 @@ describe('npcUtils.normalizeNpc', () => {
     });
 
     expect(normalized.appearance).toBe('Tall high elf in midnight robes.');
-    expect(normalized.race).toBe('High Elf');
+    expect(normalized.race).toBe('Elf');
+    expect(normalized.subspecies).toBe('High Elf');
+    expect(normalized.subtype).toBe('High Elf');
     expect(normalized.classLevels).toEqual([
       {
         class: 'Wizard',

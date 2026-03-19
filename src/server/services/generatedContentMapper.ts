@@ -96,6 +96,7 @@ interface NormalizedNpc {
   appearance: string;
   background: string;
   race: string;
+  subspecies?: string;
   size: string;
   creature_type: string;
   subtype: string;
@@ -1070,6 +1071,11 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
   const alliesDetailed = normalizeNamedEntries(npcSource.allies_friends ?? npcSource.allies);
   const enemiesDetailed = normalizeNamedEntries(npcSource.enemies ?? npcSource.foes);
   const magicItems = normalizeNamedEntries(npcSource.magic_items ?? npcSource.magicItems ?? npcSource.attuned_items).map((entry) => entry.name);
+  const explicitRace = ensureString(npcSource.race);
+  const species = ensureString(npcSource.species);
+  const resolvedSubspecies = ensureString(npcSource.subspecies)
+    || (explicitRace ? species : '')
+    || ensureString(npcSource.subtype ?? statBlock.subtype ?? statBlock.subspecies);
 
   const normalizedNpc: NormalizedNpc = {
     name: ensureString(npcSource.name, ensureString(npcSource.canonical_name, 'Unknown NPC')),
@@ -1079,10 +1085,11 @@ const normalizeNpc = (source: unknown): NormalizedNpc => {
     description: ensureString(npcSource.description ?? npcSource.summary),
     appearance: ensureString(npcSource.appearance ?? npcSource.physical_appearance),
     background: ensureString(npcSource.background),
-    race: ensureString(npcSource.race ?? npcSource.species),
+    race: explicitRace || species,
+    subspecies: resolvedSubspecies || undefined,
     size: ensureString(npcSource.size ?? statBlock.size),
     creature_type: ensureString(npcSource.creature_type ?? statBlock.creature_type ?? npcSource.type),
-    subtype: ensureString(npcSource.subtype ?? statBlock.subtype),
+    subtype: resolvedSubspecies || ensureString(npcSource.subtype ?? statBlock.subtype),
     alignment: ensureString(npcSource.alignment),
     affiliation: ensureString(npcSource.affiliation),
     location: ensureString(npcSource.location),

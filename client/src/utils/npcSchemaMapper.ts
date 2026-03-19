@@ -297,21 +297,39 @@ function normalizeFactions(source: Record<string, unknown>): Array<Record<string
     return null;
   }
 
-  if (factions.length > 0 && typeof factions[0] === 'object' && factions[0] !== null) {
-    return factions
-      .map(item => {
-        if (typeof item === 'object' && item !== null) {
-          return item as Record<string, unknown>;
-        }
-        return null;
-      })
-      .filter((item): item is Record<string, unknown> => item !== null);
+  const normalized: Array<Record<string, unknown>> = [];
+
+  for (const item of factions) {
+    let normalizedFaction: Record<string, unknown> | null = null;
+
+    if (typeof item === 'string') {
+      const name = item.trim();
+      normalizedFaction = name ? { name, role: 'member' } : null;
+    } else if (typeof item === 'object' && item !== null) {
+      const faction = item as Record<string, unknown>;
+      const name = typeof faction.name === 'string'
+        ? faction.name.trim()
+        : typeof faction.entity === 'string'
+          ? faction.entity.trim()
+          : typeof faction.title === 'string'
+            ? faction.title.trim()
+            : '';
+
+      if (name) {
+        normalizedFaction = {
+          ...faction,
+          name,
+          role: typeof faction.role === 'string' && faction.role.trim().length > 0 ? faction.role.trim() : 'member',
+        };
+      }
+    }
+
+    if (normalizedFaction) {
+      normalized.push(normalizedFaction);
+    }
   }
 
-  // If strings, convert to minimal object format
-  return factions
-    .filter(item => typeof item === 'string')
-    .map(name => ({ name, role: 'member' }));
+  return normalized;
 }
 
 /**
@@ -515,10 +533,26 @@ export function mapToCanonicalStructure(rawData: Record<string, unknown>): Mappi
       result.warnings.push('Mapped "canonical_name" to "name"');
     }
 
-    // 6a. Map species to race when stage outputs use 2024 terminology
-    if (!rawData.race && typeof rawData.species === 'string' && rawData.species.trim().length > 0) {
-      mapped.race = rawData.species;
-      result.warnings.push('Mapped "species" to canonical "race" field');
+    // 6a. Normalize race/species/subspecies terminology
+    const explicitRace = typeof rawData.race === 'string' ? rawData.race.trim() : '';
+    const explicitSpecies = typeof rawData.species === 'string' ? rawData.species.trim() : '';
+    const explicitSubspecies = typeof rawData.subspecies === 'string' ? rawData.subspecies.trim() : '';
+    const explicitSubtype = typeof rawData.subtype === 'string' ? rawData.subtype.trim() : '';
+
+    if (!explicitRace && explicitSpecies) {
+      mapped.race = explicitSpecies;
+      result.warnings.push('Mapped "species" to canonical "race" field because no explicit race was provided');
+    }
+
+    const resolvedSubspecies = explicitSubspecies || (explicitRace ? explicitSpecies : '') || explicitSubtype;
+    if (resolvedSubspecies) {
+      mapped.subspecies = resolvedSubspecies;
+      mapped.subtype = resolvedSubspecies;
+      if (explicitRace && explicitSpecies) {
+        result.warnings.push('Mapped "species" to canonical "subspecies" field and synchronized legacy "subtype"');
+      } else if (!explicitSubspecies && explicitSubtype) {
+        result.warnings.push('Mapped legacy "subtype" field to canonical "subspecies" alias');
+      }
     }
 
     // 7. Normalize class_levels (v1.1: string OR array)
@@ -550,9 +584,9 @@ export function mapToCanonicalStructure(rawData: Record<string, unknown>): Mappi
     const factions = normalizeFactions(rawData);
     if (factions !== null) {
       mapped.factions = factions;
+      mapped.organizations = factions;
       result.warnings.push('Normalized factions to v1.1 structure');
       delete mapped.faction_memberships;
-      delete mapped.organizations;
     }
 
     // 11. Normalize minions (v1.1: new field)

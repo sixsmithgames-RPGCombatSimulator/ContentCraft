@@ -304,6 +304,48 @@ function normalizePersonality(source: Record<string, unknown>): Record<string, s
   return result;
 }
 
+function normalizeNamedEntries(source: unknown, defaultFields: Record<string, unknown> = {}): Array<Record<string, unknown>> | undefined {
+  const entries = Array.isArray(source)
+    ? source
+    : source === undefined || source === null
+      ? []
+      : [source];
+
+  const normalized = entries
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const name = entry.trim();
+        return name ? { ...defaultFields, name } : null;
+      }
+
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return null;
+      }
+
+      const record = entry as Record<string, unknown>;
+      const name = typeof record.name === 'string'
+        ? record.name.trim()
+        : typeof record.entity === 'string'
+          ? record.entity.trim()
+          : typeof record.title === 'string'
+            ? record.title.trim()
+            : '';
+
+      if (!name) {
+        return null;
+      }
+
+      return {
+        ...defaultFields,
+        ...record,
+        name,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 /**
  * Map raw AI output to canonical schema structure
  *
@@ -425,10 +467,36 @@ export function mapToCanonicalStructure(rawData: Record<string, unknown>): Mappi
       result.warnings.push('Mapped "canonical_name" to "name"');
     }
 
-    // 6a. Map species to race when upstream stages use 2024 terminology
-    if (!rawData.race && typeof rawData.species === 'string' && rawData.species.trim().length > 0) {
-      mapped.race = rawData.species;
-      result.warnings.push('Mapped "species" to canonical "race" field');
+    // 6a. Normalize race/species/subspecies terminology
+    const explicitRace = typeof rawData.race === 'string' ? rawData.race.trim() : '';
+    const explicitSpecies = typeof rawData.species === 'string' ? rawData.species.trim() : '';
+    const explicitSubspecies = typeof rawData.subspecies === 'string' ? rawData.subspecies.trim() : '';
+    const explicitSubtype = typeof rawData.subtype === 'string' ? rawData.subtype.trim() : '';
+
+    if (!explicitRace && explicitSpecies) {
+      mapped.race = explicitSpecies;
+      result.warnings.push('Mapped "species" to canonical "race" field because no explicit race was provided');
+    }
+
+    const resolvedSubspecies = explicitSubspecies || (explicitRace ? explicitSpecies : '') || explicitSubtype;
+    if (resolvedSubspecies) {
+      mapped.subspecies = resolvedSubspecies;
+      mapped.subtype = resolvedSubspecies;
+      if (explicitRace && explicitSpecies) {
+        result.warnings.push('Mapped "species" to canonical "subspecies" field and synchronized legacy "subtype"');
+      } else if (!explicitSubspecies && explicitSubtype) {
+        result.warnings.push('Mapped legacy "subtype" field to canonical "subspecies" alias');
+      }
+    }
+
+    const normalizedOrganizations = normalizeNamedEntries(rawData.organizations ?? rawData.factions, { role: 'member' });
+    if (normalizedOrganizations) {
+      mapped.organizations = normalizedOrganizations;
+      mapped.factions = normalizedOrganizations.map((entry) => ({
+        ...entry,
+        role: typeof entry.role === 'string' && entry.role.trim().length > 0 ? entry.role : 'member',
+      }));
+      result.warnings.push('Normalized organizations/factions to object array structure');
     }
 
     const normalizedClassLevels = normalizeClassLevels(rawData.class_levels);
