@@ -6,6 +6,7 @@
 // refactored content
 import { useId, type ReactNode } from 'react';
 import { ContentType } from '../../types';
+import { resolveGeneratedContentType } from '../../../../src/shared/generation/generatedContentType';
 import {
   PrimitiveRecord,
   asRecord,
@@ -13,11 +14,11 @@ import {
   ensureObject,
   ensureString,
   ensureStringArray,
-  inferNpcType,
   normalizeNpc,
 } from './npcUtils';
 import NpcContentView from './NpcContentView';
 import LocationContentView from './LocationContentView';
+import MonsterContentView from './MonsterContentView';
 
 interface ContentRendererProps {
   content: unknown;
@@ -662,7 +663,15 @@ const asNormalizedStoryArc = (record: PrimitiveRecord): NormalizedStoryArc => {
   };
 };
 
-const inferType = (record: PrimitiveRecord, deliverable?: string): ContentType => inferNpcType(record, deliverable);
+const inferType = (record: PrimitiveRecord, deliverable?: string): ContentType =>
+  resolveGeneratedContentType({
+    contentType:
+      ensureString(record.content_type) ||
+      ensureString(record.contentType) ||
+      ensureString(record.type),
+    deliverable,
+    generatedContent: record,
+  }) as ContentType;
 
 const asNormalizedNonfiction = (record: PrimitiveRecord, deliverable?: string): NormalizedNonfiction => {
   const draft = ensureObject(record.draft);
@@ -1220,6 +1229,10 @@ export default function ContentRenderer({ content, deliverable }: ContentRendere
 
   if (type === ContentType.CHARACTER) {
     return <NpcContentView npc={normalizeNpc(record)} />;
+  }
+
+  if (type === ContentType.MONSTER) {
+    return <MonsterContentView monster={record as Record<string, unknown>} />;
   }
 
   if (type === ContentType.LOCATION) {

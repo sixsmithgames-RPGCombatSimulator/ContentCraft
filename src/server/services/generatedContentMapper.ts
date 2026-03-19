@@ -4,6 +4,7 @@
  */
 
 import { ContentType } from '../../shared/types/index.js';
+import { resolveGeneratedContentType } from '../../shared/generation/generatedContentType.js';
 
 type AbilityScores = {
   str: number;
@@ -956,111 +957,11 @@ const inferContentType = (
   deliverable: string | undefined,
   generatedContent: any,
 ): ContentType => {
-  const values = Object.values(ContentType) as string[];
-  if (contentType && values.includes(contentType)) {
-    return contentType as ContentType;
-  }
-
-  const deliverableLower = ensureString(deliverable || generatedContent?.deliverable).toLowerCase();
-  const draft = ensureObject(generatedContent?.draft);
-  const draftDeliverable = ensureString(draft.deliverable).toLowerCase();
-
-  if (
-    draft?.story_arc ||
-    draft?.storyArc ||
-    generatedContent?.story_arc ||
-    generatedContent?.storyArc ||
-    generatedContent?.arc ||
-    draftDeliverable.includes('story arc') ||
-    draftDeliverable.includes('story-arc') ||
-    draftDeliverable.includes('plot arc') ||
-    deliverableLower.includes('story arc') ||
-    deliverableLower.includes('story-arc') ||
-    deliverableLower.includes('plot arc')
-  ) {
-    return ContentType.STORY_ARC;
-  }
-
-  if (
-    generatedContent?.monster ||
-    draft?.monster ||
-    deliverableLower.includes('monster') ||
-    deliverableLower.includes('creature') ||
-    draftDeliverable.includes('monster') ||
-    draftDeliverable.includes('creature')
-  ) {
-    return ContentType.MONSTER;
-  }
-
-  if (draft?.npc || draft?.character || generatedContent?.npc) {
-    return ContentType.CHARACTER;
-  }
-
-  if (draftDeliverable.includes('npc') || deliverableLower.includes('npc') || deliverableLower.includes('character')) {
-    return ContentType.CHARACTER;
-  }
-
-  if (
-    generatedContent?.encounter ||
-    generatedContent?.encounter_details ||
-    draft?.encounter ||
-    draft?.encounter_details ||
-    deliverableLower.includes('encounter') ||
-    deliverableLower.includes('combat') ||
-    draftDeliverable.includes('encounter') ||
-    draftDeliverable.includes('combat')
-  ) {
-    return ContentType.SECTION;
-  }
-
-  if (
-    generatedContent?.item ||
-    draft?.item ||
-    deliverableLower.includes('item') ||
-    deliverableLower.includes('artifact') ||
-    draftDeliverable.includes('item') ||
-    draftDeliverable.includes('artifact')
-  ) {
-    return ContentType.ITEM;
-  }
-
-  if (
-    generatedContent?.location ||
-    draft?.location ||
-    deliverableLower.includes('location') ||
-    deliverableLower.includes('place') ||
-    draftDeliverable.includes('location') ||
-    draftDeliverable.includes('place')
-  ) {
-    return ContentType.LOCATION;
-  }
-
-  if (deliverableLower.includes('outline') || draftDeliverable.includes('outline')) {
-    return ContentType.OUTLINE;
-  }
-
-  if (deliverableLower.includes('chapter') || draftDeliverable.includes('chapter')) {
-    return ContentType.CHAPTER;
-  }
-
-  if (deliverableLower.includes('scene') || draftDeliverable.includes('scene')) {
-    return ContentType.SECTION;
-  }
-
-  if (deliverableLower.includes('stat') || draftDeliverable.includes('stat')) {
-    return ContentType.STAT_BLOCK;
-  }
-
-  if (
-    deliverableLower.includes('fact') ||
-    deliverableLower.includes('lore') ||
-    draftDeliverable.includes('fact') ||
-    draftDeliverable.includes('lore')
-  ) {
-    return ContentType.FACT;
-  }
-
-  return ContentType.TEXT;
+  return resolveGeneratedContentType({
+    contentType,
+    deliverable,
+    generatedContent,
+  }) as ContentType;
 };
 
 const buildCommonMetadata = (params: GeneratedContentMapParams) => {

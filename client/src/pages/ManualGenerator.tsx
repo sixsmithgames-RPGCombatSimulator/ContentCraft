@@ -2654,6 +2654,8 @@ Output: Valid JSON only. No markdown, no prose.`;
         stageInputs.additional_critical_instructions = additionalGuidance.trim();
       }
 
+      const hasInlinePreviousDecisions = Object.prototype.hasOwnProperty.call(stageInputs, 'previous_decisions');
+
       // Build packed prompt config - stage contracts already contain required keys
       const packConfig: PromptPackConfig = {
         mustHave: {
@@ -2664,7 +2666,10 @@ Output: Valid JSON only. No markdown, no prose.`;
         },
         shouldHave: {
           canonFacts: limitedFactpack ? formatCanonFacts(limitedFactpack) : undefined,
-          previousDecisionsSummary: limitedDecisions ? JSON.stringify(limitedDecisions, null, 2) : undefined,
+          previousDecisionsSummary:
+            limitedDecisions && !hasInlinePreviousDecisions
+              ? JSON.stringify(limitedDecisions, null, 2)
+              : undefined,
         },
         niceToHave: { verboseFlags: effectiveConfig.flags },
         safetyCeiling: PROMPT_SAFETY_CEILING,

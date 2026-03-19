@@ -322,6 +322,31 @@ describe('workflowStageRepair', () => {
     expect(repaired.payload).not.toHaveProperty('clues_information');
   });
 
+  it('does not duplicate scene description fragments that are already present inline', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'creator',
+      workflowType: 'scene',
+      payload: {
+        title: 'The Ash-Choked Truce',
+        description: 'Nasir and Karoz stagger beneath the shattered archway. A precarious ruin of ancient masonry located in a desolate, wind-swept canyon where the earth itself seems to be rejecting the presence of the living. Hooks: The ground begins to liquefy beneath them, forcing a physical proximity neither wants. Objectives: Navigate the collapsing ruins to safety. Discoveries: Their survival is briefly tethered to the other\'s cooperation.',
+        scene_type: 'cutscene',
+        location: {
+          name: 'The Shattered Archway',
+          description: 'A precarious ruin of ancient masonry located in a desolate, wind-swept canyon where the earth itself seems to be rejecting the presence of the living.',
+        },
+        hooks: ['The ground begins to liquefy beneath them, forcing a physical proximity neither wants.'],
+        objectives: ['Navigate the collapsing ruins to safety.'],
+        discoveries: ['Their survival is briefly tethered to the other\'s cooperation.'],
+      },
+    });
+
+    const description = String(repaired.payload.description ?? '');
+    expect(description.match(/A precarious ruin of ancient masonry/gi)?.length ?? 0).toBe(1);
+    expect(description.match(/Hooks:/g)?.length ?? 0).toBe(1);
+    expect(description.match(/Objectives:/g)?.length ?? 0).toBe(1);
+    expect(description.match(/Discoveries:/g)?.length ?? 0).toBe(1);
+  });
+
   it('normalizes story arc secrets payloads into the live contract shape', () => {
     const repaired = repairWorkflowStagePayload({
       stageIdOrName: 'story_arc.secrets',

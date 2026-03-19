@@ -35,6 +35,7 @@ const CONTENT_TYPE_LABELS = {
   [ContentType.STAT_BLOCK]: 'Stat Block',
   [ContentType.FACT]: 'Fact',
   [ContentType.STORY_ARC]: 'Story Arc',
+  [ContentType.MONSTER]: 'Monster',
 };
 
 const WRITING_TOKENS = [
@@ -108,6 +109,7 @@ const asStringList = (value: unknown): string[] => {
 const isStructuredBlock = (block: ContentBlock): boolean => {
   if (
     block.type === ContentType.CHARACTER ||
+    block.type === ContentType.MONSTER ||
     block.type === ContentType.LOCATION ||
     block.type === ContentType.ITEM ||
     block.type === ContentType.STAT_BLOCK ||

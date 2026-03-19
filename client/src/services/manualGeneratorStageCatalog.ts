@@ -27,6 +27,217 @@ type JsonRecord = Record<string, unknown>;
 export type { ManualGeneratorStageContext };
 
 const LEGACY_CANON_MAX_CHARS = 3200;
+const VALIDATION_PROMPT_PAYLOAD_MAX_CHARS = 5800;
+
+const isJsonRecord = (value: unknown): value is JsonRecord =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const clampPromptText = (value: unknown, maxChars: number): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.length <= maxChars) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
+};
+
+const clampPromptStringArray = (
+  value: unknown,
+  maxItems: number,
+  maxCharsPerItem: number,
+): string[] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const items = value
+    .map((entry) => clampPromptText(entry, maxCharsPerItem))
+    .filter((entry): entry is string => typeof entry === 'string')
+    .slice(0, maxItems);
+
+  return items.length > 0 ? items : undefined;
+};
+
+const compactSceneLocationForPrompt = (value: unknown): JsonRecord | undefined => {
+  if (!isJsonRecord(value)) {
+    return undefined;
+  }
+
+  const sensory = isJsonRecord(value.sensory_details)
+    ? {
+        ...(clampPromptStringArray(value.sensory_details.sights, 2, 80) ? { sights: clampPromptStringArray(value.sensory_details.sights, 2, 80) } : {}),
+        ...(clampPromptStringArray(value.sensory_details.sounds, 2, 80) ? { sounds: clampPromptStringArray(value.sensory_details.sounds, 2, 80) } : {}),
+        ...(clampPromptStringArray(value.sensory_details.smells, 2, 80) ? { smells: clampPromptStringArray(value.sensory_details.smells, 2, 80) } : {}),
+      }
+    : null;
+
+  return {
+    ...(clampPromptText(value.name, 120) ? { name: clampPromptText(value.name, 120) } : {}),
+    ...(clampPromptText(value.description, 260) ? { description: clampPromptText(value.description, 260) } : {}),
+    ...(clampPromptText(value.region, 120) ? { region: clampPromptText(value.region, 120) } : {}),
+    ...(clampPromptText(value.ambiance, 160) ? { ambiance: clampPromptText(value.ambiance, 160) } : {}),
+    ...(sensory && Object.keys(sensory).length > 0 ? { sensory_details: sensory } : {}),
+  };
+};
+
+const compactSceneParticipantsForPrompt = (value: unknown): JsonRecord[] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const participants = value
+    .map((entry) => {
+      if (!isJsonRecord(entry)) {
+        return null;
+      }
+
+      const participant: JsonRecord = {
+        ...(clampPromptText(entry.name, 80) ? { name: clampPromptText(entry.name, 80) } : {}),
+        ...(clampPromptText(entry.role, 80) ? { role: clampPromptText(entry.role, 80) } : {}),
+        ...(clampPromptText(entry.disposition, 80) ? { disposition: clampPromptText(entry.disposition, 80) } : {}),
+      };
+
+      const goals = clampPromptStringArray(entry.goals, 2, 100);
+      if (goals) {
+        participant.goals = goals;
+      }
+
+      return Object.keys(participant).length > 0 ? participant : null;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null)
+    .slice(0, 3);
+
+  return participants.length > 0 ? participants : undefined;
+};
+
+const compactSceneSkillChallengesForPrompt = (value: unknown): JsonRecord[] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const challenges = value
+    .map((entry) => {
+      if (!isJsonRecord(entry)) {
+        return null;
+      }
+
+      const consequences = isJsonRecord(entry.consequences)
+        ? {
+            ...(clampPromptText(entry.consequences.success, 120) ? { success: clampPromptText(entry.consequences.success, 120) } : {}),
+            ...(clampPromptText(entry.consequences.failure, 120) ? { failure: clampPromptText(entry.consequences.failure, 120) } : {}),
+          }
+        : null;
+
+      const challenge: JsonRecord = {
+        ...(clampPromptText(entry.description, 160) ? { description: clampPromptText(entry.description, 160) } : {}),
+        ...(clampPromptStringArray(entry.suggested_skills, 3, 50) ? { suggested_skills: clampPromptStringArray(entry.suggested_skills, 3, 50) } : {}),
+        ...(typeof entry.dc === 'number' ? { dc: entry.dc } : {}),
+        ...(consequences && Object.keys(consequences).length > 0 ? { consequences } : {}),
+      };
+
+      return Object.keys(challenge).length > 0 ? challenge : null;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null)
+    .slice(0, 2);
+
+  return challenges.length > 0 ? challenges : undefined;
+};
+
+const compactSceneDialogueForPrompt = (value: unknown): JsonRecord[] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const dialogue = value
+    .map((entry) => {
+      if (!isJsonRecord(entry)) {
+        return null;
+      }
+
+      const line: JsonRecord = {
+        ...(clampPromptText(entry.speaker, 80) ? { speaker: clampPromptText(entry.speaker, 80) } : {}),
+        ...(clampPromptText(entry.line, 140) ? { line: clampPromptText(entry.line, 140) } : {}),
+        ...(clampPromptText(entry.context, 120) ? { context: clampPromptText(entry.context, 120) } : {}),
+      };
+
+      return Object.keys(line).length > 0 ? line : null;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null)
+    .slice(0, 2);
+
+  return dialogue.length > 0 ? dialogue : undefined;
+};
+
+const compactScenePayloadForPrompt = (payload: JsonRecord): JsonRecord => ({
+  ...(clampPromptText(payload.title, 160) ? { title: clampPromptText(payload.title, 160) } : {}),
+  ...(clampPromptText(payload.description, 700) ? { description: clampPromptText(payload.description, 700) } : {}),
+  ...(clampPromptText(payload.scene_type, 60) ? { scene_type: clampPromptText(payload.scene_type, 60) } : {}),
+  ...(compactSceneLocationForPrompt(payload.location) && Object.keys(compactSceneLocationForPrompt(payload.location) as JsonRecord).length > 0
+    ? { location: compactSceneLocationForPrompt(payload.location) }
+    : {}),
+  ...(compactSceneParticipantsForPrompt(payload.participants) ? { participants: compactSceneParticipantsForPrompt(payload.participants) } : {}),
+  ...(clampPromptStringArray(payload.objectives, 3, 120) ? { objectives: clampPromptStringArray(payload.objectives, 3, 120) } : {}),
+  ...(clampPromptStringArray(payload.hooks, 3, 120) ? { hooks: clampPromptStringArray(payload.hooks, 3, 120) } : {}),
+  ...(compactSceneSkillChallengesForPrompt(payload.skill_challenges) ? { skill_challenges: compactSceneSkillChallengesForPrompt(payload.skill_challenges) } : {}),
+  ...(compactSceneDialogueForPrompt(payload.dialogue) ? { dialogue: compactSceneDialogueForPrompt(payload.dialogue) } : {}),
+  ...(clampPromptStringArray(payload.discoveries, 3, 120) ? { discoveries: clampPromptStringArray(payload.discoveries, 3, 120) } : {}),
+  ...(isJsonRecord(payload.transitions) ? { transitions: payload.transitions } : {}),
+  ...(clampPromptText(payload.gm_notes, 240) ? { gm_notes: clampPromptText(payload.gm_notes, 240) } : {}),
+  ...(clampPromptText(payload.rule_base, 60) ? { rule_base: clampPromptText(payload.rule_base, 60) } : {}),
+  ...(clampPromptText(payload.era, 80) ? { era: clampPromptText(payload.era, 80) } : {}),
+  ...(clampPromptText(payload.region, 80) ? { region: clampPromptText(payload.region, 80) } : {}),
+  ...(clampPromptStringArray(payload.sources_used, 3, 80) ? { sources_used: clampPromptStringArray(payload.sources_used, 3, 80) } : {}),
+  ...(clampPromptStringArray(payload.assumptions, 3, 120) ? { assumptions: clampPromptStringArray(payload.assumptions, 3, 120) } : {}),
+});
+
+const summarizeValidationPayload = (payload: JsonRecord, type: string, label: string, sourceChars: number): JsonRecord => ({
+  ...(clampPromptText(payload.title, 160) ? { title: clampPromptText(payload.title, 160) } : {}),
+  ...(clampPromptText(payload.name, 160) ? { name: clampPromptText(payload.name, 160) } : {}),
+  ...(clampPromptText(payload.description, 500) ? { description: clampPromptText(payload.description, 500) } : {}),
+  ...(clampPromptText(payload.scene_type, 60) ? { scene_type: clampPromptText(payload.scene_type, 60) } : {}),
+  ...(compactSceneLocationForPrompt(payload.location) && Object.keys(compactSceneLocationForPrompt(payload.location) as JsonRecord).length > 0
+    ? { location: compactSceneLocationForPrompt(payload.location) }
+    : {}),
+  ...(clampPromptStringArray(payload.objectives, 2, 120) ? { objectives: clampPromptStringArray(payload.objectives, 2, 120) } : {}),
+  ...(clampPromptText(payload.rule_base, 60) ? { rule_base: clampPromptText(payload.rule_base, 60) } : {}),
+  type,
+  _summary: `[${label}] Reduced from ${sourceChars} chars for prompt budget.`,
+  _field_count: Object.keys(payload).length,
+});
+
+const compactValidationPayloadForPrompt = (
+  payload: JsonRecord,
+  deliverableType: string,
+  label: string,
+): JsonRecord => {
+  const originalChars = JSON.stringify(payload).length;
+  let compacted = payload;
+
+  if (deliverableType === 'scene' && originalChars > 2500) {
+    const compactScene = compactScenePayloadForPrompt(payload);
+    const compactSceneChars = JSON.stringify(compactScene).length;
+    if (compactSceneChars < originalChars) {
+      console.log(`[${label}] Compacting scene payload for prompt budget (${originalChars} -> ${compactSceneChars} chars).`);
+      compacted = compactScene;
+    }
+  }
+
+  const compactedChars = JSON.stringify(compacted).length;
+  if (compactedChars > VALIDATION_PROMPT_PAYLOAD_MAX_CHARS) {
+    console.log(`[${label}] Payload remains large (${compactedChars} chars). Sending summary.`);
+    return summarizeValidationPayload(compacted, deliverableType, label, compactedChars);
+  }
+
+  return compacted;
+};
 
 const LEGACY_CREATOR_SYSTEM_PROMPT = `You are the Creator for structured content generation.
 
@@ -645,25 +856,7 @@ Output STRICT JSON:
     buildUserPrompt: (context) => {
       // Get full draft
       const fullDraft = stripStageOutput(context.stageResults.creator as JsonRecord);
-
-      // For chunk 1 with large content, send minimal summary to fit in prompt limits
-      let draftToUse = fullDraft;
-      if (context.chunkInfo?.currentChunk === 1) {
-        const draftJson = JSON.stringify(fullDraft);
-        if (draftJson.length > 5000) {
-          console.log(`[Fact Checker Chunk 1] Draft is large (${draftJson.length} chars). Sending minimal summary.`);
-
-          // Create minimal summary with just metadata and basic info
-          draftToUse = {
-            name: fullDraft.name,
-            type: context.config.type,
-            schema_version: fullDraft.schema_version,
-            challenge_rating: fullDraft.challenge_rating,
-            _summary: `[Large draft - ${draftJson.length} chars. Full fact-checking in chunk 2. For now, minimal validation only.]`,
-            _field_count: Object.keys(fullDraft).length,
-          };
-        }
-      }
+      const draftToUse = compactValidationPayloadForPrompt(fullDraft, resolveLegacyDeliverableType(context), 'Fact Checker draft');
 
       const userPrompt: any = {
         draft: draftToUse,
@@ -700,20 +893,17 @@ Output STRICT JSON:
     buildUserPrompt: (context) => {
       const deliverableType = resolveLegacyDeliverableType(context);
 
-      // Get full content
       const fullDraft = stripStageOutput(context.stageResults.creator as JsonRecord);
       const fullFactCheck = stripStageOutput(context.stageResults.fact_checker as JsonRecord);
 
-      // For chunk 1 with large content, send minimal summary to fit in prompt limits
-      let draftToUse = fullDraft;
+      let draftToUse = compactValidationPayloadForPrompt(fullDraft, deliverableType, 'Stylist draft');
       let factCheckToUse = fullFactCheck;
 
       if (context.chunkInfo?.currentChunk === 1) {
-        const draftJson = JSON.stringify(fullDraft);
+        const draftJson = JSON.stringify(draftToUse);
         if (draftJson.length > 5000) {
           console.log(`[Stylist Chunk 1] Draft is large (${draftJson.length} chars). Sending minimal summary.`);
 
-          // Create minimal summary with just metadata and basic info
           draftToUse = {
             name: fullDraft.name,
             type: context.config.type,
@@ -813,17 +1003,15 @@ Output the SAME JSON content with added fields:
 - canon_alignment_score: number
 - validation_notes: string`,
     buildUserPrompt: (context) => {
-      // Get full content
+      const deliverableType = resolveLegacyDeliverableType(context);
       const fullContent = stripStageOutput(context.stageResults.stylist as JsonRecord);
 
-      // For chunk 1 with large content, send minimal summary to fit in prompt limits
-      let contentToUse = fullContent;
+      let contentToUse = compactValidationPayloadForPrompt(fullContent, deliverableType, 'Canon Validator content');
       if (context.chunkInfo?.currentChunk === 1) {
-        const contentJson = JSON.stringify(fullContent);
+        const contentJson = JSON.stringify(contentToUse);
         if (contentJson.length > 5000) {
           console.log(`[Canon Validator Chunk 1] Content is large (${contentJson.length} chars). Sending minimal summary.`);
 
-          // Create minimal summary with just metadata and basic info
           contentToUse = {
             name: fullContent.name,
             type: context.config.type,
@@ -896,17 +1084,15 @@ Output the SAME JSON content with added fields:
 - logic_score: number
 - balance_notes: string`,
     buildUserPrompt: (context) => {
-      // Get full content
+      const deliverableType = resolveLegacyDeliverableType(context);
       const fullContent = stripStageOutput(context.stageResults.canon_validator as JsonRecord);
 
-      // For chunk 1 with large content, send minimal summary to fit in prompt limits
-      let contentToUse = fullContent;
+      let contentToUse = compactValidationPayloadForPrompt(fullContent, deliverableType, 'Physics Validator content');
       if (context.chunkInfo?.currentChunk === 1) {
-        const contentJson = JSON.stringify(fullContent);
+        const contentJson = JSON.stringify(contentToUse);
         if (contentJson.length > 5000) {
           console.log(`[Physics Validator Chunk 1] Content is large (${contentJson.length} chars). Sending minimal summary.`);
 
-          // Create minimal summary with just metadata and basic info
           contentToUse = {
             name: fullContent.name,
             type: context.config.type,

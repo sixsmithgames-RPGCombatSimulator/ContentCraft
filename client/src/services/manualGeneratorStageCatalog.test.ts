@@ -110,4 +110,81 @@ describe('manual generator stage catalog', () => {
     });
     expect(userPrompt).not.toHaveProperty('canon_reference');
   });
+
+  it('compacts large scene drafts before building the generic fact checker prompt', () => {
+    const factCheckerStage = GENERIC_STAGES.find((stage) => stage.routerKey === 'fact_checker');
+
+    expect(factCheckerStage?.buildUserPrompt).toBeTypeOf('function');
+    if (!factCheckerStage?.buildUserPrompt) {
+      return;
+    }
+
+    const largeSceneDraft = {
+      title: 'The Ash-Choked Truce',
+      description: 'A'.repeat(1600),
+      scene_type: 'cutscene',
+      location: {
+        name: 'The Shattered Archway',
+        description: 'B'.repeat(500),
+        region: 'The Fractured Wastes',
+        ambiance: 'Oppressive',
+        sensory_details: {
+          sights: ['C'.repeat(120), 'D'.repeat(120), 'E'.repeat(120)],
+          sounds: ['F'.repeat(120), 'G'.repeat(120), 'H'.repeat(120)],
+          smells: ['I'.repeat(120), 'J'.repeat(120), 'K'.repeat(120)],
+        },
+      },
+      participants: Array.from({ length: 5 }, (_, index) => ({
+        name: `Participant ${index + 1}`,
+        role: 'survivor',
+        disposition: 'hostile',
+        goals: ['L'.repeat(140), 'M'.repeat(140), 'N'.repeat(140)],
+      })),
+      objectives: ['O'.repeat(180), 'P'.repeat(180), 'Q'.repeat(180), 'R'.repeat(180)],
+      hooks: ['S'.repeat(180), 'T'.repeat(180), 'U'.repeat(180), 'V'.repeat(180)],
+      skill_challenges: Array.from({ length: 3 }, () => ({
+        description: 'W'.repeat(220),
+        suggested_skills: ['Acrobatics', 'Perception', 'Insight', 'Stealth'],
+        dc: 15,
+        consequences: {
+          success: 'X'.repeat(180),
+          failure: 'Y'.repeat(180),
+        },
+      })),
+      dialogue: Array.from({ length: 4 }, (_, index) => ({
+        speaker: index % 2 === 0 ? 'Nasir' : 'Karoz',
+        line: 'Z'.repeat(220),
+        context: 'Q'.repeat(180),
+      })),
+      discoveries: ['R'.repeat(180), 'S'.repeat(180), 'T'.repeat(180), 'U'.repeat(180)],
+      gm_notes: 'V'.repeat(500),
+      rule_base: '2024RAW',
+    };
+
+    const promptContext: ManualGeneratorStageContext = {
+      config: {
+        prompt: 'Create a tense aftermath scene between Nasir and Karoz.',
+        type: 'scene',
+        flags: {},
+      },
+      stageResults: {
+        creator: largeSceneDraft,
+      },
+      factpack: null,
+      previousDecisions: {
+        tension: 'Keep the tension high and non-verbal.',
+      },
+    };
+
+    const userPrompt = JSON.parse(factCheckerStage.buildUserPrompt(promptContext)) as Record<string, unknown>;
+    const compactDraft = userPrompt.draft as Record<string, unknown>;
+
+    expect(JSON.stringify(compactDraft).length).toBeLessThan(JSON.stringify(largeSceneDraft).length);
+    expect(String(compactDraft.description).length).toBeLessThanOrEqual(700);
+    expect(Array.isArray(compactDraft.participants)).toBe(true);
+    expect((compactDraft.participants as unknown[]).length).toBeLessThanOrEqual(3);
+    expect(Array.isArray(compactDraft.dialogue)).toBe(true);
+    expect((compactDraft.dialogue as unknown[]).length).toBeLessThanOrEqual(2);
+    expect(userPrompt.note).toBe('Previous decisions were already made. Do NOT flag these as issues.');
+  });
 });

@@ -140,6 +140,22 @@ export function measurePromptSize(systemPrompt: string, userPrompt: string): num
   return serialized.length;
 }
 
+function composePrompt(systemPrompt: string, userPrompt: string): string {
+  return `${systemPrompt}\n\n---\n\n${userPrompt}`;
+}
+
+function buildCandidate(
+  config: PromptPackConfig,
+): { systemPrompt: string; userPrompt: string; totalChars: number } {
+  const systemPrompt = buildSystemPrompt(config);
+  const userPrompt = buildUserPrompt(config);
+  return {
+    systemPrompt,
+    userPrompt,
+    totalChars: composePrompt(systemPrompt, userPrompt).length,
+  };
+}
+
 /**
  * Generates a size breakdown for prompt components.
  *
@@ -237,22 +253,20 @@ export function buildPackedPrompt(config: PromptPackConfig): PackedPromptResult 
   let workingConfig = { ...config };
 
   if (breakdown.grandTotal <= safetyCeiling) {
-    // All components fit - assemble and return
-    const systemPrompt = buildSystemPrompt(workingConfig);
-    const userPrompt = buildUserPrompt(workingConfig);
-    const totalChars = measurePromptSize(systemPrompt, userPrompt);
-
-    return {
-      success: true,
-      systemPrompt,
-      userPrompt,
-      analysis: {
-        totalChars,
-        breakdown,
-        droppedSections,
-        compressionApplied,
-      },
-    };
+    const candidate = buildCandidate(workingConfig);
+    if (candidate.totalChars <= safetyCeiling) {
+      return {
+        success: true,
+        systemPrompt: candidate.systemPrompt,
+        userPrompt: candidate.userPrompt,
+        analysis: {
+          totalChars: candidate.totalChars,
+          breakdown,
+          droppedSections,
+          compressionApplied,
+        },
+      };
+    }
   }
 
   // Step 3: Drop nice-to-have components
@@ -265,21 +279,20 @@ export function buildPackedPrompt(config: PromptPackConfig): PackedPromptResult 
     droppedSections.push('nice-to-have (examples, verbose flags, full prior outputs)');
 
     if (breakdown.grandTotal <= safetyCeiling) {
-      const systemPrompt = buildSystemPrompt(workingConfig);
-      const userPrompt = buildUserPrompt(workingConfig);
-      const totalChars = measurePromptSize(systemPrompt, userPrompt);
-
-      return {
-        success: true,
-        systemPrompt,
-        userPrompt,
-        analysis: {
-          totalChars,
-          breakdown,
-          droppedSections,
-          compressionApplied,
-        },
-      };
+      const candidate = buildCandidate(workingConfig);
+      if (candidate.totalChars <= safetyCeiling) {
+        return {
+          success: true,
+          systemPrompt: candidate.systemPrompt,
+          userPrompt: candidate.userPrompt,
+          analysis: {
+            totalChars: candidate.totalChars,
+            breakdown,
+            droppedSections,
+            compressionApplied,
+          },
+        };
+      }
     }
   }
 
@@ -307,21 +320,20 @@ export function buildPackedPrompt(config: PromptPackConfig): PackedPromptResult 
     breakdown = generateSizeBreakdown(workingConfig);
 
     if (breakdown.grandTotal <= safetyCeiling) {
-      const systemPrompt = buildSystemPrompt(workingConfig);
-      const userPrompt = buildUserPrompt(workingConfig);
-      const totalChars = measurePromptSize(systemPrompt, userPrompt);
-
-      return {
-        success: true,
-        systemPrompt,
-        userPrompt,
-        analysis: {
-          totalChars,
-          breakdown,
-          droppedSections,
-          compressionApplied,
-        },
-      };
+      const candidate = buildCandidate(workingConfig);
+      if (candidate.totalChars <= safetyCeiling) {
+        return {
+          success: true,
+          systemPrompt: candidate.systemPrompt,
+          userPrompt: candidate.userPrompt,
+          analysis: {
+            totalChars: candidate.totalChars,
+            breakdown,
+            droppedSections,
+            compressionApplied,
+          },
+        };
+      }
     }
   }
 
@@ -334,36 +346,36 @@ export function buildPackedPrompt(config: PromptPackConfig): PackedPromptResult 
   droppedSections.push('should-have (canon facts, previous decisions)');
 
   if (breakdown.grandTotal <= safetyCeiling) {
-    const systemPrompt = buildSystemPrompt(workingConfig);
-    const userPrompt = buildUserPrompt(workingConfig);
-    const totalChars = measurePromptSize(systemPrompt, userPrompt);
-
-    return {
-      success: true,
-      systemPrompt,
-      userPrompt,
-      analysis: {
-        totalChars,
-        breakdown,
-        droppedSections,
-        compressionApplied,
-      },
-    };
+    const candidate = buildCandidate(workingConfig);
+    if (candidate.totalChars <= safetyCeiling) {
+      return {
+        success: true,
+        systemPrompt: candidate.systemPrompt,
+        userPrompt: candidate.userPrompt,
+        analysis: {
+          totalChars: candidate.totalChars,
+          breakdown,
+          droppedSections,
+          compressionApplied,
+        },
+      };
+    }
   }
 
   // Step 6: Still too large - fail fast
+  const finalCandidate = buildCandidate(workingConfig);
   return {
     success: false,
     analysis: {
-      totalChars: breakdown.grandTotal,
+      totalChars: finalCandidate.totalChars,
       breakdown,
       droppedSections,
       compressionApplied,
     },
     error: {
-      message: `Prompt still exceeds safety ceiling (${safetyCeiling} chars) after dropping all optional components. Must-have components: ${breakdown.mustHave.total} chars.`,
+      message: `Prompt still exceeds safety ceiling (${safetyCeiling} chars) after dropping all optional components. Final composed prompt: ${finalCandidate.totalChars} chars.`,
       breakdown,
-      overflow: breakdown.grandTotal - safetyCeiling,
+      overflow: finalCandidate.totalChars - safetyCeiling,
     },
   };
 }

@@ -13,6 +13,7 @@ import { mapAndValidateNpc } from '../services/npcSchemaMapper.js';
 import { validateMonsterStrict, isMonsterContent } from '../validation/monsterValidator.js';
 import type { GeneratedContentDocument } from '../models/GeneratedContent.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { resolveGeneratedContentType } from '../../shared/generation/generatedContentType.js';
 
 export const contentRouter = Router();
 
@@ -376,14 +377,20 @@ contentRouter.post('/generated/save', async (req, res) => {
       domain,
     } = req.body;
 
-    if (!project_id || !content_type || !generated_content) {
+    if (!project_id || !generated_content) {
       return res.status(400).json({
         success: false,
-        error: 'project_id, content_type, and generated_content are required',
+        error: 'project_id and generated_content are required',
       });
     }
 
-    console.log(`[Generated Content] Saving ${content_type} to project ${project_id}`);
+    const resolvedContentType = resolveGeneratedContentType({
+      contentType: content_type,
+      deliverable: deliverable_type,
+      generatedContent: generated_content,
+    });
+
+    console.log(`[Generated Content] Saving ${resolvedContentType} to project ${project_id}`);
 
     // CRITICAL: Check for Monster content FIRST before NPC check
     // Monsters also have content_type='character' so they'd be caught by NPC validation if we check NPC first
@@ -392,7 +399,7 @@ contentRouter.post('/generated/save', async (req, res) => {
       validation_content && typeof validation_content === 'object'
         ? validation_content
         : storedGeneratedContent;
-    const isMonster = isMonsterContent(generated_content);
+    const isMonster = resolvedContentType === 'monster' || isMonsterContent(generated_content);
 
     if (isMonster) {
       console.log('[Generated Content] Detected Monster content, applying schema validation...');
@@ -420,10 +427,7 @@ contentRouter.post('/generated/save', async (req, res) => {
     }
     // Schema-driven validation for NPC content (check AFTER monster check)
     else {
-      const isNpcContent = content_type?.toLowerCase().includes('npc') ||
-                          content_type?.toLowerCase().includes('character') ||
-                          generated_content.deliverable?.toLowerCase().includes('npc') ||
-                          persisted_content?.deliverable?.toLowerCase().includes('npc');
+      const isNpcContent = resolvedContentType === 'character';
 
       if (isNpcContent) {
         console.log('[Generated Content] Detected NPC content, applying schema validation...');
@@ -467,10 +471,10 @@ contentRouter.post('/generated/save', async (req, res) => {
 
     // Determine the correct content_type based on deliverable
     // Monsters should have content_type: 'monster', not 'character'
-    let finalContentType = content_type;
-    if (isMonster) {
+    let finalContentType = resolvedContentType;
+    if (isMonster && finalContentType !== 'monster') {
       finalContentType = 'monster';
-      console.log('[Generated Content] Setting content_type to "monster" for monster content');
+      console.log('[Generated Content] Corrected content_type to "monster" for monster content');
     }
 
     const storedRecord = storedGeneratedContent as Record<string, unknown>;
@@ -481,10 +485,6 @@ contentRouter.post('/generated/save', async (req, res) => {
         : (typeof deliverable_type === 'string' && deliverable_type.trim().length > 0
           ? deliverable_type.trim()
           : '')) || undefined;
-
-    if (effectiveDeliverable === 'npc') {
-      finalContentType = 'character';
-    }
 
     const generatedDoc = {
       _id: contentId,
@@ -703,12 +703,38 @@ contentRouter.put('/generated/:contentId', async (req, res) => {
         validation_content && typeof validation_content === 'object'
           ? validation_content
           : generated_content;
-      const isNpcContent = existingContent.content_type?.toLowerCase().includes('npc') ||
-                          existingContent.content_type?.toLowerCase().includes('character') ||
-                          generated_content.deliverable?.toLowerCase().includes('npc') ||
-                          persisted_content?.deliverable?.toLowerCase().includes('npc');
+      const resolvedContentType = resolveGeneratedContentType({
+        contentType: existingContent.content_type,
+        deliverable:
+          typeof existingContent.metadata?.deliverable === 'string'
+            ? existingContent.metadata.deliverable
+            : undefined,
+        generatedContent: generated_content,
+      });
+      const isNpcContent = resolvedContentType === 'character';
+      const isMonsterContentUpdate = resolvedContentType === 'monster' || isMonsterContent(generated_content);
 
-      if (isNpcContent) {
+      if (isMonsterContentUpdate) {
+        console.log('[Generated Content] Detected monster content update, applying schema validation...');
+
+        const validation = validateMonsterStrict(validationContent);
+
+        if (!validation.valid) {
+          const errorCount = validation.errors?.length || 0;
+          return res.status(400).json({
+            success: false,
+            error: 'Monster Validation Failed',
+            details: {
+              errorCount,
+              errors: validation.details?.split('\n\n') || ['Unknown validation error'],
+              rawErrors: validation.errors,
+            },
+            message: `The updated monster data has ${errorCount} validation error${errorCount !== 1 ? 's' : ''}. Review the errors and correct the data before saving.`,
+          });
+        }
+
+        updateFields.generated_content = generated_content;
+      } else if (isNpcContent) {
         console.log('[Generated Content] Detected NPC content update, applying schema validation...');
 
         const npcPayloadForValidation =

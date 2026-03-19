@@ -58,7 +58,8 @@ export enum ContentType {
   ITEM = 'item',
   STAT_BLOCK = 'stat-block',
   FACT = 'fact',
-  STORY_ARC = 'story-arc'
+  STORY_ARC = 'story-arc',
+  MONSTER = 'monster'
 }
 
 export interface APIResponse<T = unknown> {

@@ -5,12 +5,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { X, Edit2, FileText, Calendar, Tag, AlertCircle, Code } from 'lucide-react';
+import { resolveGeneratedContentType } from '../../../../src/shared/generation/generatedContentType';
 import ContentRenderer from './ContentRenderer';
 import NpcContentView from './NpcContentView';
 import MonsterContentView from './MonsterContentView';
 import EditContentModal from './EditContentModal';
 import {
-  isNpcContent,
   normalizeNpc,
 } from './npcUtils';
 
@@ -19,22 +19,20 @@ import {
  * Returns a specific type identifier for proper routing to view components
  */
 function getContentViewType(deliverable?: string, contentType?: string, generatedContent?: JsonRecord): 'monster' | 'npc' | 'generic' {
-  // Check deliverable field first (most explicit)
-  if (deliverable === 'monster' || deliverable === 'creature') {
+  const resolvedType = resolveGeneratedContentType({
+    contentType,
+    deliverable,
+    generatedContent,
+  });
+
+  if (resolvedType === 'monster') {
     return 'monster';
   }
 
-  // Check generated_content deliverable field
-  if (generatedContent?.deliverable === 'monster' || generatedContent?.deliverable === 'creature') {
-    return 'monster';
-  }
-
-  // Check if it's NPC content
-  if (isNpcContent(deliverable, contentType)) {
+  if (resolvedType === 'character') {
     return 'npc';
   }
 
-  // Default to generic view
   return 'generic';
 }
 

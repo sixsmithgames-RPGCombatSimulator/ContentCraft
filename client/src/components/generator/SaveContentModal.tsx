@@ -6,10 +6,10 @@
 import { useState, useMemo } from 'react';
 import { X, Save, CheckCircle, AlertCircle, FileText, Database } from 'lucide-react';
 import { ContentType } from '../../types';
+import { resolveGeneratedContentType } from '../../../../src/shared/generation/generatedContentType';
 import {
   NormalizedNpc,
   asRecord,
-  isNpcContent,
   normalizeNpc,
   normalizedNpcToRecord,
 } from './npcUtils';
@@ -115,46 +115,12 @@ interface SaveContentModalProps {
  * Maps AI deliverable types to ContentType enum
  * This ensures generated content is properly categorized when saved to the project
  */
-const mapDeliverableToContentType = (deliverable: string): ContentType => {
-  const deliverableLower = (deliverable || '').toLowerCase();
-
-  // Map common deliverables to content types
-  if (deliverableLower.includes('encounter') || deliverableLower.includes('combat')) {
-    return ContentType.SECTION;
-  }
-  if (deliverableLower.includes('scene')) {
-    return ContentType.SECTION;
-  }
-  if (deliverableLower.includes('adventure') || deliverableLower.includes('quest')) {
-    return ContentType.CHAPTER;
-  }
-  if (deliverableLower.includes('npc') || deliverableLower.includes('character')) {
-    return ContentType.CHARACTER;
-  }
-  if (deliverableLower.includes('monster') || deliverableLower.includes('creature')) {
-    return ContentType.CHARACTER; // Monsters are also characters
-  }
-  if (deliverableLower.includes('location') || deliverableLower.includes('place') || deliverableLower.includes('area') || deliverableLower.includes('castle') || deliverableLower.includes('fortress') || deliverableLower.includes('dungeon')) {
-    return ContentType.LOCATION;
-  }
-  if (deliverableLower.includes('item') || deliverableLower.includes('treasure') || deliverableLower.includes('loot')) {
-    return ContentType.ITEM;
-  }
-  if (deliverableLower.includes('stat') || deliverableLower.includes('monster') || deliverableLower.includes('creature')) {
-    return ContentType.STAT_BLOCK;
-  }
-  if (deliverableLower.includes('outline') || deliverableLower.includes('plan')) {
-    return ContentType.OUTLINE;
-  }
-  if (deliverableLower.includes('fact') || deliverableLower.includes('lore')) {
-    return ContentType.FACT;
-  }
-  if (deliverableLower.includes('homebrew')) {
-    return ContentType.TEXT; // Homebrew collections saved as text documents
-  }
-
-  // Default to TEXT for unknown types
-  return ContentType.TEXT;
+const mapDeliverableToContentType = (deliverable: string, generatedContent?: unknown, contentType?: string): ContentType => {
+  return resolveGeneratedContentType({
+    contentType,
+    deliverable,
+    generatedContent,
+  }) as ContentType;
 };
 
 export default function SaveContentModal({
@@ -188,6 +154,17 @@ export default function SaveContentModal({
   }, [gc]);
 
   const deliverableLower = useMemo(() => (gc?.deliverable || '').toLowerCase(), [gc]);
+  const resolvedGeneratedType = useMemo(
+    () =>
+      gc
+        ? resolveGeneratedContentType({
+            contentType: gc.content_type,
+            deliverable: gc.deliverable,
+            generatedContent: gc,
+          })
+        : 'text',
+    [gc],
+  );
 
   const isLikelyLocationDeliverable = useMemo(
     () =>
@@ -446,7 +423,7 @@ export default function SaveContentModal({
     try {
       // Step 1: ALWAYS save the generated content to the project
       const deliverable = gc.deliverable || 'unknown';
-      const mappedContentType = mapDeliverableToContentType(deliverable);
+      const mappedContentType = mapDeliverableToContentType(deliverable, gc, gc.content_type);
       const title = gc.title || gc.canonical_name || 'Untitled';
 
       const isLocationContent =
@@ -463,7 +440,7 @@ export default function SaveContentModal({
         const skipIfEmpty = ['mythic_actions', 'treasure', 'statBlock', 'lair_actions', 'regional_effects'];
         const preserveIfEmpty = new Set<string>();
 
-        if (isNpcContent(deliverable, gc.content_type)) {
+        if (resolvedGeneratedType === 'character') {
           preserveIfEmpty.add('class_levels');
           preserveIfEmpty.add('motivations');
           preserveIfEmpty.add('sources_used');
@@ -551,7 +528,7 @@ export default function SaveContentModal({
       let normalizedNpcPayload: NormalizedNpc | undefined;
       let persistedNpcPayload: Record<string, unknown> | undefined;
 
-      if (isNpcContent(deliverable, gc.content_type)) {
+      if (resolvedGeneratedType === 'character') {
         const npcRecord = asRecord(rawGc);
         const normalized = normalizeNpc(npcRecord);
 

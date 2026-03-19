@@ -47,7 +47,9 @@ export const CONTENT_TYPE_LABELS = {
   location: 'Location',
   item: 'Item',
   'stat-block': 'Stat Block',
-  fact: 'Fact'
+  fact: 'Fact',
+  'story-arc': 'Story Arc',
+  monster: 'Monster'
 } as const;
 
 export const DEFAULT_PROMPT_TEMPLATES = {

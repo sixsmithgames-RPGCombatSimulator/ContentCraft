@@ -1116,11 +1116,28 @@ const normalizeSceneGmNotes = (payload: JsonRecord): string | undefined => {
   const narration = isRecord(payload.narration) ? payload.narration : null;
   const notes = uniqueStringParts(
     coerceNonEmptyString(payload.gm_notes),
-    normalizeLooseStringArray(payload.gm_notes),
     normalizeLooseStringArray(narration?.gm_secrets),
   );
 
   return notes.length > 0 ? notes.join('\n') : undefined;
+};
+
+const normalizeSceneTextFragment = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[.,;:!?]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const sceneDescriptionContainsFragment = (description: string, fragment: string | undefined): boolean => {
+  if (!fragment) {
+    return false;
+  }
+
+  const normalizedDescription = normalizeSceneTextFragment(description);
+  const normalizedFragment = normalizeSceneTextFragment(fragment);
+  return normalizedFragment.length > 0 && normalizedDescription.includes(normalizedFragment);
 };
 
 const normalizeSceneDescription = (
@@ -1144,15 +1161,23 @@ const normalizeSceneDescription = (
       .find((entry): entry is string => typeof entry === 'string')
     : undefined;
 
+  const baseDescription = coerceNonEmptyString(payload.description) ?? '';
+  const locationDescription = coerceNonEmptyString(location?.description);
+  const narrationOpening = coerceNonEmptyString(narration?.opening);
+  const narrationPerspective = coerceNonEmptyString(narration?.player_perspective);
+  const hooksSummary = hooks.length > 0 ? `Hooks: ${hooks.join('; ')}.` : undefined;
+  const objectivesSummary = objectives.length > 0 ? `Objectives: ${objectives.join('; ')}.` : undefined;
+  const discoveriesSummary = discoveries.length > 0 ? `Discoveries: ${discoveries.join('; ')}.` : undefined;
+
   const parts = uniqueStringParts(
-    coerceNonEmptyString(payload.description),
-    coerceNonEmptyString(location?.description),
-    coerceNonEmptyString(narration?.opening),
-    coerceNonEmptyString(narration?.player_perspective),
-    hooks.length > 0 ? `Hooks: ${hooks.join('; ')}.` : undefined,
-    objectives.length > 0 ? `Objectives: ${objectives.join('; ')}.` : undefined,
-    discoveries.length > 0 ? `Discoveries: ${discoveries.join('; ')}.` : undefined,
-    firstEventText,
+    baseDescription || undefined,
+    sceneDescriptionContainsFragment(baseDescription, locationDescription) ? undefined : locationDescription,
+    sceneDescriptionContainsFragment(baseDescription, narrationOpening) ? undefined : narrationOpening,
+    sceneDescriptionContainsFragment(baseDescription, narrationPerspective) ? undefined : narrationPerspective,
+    sceneDescriptionContainsFragment(baseDescription, hooksSummary) ? undefined : hooksSummary,
+    sceneDescriptionContainsFragment(baseDescription, objectivesSummary) ? undefined : objectivesSummary,
+    sceneDescriptionContainsFragment(baseDescription, discoveriesSummary) ? undefined : discoveriesSummary,
+    sceneDescriptionContainsFragment(baseDescription, firstEventText) ? undefined : firstEventText,
   );
   let description = parts.join(' ').trim();
 

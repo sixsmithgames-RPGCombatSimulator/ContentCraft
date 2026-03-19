@@ -4,6 +4,7 @@
  */
 
 import { ContentType } from '../../types';
+import { resolveGeneratedContentType } from '../../../../src/shared/generation/generatedContentType';
 import { mapToCanonicalStructure, logMappingResult } from '../../utils/npcSchemaMapper';
 
 export type PrimitiveRecord = Record<string, unknown>;
@@ -495,43 +496,14 @@ export const asRecord = (value: unknown): PrimitiveRecord => {
 };
 
 export const inferNpcType = (record: PrimitiveRecord, deliverable?: string): ContentType => {
-  const candidates = [
-    ensureString(record.content_type),
-    ensureString(record.type),
-    ensureString(record.category),
-    ensureString(record.kind),
-    ensureString(record.deliverable),
-    ensureString(deliverable),
-  ].map((text) => text.toLowerCase());
-
-  const keys = Object.keys(record).map((key) => key.toLowerCase());
-
-  if (keys.some((key) => key.includes('story_arc') || key.includes('storyarc') || key === 'story arc')) {
-    return ContentType.STORY_ARC;
-  }
-  if (keys.some((key) => key === 'npc' || key.includes('character'))) {
-    return ContentType.CHARACTER;
-  }
-  if (keys.some((key) => key.includes('encounter'))) {
-    return ContentType.SECTION;
-  }
-  if (keys.some((key) => key.includes('item'))) {
-    return ContentType.ITEM;
-  }
-  if (keys.some((key) => key.includes('location'))) {
-    return ContentType.LOCATION;
-  }
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    if (candidate.includes('story') && candidate.includes('arc')) return ContentType.STORY_ARC;
-    if (candidate.includes('npc') || candidate.includes('character')) return ContentType.CHARACTER;
-    if (candidate.includes('encounter') || candidate.includes('combat')) return ContentType.SECTION;
-    if (candidate.includes('item') || candidate.includes('treasure')) return ContentType.ITEM;
-    if (candidate.includes('location') || candidate.includes('place')) return ContentType.LOCATION;
-  }
-
-  return ContentType.TEXT;
+  return resolveGeneratedContentType({
+    contentType:
+      ensureString(record.content_type) ||
+      ensureString(record.contentType) ||
+      ensureString(record.type),
+    deliverable,
+    generatedContent: record,
+  }) as ContentType;
 };
 
 export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
