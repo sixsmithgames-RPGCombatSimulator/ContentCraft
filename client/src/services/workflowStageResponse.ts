@@ -98,9 +98,43 @@ const buildLegendaryCapabilities = (legendary: JsonRecord): ResolvedMechanics['l
   };
 };
 
+const coerceCombatString = (value: unknown): string | undefined => {
+  if (typeof value === 'number') return String(value);
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const normalizeCombatList = (value: unknown, bucket: 'actions' | 'bonus_actions' | 'reactions'): JsonRecord[] => {
+  if (!Array.isArray(value)) return [];
+  const defaultActivation = bucket === 'actions' ? 'action' : bucket === 'bonus_actions' ? 'bonus_action' : 'reaction';
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const text = coerceCombatString(entry);
+        return text ? { name: text.slice(0, 80) || 'Feature', description: text, activationType: defaultActivation } as JsonRecord : null;
+      }
+      if (!isRecord(entry)) return null;
+      const name = coerceCombatString(entry.name) ?? coerceCombatString(entry.title) ?? coerceCombatString(entry.attack) ?? coerceCombatString(entry.action);
+      const description = coerceCombatString(entry.description) ?? coerceCombatString(entry.details) ?? coerceCombatString(entry.text) ?? coerceCombatString(entry.effect);
+      if (!name && !description) return null;
+      return {
+        ...entry,
+        name: name ?? (description ? description.slice(0, 80) : 'Feature'),
+        description: description ?? name ?? 'Details unavailable.',
+        activationType: coerceCombatString(entry.activationType) ?? coerceCombatString(entry.activation_type) ?? defaultActivation,
+      } as JsonRecord;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null);
+};
+
 const resolveCombat = (context: JsonRecord, existing: JsonRecord): JsonRecord => {
-  const hasActions = Array.isArray(existing.actions) && existing.actions.length > 0;
-  if (hasActions) return existing;
+  const actions = normalizeCombatList(existing.actions, 'actions');
+  const bonusActions = normalizeCombatList(existing.bonus_actions, 'bonus_actions');
+  const reactions = normalizeCombatList(existing.reactions, 'reactions');
+  if (actions.length > 0) {
+    return { ...existing, actions, bonus_actions: bonusActions, reactions } as JsonRecord;
+  }
 
   const abilities = context.ability_scores as JsonRecord | undefined;
   const prof = typeof context.proficiency_bonus === 'number' ? context.proficiency_bonus : 0;
@@ -118,10 +152,16 @@ const resolveCombat = (context: JsonRecord, existing: JsonRecord): JsonRecord =>
         attack_bonus: attackBonus,
         damage: '1d8 + mod',
         range: 'melee or 30 ft.',
+        statLine: `${attackBonus >= 0 ? '+' : ''}${attackBonus} to hit`,
+        uses: 'At will',
+        activationType: 'action',
+        sourceSection: 'creator:_combat',
+        origin: 'workflow_stage_response',
+        knowledgeSource: 'derived',
       },
     ],
-    bonus_actions: Array.isArray(existing.bonus_actions) ? existing.bonus_actions : [],
-    reactions: Array.isArray(existing.reactions) ? existing.reactions : [],
+    bonus_actions: bonusActions,
+    reactions,
   } as JsonRecord;
 };
 
@@ -595,3 +635,5 @@ export function parseAndNormalizeWorkflowStageResponse(
     contractKey,
   };
 }
+
+

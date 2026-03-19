@@ -125,6 +125,22 @@ function normalizeNpcMergedContent(content: JsonRecord): JsonRecord {
   const normalized: JsonRecord = { ...content };
   const species = typeof normalized.species === 'string' ? normalized.species.trim() : '';
   const race = typeof normalized.race === 'string' ? normalized.race.trim() : '';
+  const normalizeCombatArray = (value: unknown, activationType: 'action' | 'bonus_action' | 'reaction'): JsonRecord[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((entry) => {
+        if (typeof entry === 'string') {
+          const text = entry.trim();
+          return text ? { name: text.slice(0, 80) || 'Feature', description: text, activationType } as JsonRecord : null;
+        }
+        if (!isRecord(entry)) return null;
+        const name = typeof entry.name === 'string' && entry.name.trim().length > 0 ? entry.name.trim() : typeof entry.title === 'string' ? entry.title.trim() : '';
+        const description = typeof entry.description === 'string' && entry.description.trim().length > 0 ? entry.description.trim() : typeof entry.text === 'string' ? entry.text.trim() : typeof entry.effect === 'string' ? entry.effect.trim() : '';
+        if (!name && !description) return null;
+        return { ...entry, name: name || 'Feature', description: description || 'Details unavailable.', activationType: typeof entry.activationType === 'string' && entry.activationType.trim().length > 0 ? entry.activationType.trim() : activationType } as JsonRecord;
+      })
+      .filter((entry): entry is JsonRecord => entry !== null);
+  };
 
   if (species && !race) {
     normalized.race = species;
@@ -133,6 +149,10 @@ function normalizeNpcMergedContent(content: JsonRecord): JsonRecord {
   if (race && !species) {
     normalized.species = race;
   }
+
+  normalized.actions = normalizeCombatArray(normalized.actions, 'action');
+  normalized.bonus_actions = normalizeCombatArray(normalized.bonus_actions, 'bonus_action');
+  normalized.reactions = normalizeCombatArray(normalized.reactions, 'reaction');
 
   return normalized;
 }
@@ -684,3 +704,5 @@ export function restoreUploadedWorkflowContent(
 
   return result;
 }
+
+

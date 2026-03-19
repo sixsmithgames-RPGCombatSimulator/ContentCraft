@@ -22,6 +22,13 @@ export interface Feature {
   name: string;
   description: string;
   notes?: string;
+  uses?: string;
+  recharge?: string;
+  statLine?: string;
+  activationType?: string;
+  sourceSection?: string;
+  origin?: string;
+  knowledgeSource?: string;
 }
 
 export interface ScoredEntry {
@@ -252,6 +259,13 @@ const normalizeFeatureList = (value: unknown): Feature[] =>
       name: name || 'Feature',
       description: description || 'Details unavailable.',
       notes: ensureString(obj.notes) || undefined,
+      uses: ensureString(obj.uses) || undefined,
+      recharge: ensureString(obj.recharge) || undefined,
+      statLine: ensureString(obj.statLine ?? obj.stat_line) || undefined,
+      activationType: ensureString(obj.activationType ?? obj.activation_type) || undefined,
+      sourceSection: ensureString(obj.sourceSection) || undefined,
+      origin: ensureString(obj.origin) || undefined,
+      knowledgeSource: ensureString(obj.knowledgeSource) || undefined,
     };
   }) as Feature[];
 
@@ -952,3 +966,6 @@ export const collectDiscreteCanonCandidates = (npc: NormalizedNpc): DiscreteCano
 
   return entries;
 };
+
+
+

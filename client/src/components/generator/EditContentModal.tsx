@@ -3,7 +3,7 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { X, Plus, Trash2, Save, Tag, AlertCircle, ChevronDown, ChevronUp, Map } from 'lucide-react';
 import ExpandableObjectEditor from './ExpandableObjectEditor';
 import ExpandableArrayEditor from './ExpandableArrayEditor';
@@ -37,7 +37,7 @@ const normalizeDeliverableType = (value: unknown): string => {
 const hasAnyDefinedKey = (record: JsonRecord, keys: string[]): boolean =>
   keys.some((key) => record[key] !== undefined);
 
-const inferGeneratedContentType = (record: JsonRecord, hint?: string): string => {
+export const inferGeneratedContentType = (record: JsonRecord, hint?: string): string => {
   const explicitMatch = [hint, record.deliverable, record.type, record.content_type]
     .map((candidate) => normalizeDeliverableType(candidate))
     .find((candidate) => candidate.length > 0);
@@ -79,6 +79,61 @@ const inferGeneratedContentType = (record: JsonRecord, hint?: string): string =>
   return '';
 };
 
+export const synchronizeStructuredContentContainers = (record: JsonRecord): JsonRecord => {
+  const synchronized: JsonRecord = { ...record };
+  const syncContainer = (containerKey: string, aliases: Array<[string, string]> = []) => {
+    const container = synchronized[containerKey];
+    if (!isJsonRecord(container)) return;
+    const updated: JsonRecord = { ...container };
+    for (const key of Object.keys(updated)) {
+      if (synchronized[key] !== undefined) updated[key] = synchronized[key];
+    }
+    for (const [sourceKey, targetKey] of aliases) {
+      if (synchronized[sourceKey] !== undefined && updated[targetKey] !== undefined) {
+        updated[targetKey] = synchronized[sourceKey];
+      }
+    }
+    synchronized[containerKey] = updated;
+  };
+
+  syncContainer('npc', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies_friends', 'allies'], ['allies_friends', 'allies_and_contacts'], ['foes', 'enemies']]);
+  syncContainer('character', [['appearance', 'physical_appearance'], ['skill_proficiencies', 'skills'], ['allies_friends', 'allies'], ['allies_friends', 'allies_and_contacts'], ['foes', 'enemies']]);
+  syncContainer('monster', [['skill_proficiencies', 'skills']]);
+  syncContainer('item');
+  syncContainer('scene', [['participants', 'npcs_present'], ['skill_challenges', 'skill_checks'], ['discoveries', 'clues_information']]);
+  syncContainer('story_arc', [['synopsis', 'summary']]);
+  syncContainer('storyArc', [['synopsis', 'summary']]);
+  syncContainer('arc', [['synopsis', 'summary']]);
+  syncContainer('encounter');
+  syncContainer('encounter_details');
+  syncContainer('adventure');
+
+  const statBlockOwner = ['npc', 'character', 'monster'].map((key) => synchronized[key]).find((value) => isJsonRecord(value) && isJsonRecord((value as JsonRecord).stat_block));
+  const baseStatBlock = isJsonRecord(synchronized.stat_block)
+    ? (synchronized.stat_block as JsonRecord)
+    : isJsonRecord(statBlockOwner) && isJsonRecord((statBlockOwner as JsonRecord).stat_block)
+      ? ((statBlockOwner as JsonRecord).stat_block as JsonRecord)
+      : null;
+  if (baseStatBlock) {
+    const updatedStatBlock: JsonRecord = { ...baseStatBlock };
+    for (const key of Object.keys(updatedStatBlock)) {
+      if (synchronized[key] !== undefined) updatedStatBlock[key] = synchronized[key];
+    }
+    if (synchronized.skill_proficiencies !== undefined && updatedStatBlock.skills !== undefined) {
+      updatedStatBlock.skills = synchronized.skill_proficiencies;
+    }
+    synchronized.stat_block = updatedStatBlock;
+    for (const key of ['npc', 'character', 'monster']) {
+      const container = synchronized[key];
+      if (isJsonRecord(container) && isJsonRecord(container.stat_block)) {
+        synchronized[key] = { ...container, stat_block: updatedStatBlock };
+      }
+    }
+  }
+
+  return synchronized;
+};
+
 interface EditContentModalProps {
   isOpen: boolean;
   generatedContent: unknown;
@@ -100,11 +155,13 @@ export default function EditContentModal({
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [initError, setInitError] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'fields' | 'map'>('fields');
+  const fullDocumentEditedRef = useRef(false);
 
   // Initialize content when modal opens
   useEffect(() => {
     // Reset states when modal closes
     if (!isOpen) {
+      fullDocumentEditedRef.current = false;
       setContent({});
       setExpandedSections(new Set(['basic']));
       setValidationErrors([]);
@@ -114,6 +171,7 @@ export default function EditContentModal({
     }
 
     // Modal is open - initialize content
+    fullDocumentEditedRef.current = false;
     if (!generatedContent) {
       const error = 'No generatedContent prop provided to EditContentModal';
       console.error('[EditContentModal] ERROR:', error);
@@ -381,10 +439,28 @@ export default function EditContentModal({
       }
     }
 
+    const nestedMonsterContainer = isPlainObject(normalized.monster)
+      ? (normalized.monster as JsonRecord)
+      : null;
+
+    if (nestedMonsterContainer) {
+      const keysToLift = ['name', 'title', 'canonical_name', 'aliases', 'description', 'size', 'creature_type', 'subtype', 'alignment', 'location', 'challenge_rating', 'experience_points', 'ability_scores', 'armor_class', 'hit_points', 'hit_dice', 'speed', 'senses', 'languages', 'saving_throws', 'skill_proficiencies', 'skills', 'damage_resistances', 'damage_immunities', 'damage_vulnerabilities', 'condition_immunities', 'abilities', 'actions', 'bonus_actions', 'reactions', 'legendary_actions', 'mythic_actions', 'multiattack', 'spellcasting', 'cantrips', 'prepared_spells', 'spell_slots', 'innate_spellcasting', 'lair_description', 'lair_actions', 'regional_effects', 'ecology', 'lore', 'tactics'];
+      for (const key of keysToLift) {
+        liftIfMissing('monster', nestedMonsterContainer, key);
+      }
+      if (normalized.skill_proficiencies === undefined && nestedMonsterContainer.skills !== undefined) {
+        normalized.skill_proficiencies = nestedMonsterContainer.skills;
+        normalizedFields.push('monster.skills → skill_proficiencies');
+      }
+    }
+
     const statBlock =
       (isPlainObject((normalized as any).stat_block) ? ((normalized as any).stat_block as JsonRecord) : null) ||
       (nestedNpcContainer && isPlainObject((nestedNpcContainer as any).stat_block)
         ? (((nestedNpcContainer as any).stat_block as JsonRecord) ?? null)
+        : null) ||
+      (nestedMonsterContainer && isPlainObject((nestedMonsterContainer as any).stat_block)
+        ? (((nestedMonsterContainer as any).stat_block as JsonRecord) ?? null)
         : null);
 
     if (statBlock) {
@@ -489,6 +565,38 @@ export default function EditContentModal({
 
       for (const key of keysToLift) {
         liftIfMissing('story_arc', nestedStoryArcContainer, key);
+      }
+    }
+
+    const nestedItemContainer = isPlainObject(normalized.item)
+      ? (normalized.item as JsonRecord)
+      : null;
+    if (nestedItemContainer) {
+      const keysToLift = ['name', 'title', 'canonical_name', 'aliases', 'description', 'appearance', 'item_type', 'subtype', 'rarity', 'requires_attunement', 'attunement_requirements', 'properties', 'mechanics', 'history', 'lore', 'location', 'era', 'region'];
+      for (const key of keysToLift) {
+        liftIfMissing('item', nestedItemContainer, key);
+      }
+    }
+
+    const nestedEncounterContainer = isPlainObject(normalized.encounter)
+      ? (normalized.encounter as JsonRecord)
+      : isPlainObject(normalized.encounter_details)
+        ? (normalized.encounter_details as JsonRecord)
+        : null;
+    if (nestedEncounterContainer) {
+      const keysToLift = ['title', 'description', 'encounter_type', 'party_level_range', 'estimated_duration', 'objectives', 'hooks', 'escalation', 'environment', 'encounter_map', 'enemies', 'tactics', 'rewards'];
+      for (const key of keysToLift) {
+        liftIfMissing('encounter', nestedEncounterContainer, key);
+      }
+    }
+
+    const nestedAdventureContainer = isPlainObject(normalized.adventure)
+      ? (normalized.adventure as JsonRecord)
+      : null;
+    if (nestedAdventureContainer) {
+      const keysToLift = ['title', 'description', 'subtitle', 'premise', 'scope', 'themes', 'adventure_structure', 'major_npcs', 'key_locations', 'magic_items', 'appendices', 'gm_guidance', 'era', 'region'];
+      for (const key of keysToLift) {
+        liftIfMissing('adventure', nestedAdventureContainer, key);
       }
     }
 
@@ -667,6 +775,7 @@ export default function EditContentModal({
   const updateField = useCallback((path: string, value: unknown) => {
     // Handle empty path - replace entire content
     if (!path || path.trim() === '') {
+      fullDocumentEditedRef.current = true;
       if (value && typeof value === 'object' && !Array.isArray(value)) {
         setContent(value as JsonRecord);
       }
@@ -909,52 +1018,6 @@ export default function EditContentModal({
     return [];
   };
 
-  // Helper to convert array that may contain objects to string array
-  const ensureStringArray = (value: unknown): string[] => {
-    if (Array.isArray(value)) {
-      return value.map(v => {
-        if (typeof v === 'string') return v;
-        if (typeof v === 'object' && v !== null) {
-          // Convert common object patterns to strings
-          const obj = v as any;
-
-          // Pattern: {name: "Con", value: "+11"} or {name: "Perception", value: "+8", notes: "..."}
-          if (obj.name && obj.value !== undefined) {
-            const notes = obj.notes ? ` (${obj.notes})` : '';
-            return `${obj.name} ${obj.value}${notes}`;
-          }
-
-          // Pattern: {name: "DEX", bonus: 9} or {ability: "DEX", bonus: 9}
-          if ((obj.name || obj.ability) && obj.bonus !== undefined) {
-            const name = obj.name || obj.ability;
-            const bonus = Number(obj.bonus);
-            return `${name} ${bonus >= 0 ? '+' : ''}${bonus}`;
-          }
-
-          // Pattern: {skill: "Perception", bonus: 8}
-          if (obj.skill && obj.bonus !== undefined) {
-            const bonus = Number(obj.bonus);
-            return `${obj.skill} ${bonus >= 0 ? '+' : ''}${bonus}`;
-          }
-
-          // Pattern: {name: "value"} - just return name
-          if (obj.name && Object.keys(obj).length === 1) {
-            return String(obj.name);
-          }
-
-          // Fallback: Try to create a readable string from object
-          if (obj.name && obj.description) {
-            return `${obj.name}: ${obj.description}`;
-          }
-
-          // Last resort: JSON stringify
-          return JSON.stringify(obj);
-        }
-        return String(v || '');
-      });
-    }
-    return [];
-  };
 
   const ensureObject = (value: unknown): JsonRecord => {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -1047,85 +1110,6 @@ export default function EditContentModal({
     );
   };
 
-  // Flexible string array editor that can handle arrays of strings OR objects
-  const FlexibleStringArrayEditor = ({ label, path, placeholder }: { label: string; path: string; placeholder?: string }) => {
-    // Memoize items to prevent infinite loop - only recalculate when content or path changes
-    const items = useMemo(() => ensureStringArray(getNestedValue(content, path)), [content, path]);
-    const [newItem, setNewItem] = useState('');
-    const [localItems, setLocalItems] = useState<Record<number, string>>({});
-
-    useEffect(() => {
-      // Reset local state when items change externally
-      setLocalItems({});
-    }, [items]);
-
-    const handleItemChange = (index: number, value: string) => {
-      setLocalItems(prev => ({ ...prev, [index]: value }));
-    };
-
-    const handleItemBlur = (index: number) => {
-      const newValue = localItems[index];
-      if (newValue !== undefined) {
-        updateArrayItem(path, index, newValue);
-        setLocalItems(prev => {
-          const { [index]: _, ...rest } = prev;
-          return rest;
-        });
-      }
-    };
-
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-        <div className="space-y-2">
-          {items.map((item, index) => (
-            <div key={index} className="flex gap-2">
-              <input
-                type="text"
-                value={localItems[index] !== undefined ? localItems[index] : item}
-                onChange={(e) => handleItemChange(index, e.target.value)}
-                onBlur={() => handleItemBlur(index)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={() => removeArrayItem(path, index)}
-                className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && newItem.trim()) {
-                  addArrayItem(path, newItem.trim());
-                  setNewItem('');
-                }
-              }}
-              placeholder={placeholder || 'Add new item...'}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={() => {
-                if (newItem.trim()) {
-                  addArrayItem(path, newItem.trim());
-                  setNewItem('');
-                }
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
-            >
-              <Plus className="w-4 h-4" />
-              Add
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   const StringArrayEditor = ({ label, path, placeholder }: { label: string; path: string; placeholder?: string }) => {
     // Memoize items to prevent infinite loop - only recalculate when content or path changes
@@ -1597,8 +1581,8 @@ export default function EditContentModal({
 
                   <StringArrayEditor label="Languages" path="languages" />
                   <StringArrayEditor label="Senses" path="senses" />
-                  <FlexibleStringArrayEditor label="Saving Throws" path="saving_throws" placeholder="e.g. DEX +9" />
-                  <FlexibleStringArrayEditor label="Skill Proficiencies" path="skill_proficiencies" placeholder="e.g. Perception +8" />
+                  <ExpandableArrayEditor label="Saving Throws" value={ensureAnyArray(content.saving_throws)} onChange={(val) => updateField('saving_throws', val)} path="saving_throws" defaultExpanded={false} itemType="auto" objectTemplate={{ name: '', value: '', notes: '' }} />
+                  <ExpandableArrayEditor label="Skill Proficiencies" value={ensureAnyArray(content.skill_proficiencies)} onChange={(val) => updateField('skill_proficiencies', val)} path="skill_proficiencies" defaultExpanded={false} itemType="auto" objectTemplate={{ name: '', value: '', notes: '' }} />
                   <StringArrayEditor label="Damage Resistances" path="damage_resistances" />
                   <StringArrayEditor label="Damage Immunities" path="damage_immunities" />
                   <StringArrayEditor label="Damage Vulnerabilities" path="damage_vulnerabilities" />
@@ -1961,11 +1945,12 @@ export default function EditContentModal({
                   {/* Equipment - general mundane items */}
                   <ExpandableArrayEditor
                     label="Equipment (mundane items)"
-                    value={ensureArray(content.equipment) as unknown[]}
+                    value={ensureAnyArray(content.equipment)}
                     onChange={(val) => updateField('equipment', val)}
                     path="equipment"
                     defaultExpanded={false}
-                    itemType="string"
+                    itemType="auto"
+                    objectTemplate={{ name: '', quantity: 1, description: '', notes: '' }}
                   />
 
                   {/* Attuned Magic Items */}
@@ -2547,7 +2532,8 @@ export default function EditContentModal({
                 },
                 fullContent: normalized,
               });
-              Promise.resolve(onSave(normalized)).catch((err) => {
+              const persistedContent = fullDocumentEditedRef.current ? normalized : synchronizeStructuredContentContainers(normalized);
+              Promise.resolve(onSave(persistedContent)).catch((err) => {
                 console.error('[EditContentModal] Save failed:', err);
                 setValidationErrors([
                   err instanceof Error ? err.message : String(err),
@@ -2564,3 +2550,10 @@ export default function EditContentModal({
     </div>
   );
 }
+
+
+
+
+
+
+

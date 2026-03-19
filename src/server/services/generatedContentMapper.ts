@@ -37,6 +37,11 @@ interface NpcFeature {
   uses?: string;
   recharge?: string;
   notes?: string;
+  statLine?: string;
+  activationType?: string;
+  sourceSection?: string;
+  origin?: string;
+  knowledgeSource?: string;
 }
 
 interface ScoredEntry {
@@ -709,6 +714,11 @@ const normalizeFeatureList = (value: unknown): NpcFeature[] => {
       uses: ensureString(obj.uses),
       recharge: ensureString(obj.recharge),
       notes: ensureString(obj.notes),
+      statLine: ensureString(obj.statLine ?? obj.stat_line),
+      activationType: ensureString(obj.activationType ?? obj.activation_type),
+      sourceSection: ensureString(obj.sourceSection),
+      origin: ensureString(obj.origin),
+      knowledgeSource: ensureString(obj.knowledgeSource),
     };
   });
 };
@@ -3446,3 +3456,4 @@ export const mapGeneratedContentToContentBlock = (
     },
   };
 };
+

@@ -280,6 +280,68 @@ const normalizeCharacterBuildPayload = (payload: JsonRecord): JsonRecord => {
   return normalized;
 };
 
+const normalizeCombatEntries = (value: unknown, bucket: 'actions' | 'bonus_actions' | 'reactions'): JsonRecord[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const defaultActivation = bucket === 'actions' ? 'action' : bucket === 'bonus_actions' ? 'bonus_action' : 'reaction';
+
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        const text = coerceNonEmptyString(entry);
+        return text
+          ? {
+            name: text.slice(0, 80) || 'Feature',
+            description: text,
+            activationType: defaultActivation,
+            sourceSection: 'creator:_combat',
+            origin: 'npc_combat_stage',
+            knowledgeSource: 'ai_generated',
+          } as JsonRecord
+          : null;
+      }
+
+      if (!isRecord(entry)) {
+        return null;
+      }
+
+      const name = coerceNonEmptyString(entry.name) ?? coerceNonEmptyString(entry.title) ?? coerceNonEmptyString(entry.attack) ?? coerceNonEmptyString(entry.action);
+      const description = coerceNonEmptyString(entry.description) ?? coerceNonEmptyString(entry.details) ?? coerceNonEmptyString(entry.text) ?? coerceNonEmptyString(entry.effect);
+      if (!name && !description) {
+        return null;
+      }
+
+      const normalized: JsonRecord = {
+        name: name ?? (description ? description.slice(0, 80) : 'Feature'),
+        description: description ?? name ?? 'Details unavailable.',
+      };
+
+      const statLine = coerceNonEmptyString(entry.statLine) ?? coerceNonEmptyString(entry.stat_line);
+      const uses = coerceNonEmptyString(entry.uses);
+      const notes = coerceNonEmptyString(entry.notes);
+      const recharge = coerceNonEmptyString(entry.recharge);
+      if (statLine) normalized.statLine = statLine;
+      if (uses) normalized.uses = uses;
+      if (notes) normalized.notes = notes;
+      if (recharge) normalized.recharge = recharge;
+      normalized.activationType = coerceNonEmptyString(entry.activationType) ?? coerceNonEmptyString(entry.activation_type) ?? defaultActivation;
+      normalized.sourceSection = coerceNonEmptyString(entry.sourceSection) ?? 'creator:_combat';
+      normalized.origin = coerceNonEmptyString(entry.origin) ?? 'npc_combat_stage';
+      normalized.knowledgeSource = coerceNonEmptyString(entry.knowledgeSource) ?? 'ai_generated';
+      return normalized;
+    })
+    .filter((entry): entry is JsonRecord => entry !== null);
+};
+
+const normalizeCombatPayload = (payload: JsonRecord): JsonRecord => ({
+  ...payload,
+  actions: normalizeCombatEntries(payload.actions, 'actions'),
+  bonus_actions: normalizeCombatEntries(payload.bonus_actions, 'bonus_actions'),
+  reactions: normalizeCombatEntries(payload.reactions, 'reactions'),
+});
+
 const parseStructuredString = (value: string): unknown => {
   try {
     return JSON.parse(value);
@@ -1395,6 +1457,14 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     payload = normalized;
   }
 
+  if (contractKey === 'combat') {
+    const normalized = normalizeCombatPayload(payload);
+    if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
+      appliedRepairs.push('combat:normalize');
+    }
+    payload = normalized;
+  }
+
   if (input.workflowType === 'scene' && contractKey === 'creator') {
     const normalized = normalizeScenePayload(payload);
     if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
@@ -1484,3 +1554,5 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     appliedRepairs,
   };
 }
+
+
