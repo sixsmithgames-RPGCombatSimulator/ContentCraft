@@ -7,7 +7,7 @@ This document captures:
 - the user goals behind the workflow refactor
 - the work completed so far
 - the architectural approach and why that approach was chosen
-- the next implementation steps needed to finish the migration to a robust, unified generation engine
+- the updated implementation steps needed to finish the migration to a robust, unified generation engine with app-owned memory, canon protection, and stateless AI execution across all workflows
 
 This is intended to function as both a status report and a practical handoff document for continued implementation.
 
@@ -21,6 +21,7 @@ The requested outcomes for this work are:
 4. Reduce fragility caused by duplicated client-only logic, provider-specific behavior, and page-level orchestration living in one large component.
 5. Ensure canon retrieval, validation, retry, resume, and completion behavior are all predictable, explainable, and resilient.
 6. Improve specialized workflows, including location generation, where geometry, paired doors, and wall thickness were producing unreliable outputs.
+7. Make the app the authoritative memory and canon brain for every workflow so AI outputs are treated as stateless proposals that can be validated against canon, conflicts can be detected, and contradictions can be handled gracefully instead of being silently accepted.
 
 ## High-Level Outcome So Far
 
@@ -42,6 +43,9 @@ The result is not yet the final end state, but the app is materially more robust
 - retry and resume behavior
 - manual fallback parity
 - integrated/manual workflow consistency
+
+The main remaining gap is no longer basic workflow plumbing.
+It is turning canon from “retrieved context when available” into an app-owned, inspectable, enforceable memory layer that can detect when structurally valid AI output conflicts with established project truth.
 
 ## Summary of Work Completed
 
@@ -147,7 +151,7 @@ Completed location work includes:
 
 This materially improved the professionalism and reliability of location generation and editing.
 
-### 7. Canon retrieval and fallback behavior were improved
+### 7. Canon retrieval, grounding, and fallback behavior were improved
 
 The workflow now treats canon grounding as explicit state rather than an implicit assumption.
 
@@ -161,6 +165,7 @@ Implemented behavior includes:
 - retrieval hints integrated into the same workflow model
 
 This means content generation can continue when canon is missing, while still making that limitation visible and actionable.
+What it does not yet guarantee is cross-workflow canon enforcement: a workflow can still complete with structurally valid output that drifts from canon if retrieval is weak, empty, or contradictory.
 
 ### 8. Retry and resume provenance were made explicit
 
@@ -189,6 +194,18 @@ That has now been moved onto shared runtime behavior for:
 - completion launch behavior
 
 This also fixed a real defect: earlier parsed homebrew chunks could be lost during final merge, causing incomplete final outputs.
+
+### 10. Scene, story arc, and NPC hardening exposed the next shared requirement
+
+Recent fixes across scene, story arc, and NPC generation clarified the same lesson from different angles:
+
+- the app succeeds when it owns stage memory, canon payloads, retries, and final assembly
+- the AI succeeds when it is treated as a stateless structured generator, not as a continuity system
+- structurally valid completion is not the same thing as canon-safe completion
+- canon retrieval alone is not enough if the app does not also classify conflicts, surface drift risk, and preserve user decisions about new facts
+
+This means the next major phase is not another prompt-only tuning pass.
+It is building shared app-owned memory and shared canon conflict handling for every generation workflow.
 
 ## Approach and Reasoning
 
@@ -268,356 +285,322 @@ The server workflow path is improved, but not yet the sole orchestrator.
 
 That is intentional.
 
-The current approach improves correctness without forcing a destabilizing backend rewrite before the shared model is ready. The long-term direction is still to move more acceptance and orchestration responsibility into the server runtime, but that is being done after the shared workflow contracts and client runtime patterns are proven.
+The current approach improves correctness without forcing a destabilizing backend rewrite before the shared model is ready. The long-term direction is still to move more acceptance and orchestration responsibility into the server runtime, but that migration now needs to include shared workflow memory and canon conflict handling rather than only structural validation.
 
 ## Current State Assessment
 
 ### What is now strong
 
-- NPC workflow robustness
-- location workflow robustness
-- contract-driven stage validation
-- retry and resume metadata
-- shared integrated/manual runtime behavior
-- canon fallback behavior
-- completion and continuation logic
+- shared workflow definitions, stage identity, and prompt compilation
+- manual and integrated execution parity
+- shared assembly, restore, and finalization for more workflows, including scene and story arc
+- bounded deterministic repair and retry behavior
+- NPC data retention and structure preservation
+- location geometry hardening and retry guidance
 
 ### What is improved but not fully finished
 
 - server-side orchestration centralization
-- non-NPC content-type parity
+- entity grounding and retrieval-hint quality
+- canon scope selection and review visibility
 - resume/session restore standardization across every edge case
-- browser-level QA coverage
+- workflow-specific semantic completeness and continuity validation
 
-### What is no longer the main risk
+### What is now the main risk
 
-- basic stage alias confusion
-- location door pairing drift across renderers
-- NPC slice validation rejecting valid partial stage output
-- integrated/manual behavior diverging as completely separate systems
-- hidden retry reasons with no provenance
+- structurally valid output can still drift from canon
+- empty or weak canon retrieval can produce plausible but unsupported content
+- canon conflicts are not yet classified and surfaced consistently across workflows
+- users do not yet have one shared surface to inspect memory, canon usage, new claims, and contradictions
 
-## Current NPC Workflow Process
+## Updated Cross-Workflow Direction
 
-The NPC workflow now behaves as a shared, stateless stage pipeline rather than a loosely connected sequence of prompts.
+### 1. The app must own workflow memory for every content type
 
-### 1. Prompt compilation is app-owned
+Every workflow should run from a typed app-owned memory object containing:
 
-- `ManualGenerator.tsx` compiles the authoritative stage request before execution.
-- The compiled request carries a stable `requestId`, prompt-budget metadata, stage identity, and workflow context.
-- Integrated and manual execution both depend on that compiled request rather than ad hoc prompt assembly at send time.
+- request memory
+- decision memory
+- stage memory (full outputs plus distilled summaries)
+- canon memory (facts, entities, provenance, grounding confidence)
+- conflict memory (new claims, ambiguities, contradictions, adopted decisions)
+- execution memory (current stage, retries, chunk state, autosave state)
 
-### 2. Stage execution is stateless and contract-driven
+Saved sessions, retries, resume, and final assembly should reconstruct from this model rather than from prompt text or ad hoc UI state.
 
-- Each NPC stage runs against an explicit stage contract and only the minimal prior stage context required for that stage.
-- The app, not the model, is the authoritative memory for prior outputs, retry provenance, and unresolved decisions.
-- Stage routing is determined from app-owned stage results rather than from implicit chat continuity.
+### 2. AI responses must be treated as proposals, not truth
 
-### 3. Shared repair runs before acceptance
+The AI should be treated as a stateless structured generator.
+Its responses are candidate patches against app-owned memory, not authoritative continuity.
 
-- Integrated server execution and manual/client parsing now both run through the shared workflow stage repair pipeline.
-- That repair layer handles deterministic cleanup such as:
-  - parsing stringified JSON fields
-  - pruning disallowed keys
-  - normalizing malformed `character_build` arrays into schema-safe object arrays
-  - flattening malformed core-details personality structures
-  - normalizing planner retrieval/proposal payload shape
-- Repairs are explicit, bounded, and logged rather than hidden fallbacks.
+That means acceptance should be a shared pipeline:
 
-### 4. Schema-invalid output gets one bounded automatic correction retry
+1. deterministic repair
+2. contract/schema validation
+3. semantic/workflow validation
+4. canon consistency analysis
+5. acceptance, retry, or review classification
 
-- If integrated execution returns schema-invalid structured data after deterministic repair, the server classifies that as `INVALID_RESPONSE` with retry metadata.
-- The server returns a calmer user-facing message plus a hidden `retryContext.correctionPrompt`.
-- The client automatically replays the same stage once with that hidden correction prompt and a bounded `correctionAttempt` count.
-- If the corrected response is still schema-invalid, the run moves to review-required behavior instead of looping.
+### 3. Canon must be app-managed, scoped, and inspectable
 
-### 5. NPC-specific routing and validation are stricter and more realistic
+Canon cannot remain a prompt-only convenience field.
+The app has to decide:
 
-- NPC routing now treats `class_levels` as valid whether it arrives as:
-  - an object map
-  - an array of class entries
-  - a normalized string such as `Rogue (Assassin) 5`
-- This prevents false skipping of `Combat` and `Spellcasting` when the model uses a different but still meaningful representation.
-- NPC validation now also recognizes populated relationship/equipment arrays even when the entries are plain strings instead of object records.
-- NPC character-build validation rejects clearly placeholder mechanical output such as listed skill proficiencies or saving throws that are all `+0`.
-- NPC stats validation now recognizes placeholder default ability-score blocks even when the model uses long-form keys like `strength` and `dexterity` instead of abbreviated keys.
+- what canon is relevant to the current stage
+- how grounded the stage actually is
+- whether the returned content is aligned with canon, additive, ambiguous, or conflicting
 
-### 6. Review and retry behavior are explicit
+If relevant canon is empty or low-confidence, that must be explicit in both runtime state and UI, not silently treated as equivalent to grounded generation.
 
-- Review preparation deduplicates conflicts and proposals before deciding whether to pause.
-- Same-stage retries now clear stale compiled-request state so a retry always creates a fresh compiled attempt.
-- Retry, advance, and completion transitions now also clear stale review payload, retry notice, and retry-source state so corrected stages do not leak old review context into later runs.
-- Review-triggered retries are now treated as one-shot client actions until the workflow returns a fresh review/error state, which prevents duplicate corrected retries from being re-issued with the same signature.
-- The AI assistant runner now allows a fresh compiled request to proceed even if the previous attempt for that stage ended in `error`.
-- Integrated execution now distinguishes between server patch acceptance and true local workflow acceptance: if the browser pipeline pauses for review or local validation after the patch is applied, the assistant keeps the run in an error/review-required state instead of reporting a false success.
-- This prevents retry deadlocks such as `attempt not ready (error)` and avoids stale attempt state blocking reviewed retries.
+### 4. Canon conflict handling must become a first-class shared system
 
-### 7. Acceptance is stronger, but still not fully centralized
+Every workflow needs a shared way to classify returned claims against scoped canon.
+The target shared statuses are:
 
-- The client and server now share much more of the same acceptance logic than before.
-- Structural repair, contract validation, routing, retry provenance, and review preparation are materially more aligned.
-- The remaining architectural direction is still to move more final acceptance responsibility into the shared server runtime so browser-local logic becomes thinner over time.
+- `aligned`
+- `additive_unverified`
+- `ambiguous`
+- `conflicting`
+- `unsupported_ungrounded`
+
+Those classifications should drive workflow behavior:
+
+- `aligned` → accept normally
+- `additive_unverified` → accept with reviewable proposed canon additions
+- `ambiguous` → pause for review or targeted correction
+- `conflicting` → block silent acceptance and require review/correction
+- `unsupported_ungrounded` → allow only if the workflow policy permits ungrounded generation, while making drift risk visible
+
+### 5. This must apply to all workflows, with domain-specific adapters
+
+The shared pattern stays the same, but each workflow gets its own semantic adapters:
+
+- NPC: identity, species/subspecies, relationships, equipment, spellcasting, mechanical completeness, canon entity conflicts
+- Scene: participants, location anchors, chronology, objectives, discoveries, canon event continuity
+- Story arc: character roles, secrets, major beats, unresolved threads, chronology, canon history alignment
+- Location: deterministic geometry plus canon identity of rooms, occupants, regions, and references
+- Writing/nonfiction/homebrew: named entity continuity, citation/source expectations, story-bible alignment, contradiction surfacing
+
+### 6. Review UX must expose memory and canon state directly
+
+Users need a shared review surface that shows:
+
+- what canon was used
+- what canon was missing
+- which claims are new
+- which claims are ambiguous or conflicting
+- what decisions were already made
+
+The app should let users accept new canon, reject conflicts, or retry a stage with explicit correction instructions derived from that shared state.
 
 ## Next Steps
 
 The next steps below are ordered by architectural leverage and user impact.
 
-### 1. Finish moving workflow acceptance and orchestration guarantees into the server runtime
+### 1. Formalize shared app-owned workflow memory and canon state
 
 #### Goal
 
-Make the server the authoritative executor of stage acceptance, stage identity, retry state, and progression metadata so the client is less responsible for making correctness decisions.
+Define one cross-workflow memory model so the app is the authoritative source of continuity, not chat history or prompt text.
 
 #### Work to do
 
-- Expand the generic workflow execution service so more stage acceptance rules are enforced server-side.
-- Ensure the server returns canonical stage identity, workflow identity, acceptance status, and retry context for every execution.
-- Move more stage-level structural checks out of page-level branches and into the shared server runtime.
-- Introduce clearer server response states for:
+- Define shared workflow-memory contracts for request, decisions, stage outputs, stage summaries, canon scope, conflict ledger, and execution state.
+- Persist and restore that memory model through autosave, resume, and finalization paths.
+- Ensure compiled stage requests are derived only from that canonical memory model.
+- Make every workflow declare which memory slices it depends on.
+
+#### Why this matters to the user goals
+
+This is the core requirement behind “the app is the memory and the brains.” Without a formal shared memory model, canon and continuity will keep leaking through ad hoc prompt construction and local UI state.
+
+#### Validation required
+
+- shared workflow-memory unit tests
+- prompt-compiler tests proving outbound prompts match the memory-derived request
+- save/resume tests showing memory reconstructs identically after reload
+
+### 2. Add shared canon conflict detection and response classification
+
+#### Goal
+
+Make canon protection a separate, explicit acceptance phase for every workflow instead of an implicit hope that retrieval happened.
+
+#### Work to do
+
+- Define a shared conflict-result model and workflow-specific claim adapters.
+- Compare accepted candidate output to scoped canon before final acceptance.
+- Introduce canonical workflow response states such as:
   - accepted
-  - retry required
-  - review required
-  - invalid response
-  - partial but acceptable
+  - accepted_with_additions
+  - review_required_conflict
+  - review_required_ambiguity
+  - accepted_ungrounded_warning
+  - invalid_response
+- Persist conflict findings and user decisions as part of workflow memory.
 
 #### Why this matters to the user goals
 
-This directly supports the goal of making the app architecturally robust for any content type. It also improves reliability for D&D NPC generation because the system becomes less dependent on browser-local logic to decide whether AI output is acceptable.
+This is the missing piece between “canon-aware prompts exist” and “the app actually prevents undesirable contradictions.”
 
 #### Validation required
 
-- server route tests for accepted/rejected/review-required stage responses
-- client transport tests that consume the new metadata
-- manual verification that integrated runs still behave the same from the user’s perspective
+- NPC, scene, and story arc conflict fixtures
+- shared service tests for classification and acceptance-state mapping
+- review-preparation tests for conflict-driven pauses and correction prompts
 
-### 2. Continue migrating remaining legacy prompt/config islands into shared workflow modules
+### 3. Finish moving workflow acceptance and orchestration guarantees into the server runtime
 
 #### Goal
 
-Reduce the number of content-type-specific config files that still behave like custom mini-engines.
+Make the server the authoritative executor of stage acceptance, retry state, canon conflict status, and progression metadata.
 
 #### Work to do
 
-- Audit all remaining stage config files for bespoke prompt assembly and bespoke progression assumptions.
-- Move remaining reusable logic into shared prompt helpers or shared stage prompt services.
-- Keep truly special domain stages as explicit exceptions, but isolate them behind shared interfaces.
-- Reduce content-type-specific branching in `ManualGenerator.tsx` even further.
+- Expand the generic workflow execution service so memory-aware acceptance rules are enforced server-side.
+- Ensure the server returns canonical stage identity, workflow identity, acceptance state, canon grounding state, conflict summary, and retry context for every execution.
+- Move more acceptance logic out of page-level branches and into the shared runtime.
 
 #### Why this matters to the user goals
 
-This is essential for the “not just D&D NPCs, but any content generation” requirement. If too much logic remains trapped in old config islands, other content types will stay less robust than NPCs and locations.
+This reduces browser-local correctness decisions and makes cross-workflow behavior predictable, explainable, and testable.
 
 #### Validation required
 
-- prompt-shape tests for each migrated stage set
-- shared contract tests confirming stage identity and expected inputs
-- smoke testing for item, encounter, monster, story arc, and location structural stages
+- server route/service tests for accepted, review-required, ungrounded-warning, and invalid responses
+- client transport tests that consume the new metadata
+- manual verification that integrated and manual runs still behave consistently from the user’s perspective
+
+### 4. Standardize saved-session, restore, and final assembly around the canonical memory model
+
+#### Goal
+
+Make save/resume/final assembly reconstruct the same workflow memory and canon state the user last saw, not just a content blob.
+
+#### Work to do
+
+- Ensure `_pipeline_stages`, pending prompts, finalizers, and direct upload restores rebuild canonical workflow memory.
+- Preserve canon grounding state, conflict records, and user review decisions across resume.
+- Keep scene, story arc, writing, and tabletop workflows on the same assembler/restore path.
+
+#### Why this matters to the user goals
+
+The manual fallback is only truly first-class if the workflow can be resumed with the same memory, canon, and review context intact.
+
+#### Validation required
+
+- restore tests for scene, story arc, nonfiction/writing, and tabletop workflows
+- save/close/resume tests that preserve canon/conflict state
+- browser QA for retry, review, and completion after resume
+
+### 5. Finish broad workflow parity and retire remaining bespoke prompt/assembly islands
+
+#### Goal
+
+Make all workflows rely on the same shared prompt, contract, assembly, and restore primitives instead of preserving content-type-specific mini-engines.
+
+#### Work to do
+
+- Audit remaining config islands for bespoke prompt assembly, restore assumptions, or workflow progression logic.
+- Move reusable behavior behind shared prompt/compiler and assembler interfaces.
+- Keep domain-specific exceptions explicit, but isolate them as adapters instead of page-owned branches.
 
 #### Recent progress
 
-- The location stage set was moved further behind a shared `locationStagePrompt` service so foundation, spaces prompt assembly, spaces chunk planning, details, and accuracy refinement no longer live as bespoke prompt/progression logic inside `locationCreatorStages.ts`.
-- Prompt-shape coverage was added for the migrated location builders, including template-derived foundation prompts, shared spaces chunk planning, strict-mode spaces prompts, details prompts, and accuracy-refinement prompts.
-- The item stage set was migrated behind a shared `itemStagePrompt` service so `itemCreatorStages.ts` is now a thin stage-definition layer instead of owning inline prompt assembly for concept, mechanics, and lore.
-- Focused item prompt-shape and config contract tests were added, and the migration validated cleanly with focused tests plus a full build.
-- The encounter stage set was migrated behind a shared `encounterStagePrompt` service so `encounterCreatorStages.ts` now delegates concept, enemies, terrain, tactics, and rewards prompt assembly through a shared interface instead of keeping those builders inline.
-- Focused encounter prompt-shape and config contract tests were added, and the migration validated cleanly with focused tests plus a full build.
-- The monster stage set was migrated behind a shared `monsterStagePrompt` service so `monsterCreatorStages.ts` now delegates basic info, stats, combat, legendary, and lore prompt assembly through a shared interface instead of keeping those builders inline.
-- Focused monster prompt-shape coverage was added alongside updated config-layer tests, and the migration validated cleanly with focused tests plus a full build.
-- The story arc stage set was migrated behind a shared `storyArcStagePrompt` service so `storyArcCreatorStages.ts` now delegates premise, structure, characters, and secrets prompt assembly through a shared interface while keeping character-facing context explicit and stateless.
-- Focused story arc prompt-shape and config contract tests were added, and the migration validated cleanly with focused tests plus a full build.
-- The shared workflow dispatch layer in `generatorWorkflow.ts` was tightened so specialized stage selection now routes through a shared type-to-catalog lookup instead of a longer content-type-specific branch chain, while preserving the special NPC routing path.
-- Focused workflow dispatch tests were expanded to cover specialized catalog lookup, NPC dynamic-stage precedence, and the cleanup validated cleanly with focused tests plus a full build.
-
-### 3. Finish standardizing saved-session and resume behavior across all workflow modes
-
-#### Goal
-
-Make resume behavior equally reliable for integrated mode, manual mode, retries, multi-part runs, stage chunking, and homebrew extraction.
-
-#### Work to do
-
-- Audit all resume paths to ensure they restore canonical stage identity, workflow type, current prompt state, retry context, and chunk state.
-- Standardize pending prompt restoration for content types that do not go through normal prompt compilation.
-- Ensure saved sessions always reconstruct the same state the user last saw.
-- Tighten any remaining content-type-specific end-state or restore logic.
+- Story arc prompt construction was moved behind shared stage-prompt services.
+- Shared assembly/restore now covers story arc, scene, nonfiction, and stronger tabletop workflows through the same core path.
+- Writing-family workflows now use canonical shared stage definitions and shared finalization behavior instead of drifting through older generic fallbacks.
 
 #### Why this matters to the user goals
 
-The manual fallback is only truly first-class if sessions can be resumed accurately. Robust recovery is also a major part of making the workflow dependable for long-form and multi-stage content generation.
+This is how the architecture becomes genuinely general-purpose rather than “strong in NPCs plus improving elsewhere.”
 
 #### Validation required
 
-- automated resume tests for:
-  - pending prompt
-  - retry prompt
-  - completed run
-  - stage chunking
-  - multi-part fact chunking
-  - homebrew chunk progression
-- browser QA of save, close, resume, retry, and completion flows
+- prompt-shape tests for migrated workflows
+- parity smoke tests across item, encounter, monster, scene, story arc, writing, homebrew, and location
+- regression tests around assembly, restore, and completion states
 
-- Session workflow metadata persistence was centralized behind a shared `resolveWorkflowSessionMetadata` helper so `ManualGenerator.tsx` now saves canonical workflow type and stage-sequence data from one place for both normal session saves and pending-prompt saves.
-- Resume stage resolution was tightened in `workflowResume.ts` so saved stage labels and aliases now resolve through canonical workflow stage keys before falling back to raw stage names, reducing resume drift for specialized workflows and label changes.
-- Location stage chunk reconstruction was tightened in `workflowStageChunkRestore.ts` so saved chunk progress now resolves through the workflow-scoped canonical Spaces stage key instead of relying on a hardcoded stage label.
-- Direct homebrew prompt launches now persist pending prompt entries through the same session-save path used by generated stage prompts, so saved sessions can reopen the exact homebrew chunk prompt the user last saw instead of only the stage state.
-- Saved-session validation passed with focused workflow metadata/resume tests (`generatorWorkflow.test.ts`, `workflowResume.test.ts`) plus a full build.
-- Follow-up chunk-restore validation passed with focused chunk restore/resume/workflow tests (`workflowStageChunkRestore.test.ts`, `workflowResume.test.ts`, `generatorWorkflow.test.ts`) plus a full build.
-- Homebrew prompt-persistence validation passed with focused homebrew/resume/workflow/chunk-restore tests (`workflowHomebrewRuntime.test.ts`, `workflowResume.test.ts`, `generatorWorkflow.test.ts`, `workflowStageChunkRestore.test.ts`) plus a full build.
-- Focused fact-chunk resume coverage was added so later pending canon-chunk prompts are explicitly tested to resume via the saved prompt before any generic stage fallback, and the updated resume suite plus full build passed cleanly.
-
-### 4. Finish broad content-type parity hardening
+### 6. Add workflow-specific semantic completeness and continuity passes
 
 #### Goal
 
-Bring monster, item, encounter, story arc, and other content flows up to the same standard already being reached by NPCs and locations.
+Move from structurally valid output to meaningfully complete, canon-safe output per workflow.
 
 #### Work to do
 
-- Expand shared stage contracts where they are still thin.
-- Reduce remaining content-type-specific assembly logic in `ManualGenerator.tsx` and workflow orchestration paths.
-- Standardize content reconstruction/finalization so all workflows save, restore, and complete through the same narrow set of helpers.
-- Add focused tests for each workflow that prove stage assembly, upload restoration, retry, and completion behavior are consistent.
-
-#### Progress notes
-
-- Location upload restoration now uses the same shared stage-assembly path as item, encounter, and story arc when reopening saved `_pipeline_stages`, and direct stage-structured location uploads are flattened through the same helper instead of relying on ad hoc UI assumptions.
-- Focused parity validation passed with `workflowContentAssembler.test.ts` plus the previously hardened resume/chunk/workflow suites, and a full build completed cleanly after tightening the raw-location flattening guard.
-- Monster upload restoration now also rebuilds saved `_pipeline_stages` through the shared assembler path instead of depending on fallback flattening, with focused coverage proving sanitized monster fields survive restore as expected.
-- Location final assembly and upload restoration now accept both canonical workflow keys like `location.spaces` and legacy simple keys like `spaces`, aligning the assembler with the canonical stage identities already used by saved-session and chunk-restore logic.
-- Monster final assembly and upload restoration now also accept canonical workflow keys like `monster.combat` and `monster.stats` alongside legacy keys, with focused `workflowContentAssembler` coverage and a clean full build confirming parity across both save/restore and direct upload paths.
-- Focused canonical-key regression coverage now also proves direct stage-structured upload flattening for item, encounter, story arc, and location, and the shared restore helper now guards item/encounter/story arc flattening so saved `_pipeline_stages` are not re-processed after they have already been assembled back into final content.
-- Finalizer-backed non-tabletop workflows like `scene` and `nonfiction` now participate in the same shared assembler/restore path used by the stronger tabletop flows, with focused coverage proving finalizer-based assembly, saved `_pipeline_stages` restore, direct stage-structured upload flattening, and resolved completion all stay on the shared path; the updated assembler suite passed and the full build remained clean.
-- Shared stage-definition ownership is now aligned with the workflow definitions for non-tabletop writing flows: `creator` and `fact_checker` explicitly cover `nonfiction`, `outline`, `chapter`, `memoir`, `journal_entry`, `diet_log_entry`, and `other_writing`, with focused registry/contract tests plus a clean full build confirming those workflows resolve through the same shared metadata layer instead of relying on generic fallback lookups.
-- Shared generator stage dispatch now also routes `outline`, `chapter`, `memoir`, `journal_entry`, `diet_log_entry`, and `other_writing` through the same four-stage writing catalog as `nonfiction`, instead of incorrectly falling back to the generic six-stage pipeline; focused `generatorWorkflow` coverage and a clean full build confirmed the stage sequence now matches the workflow definitions for those non-tabletop writing flows.
-- The shared workflow model for non-tabletop writing flows now reflects the real five-stage writing pipeline instead of an older generic abstraction: `workflowRegistry` defines canonical `outline_&_structure`, `draft`, and `editor_&_style` stages, the writing workflow definitions use the same five-stage sequence as the manual catalog, and `MANUAL_GENERATOR_STAGE_CATALOG.nonfictionStages` now normalizes through the shared stage adapter so saved session metadata and run definitions persist canonical writing stage keys instead of leaking raw display names.
-- Shared writing-workflow orchestration is now also normalized beyond `nonfiction`: the shared assembler now treats `outline`, `chapter`, `memoir`, `journal_entry`, `diet_log_entry`, and `other_writing` as the same writing-family contract for `fact_check_report` extraction and final content fallback (`finalizer` -> `editor_&_style` -> `draft`), and shared review preparation now treats `Editor & Style` as a fact-check stage generically instead of hardcoding a nonfiction-only exception. Focused `workflowContentAssembler` and `workflowStageReview` coverage passed, and the full build remained clean.
+- Continue NPC completeness hardening for spellcasting, relationships, equipment, identity, and under-produced fields.
+- Add scene continuity checks for participants, location anchors, chronology, and discoveries.
+- Add story arc continuity checks for character roles, secrets, beats, unresolved threads, and chronology.
+- Add location checks for deterministic geometry plus canon-linked occupants/regions where relevant.
+- Add writing/nonfiction continuity and source-quality checks where those workflows depend on known entities or facts.
 
 #### Why this matters to the user goals
 
-This is the core path to delivering a truly general-purpose content generation engine instead of a strong NPC pipeline plus a set of weaker secondary flows.
+This is where the product becomes dependable for real creative work instead of merely structurally shaped.
 
 #### Validation required
 
-- one representative happy-path run per content type
-- one retry/review case per content type where possible
-- regression tests around stage assembly and validation rules
-
-### 5. Deepen NPC hardening from “structurally valid” to “reliably complete”
-
-#### Goal
-
-Push NPC generation from robust structure into consistently rich and decision-complete output.
-
-#### Work to do
-
-- Continue improving NPC rules-pack logic for:
-  - casters
-  - half-casters
-  - warlocks
-  - martial NPCs
-  - noncombat NPCs
-  - legendary and non-legendary variants
-- Expand stage-level enforcement for fields that are commonly under-produced.
-- Audit spellcasting, relationships, equipment, and combat completeness.
-- Add more representative NPC fixtures to regression tests.
-
-#### Why this matters to the user goals
-
-This directly serves the explicit requirement that D&D NPCs must be fully fleshed out, including the details the AI often under-supplies.
-
-#### Validation required
-
-- matrix tests for multiple NPC archetypes
-- browser QA on generated NPC quality
+- representative fixtures per workflow family
+- browser QA of generated quality and continuity
 - manual inspection of final outputs for completeness and coherence
 
-### 6. Add server-side validation support for location geometry where appropriate
+### 7. Build visible memory, canon, and conflict review UX
 
 #### Goal
 
-Move the most important geometry correctness rules from purely client-side review into shared or server-enforced validation where that makes sense.
+Expose the app-owned memory layer so users can see what the workflow knows, what it used, and why a review/correction is being requested.
 
 #### Work to do
 
-- identify which geometry checks are deterministic and safe to enforce before acceptance
-- preserve interactive review for user judgment calls
-- prevent clearly broken room/door/wall outputs from being accepted silently
-- align server-side geometry rules with the client geometry utilities
+- Add a shared context inspector for canon used, canon missing, stage summaries, and grounding confidence.
+- Add review actions to accept new canon, reject conflicts, retry with correction, or keep an explicitly ungrounded draft.
+- Surface when a stage is operating with empty canon or unresolved ambiguity.
 
 #### Why this matters to the user goals
 
-The location workflow is already much stronger, but this would push it from “well-reviewed client-side” to “more strongly enforced across the whole system.” That improves architectural robustness and reduces avoidable retries.
+If the app is supposed to be the memory and the brain, users need to see and control that memory layer directly.
 
 #### Validation required
 
-- location geometry test fixtures
-- review that client and server geometry rules do not drift
-- browser testing for retry flow after geometry rejection
+- component tests for inspector and review actions
+- browser QA for user decision flows
+- documentation updates for memory/canon review semantics
 
-### 7. Run a formal browser-level QA matrix
+### 8. Run a formal browser QA matrix and retire the remaining legacy orchestration model
 
 #### Goal
 
-Confirm that the refactor is robust in real user flows, not just in unit tests and builds.
+Confirm the shared architecture holds up in real user workflows and remove the last legacy assumptions that no longer fit the new model.
 
 #### Work to do
 
-- Run manual QA for:
-  - NPC caster generation
-  - NPC non-caster generation
-  - location generation with reject/edit/retry
-  - item generation
-  - encounter generation
-  - story arc generation
-  - homebrew extraction and completion
-  - session save/close/resume
-  - manual copy/paste fallback
-  - integrated AI flow
-- Record findings and convert them into targeted fixes.
+- Run manual QA for NPC, scene, story arc, location, item, encounter, homebrew, writing, save/resume, manual fallback, and integrated AI flows.
+- Audit remaining legacy orchestration references and remove or quarantine them.
+- Update documentation so future work builds on the shared memory/canon-protection architecture instead of reviving older prompt-led patterns.
 
 #### Why this matters to the user goals
 
-The user’s goal is a dependable working tool. That cannot be confirmed through unit tests alone because the workflow behavior is heavily interactive and multi-step.
+The user’s goal is a dependable tool. That requires both real-flow QA and a clean architectural system of record.
 
 #### Validation required
 
-The QA pass itself is the validation. The output should be a test matrix with pass/fail notes and follow-up issues.
-
-### 8. Retire the remaining dependence on the old disabled orchestration model
-
-#### Goal
-
-Complete the transition away from the older disabled creator/orchestrator path so the new shared workflow engine becomes the clear system of record everywhere.
-
-#### Work to do
-
-- audit any remaining references to the older orchestration assumptions
-- migrate anything still depending on the legacy model
-- ensure generic workflow endpoints are the long-term path
-- update documentation so future work builds on the shared engine instead of reviving legacy patterns
-
-#### Why this matters to the user goals
-
-This is how the system stops being “a refactor in progress” and becomes a stable unified architecture that supports general content generation cleanly.
-
-#### Validation required
-
-- code audit confirming no workflow-critical paths still depend on the disabled model
+- completed QA matrix with pass/fail notes and follow-ups
+- code audit confirming no workflow-critical paths still depend on the older orchestration model
 - endpoint and transport smoke tests
-- documentation review
 
 ## Recommended Near-Term Execution Order
 
 The recommended sequence for the next implementation phase is:
 
-1. Server-side workflow acceptance centralization
-2. Resume and saved-session standardization
-3. Remaining legacy config/prompt migration
-4. Broad content-type parity hardening
-5. NPC completeness pass
-6. Location server-side validation pass
-7. Full browser QA matrix
-8. Final retirement of remaining legacy orchestration dependence
+1. Shared app-owned workflow memory and canon state
+2. Shared canon conflict detection and response classification
+3. Server-side workflow acceptance centralization
+4. Memory-aware save/resume/restore standardization
+5. Broad workflow parity and remaining prompt/assembly migration
+6. Workflow-specific semantic completeness and continuity passes
+7. Visible memory/canon/conflict review UX
+8. Full browser QA matrix and final legacy orchestration retirement
 
 ## Final Assessment
 
@@ -626,9 +609,13 @@ The project has moved from a fragile, page-led workflow model toward a real shar
 The most important user-facing outcomes already achieved are:
 
 - much stronger D&D NPC generation
+- much stronger story arc and scene assembly/recovery behavior
 - much stronger location generation
 - preserved manual fallback capability
 - improved retry, resume, and recovery behavior
 - reduced duplication and drift between integrated and manual flows
 
-The remaining work is still significant, but it is now mostly about finishing the migration and expanding parity, not discovering the architecture from scratch. That is a strong position to be in.
+The biggest remaining architectural gap is no longer discovering how to stage prompts or repair JSON.
+It is turning canon from “retrieved context when available” into “app-owned memory with enforced conflict handling and explicit user review” across every workflow.
+
+That is now the correct roadmap for the next phase.
