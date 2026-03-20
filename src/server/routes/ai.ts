@@ -18,6 +18,13 @@ import {
 import { resolveWorkflowContentType } from '../../shared/generation/workflowContentType.js';
 import { repairWorkflowStagePayload } from '../../shared/generation/workflowStageRepair.js';
 import { validateWorkflowStageContractPayload as validateSharedWorkflowStageContractPayload } from '../../shared/generation/workflowStageValidation.js';
+import type {
+  WorkflowAcceptanceState,
+  WorkflowCanonSummary,
+  WorkflowClaimStatus,
+  WorkflowConflictItem,
+  WorkflowConflictSummary,
+} from '../../shared/generation/workflowTypes.js';
 import {
   createWorkflowChatFailure,
   createWorkflowChatSuccess,
@@ -35,9 +42,166 @@ import {
 } from '../services/workflowExecutionService.js';
 
 const SPELLCASTING_ALLOWED_KEYS = [...(getWorkflowStageProxyAllowedKeys('spellcasting') ?? [])];
+const REVIEW_DRIVEN_STAGE_KEYS = new Set(['fact_checker', 'canon_validator', 'editor_&_style']);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const asTrimmedString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+function cloneWorkflowCanonSummary(summary: WorkflowCanonSummary): WorkflowCanonSummary {
+  return {
+    ...summary,
+    entityNames: [...summary.entityNames],
+    gaps: [...summary.gaps],
+  };
+}
+
+function createWorkflowConflictItems(value: unknown, status: WorkflowClaimStatus): WorkflowConflictItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const items: WorkflowConflictItem[] = [];
+  value.forEach((entry, index) => {
+    if (typeof entry === 'string') {
+      const message = entry.trim();
+      if (!message) {
+        return;
+      }
+
+      items.push({
+        key: `${status}:${message.toLowerCase()}:${index}`,
+        status,
+        message,
+      });
+      return;
+    }
+
+    if (!isRecord(entry)) {
+      return;
+    }
+
+    const message = asTrimmedString(entry.description)
+      ?? asTrimmedString(entry.summary)
+      ?? asTrimmedString(entry.new_claim)
+      ?? asTrimmedString(entry.text)
+      ?? asTrimmedString(entry.reason)
+      ?? asTrimmedString(entry.clarification_needed)
+      ?? asTrimmedString(entry.validation_notes);
+
+    if (!message) {
+      return;
+    }
+
+    const fieldPath = asTrimmedString(entry.field_path) ?? asTrimmedString(entry.path) ?? asTrimmedString(entry.field);
+    const severity = asTrimmedString(entry.severity);
+    const currentValue = asTrimmedString(entry.current_value) ?? asTrimmedString(entry.text);
+    const proposedValue = asTrimmedString(entry.proposed_value)
+      ?? asTrimmedString(entry.recommended_revision)
+      ?? asTrimmedString(entry.new_claim);
+
+    items.push({
+      key: `${status}:${(fieldPath ?? String(index)).toLowerCase()}:${message.toLowerCase()}`,
+      status,
+      message,
+      fieldPath,
+      severity,
+      currentValue,
+      proposedValue,
+    });
+  });
+
+  return items;
+}
+
+function resolveClientCanonSummary(body: GeminiRequestBody): WorkflowCanonSummary | undefined {
+  const memorySummary = body.clientContext?.memorySummary;
+  if (!memorySummary) {
+    return undefined;
+  }
+
+  if (memorySummary.canon) {
+    return cloneWorkflowCanonSummary(memorySummary.canon);
+  }
+
+  return {
+    groundingStatus: memorySummary.factpack.groundingStatus,
+    factCount: memorySummary.factpack.factCount,
+    entityNames: [...memorySummary.factpack.entityNames],
+    gaps: [...memorySummary.factpack.gaps],
+  };
+}
+
+function summarizeWorkflowConflicts(
+  stageKey: string,
+  payload: Record<string, unknown>,
+  canon: WorkflowCanonSummary | undefined,
+): WorkflowConflictSummary {
+  const unsupportedStatus: WorkflowClaimStatus = canon?.groundingStatus === 'ungrounded'
+    ? 'unsupported_ungrounded'
+    : 'additive_unverified';
+
+  const deduped = new Map<string, WorkflowConflictItem>();
+  for (const item of [
+    ...createWorkflowConflictItems(payload.conflicts, 'conflicting'),
+    ...createWorkflowConflictItems(payload.ambiguities, 'ambiguous'),
+    ...createWorkflowConflictItems(payload.unassociated, unsupportedStatus),
+  ]) {
+    if (!deduped.has(item.key)) {
+      deduped.set(item.key, item);
+    }
+  }
+
+  const items = Array.from(deduped.values()).slice(0, 12);
+  const ambiguityCount = items.filter((item) => item.status === 'ambiguous').length;
+  const conflictCount = items.filter((item) => item.status === 'conflicting').length;
+  const additiveCount = items.filter((item) => item.status === 'additive_unverified').length;
+  const unsupportedCount = items.filter((item) => item.status === 'unsupported_ungrounded').length;
+  const reviewRequired = REVIEW_DRIVEN_STAGE_KEYS.has(stageKey) && (conflictCount > 0 || ambiguityCount > 0);
+
+  return {
+    reviewRequired,
+    alignedCount: 0,
+    additiveCount,
+    ambiguityCount,
+    conflictCount,
+    unsupportedCount,
+    items,
+    updatedAt: Date.now(),
+  };
+}
+
+function resolveWorkflowAcceptanceState(
+  stageKey: string,
+  canon: WorkflowCanonSummary | undefined,
+  conflictSummary: WorkflowConflictSummary,
+): WorkflowAcceptanceState {
+  if (REVIEW_DRIVEN_STAGE_KEYS.has(stageKey) && conflictSummary.conflictCount > 0) {
+    return 'review_required_conflict';
+  }
+
+  if (REVIEW_DRIVEN_STAGE_KEYS.has(stageKey) && conflictSummary.ambiguityCount > 0) {
+    return 'review_required_ambiguity';
+  }
+
+  if (conflictSummary.additiveCount > 0 || conflictSummary.unsupportedCount > 0) {
+    return 'accepted_with_additions';
+  }
+
+  if (canon?.groundingStatus === 'ungrounded') {
+    return 'accepted_ungrounded_warning';
+  }
+
+  return 'accepted';
+}
 
 function getNormalizedStageKey(stageId: string, workflowType?: string): string {
   if (workflowType) {
@@ -1245,6 +1409,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
 
   const generatorType = body.clientContext?.generatorType;
   const requestedStageKey = getNormalizedStageKey(body.stageId, typeof generatorType === 'string' ? generatorType : undefined);
+  const requestCanonSummary = resolveClientCanonSummary(body);
 
   const buildWorkflowFailure = (input: {
     type: AiErrorType;
@@ -1252,8 +1417,11 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
     retryable: boolean;
     retryAfterMs?: number;
     outcome?: WorkflowExecutionOutcome;
+    acceptanceState?: WorkflowAcceptanceState;
     allowedKeyCount?: number;
     rawAllowedKeyCount?: number;
+    canon?: WorkflowCanonSummary;
+    conflictSummary?: WorkflowConflictSummary;
     retryContext?: WorkflowExecutionRetryContext;
   }): GeminiFailureResponse => createWorkflowExecutionFailure({
     requestId,
@@ -1261,6 +1429,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
     stageId: body.stageId,
     stageKey: requestedStageKey,
     workflowType: typeof generatorType === 'string' ? generatorType : undefined,
+    canon: input.canon ?? requestCanonSummary,
     ...input,
   });
 
@@ -1272,8 +1441,11 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
       retryable: boolean;
       retryAfterMs?: number;
       outcome?: WorkflowExecutionOutcome;
+      acceptanceState?: WorkflowAcceptanceState;
       allowedKeyCount?: number;
       rawAllowedKeyCount?: number;
+      canon?: WorkflowCanonSummary;
+      conflictSummary?: WorkflowConflictSummary;
       retryContext?: WorkflowExecutionRetryContext;
     },
   ) => res.status(status).json(buildWorkflowFailure(input));
@@ -1922,6 +2094,8 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
 
       if (stageKey === 'planner') {
         extraction.patch[body.stageId] = prunedPayload;
+        const conflictSummary = summarizeWorkflowConflicts(stageKey, prunedPayload, requestCanonSummary);
+        const acceptanceState = resolveWorkflowAcceptanceState(stageKey, requestCanonSummary, conflictSummary);
         const successPayload: GeminiSuccessResponse = createWorkflowExecutionSuccess({
           provider: 'gemini',
           model: GEMINI_MODEL,
@@ -1930,8 +2104,11 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
           stageId: body.stageId,
           stageKey,
           workflowType: generatorType,
+          acceptanceState,
           allowedKeyCount: allowedKeys.length,
           rawAllowedKeyCount,
+          canon: requestCanonSummary,
+          conflictSummary,
           rawText,
           jsonPatch: extraction.patch,
           foundJsonBlock: extraction.foundJsonBlock,
@@ -2008,6 +2185,11 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
       });
 
       extraction.patch[body.stageId] = prunedPayload;
+      const conflictSummary = summarizeWorkflowConflicts(stageKey, prunedPayload, requestCanonSummary);
+      const acceptanceState = resolveWorkflowAcceptanceState(stageKey, requestCanonSummary, conflictSummary);
+      const outcome: WorkflowExecutionOutcome = acceptanceState === 'review_required_conflict' || acceptanceState === 'review_required_ambiguity'
+        ? 'review_required'
+        : 'accepted';
 
       const successPayload: GeminiSuccessResponse = createWorkflowExecutionSuccess({
         provider: 'gemini',
@@ -2017,8 +2199,12 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
         stageId: body.stageId,
         stageKey,
         workflowType: generatorType,
+        outcome,
+        acceptanceState,
         allowedKeyCount: allowedKeys.length,
         rawAllowedKeyCount,
+        canon: requestCanonSummary,
+        conflictSummary,
         rawText,
         jsonPatch: extraction.patch,
         foundJsonBlock: extraction.foundJsonBlock,

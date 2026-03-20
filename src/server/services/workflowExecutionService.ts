@@ -1,3 +1,10 @@
+import type {
+  WorkflowAcceptanceState,
+  WorkflowCanonSummary,
+  WorkflowConflictSummary,
+  WorkflowStageMemorySummary,
+} from '../../shared/generation/workflowTypes.js';
+
 export type WorkflowExecutionErrorType =
   | 'RATE_LIMIT'
   | 'PROVIDER_ERROR'
@@ -29,9 +36,12 @@ export interface WorkflowExecutionMetadata {
   stageKey: string;
   workflowType?: string;
   outcome: WorkflowExecutionOutcome;
+  acceptanceState: WorkflowAcceptanceState;
   accepted: boolean;
   allowedKeyCount: number;
   rawAllowedKeyCount: number;
+  canon?: WorkflowCanonSummary;
+  conflictSummary?: WorkflowConflictSummary;
   retryContext?: WorkflowExecutionRetryContext;
 }
 
@@ -50,6 +60,7 @@ export interface WorkflowExecutionRequestBody {
     promptMode?: string;
     measuredChars?: number;
     correctionAttempt?: number;
+    memorySummary?: WorkflowStageMemorySummary;
   };
 }
 
@@ -87,6 +98,19 @@ export interface WorkflowExecutionFailureResponse {
     retryable: boolean;
     retryAfterMs?: number;
   };
+}
+
+function isAcceptedWorkflowAcceptanceState(value: WorkflowAcceptanceState): boolean {
+  return value === 'accepted' || value === 'accepted_with_additions' || value === 'accepted_ungrounded_warning';
+}
+
+function resolveAcceptanceState(input: {
+  outcome: WorkflowExecutionOutcome;
+  acceptanceState?: WorkflowAcceptanceState;
+}): WorkflowAcceptanceState {
+  if (input.acceptanceState) return input.acceptanceState;
+  if (input.outcome === 'accepted' || input.outcome === 'partial') return 'accepted';
+  return 'invalid_response';
 }
 
 function resolveFailureOutcome(input: {
@@ -137,8 +161,11 @@ export function createWorkflowExecutionSuccess(input: {
   stageKey: string;
   workflowType?: string;
   outcome?: WorkflowExecutionOutcome;
+  acceptanceState?: WorkflowAcceptanceState;
   allowedKeyCount?: number;
   rawAllowedKeyCount?: number;
+  canon?: WorkflowCanonSummary;
+  conflictSummary?: WorkflowConflictSummary;
   retryContext?: WorkflowExecutionRetryContext;
   rawText: string;
   jsonPatch?: Record<string, unknown>;
@@ -149,6 +176,11 @@ export function createWorkflowExecutionSuccess(input: {
   patchSizeBytes?: number;
   appliedPathsCandidateCount?: number;
 }): WorkflowExecutionSuccessResponse {
+  const outcome = input.outcome ?? 'accepted';
+  const acceptanceState = resolveAcceptanceState({
+    outcome,
+    acceptanceState: input.acceptanceState,
+  });
   return {
     ok: true,
     provider: input.provider,
@@ -159,10 +191,13 @@ export function createWorkflowExecutionSuccess(input: {
       stageId: input.stageId,
       stageKey: input.stageKey,
       workflowType: input.workflowType,
-      outcome: input.outcome ?? 'accepted',
-      accepted: (input.outcome ?? 'accepted') === 'accepted' || (input.outcome ?? 'accepted') === 'partial',
+      outcome,
+      acceptanceState,
+      accepted: isAcceptedWorkflowAcceptanceState(acceptanceState),
       allowedKeyCount: Number(input.allowedKeyCount ?? 0),
       rawAllowedKeyCount: Number(input.rawAllowedKeyCount ?? 0),
+      canon: input.canon,
+      conflictSummary: input.conflictSummary,
       retryContext: input.retryContext,
     },
     rawText: input.rawText,
@@ -193,14 +228,21 @@ export function createWorkflowExecutionFailure(input: {
   stageKey?: string;
   workflowType?: string;
   outcome?: WorkflowExecutionOutcome;
+  acceptanceState?: WorkflowAcceptanceState;
   allowedKeyCount?: number;
   rawAllowedKeyCount?: number;
+  canon?: WorkflowCanonSummary;
+  conflictSummary?: WorkflowConflictSummary;
   retryContext?: WorkflowExecutionRetryContext;
 }): WorkflowExecutionFailureResponse {
   const outcome = resolveFailureOutcome({
     type: input.type,
     retryable: input.retryable,
     outcome: input.outcome,
+  });
+  const acceptanceState = resolveAcceptanceState({
+    outcome,
+    acceptanceState: input.acceptanceState,
   });
   return {
     ok: false,
@@ -212,9 +254,12 @@ export function createWorkflowExecutionFailure(input: {
           stageKey: input.stageKey,
           workflowType: input.workflowType,
           outcome,
-          accepted: outcome === 'accepted' || outcome === 'partial',
+          acceptanceState,
+          accepted: isAcceptedWorkflowAcceptanceState(acceptanceState),
           allowedKeyCount: Number(input.allowedKeyCount ?? 0),
           rawAllowedKeyCount: Number(input.rawAllowedKeyCount ?? 0),
+          canon: input.canon,
+          conflictSummary: input.conflictSummary,
           retryContext: input.retryContext,
         }
       : undefined,

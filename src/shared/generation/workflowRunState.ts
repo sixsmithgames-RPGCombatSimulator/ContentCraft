@@ -7,6 +7,10 @@ import type {
   RetrievalStatus,
   StageAttempt,
   StageAttemptStatus,
+  WorkflowAcceptanceState,
+  WorkflowCanonSummary,
+  WorkflowConflictSummary,
+  WorkflowMemoryState,
   WorkflowRetrySource,
   WorkflowContentType,
 } from './workflowTypes';
@@ -54,6 +58,19 @@ export interface StageAttemptUpdateInput {
   error?: string;
   warnings?: string[];
   retrySource?: WorkflowRetrySource;
+  acceptanceState?: WorkflowAcceptanceState;
+  canon?: WorkflowCanonSummary;
+  conflicts?: WorkflowConflictSummary;
+  now?: number;
+}
+
+export interface SyncWorkflowRunMemoryInput {
+  memory: WorkflowMemoryState;
+  acceptanceState?: WorkflowAcceptanceState;
+  canon?: WorkflowCanonSummary;
+  conflicts?: WorkflowConflictSummary;
+  attemptId?: string;
+  stageKey?: string;
   now?: number;
 }
 
@@ -140,6 +157,46 @@ function mergeWarnings(existing: string[], incoming?: string[]): string[] {
   return Array.from(new Set(values));
 }
 
+function cloneCanonSummary(summary?: WorkflowCanonSummary): WorkflowCanonSummary | undefined {
+  if (!summary) {
+    return undefined;
+  }
+
+  return {
+    ...summary,
+    entityNames: [...summary.entityNames],
+    gaps: [...summary.gaps],
+  };
+}
+
+function cloneConflictSummary(summary?: WorkflowConflictSummary): WorkflowConflictSummary | undefined {
+  if (!summary) {
+    return undefined;
+  }
+
+  return {
+    ...summary,
+    items: summary.items.map((item) => ({ ...item })),
+  };
+}
+
+function cloneWorkflowMemoryState(memory: WorkflowMemoryState): WorkflowMemoryState {
+  return {
+    request: { ...memory.request },
+    stage: {
+      ...memory.stage,
+      completedStages: [...memory.stage.completedStages],
+      summaries: { ...memory.stage.summaries },
+    },
+    decisions: {
+      confirmed: { ...memory.decisions.confirmed },
+      unresolvedQuestions: [...memory.decisions.unresolvedQuestions],
+    },
+    canon: cloneCanonSummary(memory.canon) ?? memory.canon,
+    conflicts: cloneConflictSummary(memory.conflicts) ?? memory.conflicts,
+  };
+}
+
 function replaceAttempt(
   attempts: StageAttempt[],
   attemptId: string,
@@ -175,6 +232,9 @@ export function upsertStageAttempt(
       error: input.error,
       warnings: mergeWarnings(existing.warnings ?? [], input.warnings),
       retrySource: input.retrySource ?? existing.retrySource,
+      acceptanceState: input.acceptanceState ?? existing.acceptanceState,
+      canon: cloneCanonSummary(input.canon) ?? existing.canon,
+      conflicts: cloneConflictSummary(input.conflicts) ?? existing.conflicts,
       updatedAt: timestamp,
       acceptedAt: input.status === 'accepted' ? timestamp : existing.acceptedAt,
       completedAt: input.status === 'accepted' || input.status === 'error' ? timestamp : existing.completedAt,
@@ -210,6 +270,9 @@ export function upsertStageAttempt(
     warnings: input.warnings ? [...input.warnings] : [],
     retrySource: input.retrySource,
     transport: input.transport,
+    acceptanceState: input.acceptanceState,
+    canon: cloneCanonSummary(input.canon),
+    conflicts: cloneConflictSummary(input.conflicts),
     startedAt: timestamp,
     updatedAt: timestamp,
     acceptedAt: input.status === 'accepted' ? timestamp : undefined,
@@ -344,6 +407,35 @@ export function updateRetrievalStatus(
       lastUpdatedAt: timestamp,
     },
     warnings: warningMessage ? mergeWarnings(runState.warnings, [warningMessage]) : runState.warnings,
+    updatedAt: timestamp,
+  };
+}
+
+export function syncWorkflowRunMemory(
+  runState: GenerationRunState | null,
+  input: SyncWorkflowRunMemoryInput,
+): GenerationRunState | null {
+  if (!runState) return null;
+
+  const timestamp = nowValue(input.now);
+  const resolvedAttemptId = input.attemptId ?? getStageAttempt(runState, input.stageKey ?? runState.currentStageKey)?.attemptId;
+  const canon = cloneCanonSummary(input.canon ?? input.memory.canon);
+  const conflicts = cloneConflictSummary(input.conflicts ?? input.memory.conflicts);
+  const attempts = resolvedAttemptId
+    ? replaceAttempt(runState.attempts, resolvedAttemptId, (attempt) => ({
+        ...attempt,
+        acceptanceState: input.acceptanceState ?? attempt.acceptanceState,
+        canon: canon ?? attempt.canon,
+        conflicts: conflicts ?? attempt.conflicts,
+        updatedAt: timestamp,
+      }))
+    : runState.attempts;
+
+  return {
+    ...runState,
+    attempts,
+    acceptanceState: input.acceptanceState ?? runState.acceptanceState,
+    memory: cloneWorkflowMemoryState(input.memory),
     updatedAt: timestamp,
   };
 }

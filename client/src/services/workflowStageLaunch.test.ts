@@ -69,6 +69,28 @@ describe('workflowStageLaunch', () => {
           factpack: {
             factCount: 0,
             entityNames: [],
+            gaps: [],
+            groundingStatus: 'ungrounded',
+          },
+          canon: {
+            groundingStatus: 'ungrounded',
+            factCount: 0,
+            entityNames: [],
+            gaps: [],
+          },
+          conflicts: {
+            reviewRequired: false,
+            alignedCount: 0,
+            additiveCount: 0,
+            ambiguityCount: 0,
+            conflictCount: 0,
+            unsupportedCount: 0,
+            items: [],
+          },
+          execution: {
+            workflowType: 'npc',
+            executionMode: 'integrated',
+            currentStageIndex: 1,
           },
         },
       },

@@ -5,6 +5,11 @@ import type {
   WorkflowExecutionRetryContext,
   WorkflowExecutionSuccessResponse,
 } from '../../../src/server/services/workflowExecutionService';
+import type {
+  WorkflowAcceptanceState,
+  WorkflowCanonSummary,
+  WorkflowConflictSummary,
+} from '../../../src/shared/generation/workflowTypes';
 
 const DEFAULT_AUTOMATED_RETRY_DELAY_MS = 5000;
 const MIN_AUTOMATED_RETRY_DELAY_MS = 2500;
@@ -23,6 +28,7 @@ export interface WorkflowTransportStageRequest {
     promptMode?: string;
     measuredChars?: number;
     correctionAttempt?: number;
+    memorySummary?: NonNullable<AiAssistantWorkflowContext['compiledStageRequest']>['memory'];
   };
 }
 
@@ -37,9 +43,12 @@ export interface ConfirmedWorkflowStageMetadata {
   stageKey: string;
   workflowType?: string;
   outcome: WorkflowExecutionOutcome;
+  acceptanceState: WorkflowAcceptanceState;
   accepted: boolean;
   allowedKeyCount: number;
   rawAllowedKeyCount: number;
+  canon?: WorkflowCanonSummary;
+  conflictSummary?: WorkflowConflictSummary;
   retryContext?: WorkflowExecutionRetryContext;
 }
 
@@ -67,6 +76,7 @@ export function buildIntegratedStageRequest(
       userSelectedMode: providerType,
       promptMode: compiled.promptBudget.mode,
       measuredChars,
+      memorySummary: compiled.memory,
       ...(overrides?.correctionAttempt !== undefined ? { correctionAttempt: overrides.correctionAttempt } : {}),
     },
   };
@@ -95,9 +105,12 @@ export function getConfirmedIntegratedStageMetadata(
       stageKey: responseBody.workflow.stageKey || fallback.stageKey,
       workflowType: responseBody.workflow.workflowType || fallback.workflowType,
       outcome: responseBody.workflow.outcome,
+      acceptanceState: responseBody.workflow.acceptanceState,
       accepted: responseBody.workflow.accepted,
       allowedKeyCount: responseBody.workflow.allowedKeyCount,
       rawAllowedKeyCount: responseBody.workflow.rawAllowedKeyCount,
+      canon: responseBody.workflow.canon,
+      conflictSummary: responseBody.workflow.conflictSummary,
       retryContext: responseBody.workflow.retryContext,
     };
   }
@@ -107,9 +120,12 @@ export function getConfirmedIntegratedStageMetadata(
     stageKey: fallback.stageKey,
     workflowType: fallback.workflowType,
     outcome: responseBody.ok ? 'accepted' : 'invalid_response',
+    acceptanceState: responseBody.ok ? 'accepted' : 'invalid_response',
     accepted: responseBody.ok,
     allowedKeyCount: 0,
     rawAllowedKeyCount: 0,
+    canon: undefined,
+    conflictSummary: undefined,
     retryContext: undefined,
   };
 }

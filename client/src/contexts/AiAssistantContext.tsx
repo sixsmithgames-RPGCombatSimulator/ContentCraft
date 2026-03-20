@@ -18,7 +18,14 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react';
-import type { GenerationRunState, WorkflowContentType } from '../../../src/shared/generation/workflowTypes';
+import type {
+  GenerationRunState,
+  WorkflowAcceptanceState,
+  WorkflowCanonSummary,
+  WorkflowConflictSummary,
+  WorkflowContentType,
+  WorkflowStageMemorySummary,
+} from '../../../src/shared/generation/workflowTypes';
 import type {
   WorkflowExecutionFailureResponse,
   WorkflowExecutionOutcome,
@@ -30,22 +37,7 @@ import type {
 /** Supported workflow types that the AI assistant can contextually assist with */
 export type WorkflowType = WorkflowContentType;
 
-export interface AiStageMemorySummary {
-  request: {
-    prompt: string;
-    type?: string;
-    stageKey?: string;
-    stageLabel?: string;
-  };
-  completedStages: string[];
-  currentStageData: unknown;
-  priorStageSummaries: Record<string, unknown>;
-  previousDecisions: Record<string, string>;
-  factpack: {
-    factCount: number;
-    entityNames: string[];
-  };
-}
+export type AiStageMemorySummary = WorkflowStageMemorySummary;
 
 export interface AiCompiledStageRequest {
   requestId: string;
@@ -71,11 +63,14 @@ export interface SubmitPipelineStageMetadata {
   stageKey: string;
   workflowType?: string;
   outcome?: WorkflowExecutionOutcome;
+  acceptanceState?: WorkflowAcceptanceState;
   accepted?: boolean;
   requestId?: string;
   stageRunId?: string;
   allowedKeyCount?: number;
   rawAllowedKeyCount?: number;
+  canon?: WorkflowCanonSummary;
+  conflictSummary?: WorkflowConflictSummary;
   retryContext?: WorkflowExecutionRetryContext;
 }
 
@@ -101,6 +96,12 @@ export interface AiAssistantWorkflowContext {
   generationConfig?: Record<string, unknown>;
   /** Authoritative, precompiled request for the active stage */
   compiledStageRequest?: AiCompiledStageRequest;
+  /** Shared acceptance state for the current workflow runtime */
+  acceptanceState?: WorkflowAcceptanceState;
+  /** Canon scope summary currently attached to the workflow runtime */
+  canon?: WorkflowCanonSummary;
+  /** Shared conflict/addition summary currently attached to the workflow runtime */
+  conflictSummary?: WorkflowConflictSummary;
   /** Generator type (npc, encounter, location, etc.) for schema selection */
   generatorType?: string;
   /** Schema version currently in use */

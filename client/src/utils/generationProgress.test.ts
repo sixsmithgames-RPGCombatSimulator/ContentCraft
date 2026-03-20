@@ -42,7 +42,7 @@ describe('generationProgress', () => {
           workflowType: 'npc',
           workflowLabel: 'NPC Creator',
           executionMode: 'integrated',
-          status: 'running',
+          status: 'awaiting_user_input',
           stageSequence: ['keyword_extractor', 'planner', 'basic_info'],
           stageLabels: {
             keyword_extractor: 'Keyword Extractor',
@@ -54,6 +54,51 @@ describe('generationProgress', () => {
           currentStageIndex: 1,
           currentAttemptId: 'attempt-1',
           attempts: [],
+          acceptanceState: 'review_required_conflict',
+          memory: {
+            request: {
+              prompt: 'Retry the planner output.',
+              generatorType: 'npc',
+              schemaVersion: 'v1.1-client',
+            },
+            stage: {
+              currentStageKey: 'planner',
+              currentStageLabel: 'Planner',
+              currentStageIndex: 1,
+              completedStages: ['keyword_extractor'],
+              currentStageData: {
+                proposals: [{ question: 'Should Thyra remain exiled from the Azure Court?' }],
+              },
+              summaries: {
+                keyword_extractor: { summary: 'Identified exile and court canon hooks.' },
+              },
+            },
+            decisions: {
+              confirmed: {},
+              unresolvedQuestions: ['Should Thyra remain exiled from the Azure Court?'],
+            },
+            canon: {
+              groundingStatus: 'project',
+              factCount: 12,
+              entityNames: ['Thyra'],
+              gaps: [],
+            },
+            conflicts: {
+              reviewRequired: true,
+              alignedCount: 11,
+              additiveCount: 0,
+              ambiguityCount: 0,
+              conflictCount: 1,
+              unsupportedCount: 0,
+              items: [
+                {
+                  key: 'azure_court_service',
+                  status: 'conflicting',
+                  message: 'Thyra now serves the Azure Court directly despite project canon marking her as exiled.',
+                },
+              ],
+            },
+          },
           retrieval: {
             groundingStatus: 'project',
             provenance: 'project',
@@ -95,6 +140,28 @@ describe('generationProgress', () => {
             factpack: {
               factCount: 0,
               entityNames: [],
+              gaps: [],
+              groundingStatus: 'ungrounded',
+            },
+            canon: {
+              groundingStatus: 'ungrounded',
+              factCount: 0,
+              entityNames: [],
+              gaps: [],
+            },
+            conflicts: {
+              reviewRequired: false,
+              alignedCount: 0,
+              additiveCount: 0,
+              ambiguityCount: 0,
+              conflictCount: 0,
+              unsupportedCount: 0,
+              items: [],
+            },
+            execution: {
+              workflowType: 'npc',
+              executionMode: 'integrated',
+              currentStageIndex: 1,
             },
           },
         },
@@ -108,6 +175,18 @@ describe('generationProgress', () => {
         executionMode: 'integrated',
         currentStageKey: 'planner',
         currentAttemptId: 'attempt-1',
+        acceptanceState: 'review_required_conflict',
+        memory: expect.objectContaining({
+          stage: expect.objectContaining({
+            currentStageData: {
+              proposals: [{ question: 'Should Thyra remain exiled from the Azure Court?' }],
+            },
+          }),
+          conflicts: expect.objectContaining({
+            reviewRequired: true,
+            conflictCount: 1,
+          }),
+        }),
       }),
     );
     expect(updated.compiledStageRequest).toEqual(
@@ -221,6 +300,28 @@ describe('generationProgress', () => {
           factpack: {
             factCount: 120,
             entityNames: ['wizard'],
+            gaps: ['missing lineage provenance'],
+            groundingStatus: 'project',
+          },
+          canon: {
+            groundingStatus: 'project',
+            factCount: 120,
+            entityNames: ['wizard'],
+            gaps: ['missing lineage provenance'],
+          },
+          conflicts: {
+            reviewRequired: false,
+            alignedCount: 120,
+            additiveCount: 0,
+            ambiguityCount: 0,
+            conflictCount: 0,
+            unsupportedCount: 0,
+            items: [],
+          },
+          execution: {
+            workflowType: 'npc',
+            executionMode: 'integrated',
+            currentStageIndex: 1,
           },
         },
       },

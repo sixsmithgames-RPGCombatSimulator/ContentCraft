@@ -122,9 +122,19 @@ import {
   markStageError,
   syncCurrentStage,
   syncGenerationRunDefinition,
+  syncWorkflowRunMemory,
   updateRetrievalStatus,
 } from '../../../src/shared/generation/workflowRunState';
-import type { ExecutionMode, GenerationRunState, WorkflowContentType, WorkflowRetrySource } from '../../../src/shared/generation/workflowTypes';
+import type {
+  ExecutionMode,
+  GenerationRunState,
+  WorkflowAcceptanceState,
+  WorkflowConflictItem,
+  WorkflowConflictSummary,
+  WorkflowContentType,
+  WorkflowMemoryState,
+  WorkflowRetrySource,
+} from '../../../src/shared/generation/workflowTypes';
 import type { WorkflowExecutionFailureResponse } from '../../../src/server/services/workflowExecutionService';
 
 import {
@@ -236,6 +246,12 @@ type Stage = GeneratorStage;
 
 // Types aligned with CanonDeltaModal's onApprove callback
 type Proposal = WorkflowStageProposal;
+type AuthoritativeStageReviewSnapshot = {
+  stageKey: string;
+  sourceKey: string;
+  acceptanceState: WorkflowAcceptanceState;
+  conflictSummary: WorkflowConflictSummary;
+};
 
 const toStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -388,6 +404,206 @@ const summarizeForAiMemory = (value: unknown, depth = 0): unknown => {
   return String(value);
 };
 
+const createEmptyWorkflowConflictSummary = (): WorkflowConflictSummary => ({
+  reviewRequired: false,
+  alignedCount: 0,
+  additiveCount: 0,
+  ambiguityCount: 0,
+  conflictCount: 0,
+  unsupportedCount: 0,
+  items: [],
+});
+
+const getWorkflowStageSourceKey = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+};
+
+const cloneWorkflowConflictSummaryLocal = (summary: WorkflowConflictSummary): WorkflowConflictSummary => ({
+  ...summary,
+  items: summary.items.map((item) => ({ ...item })),
+});
+
+const buildAuthoritativeStageReviewSnapshot = (input: {
+  stageKey?: string;
+  source: unknown;
+  acceptanceState?: WorkflowAcceptanceState;
+  conflictSummary?: WorkflowConflictSummary;
+}): AuthoritativeStageReviewSnapshot | null => {
+  const sourceKey = getWorkflowStageSourceKey(input.source);
+  if (!input.stageKey || !sourceKey || !input.acceptanceState) {
+    return null;
+  }
+
+  return {
+    stageKey: input.stageKey,
+    sourceKey,
+    acceptanceState: input.acceptanceState,
+    conflictSummary: input.conflictSummary
+      ? cloneWorkflowConflictSummaryLocal(input.conflictSummary)
+      : createEmptyWorkflowConflictSummary(),
+  };
+};
+
+const asWorkflowText = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const createWorkflowConflictItems = (
+  value: unknown,
+  status: WorkflowConflictItem['status'],
+): WorkflowConflictItem[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const items: WorkflowConflictItem[] = [];
+  value.forEach((entry, index) => {
+    if (typeof entry === 'string') {
+      const message = entry.trim();
+      if (!message) {
+        return;
+      }
+
+      items.push({
+        key: `${status}:${message.toLowerCase()}:${index}`,
+        status,
+        message,
+      });
+      return;
+    }
+
+    if (!isRecord(entry)) {
+      return;
+    }
+
+    const message = asWorkflowText(entry.description)
+      ?? asWorkflowText(entry.summary)
+      ?? asWorkflowText(entry.new_claim)
+      ?? asWorkflowText(entry.text)
+      ?? asWorkflowText(entry.reason)
+      ?? asWorkflowText(entry.clarification_needed);
+
+    if (!message) {
+      return;
+    }
+
+    const fieldPath = asWorkflowText(entry.field_path) ?? asWorkflowText(entry.path) ?? asWorkflowText(entry.field);
+    const severity = asWorkflowText(entry.severity);
+    const currentValue = asWorkflowText(entry.current_value) ?? asWorkflowText(entry.text);
+    const proposedValue = asWorkflowText(entry.proposed_value)
+      ?? asWorkflowText(entry.recommended_revision)
+      ?? asWorkflowText(entry.new_claim);
+
+    items.push({
+      key: `${status}:${(fieldPath ?? String(index)).toLowerCase()}:${message.toLowerCase()}`,
+      status,
+      message,
+      fieldPath,
+      severity,
+      currentValue,
+      proposedValue,
+    });
+  });
+
+  return items;
+};
+
+const buildWorkflowConflictSummary = (
+  value: unknown,
+  groundingStatus: AiStageMemorySummary['factpack']['groundingStatus'],
+  reviewRequired: boolean,
+): WorkflowConflictSummary => {
+  if (!isRecord(value)) {
+    return createEmptyWorkflowConflictSummary();
+  }
+
+  const additiveStatus: WorkflowConflictItem['status'] = groundingStatus === 'ungrounded'
+    ? 'unsupported_ungrounded'
+    : 'additive_unverified';
+  const deduped = new Map<string, WorkflowConflictItem>();
+
+  for (const item of [
+    ...createWorkflowConflictItems(value.conflicts, 'conflicting'),
+    ...createWorkflowConflictItems(value.ambiguities, 'ambiguous'),
+    ...createWorkflowConflictItems(value.unassociated, additiveStatus),
+  ]) {
+    if (!deduped.has(item.key)) {
+      deduped.set(item.key, item);
+    }
+  }
+
+  const items = Array.from(deduped.values()).slice(0, 12);
+  return {
+    reviewRequired,
+    alignedCount: 0,
+    additiveCount: items.filter((item) => item.status === 'additive_unverified').length,
+    ambiguityCount: items.filter((item) => item.status === 'ambiguous').length,
+    conflictCount: items.filter((item) => item.status === 'conflicting').length,
+    unsupportedCount: items.filter((item) => item.status === 'unsupported_ungrounded').length,
+    items,
+  };
+};
+
+const buildWorkflowAcceptanceState = (input: {
+  groundingStatus: AiStageMemorySummary['factpack']['groundingStatus'];
+  conflictSummary: WorkflowConflictSummary;
+  awaitingUserDecisions: boolean;
+  unresolvedQuestionCount: number;
+}): WorkflowAcceptanceState => {
+  if (input.awaitingUserDecisions && input.conflictSummary.conflictCount > 0) {
+    return 'review_required_conflict';
+  }
+
+  if (input.awaitingUserDecisions && (input.conflictSummary.ambiguityCount > 0 || input.unresolvedQuestionCount > 0)) {
+    return 'review_required_ambiguity';
+  }
+
+  if (input.conflictSummary.additiveCount > 0 || input.conflictSummary.unsupportedCount > 0) {
+    return 'accepted_with_additions';
+  }
+
+  if (input.groundingStatus === 'ungrounded') {
+    return 'accepted_ungrounded_warning';
+  }
+
+  return 'accepted';
+};
+
+const extractUnresolvedWorkflowQuestions = (value: unknown): string[] => {
+  if (!isRecord(value) || !Array.isArray(value.proposals)) {
+    return [];
+  }
+
+  return value.proposals
+    .flatMap((proposal) => {
+      if (typeof proposal === 'string') {
+        const question = proposal.trim();
+        return question ? [question] : [];
+      }
+
+      if (!isRecord(proposal)) {
+        return [];
+      }
+
+      const question = asWorkflowText(proposal.question) ?? asWorkflowText(proposal.topic);
+      return question ? [question] : [];
+    })
+    .slice(0, 12);
+};
+
 const getStageMemoryValue = (stage: Stage, results: StageResults): unknown => {
   const storageKey = getStageStorageKey(stage);
   if (storageKey in results) {
@@ -407,11 +623,27 @@ const buildAiStageMemorySummary = (
   config: GenerationConfig,
   results: StageResults,
   activeFactpack: Factpack | null,
-  previousDecisions?: Record<string, string>
+  previousDecisions?: Record<string, string>,
+  options?: {
+    groundingStatus?: AiStageMemorySummary['factpack']['groundingStatus'];
+    conflictSummary?: WorkflowConflictSummary;
+    workflowType?: WorkflowContentType;
+    executionMode?: ExecutionMode;
+    currentStageIndex?: number;
+    schemaVersion?: string;
+  },
 ): AiStageMemorySummary => {
   const currentStageKey = getStageStorageKey(stage);
   const currentLookupKey = getStageLookupKey(stage);
   const priorStageSummaries: Record<string, unknown> = {};
+  const groundingStatus = options?.groundingStatus ?? 'ungrounded';
+  const canon = {
+    groundingStatus,
+    factCount: activeFactpack?.facts.length || 0,
+    entityNames: Array.from(new Set((activeFactpack?.facts || []).map((fact) => fact.entity_name))).slice(0, 12),
+    gaps: Array.isArray(activeFactpack?.gaps) ? activeFactpack.gaps.filter((gap): gap is string => typeof gap === 'string').slice(0, 12) : [],
+  };
+  const conflicts = options?.conflictSummary ?? createEmptyWorkflowConflictSummary();
 
   Object.entries(results).forEach(([key, value]) => {
     if (key === currentStageKey || key === currentLookupKey) {
@@ -426,14 +658,71 @@ const buildAiStageMemorySummary = (
       type: config.type,
       stageKey: currentLookupKey,
       stageLabel: stage.name,
+      schemaVersion: options?.schemaVersion,
     },
     completedStages: Object.keys(results),
     currentStageData: summarizeForAiMemory(getStageMemoryValue(stage, results)),
     priorStageSummaries,
     previousDecisions: previousDecisions || {},
     factpack: {
-      factCount: activeFactpack?.facts.length || 0,
-      entityNames: Array.from(new Set((activeFactpack?.facts || []).map((fact) => fact.entity_name))).slice(0, 12),
+      factCount: canon.factCount,
+      entityNames: canon.entityNames,
+      gaps: canon.gaps,
+      groundingStatus,
+    },
+    canon,
+    conflicts,
+    execution: {
+      workflowType: options?.workflowType,
+      executionMode: options?.executionMode,
+      currentStageIndex: options?.currentStageIndex,
+    },
+  };
+};
+
+const buildWorkflowMemoryState = (
+  stage: Stage,
+  config: GenerationConfig,
+  results: StageResults,
+  activeFactpack: Factpack | null,
+  previousDecisions: Record<string, string> | undefined,
+  options: {
+    groundingStatus?: AiStageMemorySummary['factpack']['groundingStatus'];
+    conflictSummary?: WorkflowConflictSummary;
+    workflowType?: WorkflowContentType;
+    executionMode?: ExecutionMode;
+    currentStageIndex?: number;
+    schemaVersion?: string;
+    unresolvedQuestions?: string[];
+  },
+): WorkflowMemoryState => {
+  const summary = buildAiStageMemorySummary(stage, config, results, activeFactpack, previousDecisions, options);
+  return {
+    request: {
+      prompt: summary.request.prompt,
+      generatorType: config.type,
+      schemaVersion: summary.request.schemaVersion,
+    },
+    stage: {
+      currentStageKey: summary.request.stageKey,
+      currentStageLabel: summary.request.stageLabel,
+      currentStageIndex: options.currentStageIndex ?? 0,
+      completedStages: [...summary.completedStages],
+      currentStageData: summary.currentStageData,
+      summaries: { ...summary.priorStageSummaries },
+    },
+    decisions: {
+      confirmed: { ...summary.previousDecisions },
+      unresolvedQuestions: [...(options.unresolvedQuestions ?? [])],
+    },
+    canon: {
+      ...summary.canon,
+      entityNames: [...summary.canon.entityNames],
+      gaps: [...summary.canon.gaps],
+    },
+    conflicts: {
+      ...summary.conflicts,
+      items: summary.conflicts.items.map((item) => ({ ...item })),
     },
   };
 };
@@ -763,6 +1052,8 @@ export default function ManualGenerator() {
   const prevFactpackKeyRef = useRef<string | null>(null);
   const prevCompiledStageRequestKeyRef = useRef<string | null>(null);
   const prevWorkflowRunStateKeyRef = useRef<string | null>(null);
+  const prevWorkflowMemoryKeyRef = useRef<string | null>(null);
+  const authoritativeStageReviewRef = useRef<AuthoritativeStageReviewSnapshot | null>(null);
   const dynamicNpcStagesRef = useRef<Stage[] | null>(null);
 
   useEffect(() => {
@@ -939,6 +1230,87 @@ export default function ManualGenerator() {
     }
   }, [config, _sessionStatus, error, isComplete, currentStageIndex, STAGES, workflowRunState]);
 
+  useEffect(() => {
+    if (!config) {
+      prevWorkflowMemoryKeyRef.current = null;
+      return;
+    }
+
+    const activeStage = currentStageIndex >= 0 && currentStageIndex < STAGES.length
+      ? STAGES[currentStageIndex]
+      : STAGES[STAGES.length - 1];
+    if (!activeStage) {
+      return;
+    }
+
+    const workflowType = resolveWorkflowTypeFromConfigType(config.type);
+    const runStage = getCurrentWorkflowStageIdentity(workflowType, activeStage);
+    const groundingStatus = (factpack?.facts.length ?? 0) > 0 ? retrievalGroundingStatus : 'ungrounded';
+    const reviewSource = currentStageOutput ?? getStageMemoryValue(activeStage, stageResults);
+    const memoryStageResults = currentStageOutput
+      ? storeStageResult(stageResults, activeStage, currentStageOutput)
+      : stageResults;
+    const reviewSourceKey = getWorkflowStageSourceKey(reviewSource);
+    const awaitingUserDecisions = _sessionStatus === 'awaiting_user_decisions';
+    if (
+      authoritativeStageReviewRef.current
+      && (
+        !runStage?.stageKey
+        || !reviewSourceKey
+        || authoritativeStageReviewRef.current.stageKey !== runStage.stageKey
+        || authoritativeStageReviewRef.current.sourceKey !== reviewSourceKey
+      )
+    ) {
+      authoritativeStageReviewRef.current = null;
+    }
+    const activeAuthoritativeStageReview = authoritativeStageReviewRef.current;
+    const conflictSummary = activeAuthoritativeStageReview
+      ? cloneWorkflowConflictSummaryLocal(activeAuthoritativeStageReview.conflictSummary)
+      : buildWorkflowConflictSummary(reviewSource, groundingStatus, awaitingUserDecisions);
+    const unresolvedQuestions = extractUnresolvedWorkflowQuestions(reviewSource);
+    const memory = buildWorkflowMemoryState(activeStage, config, memoryStageResults, factpack, accumulatedAnswers, {
+      groundingStatus,
+      conflictSummary,
+      workflowType,
+      executionMode: getWorkflowExecutionMode(),
+      currentStageIndex,
+      schemaVersion: 'v1.1-client',
+      unresolvedQuestions,
+    });
+    const acceptanceState = activeAuthoritativeStageReview
+      ? activeAuthoritativeStageReview.acceptanceState
+      : buildWorkflowAcceptanceState({
+        groundingStatus,
+        conflictSummary,
+        awaitingUserDecisions,
+        unresolvedQuestionCount: unresolvedQuestions.length,
+      });
+    const nextMemoryKey = JSON.stringify({ memory, acceptanceState, stageKey: runStage?.stageKey || null });
+
+    if (prevWorkflowMemoryKeyRef.current === nextMemoryKey) {
+      return;
+    }
+
+    prevWorkflowMemoryKeyRef.current = nextMemoryKey;
+    setWorkflowRunState((prev) => syncWorkflowRunMemory(prev, {
+      memory,
+      acceptanceState,
+      stageKey: runStage?.stageKey,
+      conflicts: conflictSummary,
+    }));
+  }, [
+    STAGES,
+    _sessionStatus,
+    accumulatedAnswers,
+    config,
+    currentStageIndex,
+    currentStageOutput,
+    factpack,
+    retrievalGroundingStatus,
+    assistMode,
+    stageResults,
+  ]);
+
   // Push workflow context into AI Assistant whenever relevant state changes
   useEffect(() => {
     if (!config) {
@@ -949,6 +1321,7 @@ export default function ManualGenerator() {
       prevFactpackKeyRef.current = null;
       prevCompiledStageRequestKeyRef.current = null;
       prevWorkflowRunStateKeyRef.current = null;
+      prevWorkflowMemoryKeyRef.current = null;
       return;
     }
 
@@ -1012,6 +1385,9 @@ export default function ManualGenerator() {
         flags: config.flags,
       },
       compiledStageRequest: isWorkflowComplete ? undefined : compiledStageRequest || undefined,
+      acceptanceState: workflowRunState?.acceptanceState,
+      canon: workflowRunState?.memory?.canon,
+      conflictSummary: workflowRunState?.memory?.conflicts,
       generatorType: config.type,
       schemaVersion: 'v1.1-client',
       projectId: projectId !== 'default' ? projectId : undefined,
@@ -1131,13 +1507,28 @@ export default function ManualGenerator() {
       const displayMessage = typeof metadata?.displayMessage === 'string' && metadata.displayMessage.trim().length > 0
         ? metadata.displayMessage.trim()
         : 'This stage returned data the app could not accept automatically. Review the stage and choose how to continue.';
+      const activeStage = currentStageIndex >= 0 && currentStageIndex < STAGES.length
+        ? STAGES[currentStageIndex]
+        : null;
+      const workflowType = config ? resolveWorkflowTypeFromConfigType(config.type) : 'unknown';
+      const stageKey = metadata?.stageKey
+        || _failure.workflow?.stageKey
+        || (activeStage ? getCurrentWorkflowStageIdentity(workflowType, activeStage)?.stageKey : undefined);
+      const stageErrorOutput = buildWorkflowStageErrorOutput({
+        stageName,
+        errorMessage: displayMessage,
+      });
+
+      authoritativeStageReviewRef.current = buildAuthoritativeStageReviewSnapshot({
+        stageKey,
+        source: stageErrorOutput,
+        acceptanceState: _failure.workflow?.acceptanceState,
+        conflictSummary: _failure.workflow?.conflictSummary,
+      });
 
       setError(displayMessage);
       setLastStageError({ stage: stageName, message: displayMessage, rawSnippet: undefined });
-      setCurrentStageOutput(buildWorkflowStageErrorOutput({
-        stageName,
-        errorMessage: displayMessage,
-      }));
+      setCurrentStageOutput(stageErrorOutput);
       setShowReviewModal(true);
       setSessionStatus('awaiting_user_decisions');
 
@@ -1153,7 +1544,7 @@ export default function ManualGenerator() {
         registerWorkflowStageFailureHandler(null);
       }
     };
-  }, [activeStageName, registerWorkflowStageFailureHandler]);
+  }, [STAGES, activeStageName, config, currentStageIndex, registerWorkflowStageFailureHandler]);
   // ─── End AI Assistant Integration
 
   const buildCurrentStageLaunchPlan = useCallback((): WorkflowStageLaunchPlan | null => {
@@ -1301,6 +1692,7 @@ export default function ManualGenerator() {
     setCurrentChunkInfo(undefined);
     setDynamicNpcStages(null);
     setStageRoutingDecision(null);
+    authoritativeStageReviewRef.current = null;
     setWorkflowRunState(null);
   };
 
@@ -1645,6 +2037,24 @@ export default function ManualGenerator() {
 
     // Restore the session itself
     setWorkflowRunState(session.workflowRunState ?? null);
+    const restoredStages = getGeneratorStages((session.config as unknown as GenerationConfig)?.type, STAGE_CATALOG, dynamicNpcStagesRef.current);
+    const restoredActiveStage = restoredStageIndex >= 0 && restoredStageIndex < restoredStages.length
+      ? restoredStages[restoredStageIndex]
+      : restoredStages[restoredStages.length - 1];
+    const restoredCurrentStageData = session.workflowRunState?.memory?.stage.currentStageData;
+    let restoredReviewOutput: JsonRecord | null = null;
+    if (isRecord(restoredCurrentStageData)) {
+      restoredReviewOutput = { ...restoredCurrentStageData };
+    } else if (restoredActiveStage) {
+      const restoredStageMemoryValue = getStageMemoryValue(restoredActiveStage, session.stageResults as StageResults);
+      restoredReviewOutput = isRecord(restoredStageMemoryValue) ? restoredStageMemoryValue : null;
+    }
+    authoritativeStageReviewRef.current = buildAuthoritativeStageReviewSnapshot({
+      stageKey: session.workflowRunState?.currentStageKey,
+      source: restoredReviewOutput,
+      acceptanceState: session.workflowRunState?.acceptanceState,
+      conflictSummary: session.workflowRunState?.memory?.conflicts,
+    });
     setProgressSession(attachWorkflowMetadataToSession(session));
 
     // MIGRATION: If loaded from legacy top-level fields, migrate to stageChunkState
@@ -1699,6 +2109,28 @@ export default function ManualGenerator() {
       console.log('[Resume] Showing stage output for index:', resumeAction.stageIndex);
     } else if (resumeAction.kind === 'completed') {
       console.log('[Resume] Session was already complete or at final stage');
+    }
+
+    const resumeAcceptanceState = session.workflowRunState?.acceptanceState;
+    const shouldResumeReview = Boolean(
+      restoredReviewOutput
+      && (resumeAction.kind === 'stage' || resumeAction.kind === 'final_stage')
+      && (
+        session.workflowRunState?.status === 'awaiting_user_input'
+        || resumeAcceptanceState === 'review_required_conflict'
+        || resumeAcceptanceState === 'review_required_ambiguity'
+      )
+    );
+
+    if (shouldResumeReview) {
+      setCompiledStageRequest(session.compiledStageRequest ?? null);
+      setCurrentStageOutput(restoredReviewOutput);
+      setShowReviewModal(true);
+      setSessionStatus('awaiting_user_decisions');
+      if (resumeAction.alertMessage) {
+        alert(resumeAction.alertMessage);
+      }
+      return;
     }
 
     const launchPlan = buildWorkflowResumeLaunchPlan({
@@ -2715,13 +3147,19 @@ Output: Valid JSON only. No markdown, no prose.`;
           warnings: [],
           compressionApplied: packed.analysis.compressionApplied,
         },
-        memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions),
+        memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions, {
+          groundingStatus: (limitedFactpack?.facts.length ?? 0) > 0 ? retrievalGroundingStatus : 'ungrounded',
+          conflictSummary: workflowRunState?.memory?.conflicts,
+          workflowType: resolveWorkflowTypeFromConfigType(effectiveConfig.type),
+          executionMode: getWorkflowExecutionMode(),
+          currentStageIndex: stageIndex,
+          schemaVersion: 'v1.1-client',
+        }),
       };
       setCompiledStageRequest(packedRequest);
       setCurrentPrompt(packedPrompt);
       setModalMode('output');
 
-      // Auto-save the prompt
       if (autoSaveEnabled && progressSession) {
         const chunkIndex = chunkInfo ? chunkInfo.currentChunk : null;
         await savePendingPromptSession({
@@ -2780,7 +3218,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         const multiPartInstructionsOverhead = 300;
         const availableForChunk1 = Math.max(0, spaceCalculation.availableForFacts - multiPartInstructionsOverhead);
 
-        console.log(`📊 Backup Chunking Strategy:`);
+        console.log(`📦 Backup Chunking Strategy:`);
         console.log(`   Chunk 1 space: ${availableForChunk1.toLocaleString()} chars`);
         console.log(`   Chunks 2+ space: ${availableForSubsequentChunks.toLocaleString()} chars`);
 
@@ -2928,11 +3366,18 @@ Output: Valid JSON only. No markdown, no prose.`;
             warnings: [],
             compressionApplied: false,
           },
-          memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions),
+          memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions, {
+            groundingStatus: (limitedFactpack?.facts.length ?? 0) > 0 ? retrievalGroundingStatus : 'ungrounded',
+            conflictSummary: workflowRunState?.memory?.conflicts,
+            workflowType: resolveWorkflowTypeFromConfigType(effectiveConfig.type),
+            executionMode: getWorkflowExecutionMode(),
+            currentStageIndex: stageIndex,
+            schemaVersion: 'v1.1-client',
+          }),
         };
         setCompiledStageRequest(rebuiltRequest);
         setCurrentPrompt(rebuiltPrompt);
-        console.log(`📊 Rebuilt prompt after trimming: ${rebuiltAnalysis.totalChars} chars`);
+        console.log(`📦 Rebuilt prompt after trimming: ${rebuiltAnalysis.totalChars} chars`);
         setModalMode('output');
         if (autoSaveEnabled && progressSession) {
           const chunkIndex = chunkInfo ? chunkInfo.currentChunk : null;
@@ -2970,7 +3415,14 @@ Output: Valid JSON only. No markdown, no prose.`;
           warnings,
           compressionApplied: false,
         },
-        memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions),
+        memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions, {
+          groundingStatus: (limitedFactpack?.facts.length ?? 0) > 0 ? retrievalGroundingStatus : 'ungrounded',
+          conflictSummary: workflowRunState?.memory?.conflicts,
+          workflowType: resolveWorkflowTypeFromConfigType(effectiveConfig.type),
+          executionMode: getWorkflowExecutionMode(),
+          currentStageIndex: stageIndex,
+          schemaVersion: 'v1.1-client',
+        }),
       };
       setCompiledStageRequest(overflowRequest);
       setCurrentPrompt(fullPrompt);
@@ -3011,7 +3463,14 @@ Output: Valid JSON only. No markdown, no prose.`;
         warnings,
         compressionApplied: false,
       },
-      memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions),
+      memory: buildAiStageMemorySummary(stage, effectiveConfig, results, limitedFactpack, limitedDecisions, {
+        groundingStatus: (limitedFactpack?.facts.length ?? 0) > 0 ? retrievalGroundingStatus : 'ungrounded',
+        conflictSummary: workflowRunState?.memory?.conflicts,
+        workflowType: resolveWorkflowTypeFromConfigType(effectiveConfig.type),
+        executionMode: getWorkflowExecutionMode(),
+        currentStageIndex: stageIndex,
+        schemaVersion: 'v1.1-client',
+      }),
     };
     setCompiledStageRequest(safeRequest);
     setCurrentPrompt(fullPrompt);
@@ -3669,6 +4128,50 @@ Output: Valid JSON only. No markdown, no prose.`;
         isMultiPartGeneration,
       });
       parsed = reviewPreparation.parsed;
+      const workflowType = config ? resolveWorkflowTypeFromConfigType(config.type) : 'unknown';
+      const currentRunStage = getCurrentWorkflowStageIdentity(workflowType, currentStage);
+      const reviewAwaitingUserDecisions = reviewPreparation.shouldPauseForPlannerDecisions || reviewPreparation.shouldPauseForReview;
+      const reviewGroundingStatus = (factpack?.facts.length ?? 0) > 0 ? retrievalGroundingStatus : 'ungrounded';
+      const reviewConflictSummary = metadata?.conflictSummary
+        ? cloneWorkflowConflictSummaryLocal(metadata.conflictSummary)
+        : buildWorkflowConflictSummary(parsed, reviewGroundingStatus, reviewAwaitingUserDecisions);
+      const unresolvedQuestions = extractUnresolvedWorkflowQuestions(parsed);
+      const authoritativeAcceptanceState = metadata?.acceptanceState ?? buildWorkflowAcceptanceState({
+        groundingStatus: reviewGroundingStatus,
+        conflictSummary: reviewConflictSummary,
+        awaitingUserDecisions: reviewAwaitingUserDecisions,
+        unresolvedQuestionCount: unresolvedQuestions.length,
+      });
+
+      authoritativeStageReviewRef.current = metadata
+        ? buildAuthoritativeStageReviewSnapshot({
+          stageKey: metadata.stageKey || currentRunStage?.stageKey || getStageLookupKey(currentStage),
+          source: parsed,
+          acceptanceState: authoritativeAcceptanceState,
+          conflictSummary: reviewConflictSummary,
+        })
+        : null;
+
+      if (metadata && config) {
+        const memoryStageResults = storeStageResult(stageResults, currentStage, parsed);
+        const authoritativeMemory = buildWorkflowMemoryState(currentStage, config, memoryStageResults, factpack, accumulatedAnswers, {
+          groundingStatus: reviewGroundingStatus,
+          conflictSummary: reviewConflictSummary,
+          workflowType,
+          executionMode: getWorkflowExecutionMode(),
+          currentStageIndex,
+          schemaVersion: 'v1.1-client',
+          unresolvedQuestions,
+        });
+
+        setWorkflowRunState((prev) => syncWorkflowRunMemory(prev, {
+          memory: authoritativeMemory,
+          acceptanceState: authoritativeAcceptanceState,
+          stageKey: metadata.stageKey || currentRunStage?.stageKey,
+          canon: metadata.canon,
+          conflicts: reviewConflictSummary,
+        }));
+      }
 
       if (reviewPreparation.shouldPauseForPlannerDecisions) {
         const pipelineOutcome = recordPipelineSubmitOutcome({
