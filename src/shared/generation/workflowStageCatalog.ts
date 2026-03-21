@@ -8,6 +8,8 @@ export type WorkflowStageKey =
   | 'core_details'
   | 'stats'
   | 'character_build'
+  | 'character_build_feature_inventory'
+  | 'character_build_feature_enrichment'
   | 'combat'
   | 'spellcasting'
   | 'legendary'
@@ -29,7 +31,10 @@ export type LegacyStageContractKey =
   | 'relationships'
   | 'equipment';
 
-export type NpcPromptContractKey = Exclude<WorkflowStageContractKey, 'keyword_extractor' | 'planner'>;
+export type NpcPromptContractKey = Exclude<
+  WorkflowStageContractKey,
+  'keyword_extractor' | 'planner' | 'character_build_feature_inventory' | 'character_build_feature_enrichment'
+>;
 
 export interface WorkflowStageContract extends SharedStageContract {}
 
@@ -181,6 +186,46 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
         fighting_styles: MAY_BE_EMPTY_ARRAY_RULE,
         skill_proficiencies: MAY_BE_EMPTY_ARRAY_RULE,
         saving_throws: MAY_BE_EMPTY_ARRAY_RULE,
+      },
+    },
+  },
+  character_build_feature_inventory: {
+    key: 'character_build_feature_inventory',
+    displayName: 'Creator: Character Build Inventory',
+    aliases: ['character_build_feature_inventory', 'characterBuildFeatureInventory'],
+    contentTypes: ['npc'],
+    manualModeSupported: true,
+    contract: {
+      outputAllowedKeys: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
+      requiredKeys: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
+      proxyAllowedKeys: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
+      fieldRules: {
+        class_features: MAY_BE_EMPTY_ARRAY_RULE,
+        subclass_features: MAY_BE_EMPTY_ARRAY_RULE,
+        racial_features: MAY_BE_EMPTY_ARRAY_RULE,
+        feats: MAY_BE_EMPTY_ARRAY_RULE,
+        fighting_styles: MAY_BE_EMPTY_ARRAY_RULE,
+        skill_proficiencies: MAY_BE_EMPTY_ARRAY_RULE,
+        saving_throws: MAY_BE_EMPTY_ARRAY_RULE,
+      },
+    },
+  },
+  character_build_feature_enrichment: {
+    key: 'character_build_feature_enrichment',
+    displayName: 'Creator: Character Build Enrichment',
+    aliases: ['character_build_feature_enrichment', 'characterBuildFeatureEnrichment'],
+    contentTypes: ['npc'],
+    manualModeSupported: true,
+    contract: {
+      outputAllowedKeys: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles'],
+      requiredKeys: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles'],
+      proxyAllowedKeys: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles'],
+      fieldRules: {
+        class_features: MAY_BE_EMPTY_ARRAY_RULE,
+        subclass_features: MAY_BE_EMPTY_ARRAY_RULE,
+        racial_features: MAY_BE_EMPTY_ARRAY_RULE,
+        feats: MAY_BE_EMPTY_ARRAY_RULE,
+        fighting_styles: MAY_BE_EMPTY_ARRAY_RULE,
       },
     },
   },

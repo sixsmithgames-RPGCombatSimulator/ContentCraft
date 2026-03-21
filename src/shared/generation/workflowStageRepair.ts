@@ -1500,7 +1500,11 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     payload = normalized;
   }
 
-  if (contractKey === 'character_build') {
+  if (
+    contractKey === 'character_build'
+    || contractKey === 'character_build_feature_inventory'
+    || contractKey === 'character_build_feature_enrichment'
+  ) {
     const normalized = normalizeCharacterBuildPayload(payload);
     if (JSON.stringify(normalized) !== JSON.stringify(payload)) {
       appliedRepairs.push('character_build:normalize');

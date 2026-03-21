@@ -186,7 +186,10 @@ export function validateWorkflowStageContractPayload(
     }
   }
 
-  if (definition?.key === 'character_build') {
+  if (
+    definition?.key === 'character_build'
+    || definition?.key === 'character_build_feature_enrichment'
+  ) {
     const placeholderDescriptionIssues = collectCharacterBuildPlaceholderDescriptionIssues(obj);
     if (placeholderDescriptionIssues.length > 0) {
       return { ok: false, error: placeholderDescriptionIssues.join('; ') };

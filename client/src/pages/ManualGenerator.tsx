@@ -111,7 +111,24 @@ import type { ParentStructure } from '../utils/locationGeometry';
 import { restoreWorkflowStageChunkState } from '../services/workflowStageChunkRestore';
 import {
   getStageContract as getWorkflowStageContract,
+  validateStageOutput,
 } from '../utils/stageOutputContracts';
+import { validateNpcStageOutput } from '../utils/npcStageValidator';
+import {
+  CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY,
+  CHARACTER_BUILD_ENRICHMENT_STAGE_KEY,
+  CHARACTER_BUILD_INVENTORY_STAGE_KEY,
+  CHARACTER_BUILD_INVENTORY_STATE_KEY,
+  buildCharacterBuildInventoryState,
+  createCharacterBuildEnrichedBatchesState,
+  finalizeCharacterBuildPayload,
+  getCharacterBuildFeatureBatchCount,
+  getCharacterBuildSystemPrompt,
+  isCharacterBuildInternalStageKey,
+  readCharacterBuildEnrichedBatchesState,
+  readCharacterBuildInventoryState,
+  resolveCharacterBuildExecutionStageKey,
+} from '../services/npcCharacterBuildEnrichment';
 import ModeSelectionDialog from '../components/ai-assistant/ModeSelectionDialog';
 import { buildManualStagePrompt } from '../services/workflowTransport';
 import {
@@ -255,6 +272,27 @@ type AuthoritativeStageReviewSnapshot = {
 
 const toStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
+const getCharacterBuildInternalStageName = (stageKey: string): string => {
+  if (stageKey === CHARACTER_BUILD_INVENTORY_STAGE_KEY) {
+    return 'Creator: Character Build Inventory';
+  }
+
+  if (stageKey === CHARACTER_BUILD_ENRICHMENT_STAGE_KEY) {
+    return 'Creator: Character Build Enrichment';
+  }
+
+  return 'Creator: Character Build';
+};
+
+const buildCriticalStageIssue = (
+  description: string,
+  suggestion: string = 'Retry this stage and fix every listed validation issue.',
+): JsonRecord => ({
+  severity: 'critical',
+  description,
+  suggestion,
+});
 
 const shouldLogAiPayload = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -1371,7 +1409,7 @@ export default function ManualGenerator() {
       workflowType: wfType,
       workflowLabel: getWorkflowLabel(wfType),
       currentStage: isWorkflowComplete ? undefined : currentStage?.name,
-      stageRouterKey: isWorkflowComplete ? undefined : currentRunStage?.stageKey,
+      stageRouterKey: isWorkflowComplete ? undefined : (compiledStageRequest?.stageKey || currentRunStage?.stageKey),
       stageProgress: currentStageIndex >= 0
         ? { current: currentStageIndex + 1, total: STAGES.length }
         : undefined,
@@ -1514,9 +1552,17 @@ export default function ManualGenerator() {
       const stageKey = metadata?.stageKey
         || _failure.workflow?.stageKey
         || (activeStage ? getCurrentWorkflowStageIdentity(workflowType, activeStage)?.stageKey : undefined);
+      const technicalErrorMessage = typeof _failure.error?.message === 'string' && _failure.error.message.trim().length > 0
+        ? _failure.error.message.trim()
+        : displayMessage;
       const stageErrorOutput = buildWorkflowStageErrorOutput({
         stageName,
-        errorMessage: displayMessage,
+        errorMessage: technicalErrorMessage,
+        displayErrorMessage: displayMessage,
+        technicalErrorMessage,
+        parsed: {
+          conflicts: [buildCriticalStageIssue(technicalErrorMessage)],
+        },
       });
 
       authoritativeStageReviewRef.current = buildAuthoritativeStageReviewSnapshot({
@@ -2599,7 +2645,9 @@ Validation will reject incorrect field names or missing required fields.`;
 
     // Don't condense system prompts - preserve quality
     // If chunking is needed, chunk 1 can have zero facts and all facts go to chunks 2+
-    const actualSystemPrompt = stage.systemPrompt;
+    const stageLookupKey = getStageLookupKey(stage);
+    const isCharacterBuildStage = effectiveConfig.type === 'npc' && stage.name === 'Creator: Character Build';
+    let actualSystemPrompt = stage.systemPrompt;
 
     const stageNeedsCanon = stage.name !== 'Purpose' && stage.name !== 'Keyword Extractor';
 
@@ -2664,6 +2712,10 @@ Validation will reject incorrect field names or missing required fields.`;
       const stageEmbedsCanonFacts = userPromptWithoutFacts.includes('"relevant_canon"');
       hasCanonFacts = stageEmbedsCanonFacts;
 
+      const sizingSystemPrompt = isCharacterBuildStage
+        ? getCharacterBuildSystemPrompt(resolveCharacterBuildExecutionStageKey(minimalContext))
+        : actualSystemPrompt;
+
       if (!stageEmbedsCanonFacts) {
         console.log(`[Fact Space] ${stage.name}: Prompt does not embed canon facts (likely using canon_reference). Skipping fact chunking check.`);
       }
@@ -2673,7 +2725,7 @@ Validation will reject incorrect field names or missing required fields.`;
       } else {
 
         spaceCalculation = calculateAvailableFactSpace(
-          actualSystemPrompt,  // Use condensed prompt if needed
+          sizingSystemPrompt,  // Use condensed prompt if needed
           userPromptWithoutFacts,  // This already includes previousDecisions in the JSON
           {
             // Don't pass accumulated answers - they're already in userPromptWithoutFacts via previousDecisions
@@ -2855,6 +2907,16 @@ Validation will reject incorrect field names or missing required fields.`;
       npcSectionContext: npcContext,
     };
 
+    const effectiveStageKey = isCharacterBuildStage
+      ? resolveCharacterBuildExecutionStageKey(context)
+      : (stage.workflowStageKey || stageLookupKey);
+    const effectiveStageLabel = isCharacterBuildInternalStageKey(effectiveStageKey)
+      ? getCharacterBuildInternalStageName(effectiveStageKey)
+      : stage.name;
+    if (isCharacterBuildInternalStageKey(effectiveStageKey)) {
+      actualSystemPrompt = getCharacterBuildSystemPrompt(effectiveStageKey);
+    }
+
     // Check if this stage requires chunking (e.g., Location Spaces stage)
     // This must happen BEFORE we start chunking to initialize the iteration
     console.log(`[Stage Chunking Debug] Stage: ${stage.name}, isStageChunking: ${isStageChunking}, chunkInfo: ${!!chunkInfo}, hasShould Chunk: ${'shouldChunk' in stage}`);
@@ -2881,7 +2943,9 @@ Validation will reject incorrect field names or missing required fields.`;
         setAccumulatedChunkResults([]);
 
         // Create chunkInfo for first iteration
-        const firstChunkInfo = buildWorkflowStageChunkInfoForIndex(0, chunkConfig.totalChunks);
+        const firstChunkInfo = buildWorkflowStageChunkInfoForIndex(0, chunkConfig.totalChunks, {
+          labelPrefix: chunkConfig.labelPrefix,
+        });
 
         // Re-call showStageOutput with chunk info to start iteration
         console.log(`[Stage Chunking] Starting chunk 1/${chunkConfig.totalChunks}`);
@@ -2966,13 +3030,15 @@ Validation will reject incorrect field names or missing required fields.`;
     const isSubsequentChunk = chunkInfo && chunkInfo.currentChunk > 1;
     const isLastChunk = chunkInfo && chunkInfo.currentChunk === chunkInfo.totalChunks;
     const isFirstChunk = chunkInfo && chunkInfo.currentChunk === 1;
-    const promptMode: AiCompiledStageRequest['promptBudget']['mode'] = isSubsequentChunk ? 'continuation' : 'safe';
+    const isStatelessCharacterBuildChunk = isCharacterBuildInternalStageKey(effectiveStageKey);
+    const treatAsContinuationChunk = Boolean(isSubsequentChunk && !isStatelessCharacterBuildChunk);
+    const promptMode: AiCompiledStageRequest['promptBudget']['mode'] = treatAsContinuationChunk ? 'continuation' : 'safe';
 
     let systemPromptToUse = actualSystemPrompt;  // Use condensed prompt if stage needed it
     let userPromptToUse = userPromptContent;
 
     // Add multi-part instructions for chunk 1
-    if (isFirstChunk && chunkInfo && chunkInfo.totalChunks > 1) {
+    if (isFirstChunk && chunkInfo && chunkInfo.totalChunks > 1 && !isStatelessCharacterBuildChunk) {
       systemPromptToUse = `${actualSystemPrompt}
 
 ---
@@ -2987,10 +3053,9 @@ Validation will reject incorrect field names or missing required fields.`;
     }
 
     // Use minimal prompts for chunks 2+ (but NOT for Spaces stage - it needs full prompt each time)
-    const stageLookupKey = getStageLookupKey(stage);
     const isLocationSpacesStage = stageLookupKey === 'location_spaces' || stage.name === 'Spaces';
 
-    if (isSubsequentChunk && !isLocationSpacesStage) {
+    if (treatAsContinuationChunk && !isLocationSpacesStage) {
       systemPromptToUse = `Continuing ${stage.name} generation. Chunk ${chunkInfo!.currentChunk} of ${chunkInfo!.totalChunks}.
 
 ${isLastChunk
@@ -3004,7 +3069,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       userPromptToUse = `${isLastChunk ? 'Final' : 'Continuing'} canon facts:\n\n${userPromptContent}`;
 
       console.log(`📦 Chunk ${chunkInfo!.currentChunk}/${chunkInfo!.totalChunks}: Using minimal continuation prompt`);
-    } else if (isSubsequentChunk && isLocationSpacesStage) {
+    } else if (treatAsContinuationChunk && isLocationSpacesStage) {
       // Spaces stage needs full system prompt every time for visual data generation
       console.log(`📦 Chunk ${chunkInfo!.currentChunk}/${chunkInfo!.totalChunks}: Using full prompt (Spaces stage requires it)`);
     }
@@ -3018,16 +3083,16 @@ Output: Valid JSON only. No markdown, no prose.`;
       : null;
 
     // Check if this stage has a minimal contract (new prompt packer system)
-    const normalizedStageName = stage.name.replace(/^Creator:\s*/i, '').trim();
+    const normalizedStageName = effectiveStageLabel.replace(/^Creator:\s*/i, '').trim();
     const sharedStageContract =
-      getWorkflowStageContract(stage.workflowStageKey || stageLookupKey, config?.type) ||
+      getWorkflowStageContract(effectiveStageKey, config?.type) ||
       getWorkflowStageContract(normalizedStageName, config?.type);
     const stageContract =
       sharedStageContract ||
-      getNpcStageContract(stageLookupKey) ||
+      getNpcStageContract(effectiveStageKey) ||
       getNpcStageContract(normalizedStageName) ||
       null;
-    const isSpellcastingStageContract = stageLookupKey === 'spellcasting' || normalizedStageName.toLowerCase() === 'spellcasting';
+    const isSpellcastingStageContract = effectiveStageKey === 'spellcasting' || normalizedStageName.toLowerCase() === 'spellcasting';
     const packedStageContract =
       typeof stageContract === 'string'
         ? stageContract
@@ -3045,7 +3110,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           : stageContract.requiredKeys.join(', ')
         : '';
     // Use packed prompt for ANY stage that has a contract (not just NPC), except subsequent chunks
-    const usePackedPrompt = !!stageContract && !isSubsequentChunk;
+    const usePackedPrompt = !!stageContract && !treatAsContinuationChunk;
 
     if (plannerPromptMetrics && plannerPromptMetrics.totalChars > 7200 && !usePackedPrompt) {
       setError(`Planner prompt exceeds safe limit: ${plannerPromptMetrics.totalChars.toLocaleString()} chars (system: ${plannerPromptMetrics.systemChars.toLocaleString()}, user: ${plannerPromptMetrics.userChars.toLocaleString()}). Shorten the prompt or flags and retry.`);
@@ -3134,8 +3199,8 @@ Output: Valid JSON only. No markdown, no prose.`;
       }
       const packedRequest: AiCompiledStageRequest = {
         requestId: crypto.randomUUID(),
-        stageKey: stageLookupKey,
-        stageLabel: stage.name,
+        stageKey: effectiveStageKey,
+        stageLabel: effectiveStageLabel,
         prompt: packedPrompt,
         systemPrompt: packed.systemPrompt || '',
         userPrompt: packed.userPrompt || '',
@@ -3186,8 +3251,8 @@ Output: Valid JSON only. No markdown, no prose.`;
         // Don't pass accumulated answers here - they're already in the user prompt via previousDecisions
         // Passing them here would add them as a separate section, causing double-counting
         accumulatedAnswers: undefined,
-        npcSchemaGuidance: isSubsequentChunk ? undefined : npcSchemaGuidance,
-        forceIncludeSchema: isSubsequentChunk ? false : isNpcStage,
+        npcSchemaGuidance: treatAsContinuationChunk ? undefined : npcSchemaGuidance,
+        forceIncludeSchema: treatAsContinuationChunk ? false : isNpcStage,
       }
     );
 
@@ -3346,15 +3411,15 @@ Output: Valid JSON only. No markdown, no prose.`;
           userPromptContent,
           {
             accumulatedAnswers: undefined,
-            npcSchemaGuidance: isSubsequentChunk ? undefined : npcSchemaGuidance,
-            forceIncludeSchema: isSubsequentChunk ? false : isNpcStage,
+            npcSchemaGuidance: treatAsContinuationChunk ? undefined : npcSchemaGuidance,
+            forceIncludeSchema: treatAsContinuationChunk ? false : isNpcStage,
           }
         );
 
         const rebuiltRequest: AiCompiledStageRequest = {
           requestId: crypto.randomUUID(),
-          stageKey: stageLookupKey,
-          stageLabel: stage.name,
+          stageKey: effectiveStageKey,
+          stageLabel: effectiveStageLabel,
           prompt: rebuiltPrompt,
           systemPrompt: systemPromptToUse,
           userPrompt: userPromptContent,
@@ -3402,8 +3467,8 @@ Output: Valid JSON only. No markdown, no prose.`;
       // Continue to show the prompt instead of blocking - user can proceed with caution
       const overflowRequest: AiCompiledStageRequest = {
         requestId: crypto.randomUUID(),
-        stageKey: stageLookupKey,
-        stageLabel: stage.name,
+        stageKey: effectiveStageKey,
+        stageLabel: effectiveStageLabel,
         prompt: fullPrompt,
         systemPrompt: systemPromptToUse,
         userPrompt: userPromptToUse,
@@ -3450,8 +3515,8 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     const safeRequest: AiCompiledStageRequest = {
       requestId: crypto.randomUUID(),
-      stageKey: stageLookupKey,
-      stageLabel: stage.name,
+      stageKey: effectiveStageKey,
+      stageLabel: effectiveStageLabel,
       prompt: fullPrompt,
       systemPrompt: systemPromptToUse,
       userPrompt: userPromptToUse,
@@ -3955,6 +4020,13 @@ Output: Valid JSON only. No markdown, no prose.`;
       const currentStage = STAGES[currentStageIndex];
       const currentStageName: string = currentStage.name;
       const logAi = shouldLogAiPayload();
+      const submittedStageKey = metadata?.stageKey
+        || currentStage.workflowStageKey
+        || currentStage.routerKey
+        || currentStage.name;
+      const submittedStageName = isCharacterBuildInternalStageKey(submittedStageKey)
+        ? getCharacterBuildInternalStageName(submittedStageKey)
+        : currentStage.name;
 
       if (logAi && currentStageName !== 'Visual Map') {
         console.log(`[AI][RAW][${currentStage.name}] (${aiResponse.length} chars)`, aiResponse);
@@ -3962,8 +4034,8 @@ Output: Valid JSON only. No markdown, no prose.`;
 
       const normalizedStageResponse = parseAndNormalizeWorkflowStageResponse({
         aiResponse,
-        stageName: currentStage.name,
-        stageIdentity: currentStage.workflowStageKey || currentStage.routerKey || currentStage.name,
+        stageName: submittedStageName,
+        stageIdentity: submittedStageKey,
         workflowType: config?.type,
         configPrompt: config?.prompt,
         configFlags: config?.flags as JsonRecord | undefined,
@@ -3975,7 +4047,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         const stageResponseFailure = normalizedStageResponse;
         const errorMessage = stageResponseFailure.error;
         const rawSnippet = stageResponseFailure.rawSnippet;
-        const autoRetryStageKey = `${config?.type ?? 'unknown'}:${currentStage.workflowStageKey || currentStage.routerKey || currentStage.name}`;
+        const autoRetryStageKey = `${config?.type ?? 'unknown'}:${submittedStageKey}`;
         const failureHandling = resolveWorkflowStageFailureHandling({
           stageName: currentStage.name,
           errorMessage,
@@ -4409,6 +4481,387 @@ Output: Valid JSON only. No markdown, no prose.`;
       // STAGE CHUNKING: Handle chunk completion and merging (e.g., Location Spaces)
       if (effectiveIsStageChunking) {
         console.log(`[Stage Chunking] Chunk ${effectiveCurrentChunk + 1}/${effectiveTotalChunks} complete for ${currentStage.name}`);
+
+        if (
+          config?.type === 'npc'
+          && currentStage.name === 'Creator: Character Build'
+          && isCharacterBuildInternalStageKey(submittedStageKey)
+        ) {
+          const clearedStageChunkState: StageChunkState = {
+            isStageChunking: false,
+            currentStageChunk: 0,
+            totalStageChunks: 0,
+            accumulatedChunkResults: [],
+            liveMapSpaces: [],
+            showLiveMap: false,
+          };
+
+          if (submittedStageKey === CHARACTER_BUILD_INVENTORY_STAGE_KEY) {
+            const inventoryState = buildCharacterBuildInventoryState(parsed);
+            const featureBatchCount = getCharacterBuildFeatureBatchCount(inventoryState);
+            const totalCharacterBuildChunks = featureBatchCount + 1;
+
+            if (featureBatchCount > 0) {
+              const inventoryResults: StageResults = {
+                ...stageResults,
+                [CHARACTER_BUILD_INVENTORY_STATE_KEY]: inventoryState,
+                [CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY]: createCharacterBuildEnrichedBatchesState([]),
+              };
+              const nextChunkIndex = 1;
+              const nextStageChunkState: StageChunkState = {
+                isStageChunking: true,
+                currentStageChunk: nextChunkIndex,
+                totalStageChunks: totalCharacterBuildChunks,
+                accumulatedChunkResults: [],
+                liveMapSpaces,
+                showLiveMap,
+              };
+
+              setStageResults(inventoryResults);
+              setCurrentStageChunk(nextChunkIndex);
+              setTotalStageChunks(totalCharacterBuildChunks);
+              setAccumulatedChunkResults([]);
+
+              if (autoSaveEnabled && progressSession) {
+                await saveStateAndSession({
+                  stageResults: inventoryResults,
+                  stageChunkState: nextStageChunkState,
+                });
+              }
+
+              const launchPlan = buildWorkflowSameStageLaunchPlan({
+                stageIndex: currentStageIndex,
+                stageResults: inventoryResults,
+                factpack,
+                chunkInfo: buildWorkflowStageChunkInfoForIndex(nextChunkIndex, totalCharacterBuildChunks, {
+                  labelPrefix: 'Phase',
+                }),
+              });
+              executeWorkflowStageLaunch(launchPlan, {
+                runtimeConfig: config!,
+              });
+
+              return recordPipelineSubmitOutcome({
+                status: 'retrying',
+                message: 'Character Build inventory accepted. Continuing with feature enrichment.',
+              });
+            }
+
+            const finalizedInventory = finalizeCharacterBuildPayload(inventoryState, []);
+            if (!finalizedInventory.ok) {
+              const stageErrorOutput = buildWorkflowStageErrorOutput({
+                stageName: currentStage.name,
+                errorMessage: finalizedInventory.error,
+                displayErrorMessage: 'Character Build could not be finalized because the structured feature output was incomplete.',
+                technicalErrorMessage: finalizedInventory.error,
+                parsed: {
+                  conflicts: [buildCriticalStageIssue(finalizedInventory.error, 'Retry Character Build and return complete, concrete feature data.')],
+                },
+              });
+              const pipelineOutcome = recordPipelineSubmitOutcome({
+                status: 'review_required',
+                message: 'Character Build requires review before it can continue.',
+              });
+              setCurrentStageOutput(stageErrorOutput);
+              setShowReviewModal(true);
+              setCompiledStageRequest(null);
+              setSessionStatus('awaiting_user_decisions');
+              return pipelineOutcome;
+            }
+
+            const contractValidation = validateStageOutput('character_build', finalizedInventory.payload, config?.type);
+            const finalStageContext: JsonRecord = {
+              ...(stageResults['creator:_basic_info'] || {}),
+              ...(stageResults['creator:_core_details'] || {}),
+              ...(stageResults['creator:_stats'] || {}),
+              ...finalizedInventory.payload,
+            };
+            const npcValidation = validateNpcStageOutput(currentStage.name, finalStageContext);
+
+            if (!contractValidation.ok || !npcValidation.isValid) {
+              const finalValidationError = [contractValidation.error, ...npcValidation.errors].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ');
+              const stageErrorOutput = buildWorkflowStageErrorOutput({
+                stageName: currentStage.name,
+                errorMessage: finalValidationError,
+                displayErrorMessage: 'Character Build returned data the app could not accept. Review the required fixes, then retry the stage.',
+                technicalErrorMessage: finalValidationError,
+                parsed: {
+                  conflicts: [buildCriticalStageIssue(finalValidationError, 'Retry Character Build and return complete, concrete feature descriptions.')],
+                },
+              });
+              const pipelineOutcome = recordPipelineSubmitOutcome({
+                status: 'review_required',
+                message: 'Character Build requires review before it can continue.',
+              });
+              setCurrentStageOutput(stageErrorOutput);
+              setShowReviewModal(true);
+              setCompiledStageRequest(null);
+              setSessionStatus('awaiting_user_decisions');
+              return pipelineOutcome;
+            }
+
+            const finalizedResultsBase = { ...stageResults };
+            delete finalizedResultsBase[CHARACTER_BUILD_INVENTORY_STATE_KEY];
+            delete finalizedResultsBase[CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY];
+            const finalizedResults = storeStageResult(finalizedResultsBase, currentStage, finalizedInventory.payload);
+            setStageResults(finalizedResults);
+            setIsStageChunking(false);
+            setCurrentStageChunk(0);
+            setTotalStageChunks(0);
+            setAccumulatedChunkResults([]);
+
+            const continuation = resolveWorkflowStageContinuation({
+              currentStageIndex,
+              currentStage,
+              stages: STAGES,
+              workflowType: config?.type,
+              userPrompt: config?.prompt,
+              stageResults: finalizedResults,
+              currentStageOutput: finalizedInventory.payload,
+              accumulatedAnswers,
+              ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+              dynamicNpcStages,
+              catalog: STAGE_CATALOG,
+              completionStrategy: 'finalized',
+              workflowRunState,
+              onLegendaryDecisionRequired: () =>
+                window.confirm('Should this character have legendary/mythic or lair/regional actions?'),
+            });
+            applyNpcDynamicRoutingPlan(continuation.routingPlan);
+
+            if (continuation.kind === 'advance') {
+              applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+                resetMultiPart: true,
+              }));
+
+              if (autoSaveEnabled && progressSession) {
+                await saveStateAndSession({
+                  currentStageIndex: continuation.nextIndex,
+                  stageResults: finalizedResults,
+                  stageChunkState: clearedStageChunkState,
+                });
+              }
+
+              const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+                stageIndex: continuation.nextIndex,
+                stageResults: finalizedResults,
+                factpack,
+              });
+              executeWorkflowStageLaunch(launchPlan, {
+                runtimeConfig: config!,
+              });
+            } else {
+              const completionResult = continuation.completionResult;
+              const { finalContent } = completionResult;
+              logWorkflowCompletionResult('[Pipeline Complete]', completionResult, finalizedResults);
+
+              executeWorkflowStageLaunch(buildWorkflowCompletedLaunchPlan({
+                finalOutput: finalContent,
+              }));
+
+              if (autoSaveEnabled && progressSession) {
+                await saveStateAndSession({
+                  stageResults: finalizedResults,
+                  stageChunkState: clearedStageChunkState,
+                });
+              }
+            }
+
+            return acceptPipelineSubmitOutcome();
+          }
+
+          const inventoryState = readCharacterBuildInventoryState(stageResults[CHARACTER_BUILD_INVENTORY_STATE_KEY]);
+          if (!inventoryState) {
+            const missingInventoryMessage = 'Character Build enrichment could not continue because the inventory pass state is missing.';
+            const pipelineOutcome = recordPipelineSubmitOutcome({ status: 'error', message: missingInventoryMessage });
+            setError(missingInventoryMessage);
+            setLastStageError({ stage: currentStage.name, message: missingInventoryMessage, rawSnippet: undefined });
+            setCurrentStageOutput(buildWorkflowStageErrorOutput({
+              stageName: currentStage.name,
+              errorMessage: missingInventoryMessage,
+              technicalErrorMessage: missingInventoryMessage,
+              parsed: {
+                conflicts: [buildCriticalStageIssue(missingInventoryMessage, 'Retry Character Build from the beginning so the inventory pass can be regenerated.')],
+              },
+            }));
+            setCompiledStageRequest(null);
+            applyWorkflowUiTransition(buildWorkflowErrorUiTransition());
+            return pipelineOutcome;
+          }
+
+          const existingEnrichedBatches = readCharacterBuildEnrichedBatchesState(stageResults[CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY]);
+          const updatedEnrichedBatches = [...existingEnrichedBatches, parsed];
+          const featureBatchCount = getCharacterBuildFeatureBatchCount(inventoryState);
+          const totalCharacterBuildChunks = featureBatchCount + 1;
+
+          if (updatedEnrichedBatches.length < featureBatchCount) {
+            const nextChunkIndex = updatedEnrichedBatches.length + 1;
+            const updatedStageResults: StageResults = {
+              ...stageResults,
+              [CHARACTER_BUILD_INVENTORY_STATE_KEY]: inventoryState,
+              [CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY]: createCharacterBuildEnrichedBatchesState(updatedEnrichedBatches),
+            };
+            const nextStageChunkState: StageChunkState = {
+              isStageChunking: true,
+              currentStageChunk: nextChunkIndex,
+              totalStageChunks: totalCharacterBuildChunks,
+              accumulatedChunkResults: [],
+              liveMapSpaces,
+              showLiveMap,
+            };
+
+            setStageResults(updatedStageResults);
+            setCurrentStageChunk(nextChunkIndex);
+            setTotalStageChunks(totalCharacterBuildChunks);
+            setAccumulatedChunkResults([]);
+
+            if (autoSaveEnabled && progressSession) {
+              await saveStateAndSession({
+                stageResults: updatedStageResults,
+                stageChunkState: nextStageChunkState,
+              });
+            }
+
+            const launchPlan = buildWorkflowSameStageLaunchPlan({
+              stageIndex: currentStageIndex,
+              stageResults: updatedStageResults,
+              factpack,
+              chunkInfo: buildWorkflowStageChunkInfoForIndex(nextChunkIndex, totalCharacterBuildChunks, {
+                labelPrefix: 'Phase',
+              }),
+            });
+            executeWorkflowStageLaunch(launchPlan, {
+              runtimeConfig: config!,
+            });
+
+            return recordPipelineSubmitOutcome({
+              status: 'retrying',
+              message: 'Character Build enrichment batch accepted. Continuing with the next feature batch.',
+            });
+          }
+
+          const finalizedCharacterBuild = finalizeCharacterBuildPayload(inventoryState, updatedEnrichedBatches);
+          if (!finalizedCharacterBuild.ok) {
+            const stageErrorOutput = buildWorkflowStageErrorOutput({
+              stageName: currentStage.name,
+              errorMessage: finalizedCharacterBuild.error,
+              displayErrorMessage: 'Character Build could not be finalized because one or more requested features were still missing concrete descriptions.',
+              technicalErrorMessage: finalizedCharacterBuild.error,
+              parsed: {
+                conflicts: [buildCriticalStageIssue(finalizedCharacterBuild.error, 'Retry Character Build and return every requested feature with concrete mechanics.')],
+              },
+            });
+            const pipelineOutcome = recordPipelineSubmitOutcome({
+              status: 'review_required',
+              message: 'Character Build requires review before it can continue.',
+            });
+            setCurrentStageOutput(stageErrorOutput);
+            setShowReviewModal(true);
+            setCompiledStageRequest(null);
+            setSessionStatus('awaiting_user_decisions');
+            return pipelineOutcome;
+          }
+
+          const contractValidation = validateStageOutput('character_build', finalizedCharacterBuild.payload, config?.type);
+          const finalStageContext: JsonRecord = {
+            ...(stageResults['creator:_basic_info'] || {}),
+            ...(stageResults['creator:_core_details'] || {}),
+            ...(stageResults['creator:_stats'] || {}),
+            ...finalizedCharacterBuild.payload,
+          };
+          const npcValidation = validateNpcStageOutput(currentStage.name, finalStageContext);
+
+          if (!contractValidation.ok || !npcValidation.isValid) {
+            const finalValidationError = [contractValidation.error, ...npcValidation.errors].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ');
+            const stageErrorOutput = buildWorkflowStageErrorOutput({
+              stageName: currentStage.name,
+              errorMessage: finalValidationError,
+              displayErrorMessage: 'Character Build returned data the app could not accept. Review the required fixes, then retry the stage.',
+              technicalErrorMessage: finalValidationError,
+              parsed: {
+                conflicts: [buildCriticalStageIssue(finalValidationError, 'Retry Character Build and return complete, concrete feature descriptions.')],
+              },
+            });
+            const pipelineOutcome = recordPipelineSubmitOutcome({
+              status: 'review_required',
+              message: 'Character Build requires review before it can continue.',
+            });
+            setCurrentStageOutput(stageErrorOutput);
+            setShowReviewModal(true);
+            setCompiledStageRequest(null);
+            setSessionStatus('awaiting_user_decisions');
+            return pipelineOutcome;
+          }
+
+          const finalizedResultsBase = { ...stageResults };
+          delete finalizedResultsBase[CHARACTER_BUILD_INVENTORY_STATE_KEY];
+          delete finalizedResultsBase[CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY];
+          const finalizedResults = storeStageResult(finalizedResultsBase, currentStage, finalizedCharacterBuild.payload);
+          setStageResults(finalizedResults);
+          setIsStageChunking(false);
+          setCurrentStageChunk(0);
+          setTotalStageChunks(0);
+          setAccumulatedChunkResults([]);
+
+          const continuation = resolveWorkflowStageContinuation({
+            currentStageIndex,
+            currentStage,
+            stages: STAGES,
+            workflowType: config?.type,
+            userPrompt: config?.prompt,
+            stageResults: finalizedResults,
+            currentStageOutput: finalizedCharacterBuild.payload,
+            accumulatedAnswers,
+            ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+            dynamicNpcStages,
+            catalog: STAGE_CATALOG,
+            completionStrategy: 'finalized',
+            workflowRunState,
+            onLegendaryDecisionRequired: () =>
+              window.confirm('Should this character have legendary/mythic or lair/regional actions?'),
+          });
+          applyNpcDynamicRoutingPlan(continuation.routingPlan);
+
+          if (continuation.kind === 'advance') {
+            applyWorkflowUiTransition(buildWorkflowAdvanceUiTransition({
+              resetMultiPart: true,
+            }));
+
+            if (autoSaveEnabled && progressSession) {
+              await saveStateAndSession({
+                currentStageIndex: continuation.nextIndex,
+                stageResults: finalizedResults,
+                stageChunkState: clearedStageChunkState,
+              });
+            }
+
+            const launchPlan = buildWorkflowJumpToStageLaunchPlan({
+              stageIndex: continuation.nextIndex,
+              stageResults: finalizedResults,
+              factpack,
+            });
+            executeWorkflowStageLaunch(launchPlan, {
+              runtimeConfig: config!,
+            });
+          } else {
+            const completionResult = continuation.completionResult;
+            const { finalContent } = completionResult;
+            logWorkflowCompletionResult('[Pipeline Complete]', completionResult, finalizedResults);
+
+            executeWorkflowStageLaunch(buildWorkflowCompletedLaunchPlan({
+              finalOutput: finalContent,
+            }));
+
+            if (autoSaveEnabled && progressSession) {
+              await saveStateAndSession({
+                stageResults: finalizedResults,
+                stageChunkState: clearedStageChunkState,
+              });
+            }
+          }
+
+          return acceptPipelineSubmitOutcome();
+        }
 
         // ====================================================================
         // SPACE APPROVAL WORKFLOW: For Location Spaces stage, show approval modal

@@ -1378,7 +1378,7 @@ function buildContractCorrectionPrompt(
     return buildSpellcastingSemanticCorrectionPrompt(basePrompt, issues);
   }
 
-  if (stageKey === 'character_build') {
+  if (stageKey === 'character_build' || stageKey === 'character_build_feature_enrichment') {
     return buildCharacterBuildSemanticCorrectionPrompt(basePrompt, issues);
   }
 

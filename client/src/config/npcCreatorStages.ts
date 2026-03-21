@@ -29,6 +29,10 @@ import {
   stripStageOutput,
   type GeneratorStagePromptContext as StageContext,
 } from '../services/stagePromptShared';
+import {
+  buildCharacterBuildChunkPlan,
+  buildCharacterBuildStagePrompt,
+} from '../services/npcCharacterBuildEnrichment';
 
 const CLASS_SPELLCAST_ABILITY_MAP: Record<string, string> = {
   cleric: 'WIS',
@@ -179,24 +183,8 @@ export const NPC_CREATOR_CHARACTER_BUILD = {
   name: 'Creator: Character Build',
   routerKey: 'characterBuild',
   systemPrompt: CHARACTER_BUILD_CONTRACT,
-
-  buildUserPrompt: (context: StageContext) => {
-    const basicInfo = context.stageResults['creator:_basic_info'];
-    const stats = context.stageResults['creator:_stats'];
-    return buildWorkflowStagePrompt({
-      context,
-      deliverable: 'npc',
-      stage: 'character_build',
-      payload: {
-        species: basicInfo?.species || basicInfo?.race,
-        background: basicInfo?.background,
-        class_levels: basicInfo?.class_levels,
-        ability_scores: stats?.ability_scores,
-        proficiency_bonus: stats?.proficiency_bonus,
-      },
-      plannerReferenceMessage: 'Canon facts were provided in the Planner stage. Review them for class features, racial traits, feats, and background details.',
-    });
-  },
+  shouldChunk: () => buildCharacterBuildChunkPlan(),
+  buildUserPrompt: (context: StageContext) => buildCharacterBuildStagePrompt(context),
 };
 
 /**

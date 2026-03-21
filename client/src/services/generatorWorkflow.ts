@@ -20,7 +20,12 @@ export interface GeneratorStage {
   workflowStageLabel?: string;
   systemPrompt: string;
   buildUserPrompt: (context: any) => string;
-  shouldChunk?: (context: any) => { shouldChunk: boolean; totalChunks: number; chunkSize: number };
+  shouldChunk?: (context: any) => {
+    shouldChunk: boolean;
+    totalChunks: number;
+    chunkSize: number;
+    labelPrefix?: string;
+  };
   [key: string]: unknown;
 }
 

@@ -13,6 +13,14 @@ describe('workflowRegistry', () => {
     expect(normalizeWorkflowStageId('monster_basic_info')).toBe('monster.basic_info');
   });
 
+  it('resolves internal Character Build substages through the shared NPC registry', () => {
+    expect(resolveWorkflowStageKey('npc', 'characterBuildFeatureInventory')).toBe('character_build_feature_inventory');
+    expect(resolveWorkflowStageKey('npc', 'characterBuildFeatureEnrichment')).toBe('character_build_feature_enrichment');
+    expect(getWorkflowStageDefinition('npc', 'character_build_feature_enrichment')?.contract?.requiredKeys).toEqual(
+      expect.arrayContaining(['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles']),
+    );
+  });
+
   it('returns proxy allowed keys for shared registry stage contracts', () => {
     expect(getWorkflowStageProxyAllowedKeys('item.mechanics')).toEqual(
       expect.arrayContaining(['properties', 'charges', 'spells']),
