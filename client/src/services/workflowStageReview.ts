@@ -388,7 +388,13 @@ function buildWorkflowStageUserMessage(stageName: string, errorMessage: string):
   const normalizedStageName = stageName.trim().toLowerCase();
   const normalizedError = errorMessage.trim().toLowerCase();
 
-  if (normalizedStageName.includes('character build') && normalizedError.includes('placeholder modifiers')) {
+  if (
+    normalizedStageName.includes('character build')
+    && (
+      normalizedError.includes('placeholder modifiers')
+      || normalizedError.includes('description repeats the feature name')
+    )
+  ) {
     return 'The last attempt returned incomplete character mechanics. Review the suggested fixes below, then retry the stage.';
   }
 

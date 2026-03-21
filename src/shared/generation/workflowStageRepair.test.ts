@@ -145,23 +145,44 @@ describe('workflowStageRepair', () => {
       stageIdOrName: 'character_build',
       workflowType: 'npc',
       payload: {
-        class_features: ['Extra Attack', { name: 'Action Surge', level: '2', source: 'Fighter' }],
+        class_features: ['Extra Attack: You can attack twice, instead of once, whenever you take the Attack action on your turn.', { name: 'Action Surge', description: 'Take one additional action on your turn, once per short or long rest.', level: '2', source: 'Fighter' }],
         subclass_features: [{ title: 'Improved Critical', details: 'Critical hit on 19-20.', level: 3, subclass: 'Champion' }],
-        racial_features: ['Darkvision'],
-        feats: ['Alert'],
-        fighting_styles: ['Defense'],
+        racial_features: ['Darkvision: You can see in dim light within 120 feet as if it were bright light, and in darkness as if it were dim light.'],
+        feats: ['Alert: Gain +5 to initiative, and you cannot be surprised while conscious.'],
+        fighting_styles: ['Defense: While you are wearing armor, you gain a +1 bonus to Armor Class.'],
         skill_proficiencies: ['Athletics'],
         saving_throws: [{ save: 'Strength', modifier: '+7' }],
       },
     });
 
     expect(repaired.payload.class_features).toEqual([
-      { name: 'Extra Attack', description: 'Extra Attack' },
-      { name: 'Action Surge', description: 'Action Surge', level: 2, source: 'Fighter' },
+      { name: 'Extra Attack', description: 'You can attack twice, instead of once, whenever you take the Attack action on your turn.' },
+      { name: 'Action Surge', description: 'Take one additional action on your turn, once per short or long rest.', level: 2, source: 'Fighter' },
     ]);
-    expect(repaired.payload.feats).toEqual([{ name: 'Alert', description: 'Alert' }]);
+    expect(repaired.payload.feats).toEqual([{ name: 'Alert', description: 'Gain +5 to initiative, and you cannot be surprised while conscious.' }]);
     expect(repaired.payload.skill_proficiencies).toEqual([{ name: 'Athletics', value: '+0' }]);
     expect(validateWorkflowStageContractPayload('character_build', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
+
+  it('rejects placeholder character build descriptions after repair', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'character_build',
+      workflowType: 'npc',
+      payload: {
+        class_features: ['Extra Attack'],
+        subclass_features: ['Improved Critical'],
+        racial_features: ['Darkvision'],
+        feats: ['Alert'],
+        fighting_styles: ['Defense'],
+        skill_proficiencies: ['Athletics +7'],
+        saving_throws: ['Strength +7'],
+      },
+    });
+
+    expect(validateWorkflowStageContractPayload('character_build', repaired.payload, 'npc')).toEqual({
+      ok: false,
+      error: expect.stringContaining('description repeats the feature name'),
+    });
   });
 
   it('preserves signed modifiers when character build skills and saves arrive as strings', () => {
@@ -169,12 +190,12 @@ describe('workflowStageRepair', () => {
       stageIdOrName: 'character_build',
       workflowType: 'npc',
       payload: {
-        class_features: ['Pact Magic'],
-        subclass_features: ['Genie\'s Vessel'],
-        racial_features: ['Lucky'],
-        feats: ['Chef'],
-        fighting_styles: ['None'],
-        skill_proficiencies: ['Persuasion +8', 'Stealth +7', 'Survival +5'],
+        class_features: ['Pact Magic: You have two spell slots that recharge on a short or long rest.'],
+        subclass_features: ['Genie\'s Vessel: You carry a magical vessel that serves as your patron\'s conduit and refuge.'],
+        racial_features: ['Lucky: When you roll a 1 on a d20 test, you can reroll the die and use the new roll.'],
+        feats: ['Chef: Increase Constitution or Wisdom by 1 and create treats that grant temporary hit points.'],
+        fighting_styles: [],
+        skill_proficiencies: ['Persuasion +8', 'Stealth +7', 'Survival +5', 'Insight +5'],
         saving_throws: ['Wisdom +5', 'Charisma +8'],
       },
     });
@@ -183,6 +204,7 @@ describe('workflowStageRepair', () => {
       { name: 'Persuasion', value: '+8' },
       { name: 'Stealth', value: '+7' },
       { name: 'Survival', value: '+5' },
+      { name: 'Insight', value: '+5' },
     ]);
     expect(repaired.payload.saving_throws).toEqual([
       { name: 'Wisdom', value: '+5' },
@@ -196,14 +218,14 @@ describe('workflowStageRepair', () => {
       stageIdOrName: 'character_build',
       workflowType: 'npc',
       payload: {
-        class_features: ['Sneak Attack'],
-        subclass_features: ['Assassinate'],
-        racial_features: ['Darkvision'],
-        feats: ['Alert'],
+        class_features: [{ name: 'Sneak Attack', description: 'Once per turn, deal extra damage to a target you hit with advantage or with an adjacent ally.' }],
+        subclass_features: [{ name: 'Assassinate', description: 'You gain advantage against creatures that have not acted yet, and hits against surprised creatures are critical hits.' }],
+        racial_features: [{ name: 'Darkvision', description: 'You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.' }],
+        feats: [{ name: 'Alert', description: 'Gain +5 to initiative, and you cannot be surprised while conscious.' }],
         fighting_styles: [],
         skill_proficiencies: [
           { skill: 'Stealth', bonus: 8 },
-          { name: 'Investigation', modifier: 4 },
+          { name: 'Perception', modifier: 4 },
         ],
         saving_throws: [
           { ability: 'Dexterity', bonus: 8 },
@@ -214,7 +236,7 @@ describe('workflowStageRepair', () => {
 
     expect(repaired.payload.skill_proficiencies).toEqual([
       { name: 'Stealth', value: '+8' },
-      { name: 'Investigation', value: '+4' },
+      { name: 'Perception', value: '+4' },
     ]);
     expect(repaired.payload.saving_throws).toEqual([
       { name: 'Dexterity', value: '+8' },

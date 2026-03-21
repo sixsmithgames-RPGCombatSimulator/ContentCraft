@@ -6,6 +6,98 @@ import {
   logWorkflowCompletionResult,
 } from './workflowCompletionPresentation';
 import type { WorkflowCompletionResult } from './workflowStageTransition';
+import type { GenerationRunState } from '../../../src/shared/generation/workflowTypes';
+
+function createResolvedWorkflowRunState(): GenerationRunState {
+  const canon = {
+    groundingStatus: 'project' as const,
+    factCount: 9,
+    entityNames: ['Moonspire Keep'],
+    gaps: ['missing ward sigil provenance'],
+  };
+  const conflicts = {
+    reviewRequired: false,
+    alignedCount: 8,
+    additiveCount: 1,
+    ambiguityCount: 0,
+    conflictCount: 0,
+    unsupportedCount: 0,
+    items: [
+      {
+        key: 'wards.new_sigils',
+        status: 'additive_unverified' as const,
+        message: 'The new ward sigils are additive and not yet backed by canon.',
+        fieldPath: 'wards.new_sigils',
+        proposedValue: 'Moon glass sigils',
+      },
+    ],
+  };
+
+  return {
+    runId: 'run-location-1',
+    workflowType: 'location',
+    workflowLabel: 'Location Builder',
+    executionMode: 'integrated',
+    status: 'ready',
+    stageSequence: ['purpose', 'foundation'],
+    stageLabels: {
+      purpose: 'Purpose',
+      foundation: 'Foundation',
+    },
+    currentStageKey: 'foundation',
+    currentStageLabel: 'Foundation',
+    currentStageIndex: 1,
+    currentAttemptId: 'attempt-location-1',
+    attempts: [
+      {
+        attemptId: 'attempt-location-1',
+        stageKey: 'foundation',
+        stageLabel: 'Foundation',
+        status: 'accepted',
+        transport: 'integrated',
+        acceptanceState: 'accepted_with_additions',
+        canon,
+        conflicts,
+        startedAt: 1,
+        updatedAt: 2,
+        acceptedAt: 2,
+        completedAt: 2,
+      },
+    ],
+    retrieval: {
+      groundingStatus: 'project',
+      provenance: 'project',
+      factsFound: 9,
+      lastUpdatedAt: 2,
+    },
+    acceptanceState: 'accepted_with_additions',
+    memory: {
+      request: {
+        prompt: 'Build Moonspire Keep.',
+        generatorType: 'location',
+      },
+      stage: {
+        currentStageKey: 'foundation',
+        currentStageLabel: 'Foundation',
+        currentStageIndex: 1,
+        completedStages: ['purpose'],
+        currentStageData: { environment: 'mountain' },
+        summaries: {
+          purpose: { title: 'Moonspire Keep' },
+        },
+      },
+      decisions: {
+        confirmed: {},
+        unresolvedQuestions: [],
+      },
+      canon,
+      conflicts,
+    },
+    warnings: [],
+    startedAt: 1,
+    updatedAt: 2,
+  };
+}
 
 describe('workflowCompletionPresentation', () => {
   afterEach(() => {
@@ -25,6 +117,27 @@ describe('workflowCompletionPresentation', () => {
     expect(finalContent.title).toBe('Moonspire Keep');
     expect(finalContent.rule_base).toBe('2024RAW');
     expect(finalContent.deliverable).toBe('location');
+  });
+
+  it('builds resolved workflow final content with authoritative workflow provenance fallbacks', () => {
+    const finalContent = buildResolvedWorkflowFinalContent({
+      workflowType: 'location',
+      stageResults: {
+        purpose: { title: 'Moonspire Keep' },
+        foundation: { environment: 'mountain' },
+      },
+      workflowRunState: createResolvedWorkflowRunState(),
+    });
+
+    expect(finalContent.conflicts).toEqual([
+      expect.objectContaining({
+        summary: 'The new ward sigils are additive and not yet backed by canon.',
+        conflict_type: 'canon_addition',
+        field_path: 'wards.new_sigils',
+      }),
+    ]);
+    expect(finalContent.validation_notes).toContain('Acceptance state: accepted with additions.');
+    expect(finalContent.validation_notes).toContain('Known canon gaps: missing ward sigil provenance.');
   });
 
   it('builds a validation summary completion alert', () => {

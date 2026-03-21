@@ -2082,10 +2082,10 @@ export default function ManualGenerator() {
       workflowType: (session.config as unknown as GenerationConfig | undefined)?.type || 'unknown',
       fallbackType: (session.config as unknown as GenerationConfig | undefined)?.type || 'unknown',
       stageResults: finalStageResults,
-      ruleBase:
-        typeof (session.config as unknown as GenerationConfig | undefined)?.flags?.rule_base === 'string'
-          ? String((session.config as unknown as GenerationConfig).flags.rule_base)
-          : undefined,
+      ruleBase: typeof (session.config as unknown as GenerationConfig | undefined)?.flags?.rule_base === 'string'
+        ? (session.config as unknown as GenerationConfig).flags.rule_base
+        : undefined,
+      workflowRunState: session.workflowRunState ?? null,
     });
 
     const resumeAction = resolveWorkflowResumeAction({
@@ -2547,6 +2547,7 @@ CHARACTER BUILD FIELDS (CRITICAL for D&D NPCs with class levels):
 - feats: Array<{name, description, source?, prerequisite?, notes?}> — ALL feats from ASI, background, racial bonus
 - asi_choices: Array<{level, choice, details?, source_class?}> — ASI/feat choices at each ASI level
 - background_feature: {background_name, feature_name, description, origin_feat?, skill_proficiencies?, tool_proficiencies?}
+- Every feature/feat/fighting style description must explain what it does; do not just repeat the name in the description field
 
 CRITICAL NAMING RULES:
 1. Ability scores: Use LOWERCASE: str, dex, con, int, wis, cha (NOT STR, DEX, etc.)
@@ -3939,6 +3940,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         workflowType: 'location',
         stageResults: progress.updatedStageResults,
         ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+        workflowRunState,
         }),
       }));
     }
@@ -4513,6 +4515,7 @@ Output: Valid JSON only. No markdown, no prose.`;
                   workflowType: 'location',
                   stageResults: progress.updatedStageResults,
                   ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+                  workflowRunState,
                 }),
               }));
             }
@@ -4886,6 +4889,7 @@ Output: Valid JSON only. No markdown, no prose.`;
             stageResults: mergedResults,
             strategy: 'resolved',
             ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+            workflowRunState,
           });
           const { finalContent } = completionResult;
           logWorkflowCompletionResult('[Multi-Chunk Complete]', completionResult, mergedResults);
@@ -4913,6 +4917,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         dynamicNpcStages,
         catalog: STAGE_CATALOG,
         completionStrategy: 'finalized',
+        workflowRunState,
         onLegendaryDecisionRequired: () =>
           window.confirm('Should this character have legendary/mythic or lair/regional actions?'),
       });
@@ -5313,6 +5318,7 @@ Output: Valid JSON only. No markdown, no prose.`;
       dynamicNpcStages,
       catalog: STAGE_CATALOG,
       completionStrategy: 'resolved',
+      workflowRunState,
       onLegendaryDecisionRequired: () =>
         window.confirm('Should this character have legendary/mythic or lair/regional actions?'),
     });
@@ -5345,6 +5351,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         accumulatedAnswers: updatedAnswers,
         strategy: 'finalized',
         ruleBase: typeof config?.flags?.rule_base === 'string' ? config.flags.rule_base : undefined,
+        workflowRunState,
         baseContentOverride: config?.type === 'npc'
           ? {
             ...assembleFinalWorkflowContent(config?.type, newResults).content,

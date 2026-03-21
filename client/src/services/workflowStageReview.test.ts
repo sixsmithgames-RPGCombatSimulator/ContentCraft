@@ -183,6 +183,29 @@ describe('workflowStageReview', () => {
     });
   });
 
+  it('treats placeholder character build descriptions as incomplete mechanics for retry messaging', () => {
+    expect(resolveWorkflowStageFailureHandling({
+      stageName: 'Creator: Character Build',
+      errorMessage: 'class_features[0] description repeats the feature name. Provide concrete effect text instead.',
+      parsed: {
+        conflicts: [
+          {
+            severity: 'critical',
+            description: 'class_features[0] description repeats the feature name. Provide concrete effect text instead.',
+          },
+        ],
+      },
+      allowAutomaticRetry: true,
+      automaticRetryAlreadyUsed: false,
+    })).toEqual({
+      userMessage: 'The last attempt returned incomplete character mechanics. Review the suggested fixes below, then retry the stage.',
+      retryIssues: [
+        'class_features[0] description repeats the feature name. Provide concrete effect text instead.',
+      ],
+      shouldAutoRetry: true,
+    });
+  });
+
   it('does not auto-retry the same structured validation failure after the one automatic pass is used', () => {
     expect(resolveWorkflowStageFailureHandling({
       stageName: 'Creator: Spellcasting',

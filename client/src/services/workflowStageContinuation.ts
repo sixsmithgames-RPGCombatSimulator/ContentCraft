@@ -8,6 +8,7 @@ import {
   buildWorkflowCompletionResult,
   type WorkflowCompletionResult,
 } from './workflowStageTransition';
+import type { GenerationRunState } from '../../../src/shared/generation/workflowTypes';
 
 type JsonRecord = Record<string, unknown>;
 type StageResults = Record<string, JsonRecord>;
@@ -43,6 +44,7 @@ interface ResolveWorkflowStageContinuationInput {
   catalog?: Pick<GeneratorStageCatalog, 'genericStages' | 'npcStages' | 'npcStageRouterMap'>;
   completionStrategy?: 'finalized' | 'resolved';
   completionBaseContentOverride?: JsonRecord;
+  workflowRunState?: GenerationRunState | null;
   onLegendaryDecisionRequired?: () => boolean;
 }
 
@@ -166,6 +168,7 @@ export function resolveWorkflowStageContinuation(
       strategy: input.completionStrategy,
       ruleBase: input.ruleBase,
       baseContentOverride: input.completionBaseContentOverride,
+      workflowRunState: input.workflowRunState,
     }),
   };
 }

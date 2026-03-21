@@ -154,6 +154,7 @@ COMPLETENESS IS CRITICAL:
 - List EVERY class feature from level 1 through the character's level
 - List EVERY subclass feature from the subclass selection level through the character's level
 - Do NOT skip or summarize features — include FULL mechanical descriptions
+- Descriptions must explain what each feature does and must not simply repeat the feature name
 - For a Level 20 Wizard (Divination), you should have ~10+ class features and ~4+ subclass features
 - For each ASI level, specify whether an ASI or feat was taken and what the choice was
 

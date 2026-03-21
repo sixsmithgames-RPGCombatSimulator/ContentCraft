@@ -367,14 +367,71 @@ describe('workflowStageResponse', () => {
     expect(failure.error).toContain('placeholder modifiers');
   });
 
+  it('rejects character build entries when feature descriptions only repeat the feature name', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        class_features: [
+          { name: 'Sneak Attack (3d6)', description: 'Sneak Attack (3d6)' },
+        ],
+        subclass_features: [
+          { name: 'Assassinate', description: 'Assassinate' },
+        ],
+        racial_features: [
+          { name: 'Darkvision', description: 'Darkvision' },
+        ],
+        feats: [
+          { name: 'Piercer', description: 'Piercer' },
+        ],
+        fighting_styles: [
+          { name: 'Archery', description: 'Archery' },
+        ],
+        skill_proficiencies: [
+          { name: 'Stealth', value: '+9' },
+          { name: 'Perception', value: '+5' },
+        ],
+        saving_throws: [
+          { name: 'Dexterity', value: '+9' },
+          { name: 'Intelligence', value: '+5' },
+        ],
+      }),
+      stageName: 'Creator: Character Build',
+      stageIdentity: 'character_build',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Malakor Vane',
+          class_levels: 'Rogue (Assassin) 5',
+          race: 'Tiefling',
+        },
+        'creator:_stats': {
+          ability_scores: {
+            strength: 10,
+            dexterity: 18,
+            constitution: 14,
+            intelligence: 12,
+            wisdom: 10,
+            charisma: 16,
+          },
+          proficiency_bonus: 3,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const failure = result as { ok: false; error: string };
+
+    expect(failure.error).toContain('description repeats the feature name');
+  });
+
   it('accepts character build string entries when they include signed modifiers', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({
-        class_features: ['Pact Magic', 'Pact Boon: Pact of the Tome'],
-        subclass_features: ['Genie\'s Vessel', 'Genie\'s Wrath'],
-        racial_features: ['Lucky', 'Brave'],
-        feats: ['Chef'],
-        fighting_styles: ['None'],
+        class_features: ['Pact Magic: You have two spell slots that recharge on a short or long rest.', 'Pact of the Tome: Your grimoire grants extra cantrips and broad ritual utility.'],
+        subclass_features: ['Genie\'s Vessel: Your patron grants you a magical vessel that can serve as a refuge and spellcasting focus.', 'Genie\'s Wrath: Once on each of your turns, add extra damage from your patron\'s element when you hit.'],
+        racial_features: ['Lucky: When you roll a 1 on a d20 test, you can reroll the die and must use the new roll.', 'Brave: You have advantage on saving throws against being frightened.'],
+        feats: ['Chef: Increase Constitution or Wisdom by 1 and prepare treats that grant temporary hit points.'],
+        fighting_styles: [],
         skill_proficiencies: ['Persuasion +8', 'Stealth +7', 'Survival +5', 'Insight +5'],
         saving_throws: ['Wisdom +5', 'Charisma +8'],
       }),
@@ -414,15 +471,22 @@ describe('workflowStageResponse', () => {
       { name: 'Wisdom', value: '+5' },
       { name: 'Charisma', value: '+8' },
     ]);
+    expect(result.parsed.class_features).toEqual([
+      { name: 'Pact Magic', description: 'You have two spell slots that recharge on a short or long rest.' },
+      { name: 'Pact of the Tome', description: 'Your grimoire grants extra cantrips and broad ritual utility.' },
+    ]);
   });
 
   it('accepts character build entries when modifiers arrive as numeric bonus aliases', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({
-        class_features: ['Sneak Attack (4d6)', 'Cunning Action'],
-        subclass_features: ['Assassinate'],
-        racial_features: ['Darkvision'],
-        feats: ['Alert'],
+        class_features: [
+          { name: 'Sneak Attack (4d6)', description: 'Once per turn, deal extra damage to a target you hit with advantage or with an adjacent ally.' },
+          { name: 'Cunning Action', description: 'Take Dash, Disengage, or Hide as a bonus action on each of your turns.' },
+        ],
+        subclass_features: [{ name: 'Assassinate', description: 'You gain advantage against creatures that have not acted yet, and hits against surprised creatures are critical hits.' }],
+        racial_features: [{ name: 'Darkvision', description: 'See in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light.' }],
+        feats: [{ name: 'Alert', description: 'Gain +5 to initiative, and you cannot be surprised while conscious.' }],
         fighting_styles: [],
         skill_proficiencies: [
           { skill: 'Stealth', bonus: 8 },

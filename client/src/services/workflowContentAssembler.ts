@@ -1,4 +1,10 @@
 import { mergeNpcStages, type NpcMergeResult } from '../utils/npcStageMerger';
+import type {
+  GenerationRunState,
+  WorkflowCanonSummary,
+  WorkflowConflictItem,
+  WorkflowConflictSummary,
+} from '../../../src/shared/generation/workflowTypes';
 
 type JsonRecord = Record<string, unknown>;
 type StageResults = Record<string, JsonRecord>;
@@ -243,6 +249,152 @@ function asJsonRecordArray(value: unknown): JsonRecord[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
 }
 
+function getActiveWorkflowAttempt(runState: GenerationRunState | null | undefined) {
+  if (!runState) {
+    return null;
+  }
+
+  if (runState.currentAttemptId) {
+    const currentAttempt = runState.attempts.find((attempt) => attempt.attemptId === runState.currentAttemptId);
+    if (currentAttempt) {
+      return currentAttempt;
+    }
+  }
+
+  if (runState.currentStageKey) {
+    const currentStageAttempt = [...runState.attempts].reverse().find((attempt) => attempt.stageKey === runState.currentStageKey);
+    if (currentStageAttempt) {
+      return currentStageAttempt;
+    }
+  }
+
+  return runState.attempts.length > 0 ? runState.attempts[runState.attempts.length - 1] : null;
+}
+
+function getAuthoritativeWorkflowCanonSummary(runState: GenerationRunState | null | undefined): WorkflowCanonSummary | undefined {
+  return runState?.memory?.canon ?? getActiveWorkflowAttempt(runState)?.canon;
+}
+
+function getAuthoritativeWorkflowConflictSummary(runState: GenerationRunState | null | undefined): WorkflowConflictSummary | undefined {
+  return runState?.memory?.conflicts ?? getActiveWorkflowAttempt(runState)?.conflicts;
+}
+
+function getAuthoritativeWorkflowAcceptanceState(runState: GenerationRunState | null | undefined): GenerationRunState['acceptanceState'] {
+  return runState?.acceptanceState ?? getActiveWorkflowAttempt(runState)?.acceptanceState;
+}
+
+function formatWorkflowAcceptanceState(value: NonNullable<GenerationRunState['acceptanceState']>): string {
+  return value.replace(/_/g, ' ');
+}
+
+function getWorkflowConflictType(status: WorkflowConflictItem['status']): string {
+  if (status === 'conflicting') return 'canon_conflict';
+  if (status === 'ambiguous') return 'canon_ambiguity';
+  if (status === 'additive_unverified') return 'canon_addition';
+  if (status === 'unsupported_ungrounded') return 'ungrounded_claim';
+  return 'canon_alignment';
+}
+
+function getWorkflowConflictSeverity(item: WorkflowConflictItem): string | undefined {
+  if (typeof item.severity === 'string' && item.severity.trim().length > 0) {
+    return item.severity;
+  }
+  if (item.status === 'conflicting') return 'high';
+  if (item.status === 'ambiguous') return 'medium';
+  if (item.status === 'unsupported_ungrounded') return 'medium';
+  if (item.status === 'additive_unverified') return 'low';
+  return undefined;
+}
+
+function getWorkflowConflictRecommendedAction(status: WorkflowConflictItem['status']): string | undefined {
+  if (status === 'conflicting') {
+    return 'Compare the proposed claim against canon and choose which version should persist.';
+  }
+  if (status === 'ambiguous') {
+    return 'Clarify the ambiguous claim before finalizing or promoting it into canon.';
+  }
+  if (status === 'additive_unverified') {
+    return 'Review this additive claim before accepting it as a canon update.';
+  }
+  if (status === 'unsupported_ungrounded') {
+    return 'Treat this claim as ungrounded until canon support is added or confirmed.';
+  }
+  return undefined;
+}
+
+function mapWorkflowConflictItemToDisplayRecord(item: WorkflowConflictItem): JsonRecord {
+  const summary = typeof item.message === 'string' && item.message.trim().length > 0
+    ? item.message.trim()
+    : item.key;
+  const details = [
+    typeof item.fieldPath === 'string' && item.fieldPath.trim().length > 0 ? `Field: ${item.fieldPath}.` : null,
+    typeof item.currentValue === 'string' && item.currentValue.trim().length > 0 ? `Existing: ${item.currentValue}.` : null,
+    typeof item.proposedValue === 'string' && item.proposedValue.trim().length > 0 ? `Proposed: ${item.proposedValue}.` : null,
+  ].filter((value): value is string => value !== null).join(' ');
+
+  return {
+    key: item.key,
+    status: item.status,
+    summary,
+    details: details || summary,
+    reason: summary,
+    field_path: item.fieldPath,
+    entity_name: item.key,
+    existing_claim: item.currentValue,
+    new_claim: item.proposedValue,
+    severity: getWorkflowConflictSeverity(item),
+    conflict_type: getWorkflowConflictType(item.status),
+    recommended_action: getWorkflowConflictRecommendedAction(item.status),
+  };
+}
+
+function getAuthoritativeWorkflowConflictRecords(runState: GenerationRunState | null | undefined): JsonRecord[] {
+  const conflictSummary = getAuthoritativeWorkflowConflictSummary(runState);
+  return conflictSummary ? conflictSummary.items.map((item) => mapWorkflowConflictItemToDisplayRecord(item)) : [];
+}
+
+function buildAuthoritativeWorkflowValidationNotes(runState: GenerationRunState | null | undefined): string | undefined {
+  const acceptanceState = getAuthoritativeWorkflowAcceptanceState(runState);
+  const canon = getAuthoritativeWorkflowCanonSummary(runState);
+  const conflicts = getAuthoritativeWorkflowConflictSummary(runState);
+
+  if (!acceptanceState && !canon && !conflicts) {
+    return undefined;
+  }
+
+  const notes: string[] = [];
+  if (acceptanceState) {
+    notes.push(`Acceptance state: ${formatWorkflowAcceptanceState(acceptanceState)}.`);
+  }
+
+  if (canon) {
+    const entityPreview = canon.entityNames.length > 0
+      ? ` across ${canon.entityNames.slice(0, 3).join(', ')}${canon.entityNames.length > 3 ? ', …' : ''}`
+      : '';
+    notes.push(`Canon grounding: ${canon.groundingStatus} with ${canon.factCount} facts${entityPreview}.`);
+    if (canon.gaps.length > 0) {
+      notes.push(`Known canon gaps: ${canon.gaps.slice(0, 2).join('; ')}${canon.gaps.length > 2 ? '; …' : ''}.`);
+    }
+  }
+
+  if (conflicts) {
+    const counts = [
+      conflicts.conflictCount > 0 ? `${conflicts.conflictCount} conflicting` : null,
+      conflicts.ambiguityCount > 0 ? `${conflicts.ambiguityCount} ambiguous` : null,
+      conflicts.additiveCount > 0 ? `${conflicts.additiveCount} additive` : null,
+      conflicts.unsupportedCount > 0 ? `${conflicts.unsupportedCount} unsupported` : null,
+    ].filter((value): value is string => value !== null);
+
+    if (counts.length > 0) {
+      notes.push(`Conflict summary: ${counts.join(', ')}.${conflicts.reviewRequired ? ' Review required.' : ''}`);
+    } else if (conflicts.reviewRequired) {
+      notes.push('Review required due to authoritative workflow conflict memory.');
+    }
+  }
+
+  return notes.join(' ');
+}
+
 export function inferWorkflowDeliverableType(
   data: JsonRecord,
   fallback: string,
@@ -283,8 +435,16 @@ export function buildFinalWorkflowOutput(input: {
   fallbackType: string;
   proposals: unknown[];
   ruleBase?: string;
+  workflowRunState?: GenerationRunState | null;
 }): JsonRecord {
   const inferredDeliverable = inferWorkflowDeliverableType(input.baseContent, input.fallbackType);
+  const canonValidator = getStageObject(input.stageResults, 'canon_validator');
+  const physicsValidator = getStageObject(input.stageResults, 'physics_validator');
+  const stageConflicts = asJsonRecordArray(canonValidator?.conflicts);
+  const authoritativeConflicts = getAuthoritativeWorkflowConflictRecords(input.workflowRunState);
+  const stageValidationNotes = typeof canonValidator?.validation_notes === 'string' && canonValidator.validation_notes.trim().length > 0
+    ? canonValidator.validation_notes
+    : undefined;
 
   return {
     ...input.baseContent,
@@ -294,12 +454,12 @@ export function buildFinalWorkflowOutput(input: {
     fact_check_report: WRITING_WORKFLOW_TYPES.includes(input.workflowType)
       ? (getStageObject(input.stageResults, 'editor_&_style') || {})
       : (getStageObject(input.stageResults, 'fact_checker') || {}),
-    conflicts: asJsonRecordArray(getStageObject(input.stageResults, 'canon_validator')?.conflicts),
-    canon_alignment_score: getStageObject(input.stageResults, 'canon_validator')?.canon_alignment_score,
-    validation_notes: getStageObject(input.stageResults, 'canon_validator')?.validation_notes,
-    physics_issues: asJsonRecordArray(getStageObject(input.stageResults, 'physics_validator')?.physics_issues),
-    logic_score: getStageObject(input.stageResults, 'physics_validator')?.logic_score,
-    balance_notes: getStageObject(input.stageResults, 'physics_validator')?.balance_notes,
+    conflicts: stageConflicts.length > 0 ? stageConflicts : authoritativeConflicts,
+    canon_alignment_score: canonValidator?.canon_alignment_score,
+    validation_notes: stageValidationNotes ?? buildAuthoritativeWorkflowValidationNotes(input.workflowRunState),
+    physics_issues: asJsonRecordArray(physicsValidator?.physics_issues),
+    logic_score: physicsValidator?.logic_score,
+    balance_notes: physicsValidator?.balance_notes,
     _pipeline_stages: input.stageResults,
   };
 }
@@ -326,6 +486,7 @@ export function resolveCompletedWorkflowOutput(input: {
   stageResults: StageResults;
   fallbackType: string;
   ruleBase?: string;
+  workflowRunState?: GenerationRunState | null;
 }): JsonRecord {
   if (input.workflowType === 'homebrew') {
     const merged = getStageObject(input.stageResults, 'merged');
@@ -345,6 +506,7 @@ export function resolveCompletedWorkflowOutput(input: {
     fallbackType: input.fallbackType,
     proposals: rawProposals,
     ruleBase: input.ruleBase,
+    workflowRunState: input.workflowRunState,
   });
 }
 

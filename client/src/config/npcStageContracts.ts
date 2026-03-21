@@ -92,7 +92,9 @@ Return JSON with ONLY these keys:
 - saving_throws: { name: string, value: string }[]
 
 Rules:
-- Keep descriptions concise (2–5 sentences per feature).
+- Every item in class_features, subclass_features, racial_features, feats, and fighting_styles must include a real description explaining what it does.
+- Description text must not merely repeat the feature name.
+- Keep descriptions concise (1–2 short sentences per feature, focused on concrete mechanics, benefits, triggers, or limitations).
 - Skill/save values must be signed strings (e.g., "+7").
 - Return only these keys; no stats, personality, or equipment.`;
 

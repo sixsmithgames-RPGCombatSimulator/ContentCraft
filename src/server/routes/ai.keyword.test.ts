@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildContractCorrectionPrompt,
   buildSchemaCorrectionPrompt,
   buildSpellcastingSemanticCorrectionPrompt,
   evaluateKeywordExtractorCompliance,
@@ -285,6 +286,25 @@ describe('evaluateKeywordExtractorCompliance', () => {
     ]);
   });
 
+  it('rejects character_build payloads whose descriptions only repeat feature names', () => {
+    const result = validateWorkflowStageContractPayload('character_build', {
+      class_features: [{ name: 'Sneak Attack', description: 'Sneak Attack' }],
+      subclass_features: [{ name: 'Assassinate', description: 'Assassinate' }],
+      racial_features: [{ name: 'Darkvision', description: 'Darkvision' }],
+      feats: [{ name: 'Alert', description: 'Alert' }],
+      fighting_styles: [{ name: 'Archery', description: 'Archery' }],
+      skill_proficiencies: [{ name: 'Stealth', value: '+8' }],
+      saving_throws: [{ name: 'Dexterity', value: '+8' }],
+    }, 'npc');
+
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      const failure = result;
+      expect(failure.error).toContain('description repeats the feature name');
+      expect(failure.error).toContain('class_features[0]');
+    }
+  });
+
   it('builds a hidden schema correction prompt with validation details', () => {
     const prompt = buildSchemaCorrectionPrompt('Return stats JSON.', '/speed/walk must be string', ['ability_scores', 'speed']);
 
@@ -307,5 +327,20 @@ describe('evaluateKeywordExtractorCompliance', () => {
     expect(prompt).toContain('Do not return bare arrays for prepared_spells, always_prepared_spells, or innate_spells.');
     expect(prompt).toContain('Known casters such as warlocks must include spells_known.');
     expect(prompt).toContain('Prepared casters must include prepared_spells or always_prepared_spells.');
+  });
+
+  it('builds a character_build correction prompt with explicit description guidance', () => {
+    const prompt = buildContractCorrectionPrompt(
+      'Return character build JSON.',
+      'character_build',
+      'class_features[0] description repeats the feature name. Provide concrete effect text instead.',
+      ['class_features', 'feats'],
+    );
+
+    expect(prompt).toContain('Return character build JSON.');
+    expect(prompt).toContain('description repeats the feature name');
+    expect(prompt).toContain('every returned item must include a real description explaining what the feature does');
+    expect(prompt).toContain('Do not repeat the feature name as the description.');
+    expect(prompt).toContain('Preserve the same JSON shape and replace placeholder descriptions in place.');
   });
 });

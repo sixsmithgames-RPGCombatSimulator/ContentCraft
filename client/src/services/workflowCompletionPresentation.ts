@@ -1,5 +1,6 @@
 import { resolveCompletedWorkflowOutput } from './workflowContentAssembler';
 import type { WorkflowCompletionResult } from './workflowStageTransition';
+import type { GenerationRunState } from '../../../src/shared/generation/workflowTypes';
 
 type JsonRecord = Record<string, unknown>;
 type StageResults = Record<string, JsonRecord>;
@@ -9,12 +10,14 @@ export function buildResolvedWorkflowFinalContent(input: {
   stageResults: StageResults;
   fallbackType?: string;
   ruleBase?: string;
+  workflowRunState?: GenerationRunState | null;
 }): JsonRecord {
   return resolveCompletedWorkflowOutput({
     workflowType: input.workflowType,
     fallbackType: input.fallbackType ?? input.workflowType,
     stageResults: input.stageResults,
     ruleBase: input.ruleBase,
+    workflowRunState: input.workflowRunState,
   });
 }
 

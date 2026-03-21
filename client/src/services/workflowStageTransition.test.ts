@@ -3,6 +3,99 @@ import {
   buildWorkflowCompletionResult,
   getWorkflowStageProgression,
 } from './workflowStageTransition';
+import type { GenerationRunState } from '../../../src/shared/generation/workflowTypes';
+
+function createAuthoritativeWorkflowRunState(title = 'Moonlit Dock'): GenerationRunState {
+  const canon = {
+    groundingStatus: 'project' as const,
+    factCount: 12,
+    entityNames: [title, 'Azure Court'],
+    gaps: [],
+  };
+  const conflicts = {
+    reviewRequired: true,
+    alignedCount: 11,
+    additiveCount: 0,
+    ambiguityCount: 0,
+    conflictCount: 1,
+    unsupportedCount: 0,
+    items: [
+      {
+        key: 'ownership.current_holder',
+        status: 'conflicting' as const,
+        message: 'Dock ownership conflicts with established Azure Court canon.',
+        fieldPath: 'ownership.current_holder',
+        currentValue: 'Harbormaster Sel',
+        proposedValue: 'Azure Court',
+      },
+    ],
+  };
+
+  return {
+    runId: 'run-1',
+    workflowType: 'scene',
+    workflowLabel: 'Scene Builder',
+    executionMode: 'integrated',
+    status: 'awaiting_user_input',
+    stageSequence: ['creator', 'fact_checker', 'canon_validator'],
+    stageLabels: {
+      creator: 'Creator',
+      fact_checker: 'Fact Checker',
+      canon_validator: 'Canon Validator',
+    },
+    currentStageKey: 'fact_checker',
+    currentStageLabel: 'Fact Checker',
+    currentStageIndex: 1,
+    currentAttemptId: 'attempt-1',
+    attempts: [
+      {
+        attemptId: 'attempt-1',
+        stageKey: 'fact_checker',
+        stageLabel: 'Fact Checker',
+        status: 'awaiting_user_input',
+        transport: 'integrated',
+        acceptanceState: 'review_required_conflict',
+        canon,
+        conflicts,
+        startedAt: 1,
+        updatedAt: 2,
+      },
+    ],
+    retrieval: {
+      groundingStatus: 'project',
+      provenance: 'project',
+      factsFound: 12,
+      lastUpdatedAt: 2,
+    },
+    acceptanceState: 'review_required_conflict',
+    memory: {
+      request: {
+        prompt: 'Draft the harbor confrontation scene.',
+        generatorType: 'scene',
+        schemaVersion: 'v1.1-client',
+      },
+      stage: {
+        currentStageKey: 'fact_checker',
+        currentStageLabel: 'Fact Checker',
+        currentStageIndex: 1,
+        completedStages: ['creator'],
+        currentStageData: { title },
+        summaries: {
+          creator: { title },
+        },
+      },
+      decisions: {
+        confirmed: {},
+        unresolvedQuestions: [],
+      },
+      canon,
+      conflicts,
+    },
+    warnings: [],
+    startedAt: 1,
+    updatedAt: 2,
+  };
+}
 
 describe('workflowStageTransition', () => {
   it('returns the next stage when the workflow is not complete', () => {
@@ -84,5 +177,35 @@ describe('workflowStageTransition', () => {
       title: 'Moonwell Vault',
       _pipeline_stages: expect.any(Object),
     });
+  });
+
+  it('preserves authoritative workflow conflict provenance in finalized output when validator stages are absent', () => {
+    const result = buildWorkflowCompletionResult({
+      workflowType: 'scene',
+      stageResults: {
+        creator: {
+          title: 'Moonlit Dock',
+          description: 'Lantern light ripples across black water.',
+        },
+      },
+      strategy: 'finalized',
+      workflowRunState: createAuthoritativeWorkflowRunState(),
+    });
+
+    expect(result.finalContent).toMatchObject({
+      title: 'Moonlit Dock',
+      deliverable: 'scene',
+    });
+    expect(result.finalContent.conflicts).toEqual([
+      expect.objectContaining({
+        summary: 'Dock ownership conflicts with established Azure Court canon.',
+        field_path: 'ownership.current_holder',
+        conflict_type: 'canon_conflict',
+        existing_claim: 'Harbormaster Sel',
+        new_claim: 'Azure Court',
+      }),
+    ]);
+    expect(result.finalContent.validation_notes).toContain('Acceptance state: review required conflict.');
+    expect(result.finalContent.validation_notes).toContain('Canon grounding: project');
   });
 });

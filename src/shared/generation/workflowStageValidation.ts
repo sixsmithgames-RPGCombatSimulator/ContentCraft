@@ -63,6 +63,52 @@ export function pruneWorkflowStageOutput<T extends Record<string, unknown>>(
   return out;
 }
 
+const CHARACTER_BUILD_DESCRIPTION_FIELDS = [
+  'class_features',
+  'subclass_features',
+  'racial_features',
+  'feats',
+  'fighting_styles',
+] as const;
+
+function normalizeComparableText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[`'".,;:!?()[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function collectCharacterBuildPlaceholderDescriptionIssues(obj: WorkflowStageJsonRecord): string[] {
+  const issues: string[] = [];
+
+  for (const field of CHARACTER_BUILD_DESCRIPTION_FIELDS) {
+    const value = obj[field];
+    if (!Array.isArray(value)) {
+      continue;
+    }
+
+    value.forEach((entry, index) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return;
+      }
+
+      const record = entry as Record<string, unknown>;
+      const name = typeof record.name === 'string' ? record.name.trim() : '';
+      const description = typeof record.description === 'string' ? record.description.trim() : '';
+      if (!name || !description) {
+        return;
+      }
+
+      if (normalizeComparableText(name) === normalizeComparableText(description)) {
+        issues.push(`${field}[${index}] description repeats the feature name. Provide concrete effect text instead.`);
+      }
+    });
+  }
+
+  return issues;
+}
+
 export function validateWorkflowStageContractPayload(
   stageIdOrName: string,
   obj: WorkflowStageJsonRecord,
@@ -137,6 +183,13 @@ export function validateWorkflowStageContractPayload(
     }
     if (!Array.isArray(obj.proposals)) {
       return { ok: false, error: 'Field proposals must be an array.' };
+    }
+  }
+
+  if (definition?.key === 'character_build') {
+    const placeholderDescriptionIssues = collectCharacterBuildPlaceholderDescriptionIssues(obj);
+    if (placeholderDescriptionIssues.length > 0) {
+      return { ok: false, error: placeholderDescriptionIssues.join('; ') };
     }
   }
 

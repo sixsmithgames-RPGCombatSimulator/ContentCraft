@@ -7,6 +7,7 @@ import {
   deduplicateWorkflowProposals,
   sanitizeWorkflowProposals,
 } from './workflowStageReview';
+import type { GenerationRunState } from '../../../src/shared/generation/workflowTypes';
 
 type JsonRecord = Record<string, unknown>;
 type StageResults = Record<string, JsonRecord>;
@@ -23,6 +24,7 @@ export interface WorkflowCompletionInput {
   accumulatedAnswers?: Record<string, string>;
   strategy?: 'finalized' | 'resolved';
   baseContentOverride?: JsonRecord;
+  workflowRunState?: GenerationRunState | null;
 }
 
 export interface WorkflowCompletionResult {
@@ -65,6 +67,7 @@ export function buildWorkflowCompletionResult(
       fallbackType: workflowType,
       stageResults: input.stageResults,
       ruleBase: input.ruleBase,
+      workflowRunState: input.workflowRunState,
     })
     : buildFinalWorkflowOutput({
       baseContent,
@@ -73,6 +76,7 @@ export function buildWorkflowCompletionResult(
       fallbackType: workflowType,
       proposals,
       ruleBase: input.ruleBase,
+      workflowRunState: input.workflowRunState,
     });
 
   return {

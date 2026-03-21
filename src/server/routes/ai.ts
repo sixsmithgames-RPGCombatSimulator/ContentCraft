@@ -1354,6 +1354,18 @@ function buildSpellcastingSemanticCorrectionPrompt(basePrompt: string, issues: s
   });
 }
 
+function buildCharacterBuildSemanticCorrectionPrompt(basePrompt: string, issues: string[]): string {
+  return buildCorrectionPrompt(basePrompt, issues, {
+    extraRules: [
+      'For class_features, subclass_features, racial_features, feats, and fighting_styles, every returned item must include a real description explaining what the feature does.',
+      'Do not repeat the feature name as the description.',
+      'If the character has many features, keep each description to one or two concise sentences with concrete mechanics, benefits, triggers, or limits rather than omitting detail.',
+      'Preserve the same JSON shape and replace placeholder descriptions in place.',
+    ],
+    requiredFields: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
+  });
+}
+
 function buildContractCorrectionPrompt(
   basePrompt: string,
   stageKey: string,
@@ -1364,6 +1376,10 @@ function buildContractCorrectionPrompt(
 
   if (stageKey === 'spellcasting') {
     return buildSpellcastingSemanticCorrectionPrompt(basePrompt, issues);
+  }
+
+  if (stageKey === 'character_build') {
+    return buildCharacterBuildSemanticCorrectionPrompt(basePrompt, issues);
   }
 
   return buildCorrectionPrompt(basePrompt, issues, { requiredFields });

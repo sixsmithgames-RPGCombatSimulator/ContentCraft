@@ -133,6 +133,44 @@ const coerceModifierText = (value: unknown): string | undefined => {
   return undefined;
 };
 
+const parseNamedDescriptionStringEntry = (value: string): { name: string; description: string } | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const separatorMatch = trimmed.match(/^(.+?)(?:\s*:\s+|\s+[–—-]\s+)(.+)$/);
+  if (!separatorMatch) {
+    return {
+      name: trimmed,
+      description: trimmed,
+    };
+  }
+
+  const name = separatorMatch[1]?.trim();
+  const description = separatorMatch[2]?.trim();
+  const descriptionWordCount = description?.split(/\s+/).filter(Boolean).length ?? 0;
+  const looksLikeDescriptiveText = Boolean(
+    description
+    && (
+      description.length >= 30
+      || descriptionWordCount >= 6
+      || /[.,;()]/.test(description)
+    ),
+  );
+  if (!name || !description || !looksLikeDescriptiveText) {
+    return {
+      name: trimmed,
+      description: trimmed,
+    };
+  }
+
+  return {
+    name,
+    description,
+  };
+};
+
 const normalizeNamedDescriptionEntries = (
   value: unknown,
   options?: { includeLevel?: boolean },
@@ -144,14 +182,14 @@ const normalizeNamedDescriptionEntries = (
   return value
     .map((entry) => {
       if (typeof entry === 'string') {
-        const trimmed = entry.trim();
-        if (!trimmed) {
+        const parsedEntry = parseNamedDescriptionStringEntry(entry);
+        if (!parsedEntry) {
           return null;
         }
 
         return {
-          name: trimmed,
-          description: trimmed,
+          name: parsedEntry.name,
+          description: parsedEntry.description,
         } as JsonRecord;
       }
 
