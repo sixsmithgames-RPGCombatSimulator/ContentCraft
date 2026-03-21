@@ -205,8 +205,82 @@ function getBatchFeatureNames(batch: JsonRecord): string[] {
   return batch.feature_names.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
 }
 
-function featureLookupKey(field: CharacterBuildFeatureField, name: string): string {
-  return `${field}:${normalizeComparableText(name)}`;
+function featureNameLookupKey(name: string): string {
+  return normalizeComparableText(name);
+}
+
+type EnrichedFeatureCandidate = {
+  field: CharacterBuildFeatureField;
+  entry: JsonRecord;
+};
+
+function getConcreteDescriptionScore(name: string, entry: JsonRecord): number {
+  const description = coerceNonEmptyString(entry.description);
+  if (!description || isPlaceholderDescription(name, description)) {
+    return 0;
+  }
+
+  return description.length;
+}
+
+function collectEnrichedFeatureCandidates(enrichedBatches: JsonRecord[]): Map<string, EnrichedFeatureCandidate[]> {
+  const candidatesByName = new Map<string, EnrichedFeatureCandidate[]>();
+
+  for (const batch of enrichedBatches) {
+    for (const field of CHARACTER_BUILD_FEATURE_FIELDS) {
+      for (const entry of normalizeFeatureEntries(batch[field])) {
+        const name = coerceNonEmptyString(entry.name);
+        if (!name) {
+          continue;
+        }
+
+        const lookupKey = featureNameLookupKey(name);
+        const existing = candidatesByName.get(lookupKey) ?? [];
+        existing.push({ field, entry });
+        candidatesByName.set(lookupKey, existing);
+      }
+    }
+  }
+
+  return candidatesByName;
+}
+
+function selectBestEnrichedFeatureCandidate(input: {
+  inventoryField: CharacterBuildFeatureField;
+  inventoryEntry: JsonRecord;
+  candidates: EnrichedFeatureCandidate[];
+}): EnrichedFeatureCandidate | null {
+  const inventoryName = coerceNonEmptyString(input.inventoryEntry.name);
+  if (!inventoryName || input.candidates.length === 0) {
+    return null;
+  }
+
+  const scored = input.candidates
+    .map((candidate, index) => {
+      let score = getConcreteDescriptionScore(inventoryName, candidate.entry);
+
+      // Prefer candidates that kept the same category, but allow concrete
+      // descriptions from a different bucket to recover miscategorized inventory.
+      if (candidate.field === input.inventoryField) {
+        score += 200;
+      }
+
+      return {
+        candidate,
+        index,
+        score,
+      };
+    })
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      // Prefer later candidates when scores tie so corrected retries win.
+      return right.index - left.index;
+    });
+
+  return scored[0]?.candidate ?? null;
 }
 
 export function buildCharacterBuildChunkPlan(): {
@@ -372,58 +446,44 @@ export function finalizeCharacterBuildPayload(
 ): { ok: true; payload: JsonRecord } | { ok: false; error: string } {
   const issues: string[] = [];
   const payload: JsonRecord = {
+    class_features: [],
+    subclass_features: [],
+    racial_features: [],
+    feats: [],
+    fighting_styles: [],
     skill_proficiencies: normalizeModifierEntries(inventoryState.skill_proficiencies),
     saving_throws: normalizeModifierEntries(inventoryState.saving_throws),
   };
-  const expectedKeys = new Set<string>();
-  const enrichedByKey = new Map<string, JsonRecord>();
+  const enrichedCandidatesByName = collectEnrichedFeatureCandidates(enrichedBatches);
 
   for (const field of CHARACTER_BUILD_FEATURE_FIELDS) {
     const inventoryEntries = normalizeFeatureEntries(inventoryState[field]);
-    for (const entry of inventoryEntries) {
-      expectedKeys.add(featureLookupKey(field, entry.name as string));
-    }
-  }
-
-  for (const batch of enrichedBatches) {
-    for (const field of CHARACTER_BUILD_FEATURE_FIELDS) {
-      for (const entry of normalizeFeatureEntries(batch[field])) {
-        enrichedByKey.set(featureLookupKey(field, entry.name as string), entry);
-      }
-    }
-  }
-
-  for (const field of CHARACTER_BUILD_FEATURE_FIELDS) {
-    const inventoryEntries = normalizeFeatureEntries(inventoryState[field]);
-    const finalizedEntries = inventoryEntries.map((entry, index) => {
+    for (const [index, entry] of inventoryEntries.entries()) {
       const name = entry.name as string;
-      const lookupKey = featureLookupKey(field, name);
-      const enriched = enrichedByKey.get(lookupKey);
+      const candidates = enrichedCandidatesByName.get(featureNameLookupKey(name)) ?? [];
+      const enriched = selectBestEnrichedFeatureCandidate({
+        inventoryField: field,
+        inventoryEntry: entry,
+        candidates,
+      });
 
       if (!enriched) {
         issues.push(`${field}[${index}] ${name} was not returned in the enrichment pass.`);
-        return null;
+        continue;
       }
 
-      const description = coerceNonEmptyString(enriched.description);
+      const description = coerceNonEmptyString(enriched.entry.description);
       if (!description || isPlaceholderDescription(name, description)) {
         issues.push(`${field}[${index}] ${name} is missing a concrete description.`);
+        continue;
       }
 
-      return {
+      (payload[enriched.field] as JsonRecord[]).push({
         ...entry,
-        ...enriched,
+        ...enriched.entry,
         name,
         description,
-      } satisfies JsonRecord;
-    }).filter((entry) => entry !== null) as JsonRecord[];
-
-    payload[field] = finalizedEntries;
-  }
-
-  for (const key of enrichedByKey.keys()) {
-    if (!expectedKeys.has(key)) {
-      issues.push(`Unexpected enriched feature returned: ${key}`);
+      } satisfies JsonRecord);
     }
   }
 

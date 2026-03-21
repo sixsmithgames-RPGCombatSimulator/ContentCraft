@@ -1366,6 +1366,33 @@ function buildCharacterBuildSemanticCorrectionPrompt(basePrompt: string, issues:
   });
 }
 
+function buildCharacterBuildInventoryCorrectionPrompt(basePrompt: string, issues: string[]): string {
+  return buildCorrectionPrompt(basePrompt, issues, {
+    extraRules: [
+      'Treat this as the inventory pass for character build data.',
+      'Return the authoritative feature list plus concrete signed modifiers for skill_proficiencies and saving_throws.',
+      'For skill_proficiencies and saving_throws, return real signed modifiers such as +7 or -1 and do not use placeholder +0 values unless zero is truly correct.',
+      'Keep the feature list rules-consistent and do not invent unrelated extra features.',
+    ],
+    requiredFields: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles', 'skill_proficiencies', 'saving_throws'],
+  });
+}
+
+function buildCharacterBuildEnrichmentCorrectionPrompt(basePrompt: string, issues: string[]): string {
+  return buildCorrectionPrompt(basePrompt, issues, {
+    extraRules: [
+      'Treat feature_batch and feature_names as authoritative for this enrichment pass.',
+      'Return only the requested features from feature_batch, in the same categories, and preserve any provided metadata.',
+      'Do not add extra features that are not listed in feature_batch.',
+      'Do not add skill_proficiencies or saving_throws in this stage.',
+      'Use empty arrays for categories that are not part of the current batch.',
+      'For each requested feature, provide a concrete mechanical description explaining what it does, when it applies, and any notable limits, benefits, or triggers.',
+      'Do not repeat the feature name as the description.',
+    ],
+    requiredFields: ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles'],
+  });
+}
+
 function buildContractCorrectionPrompt(
   basePrompt: string,
   stageKey: string,
@@ -1378,8 +1405,16 @@ function buildContractCorrectionPrompt(
     return buildSpellcastingSemanticCorrectionPrompt(basePrompt, issues);
   }
 
-  if (stageKey === 'character_build' || stageKey === 'character_build_feature_enrichment') {
+  if (stageKey === 'character_build') {
     return buildCharacterBuildSemanticCorrectionPrompt(basePrompt, issues);
+  }
+
+  if (stageKey === 'character_build_feature_inventory') {
+    return buildCharacterBuildInventoryCorrectionPrompt(basePrompt, issues);
+  }
+
+  if (stageKey === 'character_build_feature_enrichment') {
+    return buildCharacterBuildEnrichmentCorrectionPrompt(basePrompt, issues);
   }
 
   return buildCorrectionPrompt(basePrompt, issues, { requiredFields });

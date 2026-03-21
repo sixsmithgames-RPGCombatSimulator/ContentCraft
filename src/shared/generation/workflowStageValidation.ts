@@ -177,12 +177,27 @@ export function validateWorkflowStageContractPayload(
   }
 
   if (definition?.key === 'planner') {
+    const deliverable = typeof obj.deliverable === 'string' ? obj.deliverable.trim() : '';
+    const resolvedDeliverable = resolveWorkflowContentType(deliverable);
+    const resolvedWorkflowType = workflowType ? resolveWorkflowContentType(workflowType) : 'unknown';
+
+    if (!deliverable || resolvedDeliverable === 'unknown') {
+      return { ok: false, error: 'Field deliverable must be a known workflow content type.' };
+    }
+
+    if (resolvedWorkflowType !== 'unknown' && resolvedDeliverable !== resolvedWorkflowType) {
+      return { ok: false, error: `Field deliverable must match workflow type ${resolvedWorkflowType}.` };
+    }
+
     const retrievalHints = obj.retrieval_hints;
     if (typeof retrievalHints !== 'object' || retrievalHints === null || Array.isArray(retrievalHints)) {
       return { ok: false, error: 'Field retrieval_hints must be an object.' };
     }
     if (!Array.isArray(obj.proposals)) {
       return { ok: false, error: 'Field proposals must be an array.' };
+    }
+    if (obj.proposals.some((proposal) => typeof proposal !== 'object' || proposal === null || Array.isArray(proposal))) {
+      return { ok: false, error: 'Field proposals must contain only proposal objects.' };
     }
   }
 

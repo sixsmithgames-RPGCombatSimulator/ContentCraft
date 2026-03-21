@@ -150,4 +150,63 @@ describe('npcCharacterBuildEnrichment', () => {
       error: 'class_features[0] Extra Attack is missing a concrete description.',
     });
   });
+
+  it('reconciles enrichment features by name across categories and ignores unrelated extras', () => {
+    const inventoryState = buildCharacterBuildInventoryState({
+      class_features: [
+        { name: 'Illusion Savant', description: 'Inventory placeholder.' },
+      ],
+      subclass_features: [
+        { name: 'Assassinate', description: 'Inventory placeholder.' },
+      ],
+      racial_features: [],
+      feats: [],
+      fighting_styles: [],
+      skill_proficiencies: [{ name: 'Stealth', value: '+13' }],
+      saving_throws: [{ name: 'Dexterity', value: '+9' }],
+    });
+
+    const finalized = finalizeCharacterBuildPayload(inventoryState, [
+      {
+        class_features: [
+          { name: 'Sneak Attack', description: 'Unrelated extra that should be ignored.' },
+        ],
+        subclass_features: [
+          {
+            name: 'Illusion Savant',
+            description: 'The gold and time you must spend to copy an illusion spell into your spellbook is halved.',
+          },
+          {
+            name: 'Assassinate',
+            description: 'You have advantage on attack rolls against creatures that have not taken a turn yet, and hits against surprised creatures are critical hits.',
+          },
+        ],
+        racial_features: [],
+        feats: [],
+        fighting_styles: [],
+      },
+    ]);
+
+    expect(finalized).toEqual({
+      ok: true,
+      payload: {
+        class_features: [],
+        subclass_features: [
+          {
+            name: 'Illusion Savant',
+            description: 'The gold and time you must spend to copy an illusion spell into your spellbook is halved.',
+          },
+          {
+            name: 'Assassinate',
+            description: 'You have advantage on attack rolls against creatures that have not taken a turn yet, and hits against surprised creatures are critical hits.',
+          },
+        ],
+        racial_features: [],
+        feats: [],
+        fighting_styles: [],
+        skill_proficiencies: [{ name: 'Stealth', value: '+13' }],
+        saving_throws: [{ name: 'Dexterity', value: '+9' }],
+      },
+    });
+  });
 });
