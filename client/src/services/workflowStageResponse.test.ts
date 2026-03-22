@@ -588,6 +588,67 @@ describe('workflowStageResponse', () => {
     ]);
   });
 
+  it('accepts character build enrichment display labels and prunes non-contract modifier arrays', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        class_features: [],
+        subclass_features: [
+          {
+            name: 'Improved Minor Illusion',
+            description: 'When you cast the Minor Illusion cantrip, you can create both a sound and an image with a single casting.',
+          },
+          {
+            name: 'Malleable Illusions',
+            description: 'When you cast an illusion spell that lasts 1 minute or longer, you can use your action to change its appearance within the spell\'s limits.',
+          },
+        ],
+        racial_features: [
+          {
+            name: 'Darkvision (120ft)',
+            description: 'You can see in dim light within 120 feet as if it were bright light, and in darkness as if it were dim light.',
+          },
+          {
+            name: 'Fey Ancestry',
+            description: 'You have advantage on saving throws against being charmed, and magic cannot put you to sleep.',
+          },
+        ],
+        feats: [],
+        fighting_styles: [],
+        skill_proficiencies: [],
+        saving_throws: [],
+      }),
+      stageName: 'Creator: Character Build Enrichment',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Nasir\'il Cuth\'il',
+          class_levels: 'Rogue (Assassin) 3 / Wizard (Illusionist) 10',
+          race: 'Drow',
+        },
+        'creator:_stats': {
+          ability_scores: {
+            strength: 10,
+            dexterity: 20,
+            constitution: 14,
+            intelligence: 20,
+            wisdom: 12,
+            charisma: 14,
+          },
+          proficiency_bonus: 5,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.class_features).toEqual([]);
+    expect(result.parsed.subclass_features).toHaveLength(2);
+    expect(result.parsed.racial_features).toHaveLength(2);
+    expect(result.parsed.skill_proficiencies).toBeUndefined();
+    expect(result.parsed.saving_throws).toBeUndefined();
+  });
+
   it('repairs truncated character build enrichment JSON when the response still contains usable content', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: '{"class_features":[],"subclass_features":[],"racial_features":[],"feats":[{"name":"Sharpshooter","description":"Attacking at long range does not impose disadvantage on your ranged weapon attack rolls."}],"fighting_styles":[{"name":"Archery","description":"You gain a +2 bonus to attack rolls you make with ranged weapons."}]',

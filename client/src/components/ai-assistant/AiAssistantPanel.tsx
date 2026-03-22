@@ -42,6 +42,7 @@ import {
   shouldAutoRetryIntegratedFailure,
 } from '../../services/workflowTransport';
 import type { WorkflowTransportStageResponse } from '../../services/workflowTransport';
+import { getStageContract as getWorkflowStageContract } from '../../utils/stageOutputContracts';
 import { getWorkflowRetryBadgeLabel, getWorkflowRetryDetail } from '../../services/workflowRetryNotice';
 import AiProviderSettings from './AiProviderSettings';
 import ModeSelectionDialog from './ModeSelectionDialog';
@@ -118,6 +119,22 @@ function deepMergeObjects(target: Record<string, unknown>, source: Record<string
     }
   }
   return result;
+}
+
+function getAllowedStageKeys(
+  stageKey: string,
+  workflowType: string | undefined,
+  schema: Record<string, unknown> | undefined,
+): string[] | null {
+  if (schema && isPlainObject(schema) && isPlainObject(schema.properties)) {
+    const schemaKeys = Object.keys(schema.properties);
+    if (schemaKeys.length > 0) {
+      return schemaKeys;
+    }
+  }
+
+  const contract = getWorkflowStageContract(stageKey, workflowType);
+  return contract ? [...contract.allowedKeys] : null;
 }
 
 // ─── Sub-Components ──────────────────────────────────────────────────────────
@@ -712,9 +729,11 @@ export default function AiAssistantPanel() {
       const inner = (patch as Record<string, unknown>)[stageKey];
       if (!isPlainObject(inner)) return { ok: false, message: 'Stage payload must be an object.' };
 
-      const allowed = workflowContext?.schema && isPlainObject(workflowContext.schema)
-        ? Object.keys((workflowContext.schema as { properties?: Record<string, unknown> }).properties || {})
-        : null;
+      const allowed = getAllowedStageKeys(
+        stageKey,
+        workflowContext?.generatorType || workflowContext?.workflowType,
+        workflowContext?.schema,
+      );
 
       if (allowed) {
         const invalid = Object.keys(inner).find((k) => k !== '_meta' && !allowed.includes(k));
@@ -728,7 +747,7 @@ export default function AiAssistantPanel() {
 
       return { ok: true, payload: inner as Record<string, unknown> };
     },
-    [workflowContext?.schema]
+    [workflowContext?.generatorType, workflowContext?.schema, workflowContext?.workflowType]
   );
 
   const applyStagePatch = useCallback(
@@ -1022,9 +1041,11 @@ export default function AiAssistantPanel() {
       }
 
       const { payload } = validated as { ok: true; payload: Record<string, unknown> }; // narrowed to ok: true
-      const allowedKeys = workflowContext?.schema && isPlainObject(workflowContext.schema)
-        ? Object.keys((workflowContext.schema as { properties?: Record<string, unknown> }).properties || {})
-        : null;
+      const allowedKeys = getAllowedStageKeys(
+        confirmedStageKey,
+        workflowContext?.generatorType || workflowContext?.workflowType,
+        workflowContext?.schema,
+      );
       const sanitizedPayload = sanitizeStagePayload(confirmedStageKey, payload, allowedKeys);
       setStageRunnerState('applying');
       updateWorkflowRunAttempt('applying', {

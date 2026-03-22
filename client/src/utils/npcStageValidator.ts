@@ -358,11 +358,17 @@ export function validateNpcStageOutput(
   const normalizedName = stageName.toLowerCase();
   const relaxedName = normalizedName.replace(/[_:]+/g, ' ');
 
-  if (normalizedName.includes('character_build_feature_inventory')) {
+  if (
+    normalizedName.includes('character_build_feature_inventory')
+    || relaxedName.includes('character build inventory')
+  ) {
     return validateCharacterBuildStage(output);
   }
 
-  if (normalizedName.includes('character_build_feature_enrichment')) {
+  if (
+    normalizedName.includes('character_build_feature_enrichment')
+    || relaxedName.includes('character build enrichment')
+  ) {
     return validateCharacterBuildEnrichmentStage();
   }
 

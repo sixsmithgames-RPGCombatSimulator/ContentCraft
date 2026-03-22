@@ -78,6 +78,16 @@ const getStageObject = (source: StageResults | null | undefined, key: string): J
   return isRecord(value) ? value : undefined;
 };
 
+const isCharacterBuildInternalValidationStage = (stageIdOrName: string): boolean => {
+  const normalizedStageId = stageIdOrName.trim().toLowerCase();
+  const relaxedStageId = normalizedStageId.replace(/[_:]+/g, ' ');
+
+  return normalizedStageId.includes('character_build_feature_inventory')
+    || normalizedStageId.includes('character_build_feature_enrichment')
+    || relaxedStageId.includes('character build inventory')
+    || relaxedStageId.includes('character build enrichment');
+};
+
 const buildCombatCapabilities = (combat: JsonRecord): ResolvedMechanics['combat'] => {
   const hasActions = Array.isArray(combat.actions) && combat.actions.length > 0;
   const hasBonus = Array.isArray(combat.bonus_actions) && combat.bonus_actions.length > 0;
@@ -592,14 +602,16 @@ export function parseAndNormalizeWorkflowStageResponse(
   }
 
   if (input.workflowType === 'npc' && input.stageName.startsWith('Creator:')) {
+    const validationStageKey = input.stageIdentity || input.stageName;
     const stageContextForValidation: JsonRecord = {
       ...getStageObject(input.stageResults, 'creator:_basic_info'),
       ...getStageObject(input.stageResults, 'creator:_core_details'),
       ...getStageObject(input.stageResults, 'creator:_stats'),
-      ...getStageObject(input.stageResults, 'creator:_character_build'),
+      ...(isCharacterBuildInternalValidationStage(validationStageKey)
+        ? {}
+        : (getStageObject(input.stageResults, 'creator:_character_build') || {})),
       ...parsed,
     };
-    const validationStageKey = input.stageIdentity || input.stageName;
     const validation = validateNpcStageOutput(validationStageKey, stageContextForValidation);
     if (!validation.isValid) {
       const stageIssues = validation.errors.map((errorMessage) => ({

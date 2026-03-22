@@ -378,6 +378,27 @@ const getCanonicalStageResultKeys = (stage: Stage): string[] => {
   return Array.from(new Set(keys.filter((key): key is string => typeof key === 'string' && key.trim().length > 0)));
 };
 
+const buildWorkflowContextStageSchema = (
+  stageKey: string | undefined,
+  workflowType?: string | null,
+): Record<string, unknown> | undefined => {
+  if (!stageKey) {
+    return undefined;
+  }
+
+  const contract = getWorkflowStageContract(stageKey, workflowType);
+  if (!contract) {
+    return undefined;
+  }
+
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: [...contract.requiredKeys],
+    properties: Object.fromEntries(contract.allowedKeys.map((key) => [key, {}])),
+  };
+};
+
 const storeStageResult = (results: StageResults, stage: Stage, payload: JsonRecord): StageResults => {
   const nextResults: StageResults = { ...results };
   for (const key of getCanonicalStageResultKeys(stage)) {
@@ -1404,16 +1425,21 @@ export default function ManualGenerator() {
     const currentStage = STAGES[currentStageIndex];
     const currentRunStage = getCurrentWorkflowStageIdentity(wfType, currentStage);
     const isWorkflowComplete = isComplete || currentStageIndex >= STAGES.length;
+    const currentContextStageKey = isWorkflowComplete
+      ? undefined
+      : (compiledStageRequest?.stageKey || currentRunStage?.stageKey || getStageLookupKey(currentStage));
+    const currentContextStageSchema = buildWorkflowContextStageSchema(currentContextStageKey, config.type);
 
     setWorkflowContext({
       workflowType: wfType,
       workflowLabel: getWorkflowLabel(wfType),
       currentStage: isWorkflowComplete ? undefined : currentStage?.name,
-      stageRouterKey: isWorkflowComplete ? undefined : (compiledStageRequest?.stageKey || currentRunStage?.stageKey),
+      stageRouterKey: currentContextStageKey,
       stageProgress: currentStageIndex >= 0
         ? { current: currentStageIndex + 1, total: STAGES.length }
         : undefined,
       currentData: stageResults,
+      schema: currentContextStageSchema,
       factpack: factpack
         ? { facts: factpack.facts.map(f => ({ text: f.text, source: f.entity_name })) }
         : undefined,
@@ -4549,13 +4575,16 @@ Output: Valid JSON only. No markdown, no prose.`;
 
             const finalizedInventory = finalizeCharacterBuildPayload(inventoryState, []);
             if (!finalizedInventory.ok) {
+              const finalizedInventoryError = 'error' in finalizedInventory
+                ? finalizedInventory.error
+                : 'Character Build could not be finalized because the structured feature output was incomplete.';
               const stageErrorOutput = buildWorkflowStageErrorOutput({
                 stageName: currentStage.name,
-                errorMessage: finalizedInventory.error,
+                errorMessage: finalizedInventoryError,
                 displayErrorMessage: 'Character Build could not be finalized because the structured feature output was incomplete.',
-                technicalErrorMessage: finalizedInventory.error,
+                technicalErrorMessage: finalizedInventoryError,
                 parsed: {
-                  conflicts: [buildCriticalStageIssue(finalizedInventory.error, 'Retry Character Build and return complete, concrete feature data.')],
+                  conflicts: [buildCriticalStageIssue(finalizedInventoryError, 'Retry Character Build and return complete, concrete feature data.')],
                 },
               });
               const pipelineOutcome = recordPipelineSubmitOutcome({
@@ -4742,13 +4771,16 @@ Output: Valid JSON only. No markdown, no prose.`;
 
           const finalizedCharacterBuild = finalizeCharacterBuildPayload(inventoryState, updatedEnrichedBatches);
           if (!finalizedCharacterBuild.ok) {
+            const finalizedCharacterBuildError = 'error' in finalizedCharacterBuild
+              ? finalizedCharacterBuild.error
+              : 'Character Build could not be finalized because one or more requested features were still missing concrete descriptions.';
             const stageErrorOutput = buildWorkflowStageErrorOutput({
               stageName: currentStage.name,
-              errorMessage: finalizedCharacterBuild.error,
+              errorMessage: finalizedCharacterBuildError,
               displayErrorMessage: 'Character Build could not be finalized because one or more requested features were still missing concrete descriptions.',
-              technicalErrorMessage: finalizedCharacterBuild.error,
+              technicalErrorMessage: finalizedCharacterBuildError,
               parsed: {
-                conflicts: [buildCriticalStageIssue(finalizedCharacterBuild.error, 'Retry Character Build and return every requested feature with concrete mechanics.')],
+                conflicts: [buildCriticalStageIssue(finalizedCharacterBuildError, 'Retry Character Build and return every requested feature with concrete mechanics.')],
               },
             });
             const pipelineOutcome = recordPipelineSubmitOutcome({
