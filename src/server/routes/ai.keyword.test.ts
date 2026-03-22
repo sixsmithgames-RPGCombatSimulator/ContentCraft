@@ -4,6 +4,7 @@ import {
   buildSchemaCorrectionPrompt,
   buildSpellcastingSemanticCorrectionPrompt,
   evaluateKeywordExtractorCompliance,
+  extractJsonPatch,
   getAutomaticWorkflowRetryDelayMs,
   getStageAllowedKeys,
   normalizeNameValueArray,
@@ -409,5 +410,21 @@ describe('evaluateKeywordExtractorCompliance', () => {
     expect(prompt).toContain('Do not add skill_proficiencies or saving_throws in this stage.');
     expect(prompt).toContain('class_features, subclass_features, racial_features, feats, fighting_styles');
     expect(prompt).not.toContain('skill_proficiencies, saving_throws');
+  });
+
+  it('salvages malformed-but-usable JSON patches from AI output', () => {
+    const extraction = extractJsonPatch(`Here is the JSON:\n{"class_features":[],"subclass_features":[],"racial_features":[],"feats":[{"name":"Sharpshooter","description":"Long-range attacks ignore disadvantage."}],"fighting_styles":[{"name":"Archery","description":"Gain +2 to ranged weapon attack rolls."}],}`);
+
+    expect(extraction.ok).toBe(true);
+    if (!extraction.ok) return;
+
+    expect(extraction.patch).toEqual({
+      class_features: [],
+      subclass_features: [],
+      racial_features: [],
+      feats: [{ name: 'Sharpshooter', description: 'Long-range attacks ignore disadvantage.' }],
+      fighting_styles: [{ name: 'Archery', description: 'Gain +2 to ranged weapon attack rolls.' }],
+    });
+    expect(extraction.warnings).toContain('repair:removed_trailing_commas');
   });
 });

@@ -533,6 +533,104 @@ describe('workflowStageResponse', () => {
     ]);
   });
 
+  it('accepts batch-scoped character build enrichment responses with empty non-batch categories', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        class_features: [],
+        subclass_features: [],
+        racial_features: [],
+        feats: [
+          {
+            name: 'Sharpshooter',
+            description: 'Attacking at long range does not impose disadvantage, your ranged attacks ignore half and three-quarters cover, and you can take a -5 penalty to add +10 damage.',
+          },
+        ],
+        fighting_styles: [
+          {
+            name: 'Archery',
+            description: 'You gain a +2 bonus to attack rolls you make with ranged weapons.',
+          },
+        ],
+      }),
+      stageName: 'Creator: Character Build',
+      stageIdentity: 'character_build_feature_enrichment',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Nasir\'il Cuth\'il',
+          class_levels: 'Rogue (Assassin) 3 / Wizard (Illusionist) 10',
+          race: 'Drow',
+        },
+        'creator:_stats': {
+          ability_scores: {
+            strength: 10,
+            dexterity: 20,
+            constitution: 14,
+            intelligence: 20,
+            wisdom: 12,
+            charisma: 14,
+          },
+          proficiency_bonus: 5,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.class_features).toEqual([]);
+    expect(result.parsed.racial_features).toEqual([]);
+    expect(result.parsed.feats).toEqual([
+      {
+        name: 'Sharpshooter',
+        description: 'Attacking at long range does not impose disadvantage, your ranged attacks ignore half and three-quarters cover, and you can take a -5 penalty to add +10 damage.',
+      },
+    ]);
+  });
+
+  it('repairs truncated character build enrichment JSON when the response still contains usable content', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: '{"class_features":[],"subclass_features":[],"racial_features":[],"feats":[{"name":"Sharpshooter","description":"Attacking at long range does not impose disadvantage on your ranged weapon attack rolls."}],"fighting_styles":[{"name":"Archery","description":"You gain a +2 bonus to attack rolls you make with ranged weapons."}]',
+      stageName: 'Creator: Character Build',
+      stageIdentity: 'character_build_feature_enrichment',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Nasir\'il Cuth\'il',
+          class_levels: 'Rogue (Assassin) 3 / Wizard (Illusionist) 10',
+          race: 'Drow',
+        },
+        'creator:_stats': {
+          ability_scores: {
+            strength: 10,
+            dexterity: 20,
+            constitution: 14,
+            intelligence: 20,
+            wisdom: 12,
+            charisma: 14,
+          },
+          proficiency_bonus: 5,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.feats).toEqual([
+      {
+        name: 'Sharpshooter',
+        description: 'Attacking at long range does not impose disadvantage on your ranged weapon attack rolls.',
+      },
+    ]);
+    expect(result.parsed.fighting_styles).toEqual([
+      {
+        name: 'Archery',
+        description: 'You gain a +2 bonus to attack rolls you make with ranged weapons.',
+      },
+    ]);
+  });
+
   it('accepts spellcasting responses that return spells_known as a leveled object map', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({

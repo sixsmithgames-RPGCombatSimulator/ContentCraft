@@ -218,6 +218,14 @@ function validateCharacterBuildStage(output: Record<string, unknown>): Validatio
   };
 }
 
+function validateCharacterBuildEnrichmentStage(): ValidationResult {
+  return {
+    isValid: true,
+    errors: [],
+    warnings: [],
+  };
+}
+
 function validateCombatStage(output: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -348,8 +356,17 @@ export function validateNpcStageOutput(
   output: Record<string, unknown>
 ): ValidationResult {
   const normalizedName = stageName.toLowerCase();
+  const relaxedName = normalizedName.replace(/[_:]+/g, ' ');
 
-  if (normalizedName.includes('core details')) {
+  if (normalizedName.includes('character_build_feature_inventory')) {
+    return validateCharacterBuildStage(output);
+  }
+
+  if (normalizedName.includes('character_build_feature_enrichment')) {
+    return validateCharacterBuildEnrichmentStage();
+  }
+
+  if (normalizedName.includes('core_details') || relaxedName.includes('core details')) {
     return validateCoreDetailsStage(output);
   }
 
@@ -357,7 +374,7 @@ export function validateNpcStageOutput(
     return validateStatsStage(output);
   }
 
-  if (normalizedName.includes('character build')) {
+  if (normalizedName.includes('character_build') || relaxedName.includes('character build')) {
     return validateCharacterBuildStage(output);
   }
 

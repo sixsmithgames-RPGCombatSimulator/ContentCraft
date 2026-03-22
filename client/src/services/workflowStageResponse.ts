@@ -599,7 +599,8 @@ export function parseAndNormalizeWorkflowStageResponse(
       ...getStageObject(input.stageResults, 'creator:_character_build'),
       ...parsed,
     };
-    const validation = validateNpcStageOutput(input.stageName, stageContextForValidation);
+    const validationStageKey = input.stageIdentity || input.stageName;
+    const validation = validateNpcStageOutput(validationStageKey, stageContextForValidation);
     if (!validation.isValid) {
       const stageIssues = validation.errors.map((errorMessage) => ({
         severity: 'critical',

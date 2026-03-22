@@ -191,6 +191,46 @@ function repairJSON(jsonText: string): string {
     repaired = result;
   }
 
+  const stack: string[] = [];
+  let inStr = false;
+  let esc = false;
+
+  for (let i = 0; i < repaired.length; i++) {
+    const ch = repaired[i];
+
+    if (inStr) {
+      if (esc) {
+        esc = false;
+        continue;
+      }
+      if (ch === '\\') {
+        esc = true;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+
+    if (ch === '{') {
+      stack.push('}');
+    } else if (ch === '[') {
+      stack.push(']');
+    } else if ((ch === '}' || ch === ']') && stack[stack.length - 1] === ch) {
+      stack.pop();
+    }
+  }
+
+  if (stack.length > 0) {
+    repaired += [...stack].reverse().join('');
+  }
+
   return repaired;
 }
 

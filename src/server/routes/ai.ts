@@ -1212,8 +1212,31 @@ function parseChatRequestBody(body: unknown): { valid: true; data: WorkflowChatR
 function findBalancedJson(text: string): string | null {
   let depth = 0;
   let start = -1;
+  let inString = false;
+  let escaped = false;
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
     if (ch === '{') {
       if (depth === 0) start = i;
       depth += 1;
@@ -1228,41 +1251,225 @@ function findBalancedJson(text: string): string | null {
   return null;
 }
 
+function cleanJsonText(text: string): string {
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '');
+  cleaned = cleaned.replace(/\s*```\s*$/i, '');
+  cleaned = cleaned.replace(/\[cite_start\]/gi, '');
+  cleaned = cleaned.replace(/\[cite_end\]/gi, '');
+  cleaned = cleaned.replace(/【\d+†source】/g, '');
+  cleaned = cleaned.replace(/\[\d+\]/g, '');
+
+  const prefixes = [
+    /^Here's the JSON:/i,
+    /^Here is the JSON:/i,
+    /^JSON:/i,
+    /^Response:/i,
+    /^Output:/i,
+    /^Result:/i,
+  ];
+
+  for (const prefix of prefixes) {
+    cleaned = cleaned.replace(prefix, '');
+  }
+
+  return cleaned.trim();
+}
+
+function repairJsonStringFields(text: string): string {
+  let repaired = text;
+  const stringFields = [
+    'text', 'source', 'canonical_name', 'short_summary', 'full_description',
+    'description', 'homebrew_type', 'title', 'content', 'question', 'answer',
+    'name', 'value', 'message', 'reason', 'suggestion', 'note',
+  ];
+
+  for (const field of stringFields) {
+    const regex = new RegExp(`"${field}"\\s*:\\s*"`, 'g');
+    let match: RegExpExecArray | null;
+    let lastIndex = 0;
+    let result = '';
+
+    while ((match = regex.exec(repaired)) !== null) {
+      result += repaired.substring(lastIndex, match.index + match[0].length);
+      let pos = match.index + match[0].length;
+      let stringValue = '';
+      let escaped = false;
+
+      while (pos < repaired.length) {
+        const char = repaired[pos];
+
+        if (escaped) {
+          stringValue += char;
+          escaped = false;
+        } else if (char === '\\') {
+          stringValue += char;
+          escaped = true;
+        } else if (char === '"') {
+          const nextNonSpace = repaired.substring(pos + 1).match(/^\s*([,}\]])/);
+          if (nextNonSpace) {
+            result += stringValue + '"';
+            lastIndex = pos + 1;
+            break;
+          }
+          stringValue += '\\"';
+        } else {
+          stringValue += char;
+        }
+        pos += 1;
+      }
+    }
+
+    result += repaired.substring(lastIndex);
+    repaired = result;
+  }
+
+  return repaired;
+}
+
+function appendMissingJsonClosers(text: string): { repaired: string; changed: boolean } {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === '{') {
+      stack.push('}');
+    } else if (ch === '[') {
+      stack.push(']');
+    } else if ((ch === '}' || ch === ']') && stack[stack.length - 1] === ch) {
+      stack.pop();
+    }
+  }
+
+  if (stack.length === 0) {
+    return { repaired: text, changed: false };
+  }
+
+  return {
+    repaired: `${text}${[...stack].reverse().join('')}`,
+    changed: true,
+  };
+}
+
+function repairJsonCandidate(text: string): { repaired: string; warnings: string[] } {
+  const warnings: string[] = [];
+  let repaired = cleanJsonText(text);
+
+  const firstBrace = repaired.indexOf('{');
+  if (firstBrace > 0) {
+    repaired = repaired.slice(firstBrace);
+    warnings.push('repair:trimmed_prefix');
+  }
+
+  const lastBrace = repaired.lastIndexOf('}');
+  if (lastBrace !== -1 && lastBrace < repaired.length - 1) {
+    repaired = repaired.slice(0, lastBrace + 1);
+    warnings.push('repair:trimmed_suffix');
+  }
+
+  const withoutComments = repaired
+    .replace(/\/\/.*$/gm, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  if (withoutComments !== repaired) {
+    repaired = withoutComments;
+    warnings.push('repair:removed_comments');
+  }
+
+  const withoutTrailingCommas = repaired.replace(/,(\s*[}\]])/g, '$1');
+  if (withoutTrailingCommas !== repaired) {
+    repaired = withoutTrailingCommas;
+    warnings.push('repair:removed_trailing_commas');
+  }
+
+  const escapedQuotes = repairJsonStringFields(repaired);
+  if (escapedQuotes !== repaired) {
+    repaired = escapedQuotes;
+    warnings.push('repair:escaped_quotes');
+  }
+
+  const balanced = appendMissingJsonClosers(repaired);
+  if (balanced.changed) {
+    repaired = balanced.repaired;
+    warnings.push('repair:closed_delimiters');
+  }
+
+  return { repaired, warnings };
+}
+
 /** Extract JSON patch from a Gemini response text. */
 function extractJsonPatch(rawText: string): { ok: true; patch?: Record<string, unknown>; foundJsonBlock: boolean; warnings: string[] } | { ok: false; message: string } {
   const warnings: string[] = [];
   const fencedMatch = rawText.match(/```json\s*\n?([\s\S]*?)```/i);
-  const candidate = fencedMatch ? fencedMatch[1] : findBalancedJson(rawText);
+  const cleanedRawText = cleanJsonText(rawText);
+  const candidate = fencedMatch ? fencedMatch[1].trim() : findBalancedJson(cleanedRawText) ?? cleanedRawText;
   const foundJsonBlock = Boolean(fencedMatch);
 
   if (!candidate) {
     return { ok: false, message: 'No JSON object found in response.' };
   }
 
-  if (candidate.length > MAX_PATCH_BYTES) {
-    return { ok: false, message: `Patch exceeds size limit (${MAX_PATCH_BYTES} bytes).` };
-  }
-
-  try {
-    const parsed = JSON.parse(candidate);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { ok: false, message: 'JSON patch must be an object.' };
+  const parseCandidate = (jsonText: string): { ok: true; patch: Record<string, unknown> } | { ok: false; message: string } => {
+    if (jsonText.length > MAX_PATCH_BYTES) {
+      return { ok: false, message: `Patch exceeds size limit (${MAX_PATCH_BYTES} bytes).` };
     }
 
-    // Simple forbidden keys guardrail
-    const forbiddenKeys = ['projectId', 'stageId', 'stageRunId'];
-    for (const key of forbiddenKeys) {
-      if (Object.prototype.hasOwnProperty.call(parsed, key)) {
-        console.warn(`[AI][Gemini] Stripping forbidden root field '${key}' from patch`);
-        delete (parsed as Record<string, unknown>)[key];
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { ok: false, message: 'JSON patch must be an object.' };
       }
-    }
 
-    return { ok: true, patch: parsed as Record<string, unknown>, foundJsonBlock, warnings };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Invalid JSON';
-    return { ok: false, message: `Invalid JSON: ${message}` };
+      const forbiddenKeys = ['projectId', 'stageId', 'stageRunId'];
+      for (const key of forbiddenKeys) {
+        if (Object.prototype.hasOwnProperty.call(parsed, key)) {
+          console.warn(`[AI][Gemini] Stripping forbidden root field '${key}' from patch`);
+          delete (parsed as Record<string, unknown>)[key];
+        }
+      }
+
+      return { ok: true, patch: parsed as Record<string, unknown> };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Invalid JSON';
+      return { ok: false, message: `Invalid JSON: ${message}` };
+    }
+  };
+
+  const directParse = parseCandidate(candidate);
+  if (directParse.ok) {
+    return { ok: true, patch: directParse.patch, foundJsonBlock, warnings };
   }
+
+  const repairedCandidate = repairJsonCandidate(candidate);
+  warnings.push(...repairedCandidate.warnings);
+  const repairedParse = parseCandidate(repairedCandidate.repaired);
+  if (repairedParse.ok) {
+    return { ok: true, patch: repairedParse.patch, foundJsonBlock, warnings };
+  }
+
+  return { ok: false, message: repairedParse.message };
 }
 
 /** Map HTTP status / provider errors to structured error codes. */
@@ -2418,6 +2625,7 @@ export {
   buildContractCorrectionPrompt,
   buildSchemaCorrectionPrompt,
   buildSpellcastingSemanticCorrectionPrompt,
+  extractJsonPatch,
   evaluateKeywordExtractorCompliance,
   getNormalizedStageKey,
   getStageAllowedKeys,
