@@ -3,8 +3,39 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 font-sans;
+    @apply bg-gray-50 text-gray-900 font-sans transition-colors;
+  }
+
+  html.dark body {
+    background-color: rgb(2 6 23);
+    color: rgb(226 232 240);
+  }
+
+  html.dark input,
+  html.dark select,
+  html.dark textarea {
+    background-color: rgb(15 23 42);
+    border-color: rgb(71 85 105);
+    color: rgb(226 232 240);
+  }
+
+  html.dark input::placeholder,
+  html.dark textarea::placeholder {
+    color: rgb(148 163 184);
+  }
+
+  html.dark option {
+    background-color: rgb(15 23 42);
+    color: rgb(226 232 240);
   }
 }
 
@@ -23,5 +54,69 @@
 
   .input {
     @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+}
+
+@layer utilities {
+  html.dark .bg-white {
+    background-color: rgb(15 23 42);
+  }
+
+  html.dark .bg-gray-50 {
+    background-color: rgb(2 6 23);
+  }
+
+  html.dark .bg-gray-100 {
+    background-color: rgb(30 41 59);
+  }
+
+  html.dark .bg-gray-200 {
+    background-color: rgb(51 65 85);
+  }
+
+  html.dark .text-gray-900 {
+    color: rgb(241 245 249);
+  }
+
+  html.dark .text-gray-800 {
+    color: rgb(226 232 240);
+  }
+
+  html.dark .text-gray-700 {
+    color: rgb(203 213 225);
+  }
+
+  html.dark .text-gray-600,
+  html.dark .text-gray-500,
+  html.dark .text-gray-400 {
+    color: rgb(148 163 184);
+  }
+
+  html.dark .border-gray-100,
+  html.dark .border-gray-200,
+  html.dark .border-gray-300 {
+    border-color: rgb(51 65 85);
+  }
+
+  html.dark .hover\:bg-gray-50:hover {
+    background-color: rgb(30 41 59);
+  }
+
+  html.dark .hover\:bg-gray-100:hover {
+    background-color: rgb(30 41 59);
+  }
+
+  html.dark .hover\:bg-gray-200:hover,
+  html.dark .hover\:bg-gray-300:hover {
+    background-color: rgb(51 65 85);
+  }
+
+  html.dark .hover\:text-gray-700:hover {
+    color: rgb(241 245 249);
+  }
+
+  html.dark .shadow-sm,
+  html.dark .shadow {
+    --tw-shadow-color: rgb(0 0 0 / 0.35);
   }
 }
