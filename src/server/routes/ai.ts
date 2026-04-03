@@ -1461,15 +1461,20 @@ function extractJsonPatch(rawText: string): { ok: true; patch?: Record<string, u
   if (directParse.ok) {
     return { ok: true, patch: directParse.patch, foundJsonBlock, warnings };
   }
+  if ('message' in directParse) {
+    const parseFailureMessage = directParse.message;
 
-  const repairedCandidate = repairJsonCandidate(candidate);
-  warnings.push(...repairedCandidate.warnings);
-  const repairedParse = parseCandidate(repairedCandidate.repaired);
-  if (repairedParse.ok) {
-    return { ok: true, patch: repairedParse.patch, foundJsonBlock, warnings };
+    const repairedCandidate = repairJsonCandidate(candidate);
+    warnings.push(...repairedCandidate.warnings);
+    const repairedParse = parseCandidate(repairedCandidate.repaired);
+    if (repairedParse.ok) {
+      return { ok: true, patch: repairedParse.patch, foundJsonBlock, warnings };
+    }
+
+    return { ok: false, message: parseFailureMessage };
   }
 
-  return { ok: false, message: repairedParse.message };
+  return { ok: false, message: 'Failed to parse JSON patch.' };
 }
 
 /** Map HTTP status / provider errors to structured error codes. */

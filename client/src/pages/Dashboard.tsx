@@ -83,47 +83,64 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Your Projects</h1>
-          <p className="text-gray-600 mt-2">Manage and organize your content creation projects</p>
-        </div>
-
-        <Link to="/projects/new" className="btn-primary flex items-center space-x-2">
-          <PlusIcon className="w-5 h-5" />
-          <span>New Project</span>
-        </Link>
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Your Projects</h1>
+        <p className="text-gray-600 mt-2">Manage and organize your content creation projects</p>
       </div>
 
-      <div className="flex items-center space-x-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10"
-          />
-        </div>
+      {projects.length > 0 && (
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search projects..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input pl-10"
+              />
+            </div>
 
-        <div className="relative">
-          <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value as ProjectType | 'all')}
-            className="input pl-10 min-w-40"
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value as ProjectType | 'all')}
+                className="input pl-10 min-w-40"
+              >
+                <option value="all">All Types</option>
+                <option value={ProjectType.FICTION}>Fiction</option>
+                <option value={ProjectType.NON_FICTION}>Non-Fiction</option>
+                <option value={ProjectType.DND_ADVENTURE}>D&D Adventure</option>
+                <option value={ProjectType.DND_HOMEBREW}>D&D Homebrew</option>
+                <option value={ProjectType.HEALTH_ADVICE}>Health Advice</option>
+                <option value={ProjectType.RESEARCH}>Research</option>
+              </select>
+            </div>
+          </div>
+
+          <Link
+            to="/projects/new"
+            className="group relative min-h-[132px] overflow-hidden rounded-2xl border border-dashed border-primary-200 bg-gradient-to-br from-primary-50 via-white to-slate-50 p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-primary-300 hover:shadow-lg dark:border-primary-500/20 dark:from-slate-900 dark:via-slate-900 dark:to-primary-950/30"
           >
-            <option value="all">All Types</option>
-            <option value={ProjectType.FICTION}>Fiction</option>
-            <option value={ProjectType.NON_FICTION}>Non-Fiction</option>
-            <option value={ProjectType.DND_ADVENTURE}>D&D Adventure</option>
-            <option value={ProjectType.DND_HOMEBREW}>D&D Homebrew</option>
-            <option value={ProjectType.HEALTH_ADVICE}>Health Advice</option>
-            <option value={ProjectType.RESEARCH}>Research</option>
-          </select>
+            <div className="absolute right-5 top-1 text-[6rem] font-extralight leading-none text-primary-100 transition-colors group-hover:text-primary-200 dark:text-primary-400/10 dark:group-hover:text-primary-300/20">
+              +
+            </div>
+            <div className="relative flex h-full flex-col justify-between">
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/80 bg-white/80 text-primary-600 shadow-sm dark:border-slate-700 dark:bg-slate-800/80 dark:text-blue-300">
+                <PlusIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">New Project</h3>
+                <p className="mt-1 max-w-[16rem] text-sm leading-relaxed text-gray-600 dark:text-slate-400">
+                  Start something new without leaving your project overview.
+                </p>
+              </div>
+            </div>
+          </Link>
         </div>
-      </div>
+      )}
 
       {filteredProjects.length === 0 ? (
         <div className="py-12">
@@ -135,12 +152,28 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <h3 className="text-2xl font-semibold text-gray-900 mb-3">Welcome to ContentCraft</h3>
                 <p className="text-gray-500 text-base leading-relaxed">
-                  Organize your writing projects and generate AI-ready prompts. Use the{' '}
-                  <span className="font-medium text-gray-700">New Project</span> button above to get started.
+                  Organize your writing projects and generate AI-ready prompts. Create your first project from the tile below to get started.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Link
+                  to="/projects/new"
+                  className="group relative overflow-hidden rounded-xl border border-dashed border-primary-200 bg-gradient-to-br from-primary-50 via-white to-primary-50/60 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md dark:border-primary-500/20 dark:from-slate-900 dark:via-slate-900 dark:to-primary-950/40"
+                >
+                  <div className="absolute right-4 top-2 text-7xl font-light leading-none text-primary-200/70 transition-colors group-hover:text-primary-300 dark:text-primary-400/20 dark:group-hover:text-primary-300/30">
+                    +
+                  </div>
+                  <div className="relative">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80 text-primary-600 shadow-sm dark:bg-slate-800/80 dark:text-blue-300">
+                      <PlusIcon className="w-5 h-5" />
+                    </div>
+                    <h4 className="mt-6 font-semibold text-gray-900 dark:text-slate-100">New Project</h4>
+                    <p className="mt-1 text-sm leading-relaxed text-gray-600 dark:text-slate-400">
+                      Start a fresh workspace for your next story, campaign, or research build.
+                    </p>
+                  </div>
+                </Link>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
                   <Layers className="w-5 h-5 text-primary-500 mb-3" />
                   <h4 className="font-medium text-gray-900 mb-1 text-sm">Organize Content</h4>
@@ -166,15 +199,15 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onDelete={handleDeleteProject}
-            />
-          ))}
-        </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredProjects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onDelete={handleDeleteProject}
+              />
+            ))}
+          </div>
       )}
     </div>
   );

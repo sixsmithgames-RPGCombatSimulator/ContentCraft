@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { PlusIcon, HomeIcon, BookOpenIcon, MoonIcon, SunIcon } from 'lucide-react';
+import { HomeIcon, BookOpenIcon, MoonIcon, SunIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -50,13 +50,6 @@ export const Navbar: React.FC = () => {
               {isDark ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
               <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
             </button>
-            <Link
-              to="/projects/new"
-              className="btn-primary flex items-center space-x-2"
-            >
-              <PlusIcon className="w-4 h-4" />
-              <span>New Project</span>
-            </Link>
           </div>
         </div>
       </div>
