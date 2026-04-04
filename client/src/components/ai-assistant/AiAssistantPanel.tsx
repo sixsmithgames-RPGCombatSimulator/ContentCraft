@@ -103,6 +103,7 @@ type StageRunnerState =
   | 'error';
 
 const MAX_INTEGRATED_CORRECTION_ATTEMPTS = 1;
+type IntegratedStageRunOverrides = { promptOverride?: string; correctionAttempt?: number };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -310,12 +311,15 @@ export default function AiAssistantPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const inFlightRef = useRef(false);
+  const stageRunnerStateRef = useRef<StageRunnerState>('idle');
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const stallTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const scheduledRunTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoRetryScheduledRef = useRef(false);
   const lastGateLogSignatureRef = useRef<string | null>(null);
   const lastAttemptedCompiledRequestIdRef = useRef<string | null>(null);
+  const runStageWithGeminiRef = useRef<(overrides?: IntegratedStageRunOverrides) => Promise<void>>(async () => undefined);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -328,6 +332,10 @@ export default function AiAssistantPanel() {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [isPanelOpen]);
+
+  useEffect(() => {
+    stageRunnerStateRef.current = stageRunnerState;
+  }, [stageRunnerState]);
 
   const effectiveStageKey = workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest?.stageKey || null;
   const hasActiveAutomatedStage = Boolean(workflowContext?.stageRouterKey || workflowContext?.compiledStageRequest);
@@ -389,9 +397,27 @@ export default function AiAssistantPanel() {
     [workflowRunStateDispatcher, workflowContext, effectiveStageKey, activeAttemptId, currentCompiledRequestId]
   );
 
+  const clearScheduledRun = useCallback(() => {
+    if (scheduledRunTimerRef.current) {
+      clearTimeout(scheduledRunTimerRef.current);
+      scheduledRunTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleStageRun = useCallback((delayMs: number, overrides?: IntegratedStageRunOverrides) => {
+    clearScheduledRun();
+    scheduledRunTimerRef.current = setTimeout(() => {
+      scheduledRunTimerRef.current = null;
+      void runStageWithGeminiRef.current(overrides);
+    }, delayMs);
+  }, [clearScheduledRun]);
+
+  useEffect(() => clearScheduledRun, [clearScheduledRun]);
+
   // Reset stageRunId when stage changes (use compiled request as fallback identifier)
   useEffect(() => {
     if (!effectiveStageKey) {
+      clearScheduledRun();
       setStageRunId(null);
       setStageRunnerState('idle');
       setStageRunnerError(null);
@@ -401,13 +427,14 @@ export default function AiAssistantPanel() {
       lastAttemptedCompiledRequestIdRef.current = null;
       return;
     }
+    clearScheduledRun();
     setStageRunId(crypto.randomUUID());
     setStageRunnerState('idle');
     setStageRunnerError(null);
     setAutoRetryEligible(false);
     setHasAutoStarted(false);
     lastAttemptedCompiledRequestIdRef.current = null;
-  }, [effectiveStageKey, workflowContext?.compiledStageRequest?.requestId, workflowContext?.compiledStageRequest?.prompt]);
+  }, [clearScheduledRun, effectiveStageKey, workflowContext?.compiledStageRequest?.requestId, workflowContext?.compiledStageRequest?.prompt]);
 
   // Avoid hard error when stageRouterKey is temporarily missing; rely on compiled stage key if present
   useEffect(() => {
@@ -470,6 +497,7 @@ export default function AiAssistantPanel() {
   // ─── Handlers ────────────────────────────────────────────────────────────
 
   const resetIntegratedRunner = useCallback(() => {
+    clearScheduledRun();
     inFlightRef.current = false;
     setStageRunId(crypto.randomUUID());
     setStageRunnerState('idle');
@@ -480,7 +508,7 @@ export default function AiAssistantPanel() {
     setRateLimitSecondsLeft(null);
     setCooldownEndsAt(null);
     lastAttemptedCompiledRequestIdRef.current = null;
-  }, []);
+  }, [clearScheduledRun]);
 
   const handleModeSelection = useCallback((mode: 'integrated' | 'manual') => {
     resetIntegratedRunner();
@@ -787,9 +815,10 @@ export default function AiAssistantPanel() {
     []
   );
 
-  const runStageWithGemini = useCallback(async (overrides?: { promptOverride?: string; correctionAttempt?: number }) => {
-    if (inFlightRef.current || stageRunnerState !== 'idle') {
-      logStageRunnerGate(`skip: in-flight (${stageRunnerState})`);
+  const runStageWithGemini = useCallback(async (overrides?: IntegratedStageRunOverrides) => {
+    const currentRunnerState = stageRunnerStateRef.current;
+    if (inFlightRef.current || currentRunnerState !== 'idle') {
+      logStageRunnerGate(`skip: in-flight (${currentRunnerState})`);
       return;
     }
     const stageKeyForRun = effectiveStageKey;
@@ -948,10 +977,10 @@ export default function AiAssistantPanel() {
           setStageRunnerState('idle');
           setHasAutoStarted(false);
           inFlightRef.current = false;
-          setTimeout(() => runStageWithGemini({
+          scheduleStageRun(retryDelayMs, {
             promptOverride: correctionPrompt,
             correctionAttempt: correctionAttempt + 1,
-          }), retryDelayMs);
+          });
           return;
         }
         if (failureBody?.error?.type === 'RATE_LIMIT') {
@@ -1160,23 +1189,28 @@ export default function AiAssistantPanel() {
     applyStagePatch,
     addMessage,
     logStageRunnerGate,
-    stageRunnerState,
+    scheduleStageRun,
     currentRetrySource,
     currentRunAttemptStatus,
     activeAttemptId,
     updateWorkflowRunAttempt,
   ]);
 
+  useEffect(() => {
+    runStageWithGeminiRef.current = runStageWithGemini;
+  }, [runStageWithGemini]);
+
   const handleRetryAfterRateLimit = useCallback(() => {
-    if (stageRunnerState !== 'error') return;
+    if (stageRunnerStateRef.current !== 'error') return;
+    inFlightRef.current = false;
     setRateLimitCooldownMs(null);
     setCooldownEndsAt(null);
     setRateLimitSecondsLeft(null);
     setStageRunnerState('idle');
     setStageRunnerError(null);
     setHasAutoStarted(false);
-    runStageWithGemini();
-  }, [stageRunnerState, runStageWithGemini]);
+    scheduleStageRun(0);
+  }, [scheduleStageRun]);
 
   // Manage cooldown countdown timer
   useEffect(() => {
@@ -1222,16 +1256,18 @@ export default function AiAssistantPanel() {
     if (autoRetryScheduledRef.current) return;
 
     autoRetryScheduledRef.current = true;
-    setTimeout(() => {
+    clearScheduledRun();
+    scheduledRunTimerRef.current = setTimeout(() => {
+      scheduledRunTimerRef.current = null;
       setRateLimitCooldownMs(null);
       setCooldownEndsAt(null);
       setRateLimitSecondsLeft(null);
       setStageRunnerState('idle');
       setStageRunnerError(null);
       setHasAutoStarted(false);
-      runStageWithGemini();
+      void runStageWithGeminiRef.current();
     }, 300);
-  }, [cooldownEndsAt, rateLimitSecondsLeft, stageRunnerState, runStageWithGemini]);
+  }, [clearScheduledRun, cooldownEndsAt, rateLimitSecondsLeft, stageRunnerState]);
 
   // Auto-start integrated AI when panel opens in provider mode
   useEffect(() => {
@@ -1306,8 +1342,8 @@ export default function AiAssistantPanel() {
     logStageRunnerGate('auto-start: scheduling run with initial delay');
     setHasAutoStarted(true);
     // Add 2.5s initial delay to ensure server-side throttle window is clear
-    setTimeout(() => runStageWithGemini(), 2500);
-  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, runStageWithGemini, logStageRunnerGate, currentRunAttemptStatus, currentCompiledRequestId, hasTrackedCompiledRequest, hasAuthorizedCompiledRequest]);
+    scheduleStageRun(2500);
+  }, [isPanelOpen, assistMode, hasProvider, workflowContext?.stageRouterKey, workflowContext?.compiledStageRequest, stageRunnerState, hasAutoStarted, scheduleStageRun, logStageRunnerGate, currentRunAttemptStatus, currentCompiledRequestId, hasTrackedCompiledRequest, hasAuthorizedCompiledRequest]);
 
   // Auto-retry on error with countdown (skip if missing stageRouterKey)
   useEffect(() => {
@@ -1343,7 +1379,7 @@ export default function AiAssistantPanel() {
           setStageRunnerError(null);
           setStageRunnerState('idle');
           // Allow state to settle before retrying
-          setTimeout(() => runStageWithGemini(), automatedRetryDelayMs);
+          scheduleStageRun(automatedRetryDelayMs);
           return null;
         }
         return next;
@@ -1356,7 +1392,7 @@ export default function AiAssistantPanel() {
       clearInterval(interval);
       retryTimerRef.current = null;
     };
-  }, [stageRunnerState, stageRunnerError, currentRunAttemptStatus, autoRetryEligible, automatedRetryDelayMs, runStageWithGemini]);
+  }, [stageRunnerState, stageRunnerError, currentRunAttemptStatus, autoRetryEligible, automatedRetryDelayMs, scheduleStageRun]);
 
   // Stall watchdog: only retry if the same explicit attempt never gets accepted.
   useEffect(() => {
@@ -1401,7 +1437,7 @@ export default function AiAssistantPanel() {
           });
           setStageRunnerState('idle');
           setHasAutoStarted(false);
-          setTimeout(() => runStageWithGemini(), automatedRetryDelayMs);
+          scheduleStageRun(automatedRetryDelayMs);
           return null;
         }
         return next;
@@ -1425,7 +1461,7 @@ export default function AiAssistantPanel() {
     hasActiveAutomatedStage,
     isPanelOpen,
     automatedRetryDelayMs,
-    runStageWithGemini,
+    scheduleStageRun,
     stageRunnerState,
     updateWorkflowRunAttempt,
     workflowContext?.currentStage,
