@@ -71,6 +71,74 @@ describe('workflowCanonRetrieval', () => {
     expect(result.warningMessage).toContain('ungrounded');
   });
 
+  it('does not include weak claim-only matches for generic planner keywords', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/canon/projects/project-1/entities')) {
+        return createJsonResponse([
+          {
+            _id: 'npc.glatham',
+            canonical_name: 'Glatham Woodspliter Elanithak',
+            claims: [
+              { text: 'Alignment: Lawful Neutral' },
+              { text: 'Hair: Black' },
+            ],
+          },
+        ]);
+      }
+
+      return createJsonResponse([]);
+    });
+
+    const result = await searchWorkflowCanonByKeywords({
+      keywords: ['Fiblan', 'Wizard', 'Human', 'Lawful Neutral'],
+      projectId: 'project-1',
+      apiBaseUrl: 'https://example.test',
+      fetchImpl,
+      workflowType: 'npc',
+    });
+
+    expect(result.groundingStatus).toBe('ungrounded');
+    expect(result.matchedEntityCount).toBe(0);
+    expect(result.factpack.facts).toEqual([]);
+  });
+
+  it('still includes direct canon matches when the keyword exactly names an entity', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/canon/projects/project-1/entities')) {
+        return createJsonResponse([
+          {
+            _id: 'npc.fiblan',
+            canonical_name: 'Fiblan',
+            claims: [
+              { text: 'Fiblan was born in Marenport.' },
+            ],
+          },
+          {
+            _id: 'npc.glatham',
+            canonical_name: 'Glatham Woodspliter Elanithak',
+            claims: [
+              { text: 'Alignment: Lawful Neutral' },
+            ],
+          },
+        ]);
+      }
+
+      return createJsonResponse([]);
+    });
+
+    const result = await searchWorkflowCanonByKeywords({
+      keywords: ['Fiblan', 'Lawful Neutral'],
+      projectId: 'project-1',
+      apiBaseUrl: 'https://example.test',
+      fetchImpl,
+      workflowType: 'npc',
+    });
+
+    expect(result.groundingStatus).toBe('project');
+    expect(result.matchedEntityCount).toBe(1);
+    expect(result.factpack.facts[0]?.entity_name).toBe('Fiblan');
+  });
+
   it('extracts and deduplicates retrieval hint keywords', () => {
     const keywords = extractRetrievalHintKeywords({
       retrieval_hints: {

@@ -1587,16 +1587,22 @@ export default function ManualGenerator() {
       const stageKey = metadata?.stageKey
         || _failure.workflow?.stageKey
         || (activeStage ? getCurrentWorkflowStageIdentity(workflowType, activeStage)?.stageKey : undefined);
+      const validationIssues = Array.isArray(_failure.workflow?.retryContext?.validationIssues)
+        ? _failure.workflow.retryContext.validationIssues.filter((issue): issue is string => typeof issue === 'string' && issue.trim().length > 0)
+        : [];
       const technicalErrorMessage = typeof _failure.error?.message === 'string' && _failure.error.message.trim().length > 0
         ? _failure.error.message.trim()
         : displayMessage;
+      const stageIssues = validationIssues.length > 0
+        ? validationIssues.map((issue) => buildCriticalStageIssue(issue))
+        : [buildCriticalStageIssue(technicalErrorMessage)];
       const stageErrorOutput = buildWorkflowStageErrorOutput({
         stageName,
         errorMessage: technicalErrorMessage,
         displayErrorMessage: displayMessage,
         technicalErrorMessage,
         parsed: {
-          conflicts: [buildCriticalStageIssue(technicalErrorMessage)],
+          conflicts: stageIssues,
         },
       });
 

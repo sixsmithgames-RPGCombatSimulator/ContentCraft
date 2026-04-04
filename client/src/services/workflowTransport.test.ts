@@ -215,6 +215,7 @@ describe('workflow transport', () => {
             reason: 'duplicate_retry_signature',
             retryable: false,
             duplicateRetryBlocked: true,
+            validationIssues: ['proposals must be an array of proposal objects'],
           },
         },
         error: {
@@ -241,6 +242,7 @@ describe('workflow transport', () => {
         reason: 'duplicate_retry_signature',
         retryable: false,
         duplicateRetryBlocked: true,
+        validationIssues: ['proposals must be an array of proposal objects'],
       },
     });
   });

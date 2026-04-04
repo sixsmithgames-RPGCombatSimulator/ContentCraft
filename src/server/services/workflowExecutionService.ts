@@ -29,6 +29,7 @@ export interface WorkflowExecutionRetryContext {
   retryAfterMs?: number;
   duplicateRetryBlocked?: boolean;
   correctionPrompt?: string;
+  validationIssues?: string[];
 }
 
 export interface WorkflowExecutionMetadata {

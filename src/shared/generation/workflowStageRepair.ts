@@ -445,13 +445,105 @@ const normalizePlannerRetrievalHints = (value: unknown): JsonRecord => {
   };
 };
 
+const slugifyPlannerProposalKey = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 48);
+
+const normalizePlannerProposalEntry = (value: unknown, index: number): JsonRecord | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const question = value.trim();
+    if (!question) return null;
+
+    return {
+      id: slugifyPlannerProposalKey(question || `proposal-${index + 1}`),
+      topic: `Decision ${index + 1}`,
+      question,
+      options: [question],
+      default: question,
+      required: false,
+    };
+  }
+
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const topic = typeof value.topic === 'string' && value.topic.trim().length > 0
+    ? value.topic.trim()
+    : typeof value.question === 'string' && value.question.trim().length > 0
+      ? value.question.trim()
+      : `Decision ${index + 1}`;
+  const question = typeof value.question === 'string' && value.question.trim().length > 0
+    ? value.question.trim()
+    : topic;
+
+  if (!question) {
+    return null;
+  }
+
+  const normalizeOption = (option: unknown): string | null => {
+    if (typeof option === 'string') {
+      const trimmed = option.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+
+    if (isRecord(option) && typeof option.choice === 'string' && option.choice.trim().length > 0) {
+      return option.choice.trim();
+    }
+
+    return null;
+  };
+
+  const options = Array.isArray(value.options)
+    ? value.options.map(normalizeOption).filter((option): option is string => option !== null)
+    : Array.isArray(value.choices)
+      ? value.choices.map(normalizeOption).filter((option): option is string => option !== null)
+      : [];
+
+  const normalizedOptions = options.length > 0 ? options : [question];
+  const defaultValue =
+    typeof value.default === 'string' && value.default.trim().length > 0
+      ? value.default.trim()
+      : normalizedOptions[0];
+
+  const proposalId =
+    typeof value.id === 'string' && value.id.trim().length > 0
+      ? value.id.trim()
+      : slugifyPlannerProposalKey(topic || question || `proposal-${index + 1}`);
+
+  return {
+    ...value,
+    id: proposalId,
+    topic,
+    question,
+    options: normalizedOptions,
+    default: normalizedOptions.includes(defaultValue) ? defaultValue : normalizedOptions[0],
+    required: Boolean(value.required ?? false),
+  };
+};
+
 const normalizePlannerProposals = (value: unknown): unknown[] => {
   if (Array.isArray(value)) {
-    return value.filter((entry) => entry !== null && entry !== undefined);
+    return value
+      .map((entry, index) => normalizePlannerProposalEntry(entry, index))
+      .filter((entry): entry is JsonRecord => entry !== null);
   }
 
   if (isRecord(value)) {
-    return [value];
+    const normalized = normalizePlannerProposalEntry(value, 0);
+    return normalized ? [normalized] : [];
+  }
+
+  if (typeof value === 'string') {
+    const normalized = normalizePlannerProposalEntry(value, 0);
+    return normalized ? [normalized] : [];
   }
 
   return [];
@@ -1625,5 +1717,4 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     appliedRepairs,
   };
 }
-
 

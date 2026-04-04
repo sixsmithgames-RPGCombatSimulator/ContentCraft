@@ -89,6 +89,87 @@ function slugify(value: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
+const GENERIC_CANON_TOKENS = new Set([
+  'ability',
+  'alignment',
+  'appearance',
+  'arcane',
+  'background',
+  'bard',
+  'black',
+  'blue',
+  'brown',
+  'chaotic',
+  'charisma',
+  'class',
+  'cleric',
+  'constitution',
+  'description',
+  'dexterity',
+  'dragonborn',
+  'druid',
+  'dwarf',
+  'elf',
+  'evil',
+  'eyes',
+  'female',
+  'fighter',
+  'gender',
+  'gnome',
+  'good',
+  'gray',
+  'green',
+  'hair',
+  'halfling',
+  'height',
+  'human',
+  'intelligence',
+  'large',
+  'lawful',
+  'level',
+  'male',
+  'medium',
+  'monk',
+  'neutral',
+  'noble',
+  'orc',
+  'paladin',
+  'pale',
+  'race',
+  'ranger',
+  'red',
+  'rogue',
+  'sage',
+  'skin',
+  'small',
+  'sorcerer',
+  'spellcaster',
+  'strength',
+  'subrace',
+  'variant',
+  'warlock',
+  'weight',
+  'white',
+  'wisdom',
+  'wizard',
+]);
+
+function isSpecificClaimKeyword(keyword: string): boolean {
+  const tokens = keyword.split(/_+/).filter((token) => token.length > 0);
+  if (tokens.length === 0) return false;
+
+  const distinctiveTokens = tokens.filter((token) => token.length >= 4 && !GENERIC_CANON_TOKENS.has(token));
+  if (distinctiveTokens.length === 0) {
+    return false;
+  }
+
+  if (tokens.length === 1) {
+    return distinctiveTokens[0]!.length >= 6;
+  }
+
+  return true;
+}
+
 async function parseEntitiesResponse(
   url: string,
   fetchImpl: WorkflowCanonFetch,
@@ -184,6 +265,13 @@ export async function searchWorkflowCanonByKeywords(input: WorkflowCanonSearchIn
     const keywordSet = new Set(keywordSlugs);
     const regionAnchors = new Set(['snowdown', 'westphal']);
 
+    const claimKeywords = keywordSlugs
+      .filter((keyword) => keyword.length > 3)
+      .map((keyword) => ({
+        keyword,
+        weight: isSpecificClaimKeyword(keyword) ? 25 : 10,
+      }));
+
     const scoredEntities = relevantEntities.map((entity) => {
       let score = 0;
 
@@ -194,73 +282,96 @@ export async function searchWorkflowCanonByKeywords(input: WorkflowCanonSearchIn
       const regionSlug = entity.region ? slugify(entity.region) : '';
       const typeSlug = entity.type ? slugify(entity.type) : '';
       const tags = toStringArray(entity.tags || []).map(slugify);
+      let exactEntityMatch = false;
+      let structuralMatch = false;
 
       for (const keyword of keywordSet) {
-        if (tags.includes(keyword)) score += 1000;
+        if (tags.includes(keyword)) {
+          score += 1000;
+          structuralMatch = true;
+        }
       }
 
       if (nameSlug && keywordSet.has(nameSlug)) {
         score += 500;
+        exactEntityMatch = true;
+        structuralMatch = true;
       }
 
       for (const keyword of keywordSet) {
         if (nameSlug && nameSlug.includes(keyword) && keyword.length > 3) {
           score += 250;
+          structuralMatch = true;
         }
       }
 
       if (keywordSet.has(leafId)) {
         score += 300;
+        exactEntityMatch = true;
+        structuralMatch = true;
       }
 
       if (aliasSlugs.some((alias) => keywordSet.has(alias))) {
         score += 300;
+        exactEntityMatch = true;
+        structuralMatch = true;
       }
 
       if (typeSlug && keywordSet.has(typeSlug)) {
         score += 100;
+        structuralMatch = true;
       }
 
       if (regionSlug) {
         for (const keyword of keywordSet) {
           if (regionSlug.includes(keyword)) {
             score += 100;
+            structuralMatch = true;
           }
         }
       }
 
       if (regionAnchors.has(leafId) && keywordSet.has(leafId)) {
         score += 200;
-      }
-
-      const multiWordKeywords = keywords
-        .filter((keyword) => keyword.split(/\s+/).length >= 2)
-        .map(slugify);
-
-      const searchInClaims = multiWordKeywords.length > 0 || score === 0;
-
-      if (searchInClaims) {
-        const claims = toObjectArray(entity.claims);
-        for (const claim of claims) {
-          const claimText = getString(claim, 'text') || '';
-          const claimSlug = slugify(claimText);
-
-          for (const keyword of (multiWordKeywords.length > 0 ? multiWordKeywords : Array.from(keywordSet))) {
-            if (claimSlug.includes(keyword) && keyword.length > 3) {
-              score += 10;
-            }
-          }
-        }
+        structuralMatch = true;
       }
 
       return {
         entity,
         score,
+        exactEntityMatch,
+        structuralMatch,
       };
     });
 
-    const keywordMatches = scoredEntities
-      .filter((item) => item.score > 0)
+    const hasExactEntityMatch = scoredEntities.some((item) => item.exactEntityMatch);
+
+    const rescoredEntities = scoredEntities.map((item) => {
+      let score = item.score;
+
+      const claims = toObjectArray(item.entity.claims);
+      for (const claim of claims) {
+        const claimText = getString(claim, 'text') || '';
+        const claimSlug = slugify(claimText);
+
+        for (const { keyword, weight } of claimKeywords) {
+          if (claimSlug.includes(keyword)) {
+            score += weight;
+          }
+        }
+      }
+
+      return {
+        ...item,
+        score,
+      };
+    });
+
+    const hasStructuralMatch = rescoredEntities.some((item) => item.structuralMatch);
+    const minimumScore = hasExactEntityMatch ? 250 : hasStructuralMatch ? 100 : 25;
+
+    const keywordMatches = rescoredEntities
+      .filter((item) => item.score >= minimumScore)
       .sort((a, b) => b.score - a.score)
       .map((item) => item.entity);
 

@@ -97,6 +97,39 @@ describe('workflowStageResponse', () => {
     });
   });
 
+  it('repairs planner string proposals into canonical proposal objects', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        deliverable: 'npc',
+        retrieval_hints: {
+          entities: ['Fiblan'],
+          keywords: ['Wizard'],
+          regions: [],
+          eras: [],
+        },
+        proposals: ['Decide whether Fiblan trained at the Academy of Mystra.'],
+      }),
+      stageName: 'Planner',
+      stageIdentity: 'planner',
+      workflowType: 'npc',
+      stageResults: {},
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(Array.isArray(result.parsed.proposals)).toBe(true);
+    expect((result.parsed.proposals as unknown[])).toHaveLength(1);
+    expect((result.parsed.proposals as Array<Record<string, unknown>>)[0]).toMatchObject({
+      topic: 'Decision 1',
+      question: 'Decide whether Fiblan trained at the Academy of Mystra.',
+      options: ['Decide whether Fiblan trained at the Academy of Mystra.'],
+      default: 'Decide whether Fiblan trained at the Academy of Mystra.',
+      required: false,
+    });
+    expect(typeof (result.parsed.proposals as Array<Record<string, unknown>>)[0]?.id).toBe('string');
+  });
+
   it('infers npc basic-info species and prunes forbidden fields', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({

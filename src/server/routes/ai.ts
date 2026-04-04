@@ -1542,11 +1542,19 @@ function buildCorrectionPrompt(
 }
 
 function buildSchemaCorrectionPrompt(basePrompt: string, validationErrors: string, requiredFields: string[]): string {
+  const issues = splitValidationIssues(validationErrors);
   return buildCorrectionPrompt(
     basePrompt,
-    validationErrors.split(/;\s*/).filter((issue) => issue.trim().length > 0),
+    issues,
     { requiredFields },
   );
+}
+
+function splitValidationIssues(validationErrors: string): string[] {
+  return validationErrors
+    .split(/;\s*/)
+    .map((issue) => issue.trim())
+    .filter((issue) => issue.length > 0);
 }
 
 function buildSpellcastingSemanticCorrectionPrompt(basePrompt: string, issues: string[]): string {
@@ -1611,7 +1619,7 @@ function buildContractCorrectionPrompt(
   validationErrors: string,
   requiredFields: string[],
 ): string {
-  const issues = validationErrors.split(/;\s*/).filter((issue) => issue.trim().length > 0);
+  const issues = splitValidationIssues(validationErrors);
 
   if (stageKey === 'spellcasting') {
     return buildSpellcastingSemanticCorrectionPrompt(basePrompt, issues);
@@ -2310,6 +2318,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
       const contractValidation = validateSharedWorkflowStageContractPayload(body.stageId, prunedPayload, generatorType);
       if (contractValidation.ok === false) {
         const failure = contractValidation;
+        const validationIssues = splitValidationIssues(failure.error);
 
         const scopedDefinition = getWorkflowStageDefinition(resolveWorkflowContentType(generatorType), body.stageId)
           ?? getWorkflowStageDefinition(resolveWorkflowContentType(generatorType), stageKey);
@@ -2335,6 +2344,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
               retryable: true,
               retryAfterMs,
               correctionPrompt,
+              validationIssues,
             },
           });
         }
@@ -2351,6 +2361,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
           retryContext: {
             reason: 'contract_validation_failed_after_correction',
             retryable: false,
+            validationIssues,
           },
         });
       }
@@ -2405,6 +2416,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
         });
         if (!isValid) {
           const validationErrors = (validate.errors || []).map((e) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
+          const validationIssues = splitValidationIssues(validationErrors);
           const requiredFields = (validate.schema as any)?.required || [];
 
           if (shouldOfferAutomaticSchemaCorrectionRetry(body)) {
@@ -2423,6 +2435,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
                 retryable: true,
                 retryAfterMs,
                 correctionPrompt,
+                validationIssues,
               },
             });
           }
@@ -2437,6 +2450,7 @@ const handleGeminiWorkflowStageRequest = async (req: Request, res: ExpressRespon
             retryContext: {
               reason: 'schema_validation_failed_after_correction',
               retryable: false,
+              validationIssues,
             },
           });
         }

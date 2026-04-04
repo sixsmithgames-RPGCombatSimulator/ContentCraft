@@ -37,6 +37,37 @@ describe('workflowStageRepair', () => {
     expect(validateWorkflowStageContractPayload('planner', repaired.payload, 'npc')).toEqual({ ok: true });
   });
 
+  it('normalizes planner string proposals into proposal objects before validation', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'planner',
+      workflowType: 'npc',
+      payload: {
+        deliverable: 'npc',
+        retrieval_hints: {
+          entities: ['Fiblan'],
+          regions: [],
+          eras: [],
+          keywords: ['wizard'],
+        },
+        proposals: ['Decide whether Fiblan studies at the Academy of Mystra.'],
+      },
+    });
+
+    expect(repaired.payload).toMatchObject({
+      deliverable: 'npc',
+      proposals: [
+        {
+          question: 'Decide whether Fiblan studies at the Academy of Mystra.',
+          options: ['Decide whether Fiblan studies at the Academy of Mystra.'],
+          default: 'Decide whether Fiblan studies at the Academy of Mystra.',
+          required: false,
+        },
+      ],
+    });
+
+    expect(validateWorkflowStageContractPayload('planner', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
+
   it('infers npc species and race for basic info responses from user prompt context', () => {
     const repaired = repairWorkflowStagePayload({
       stageIdOrName: 'basic_info',
