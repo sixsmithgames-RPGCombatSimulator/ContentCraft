@@ -393,9 +393,9 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
             </button>
           </div>
         ) : (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <p className="font-medium text-blue-900 mb-1">📚 Project canon comes from linked library entries</p>
-            <p className="text-sm text-blue-800 mb-3">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:bg-blue-500/10 dark:border-blue-400/30">
+            <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">📚 Project canon comes from linked library entries</p>
+            <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
               Promote content you already made for this project, or link existing library entries. Unlink anything you no longer want the generator to think with.
             </p>
             <div className="flex flex-col gap-2 md:flex-row">
@@ -408,7 +408,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
               </button>
               <button
                 onClick={() => setScopeTab('library')}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-blue-300 text-blue-800 rounded-md hover:bg-blue-100 text-sm font-medium"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-blue-300 text-blue-800 rounded-md hover:bg-blue-100 dark:bg-slate-900 dark:border-blue-400/30 dark:text-blue-200 dark:hover:bg-blue-500/15 text-sm font-medium"
               >
                 <Library className="w-4 h-4" />
                 Browse Library

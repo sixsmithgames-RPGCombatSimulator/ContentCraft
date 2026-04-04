@@ -351,7 +351,10 @@ const asJsonRecordArray = (value: unknown): JsonRecord[] =>
 
 const getStageStorageKey = (stage: Stage): string => stage.name.toLowerCase().replace(/\s+/g, '_');
 
-const getStageLookupKey = (stage: Stage): string => {
+const getStageLookupKey = (stage: Stage | null | undefined): string => {
+  if (!stage) {
+    return '';
+  }
   if (typeof stage.workflowStageKey === 'string' && stage.workflowStageKey.trim().length > 0) {
     return stage.workflowStageKey;
   }
@@ -1196,7 +1199,9 @@ export default function ManualGenerator() {
 
     const workflowType = resolveWorkflowTypeFromConfigType(config.type);
     const currentStage = STAGES[currentStageIndex];
-    const runStage = getCurrentWorkflowStageIdentity(workflowType, currentStage);
+    const runStage = currentStage
+      ? getCurrentWorkflowStageIdentity(workflowType, currentStage)
+      : undefined;
 
     if (!compiledStageRequest || !runStage) {
       return;
@@ -1423,19 +1428,22 @@ export default function ManualGenerator() {
 
     const wfType = resolveWorkflowTypeFromConfigType(config.type);
     const currentStage = STAGES[currentStageIndex];
-    const currentRunStage = getCurrentWorkflowStageIdentity(wfType, currentStage);
+    const hasCurrentStage = currentStageIndex >= 0 && currentStageIndex < STAGES.length && Boolean(currentStage);
+    const currentRunStage = currentStage
+      ? getCurrentWorkflowStageIdentity(wfType, currentStage)
+      : undefined;
     const isWorkflowComplete = isComplete || currentStageIndex >= STAGES.length;
     const currentContextStageKey = isWorkflowComplete
       ? undefined
-      : (compiledStageRequest?.stageKey || currentRunStage?.stageKey || getStageLookupKey(currentStage));
+      : (compiledStageRequest?.stageKey || currentRunStage?.stageKey || getStageLookupKey(currentStage) || undefined);
     const currentContextStageSchema = buildWorkflowContextStageSchema(currentContextStageKey, config.type);
 
     setWorkflowContext({
       workflowType: wfType,
       workflowLabel: getWorkflowLabel(wfType),
-      currentStage: isWorkflowComplete ? undefined : currentStage?.name,
+      currentStage: isWorkflowComplete || !hasCurrentStage ? undefined : currentStage.name,
       stageRouterKey: currentContextStageKey,
-      stageProgress: currentStageIndex >= 0
+      stageProgress: hasCurrentStage
         ? { current: currentStageIndex + 1, total: STAGES.length }
         : undefined,
       currentData: stageResults,
@@ -1448,7 +1456,7 @@ export default function ManualGenerator() {
         prompt: config.prompt,
         flags: config.flags,
       },
-      compiledStageRequest: isWorkflowComplete ? undefined : compiledStageRequest || undefined,
+      compiledStageRequest: isWorkflowComplete || !hasCurrentStage ? undefined : compiledStageRequest || undefined,
       acceptanceState: workflowRunState?.acceptanceState,
       canon: workflowRunState?.memory?.canon,
       conflictSummary: workflowRunState?.memory?.conflicts,
@@ -4044,6 +4052,17 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     try {
       const currentStage = STAGES[currentStageIndex];
+      if (!currentStage) {
+        const message = 'The current workflow stage is temporarily unavailable. Please retry generation.';
+        console.error('[ManualGenerator] Unable to submit stage response without an active stage.', {
+          currentStageIndex,
+          totalStages: STAGES.length,
+          metadata,
+        });
+        setError(message);
+        setLastStageError(message);
+        return recordPipelineSubmitOutcome({ status: 'error', message });
+      }
       const currentStageName: string = currentStage.name;
       const logAi = shouldLogAiPayload();
       const submittedStageKey = metadata?.stageKey
@@ -6596,12 +6615,12 @@ Output: Valid JSON only. No markdown, no prose.`;
         )}
 
         {/* How It Works */}
-        <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-          <h3 className="font-medium text-yellow-900 mb-2 flex items-center gap-2">
+        <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md dark:bg-amber-500/10 dark:border-amber-400/30">
+          <h3 className="font-medium text-yellow-900 dark:text-amber-100 mb-2 flex items-center gap-2">
             <Zap className="w-5 h-5" />
             How Manual Mode Works
           </h3>
-          <ol className="text-sm text-yellow-800 space-y-2">
+          <ol className="text-sm text-yellow-800 dark:text-amber-200 space-y-2">
             <li>
               <strong>1.</strong> Click "Generate Content" to start
             </li>
@@ -6621,7 +6640,7 @@ Output: Valid JSON only. No markdown, no prose.`;
               <strong>6.</strong> Click "Review & Save to Project" to resolve issues and save
             </li>
           </ol>
-          <p className="text-xs text-yellow-700 mt-3">
+          <p className="text-xs text-yellow-700 dark:text-amber-300 mt-3">
             💡 Works with ChatGPT, Claude, Gemini, or any AI that accepts JSON prompts
           </p>
         </div>
@@ -7139,4 +7158,3 @@ Output: Valid JSON only. No markdown, no prose.`;
     </div>
   );
 }
-

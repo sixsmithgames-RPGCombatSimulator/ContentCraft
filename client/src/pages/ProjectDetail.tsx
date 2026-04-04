@@ -798,14 +798,14 @@ export const ProjectDetail: React.FC = () => {
       <div className="flex items-center space-x-4">
         <button
           onClick={() => navigate('/')}
-          className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+          className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1">
           <div className="flex items-center space-x-3">
             <h1 className="text-3xl font-bold text-gray-900">{project.title}</h1>
-            <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-200">
               {PROJECT_TYPE_LABELS[project.type]}
             </span>
           </div>
@@ -819,9 +819,9 @@ export const ProjectDetail: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button
           onClick={() => navigate(`/projects/${id}/canon`)}
-          className="flex items-center justify-center gap-3 p-4 border-2 border-blue-200 bg-blue-50 rounded-lg hover:border-blue-400 hover:bg-blue-100 transition-colors group"
+          className="flex items-center justify-center gap-3 p-4 border-2 border-blue-200 bg-blue-50 rounded-lg hover:border-blue-400 hover:bg-blue-100 dark:border-blue-400/30 dark:bg-blue-500/10 dark:hover:border-blue-300/50 dark:hover:bg-blue-500/15 transition-colors group"
         >
-          <BookOpen className="w-6 h-6 text-blue-600" />
+          <BookOpen className="w-6 h-6 text-blue-600 dark:text-blue-300" />
           <div className="text-left">
             <div className="font-semibold text-gray-900">Manage Canon Resources</div>
             <div className="text-sm text-gray-600">Link entities and build your world</div>
@@ -829,9 +829,9 @@ export const ProjectDetail: React.FC = () => {
         </button>
         <button
           onClick={() => navigate(`/generator?projectId=${id}`)}
-          className="flex items-center justify-center gap-3 p-4 border-2 border-purple-200 bg-purple-50 rounded-lg hover:border-purple-400 hover:bg-purple-100 transition-colors group"
+          className="flex items-center justify-center gap-3 p-4 border-2 border-purple-200 bg-purple-50 rounded-lg hover:border-purple-400 hover:bg-purple-100 dark:border-purple-400/30 dark:bg-purple-500/10 dark:hover:border-purple-300/50 dark:hover:bg-purple-500/15 transition-colors group"
         >
-          <Wand2 className="w-6 h-6 text-purple-600" />
+          <Wand2 className="w-6 h-6 text-purple-600 dark:text-purple-300" />
           <div className="text-left">
             <div className="font-semibold text-gray-900">Generate Content</div>
             <div className="text-sm text-gray-600">Create new content with AI</div>
