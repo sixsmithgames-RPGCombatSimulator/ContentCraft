@@ -5,6 +5,7 @@
 
 import axios from 'axios';
 import { Project, ContentBlock, APIResponse, PaginatedResponse } from '../types';
+import type { WritingCanonProjectReport } from '../../../src/shared/canon/writingCanon';
 
 // Use relative URL - works in both development (via Vite proxy) and production (same-origin)
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -71,6 +72,16 @@ export const projectApi = {
 export const contentApi = {
   getByProjectId: async (projectId: string, page = 1, limit = 50): Promise<PaginatedResponse<ContentBlock>> => {
     const response = await api.get(`/content/project/${projectId}?page=${page}&limit=${limit}`);
+    return response.data;
+  },
+
+  scanProjectCanonCheck: async (
+    projectId: string,
+    blockIds?: string[],
+  ): Promise<APIResponse<WritingCanonProjectReport>> => {
+    const response = await api.post(`/content/project/${projectId}/canon-check`, {
+      block_ids: Array.isArray(blockIds) ? blockIds : [],
+    });
     return response.data;
   },
 

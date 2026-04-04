@@ -3,9 +3,9 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Edit, Trash2, FileText, BookOpen, Wand2, Eye, Search, Filter, Copy, GripVertical, ArrowUpDown, Check, X } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, FileText, BookOpen, Wand2, Eye, Search, Filter, Copy, GripVertical, ArrowUpDown, Check, X, AlertCircle, RotateCw } from 'lucide-react';
 import { Project, ContentBlock, ProjectType, ContentType } from '../types';
 import { projectApi, contentApi, API_BASE_URL } from '../services/api';
 import GeneratedContentModal, { type GeneratedContentDoc } from '../components/generator/GeneratedContentModal';
@@ -14,6 +14,11 @@ import EditContentModal from '../components/generator/EditContentModal';
 import WritingReaderModal from '../components/generator/WritingReaderModal';
 import TextBlocksSplitView from '../components/TextBlocksSplitView';
 import { parseAIResponse } from '../utils/jsonParser';
+import type {
+  WritingCanonBlockReport,
+  WritingCanonProjectReport,
+} from '../../../src/shared/canon/writingCanon';
+import { getWritingCanonBadge, getWritingCanonBlockSummary, getWritingCanonProjectSummary } from '../services/writingCanonPresentation';
 
 const PROJECT_TYPE_LABELS = {
   [ProjectType.FICTION]: 'Fiction',
@@ -158,8 +163,13 @@ const tryParseJsonContent = (text: string): Record<string, unknown> | null => {
   return null;
 };
 
-const ContentBlockBody: React.FC<{ block: ContentBlock; onBlockUpdated?: (updated: ContentBlock) => void }> = ({
+const ContentBlockBody: React.FC<{
+  block: ContentBlock;
+  canonReport?: WritingCanonBlockReport | null;
+  onBlockUpdated?: (updated: ContentBlock) => void;
+}> = ({
   block,
+  canonReport,
   onBlockUpdated,
 }) => {
   const [viewMode, setViewMode] = useState<'formatted' | 'raw'>('formatted');
@@ -308,6 +318,20 @@ const ContentBlockBody: React.FC<{ block: ContentBlock; onBlockUpdated?: (update
           )}
           {deliverable && <span>Type: {deliverable}</span>}
         </div>
+        {canonReport && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {(() => {
+              const badge = getWritingCanonBadge(canonReport);
+              if (!badge) return null;
+              return (
+                <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.className}`}>
+                  {badge.label}
+                </span>
+              );
+            })()}
+            <span className="text-xs text-gray-500">{getWritingCanonBlockSummary(canonReport)}</span>
+          </div>
+        )}
         {canRenderFormatted && (isWritingDomain || isWritingDeliverable) ? (
           <div className="flex gap-2">
             <button
@@ -376,6 +400,7 @@ const ContentBlockBody: React.FC<{ block: ContentBlock; onBlockUpdated?: (update
         content={renderPayload ?? { text: block.content, deliverable, domain: isWritingDomain ? 'writing' : undefined }}
         rawText={typeof block.content === 'string' ? block.content : ''}
         initialMetadata={metadata}
+        canonReport={canonReport}
         deliverable={deliverable}
         initialMode={readerMode}
         onSave={
@@ -472,6 +497,18 @@ export const ProjectDetail: React.FC = () => {
   const [showContentModal, setShowContentModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [canonReport, setCanonReport] = useState<WritingCanonProjectReport | null>(null);
+  const [canonCheckLoading, setCanonCheckLoading] = useState(false);
+  const [canonCheckError, setCanonCheckError] = useState<string | null>(null);
+  const canonScanRequestIdRef = useRef(0);
+
+  const canonReportsByBlockId = useMemo<Record<string, WritingCanonBlockReport>>(
+    () =>
+      Object.fromEntries(
+        (canonReport?.blocks ?? []).map((report) => [report.blockId, report]),
+      ) as Record<string, WritingCanonBlockReport>,
+    [canonReport],
+  );
 
   const handleBlockUpdated = useCallback((updated: ContentBlock) => {
     setContentBlocks((prev: ContentBlock[]) =>
@@ -498,6 +535,48 @@ export const ProjectDetail: React.FC = () => {
       console.error('Error loading project:', err);
     }
   }, [id]);
+
+  const scanCanonConsistency = useCallback(
+    async (blocks: ContentBlock[]) => {
+      if (!id) return;
+      const requestId = canonScanRequestIdRef.current + 1;
+      canonScanRequestIdRef.current = requestId;
+
+      const writingBlocks = blocks.filter((block) => isWrittenBlock(block));
+      if (writingBlocks.length === 0) {
+        if (canonScanRequestIdRef.current === requestId) {
+          setCanonReport(null);
+          setCanonCheckError(null);
+          setCanonCheckLoading(false);
+        }
+        return;
+      }
+
+      setCanonCheckLoading(true);
+      setCanonCheckError(null);
+      try {
+        const response = await contentApi.scanProjectCanonCheck(
+          id,
+          writingBlocks.map((block) => block.id),
+        );
+        if (canonScanRequestIdRef.current !== requestId) return;
+        if (response.success && response.data) {
+          setCanonReport(response.data);
+        } else {
+          throw new Error(response.error || 'Failed to run canon check');
+        }
+      } catch (err) {
+        if (canonScanRequestIdRef.current !== requestId) return;
+        console.error('Error running canon consistency scan:', err);
+        setCanonCheckError(err instanceof Error ? err.message : 'Failed to run canon check');
+      } finally {
+        if (canonScanRequestIdRef.current === requestId) {
+          setCanonCheckLoading(false);
+        }
+      }
+    },
+    [id],
+  );
 
   const filteredContentBlocks = useMemo(() => {
     let filtered = contentBlocks;
@@ -672,6 +751,21 @@ export const ProjectDetail: React.FC = () => {
     }
   }, [id, loadProject, loadContent, loadGeneratedContent]);
 
+  useEffect(() => {
+    canonScanRequestIdRef.current += 1;
+    setCanonReport(null);
+    setCanonCheckError(null);
+    setCanonCheckLoading(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const timer = window.setTimeout(() => {
+      void scanCanonConsistency(contentBlocks);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [id, contentBlocks, scanCanonConsistency]);
+
   const handleCreateBlock = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -838,6 +932,45 @@ export const ProjectDetail: React.FC = () => {
           </div>
         </button>
       </div>
+
+      {contentBlocks.some((block) => isWrittenBlock(block)) && (
+        <div
+          className={`rounded-lg border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${
+            canonReport?.summary.reviewRequired
+              ? 'border-amber-200 bg-amber-50'
+              : 'border-slate-200 bg-slate-50'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`mt-0.5 rounded-full p-2 ${
+                canonReport?.summary.reviewRequired ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              <AlertCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-semibold text-gray-900">Canon Check</div>
+              <div className="text-sm text-gray-700">{getWritingCanonProjectSummary(canonReport)}</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {canonReport
+                  ? `Scope: ${canonReport.searchedScope}${canonReport.warningMessage ? ` • ${canonReport.warningMessage}` : ''}`
+                  : 'Subtle contradiction checks run against linked canon while you write.'}
+              </div>
+              {canonCheckError && <div className="text-xs text-red-600 mt-1">{canonCheckError}</div>}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void scanCanonConsistency(contentBlocks)}
+            disabled={canonCheckLoading}
+            className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            <RotateCw className={`w-4 h-4 ${canonCheckLoading ? 'animate-spin' : ''}`} />
+            {canonCheckLoading ? 'Checking…' : 'Recheck'}
+          </button>
+        </div>
+      )}
 
       {/* Generated Content Section */}
       {generatedContent.length > 0 && (
@@ -1242,6 +1375,7 @@ export const ProjectDetail: React.FC = () => {
                     onCopy={handleCopyBlock}
                     onDelete={handleDeleteBlock}
                     onBlockUpdated={handleBlockUpdated}
+                    canonReportsByBlockId={canonReportsByBlockId}
                   />
                 ) : (
                   <div className="space-y-4">
@@ -1275,8 +1409,23 @@ export const ProjectDetail: React.FC = () => {
                                   </span>
                                 );
                               })()}
+                              {(() => {
+                                const badge = getWritingCanonBadge(canonReportsByBlockId[block.id] ?? null);
+                                if (!badge) return null;
+                                return (
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${badge.className}`}>
+                                    {badge.label}
+                                  </span>
+                                );
+                              })()}
                             </div>
-                            {block.content && <ContentBlockBody block={block} onBlockUpdated={handleBlockUpdated} />}
+                            {block.content && (
+                              <ContentBlockBody
+                                block={block}
+                                canonReport={canonReportsByBlockId[block.id] ?? null}
+                                onBlockUpdated={handleBlockUpdated}
+                              />
+                            )}
                             <p className="text-xs text-gray-500 mt-2">
                               Created {new Date(block.createdAt).toLocaleDateString()}
                             </p>

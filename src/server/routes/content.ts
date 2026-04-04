@@ -7,18 +7,89 @@ import { Router } from 'express';
 import { ContentBlockModel } from '../models/index.js';
 import { ContentBlockSchema, PaginationSchema } from '../../shared/validators/index.js';
 import { APIResponse, PaginatedResponse } from '../../shared/types/index.js';
-import { getDb } from '../config/mongo.js';
+import {
+  getCanonEntitiesCollection,
+  getDb,
+  getLibraryCollectionsCollection,
+  getProjectLibraryLinksCollection,
+} from '../config/mongo.js';
 import { mapGeneratedContentToContentBlock } from '../services/generatedContentMapper.js';
 import { mapAndValidateNpc } from '../services/npcSchemaMapper.js';
 import { validateMonsterStrict, isMonsterContent } from '../validation/monsterValidator.js';
 import type { GeneratedContentDocument } from '../models/GeneratedContent.js';
+import type { CanonEntity } from '../models/CanonEntity.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { resolveGeneratedContentType } from '../../shared/generation/generatedContentType.js';
+import type { WritingCanonProjectReport } from '../../shared/canon/writingCanon.js';
+import { buildWritingCanonProjectReport } from '../services/writingCanonConsistency.js';
 
 export const contentRouter = Router();
 
 // Apply auth middleware to all routes
 contentRouter.use(authMiddleware);
+
+async function loadCanonEntitiesForConsistency(userId: string, projectId: string): Promise<{
+  entities: CanonEntity[];
+  searchedScope: 'project' | 'library' | 'ungrounded';
+  warningMessage?: string;
+}> {
+  const linksCollection = getProjectLibraryLinksCollection();
+  const entitiesCollection = getCanonEntitiesCollection();
+  const collectionsCollection = getLibraryCollectionsCollection();
+
+  const links = await linksCollection.find({ project_id: projectId, userId }).toArray();
+  if (links.length > 0) {
+    const linkedIds = links
+      .map((link) => (typeof link.library_entity_id === 'string' ? link.library_entity_id : ''))
+      .filter((id) => id.length > 0);
+
+    const entityIds = new Set<string>();
+    for (const linkedId of linkedIds) {
+      if (linkedId.startsWith('coll_')) {
+        const collection = await collectionsCollection.findOne({ _id: linkedId, userId });
+        const collectionEntityIds = Array.isArray(collection?.entity_ids) ? collection.entity_ids : [];
+        for (const entityId of collectionEntityIds) {
+          if (typeof entityId === 'string' && entityId.trim().length > 0) {
+            entityIds.add(entityId.trim());
+          }
+        }
+      } else {
+        entityIds.add(linkedId);
+      }
+    }
+
+    if (entityIds.size > 0) {
+      const entities = await entitiesCollection
+        .find({ _id: { $in: Array.from(entityIds) }, userId })
+        .toArray();
+
+      if (entities.length > 0) {
+        return {
+          entities,
+          searchedScope: 'project',
+        };
+      }
+    }
+  }
+
+  const libraryEntities = await entitiesCollection
+    .find({ scope: 'lib', userId })
+    .toArray();
+
+  if (libraryEntities.length > 0) {
+    return {
+      entities: libraryEntities,
+      searchedScope: 'library',
+      warningMessage: 'Using library canon because this project has no linked canon resources yet.',
+    };
+  }
+
+  return {
+    entities: [],
+    searchedScope: 'ungrounded',
+    warningMessage: 'No canon resources are available yet. Link canon to this project to tighten contradiction checks.',
+  };
+}
 
 contentRouter.get('/project/:projectId', async (req, res) => {
   try {
@@ -44,6 +115,49 @@ contentRouter.get('/project/:projectId', async (req, res) => {
       success: false,
       error: 'Failed to fetch content blocks',
       message: error instanceof Error ? error.message : 'Unknown error'
+    };
+    res.status(500).json(response);
+  }
+});
+
+contentRouter.post('/project/:projectId/canon-check', async (req, res) => {
+  try {
+    const authReq = req as unknown as AuthRequest;
+    const { projectId } = req.params;
+    const blockIds = Array.isArray(req.body?.block_ids)
+      ? req.body.block_ids.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [];
+
+    const { blocks } = await ContentBlockModel.findByProjectId(authReq.userId, projectId, {
+      page: 1,
+      limit: 1000,
+    });
+
+    const selectedBlocks =
+      blockIds.length > 0
+        ? blocks.filter((block) => blockIds.includes(block.id))
+        : blocks;
+
+    const canon = await loadCanonEntitiesForConsistency(authReq.userId, projectId);
+    const report = buildWritingCanonProjectReport({
+      projectId,
+      blocks: selectedBlocks,
+      entities: canon.entities,
+      searchedScope: canon.searchedScope,
+      warningMessage: canon.warningMessage,
+    });
+
+    const response: APIResponse<WritingCanonProjectReport> = {
+      success: true,
+      data: report,
+    };
+
+    res.json(response);
+  } catch (error) {
+    const response: APIResponse = {
+      success: false,
+      error: 'Failed to run canon consistency scan',
+      message: error instanceof Error ? error.message : 'Unknown error',
     };
     res.status(500).json(response);
   }

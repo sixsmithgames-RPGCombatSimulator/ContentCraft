@@ -6,6 +6,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Code, FileText, Pencil, Save, AlertCircle, Copy, Tag, Wand2, Volume2, Play, Pause, Square, Mic } from 'lucide-react';
 import ContentRenderer from './ContentRenderer';
+import type { WritingCanonBlockReport } from '../../../../src/shared/canon/writingCanon';
+import { getWritingCanonBadge, getWritingCanonBlockSummary } from '../../services/writingCanonPresentation';
 
 type SpeechRecognitionResultAlternativeLike = {
   transcript: string;
@@ -48,6 +50,7 @@ interface WritingReaderModalProps {
   rawText?: string;
   initialMetadata?: Record<string, unknown>;
   deliverable?: string;
+  canonReport?: WritingCanonBlockReport | null;
   initialMode?: 'formatted' | 'raw' | 'edit';
   onClose: () => void;
   onSave?: (update: { title: string; content: string; metadata?: Record<string, unknown> }) => Promise<void> | void;
@@ -60,6 +63,7 @@ export default function WritingReaderModal({
   rawText,
   initialMetadata,
   deliverable,
+  canonReport,
   initialMode,
   onClose,
   onSave,
@@ -1031,6 +1035,13 @@ export default function WritingReaderModal({
 
   if (!isOpen) return null;
 
+  const canonBadge = getWritingCanonBadge(canonReport);
+  const canonSummary = getWritingCanonBlockSummary(canonReport);
+  const canonPanelClassName =
+    canonReport && (canonReport.conflictCount > 0 || canonReport.ambiguityCount > 0)
+      ? 'bg-amber-50 border-amber-200'
+      : 'bg-slate-50 border-slate-200';
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -1046,6 +1057,13 @@ export default function WritingReaderModal({
                 {wordCount > 0 && (
                   <div className="text-xs text-gray-300">
                     {wordCount.toLocaleString()} words{readingTimeMinutes > 0 ? ` • ~${readingTimeMinutes} min` : ''}
+                  </div>
+                )}
+                {canonBadge && (
+                  <div className="mt-1">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${canonBadge.className}`}>
+                      {canonBadge.label}
+                    </span>
                   </div>
                 )}
                 {(draftStatus || tagList.length > 0) && (
@@ -1241,6 +1259,66 @@ export default function WritingReaderModal({
         </div>
 
         <div className="p-6 overflow-auto flex-1">
+          {canonReport && (
+            <details className={`mb-4 rounded-lg border ${canonPanelClassName}`} open={canonReport.reviewRequired}>
+              <summary className="cursor-pointer select-none px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">Canon Check</div>
+                  <div className="text-xs text-gray-600 mt-1">{canonSummary}</div>
+                </div>
+                {canonBadge && (
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${canonBadge.className}`}>
+                    {canonBadge.label}
+                  </span>
+                )}
+              </summary>
+              <div className="px-4 pb-4 space-y-3">
+                {canonReport.entityNames.length > 0 && (
+                  <div className="text-xs text-gray-600">
+                    Linked canon touched here: {canonReport.entityNames.join(', ')}
+                  </div>
+                )}
+                {canonReport.items.length > 0 ? (
+                  <div className="space-y-3">
+                    {canonReport.items.map((item) => (
+                      <div key={item.key} className="rounded-lg border border-white/70 bg-white/70 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-medium text-gray-900">{item.message}</div>
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                              item.severity === 'high'
+                                ? 'bg-amber-100 text-amber-900'
+                                : item.severity === 'medium'
+                                  ? 'bg-yellow-100 text-yellow-900'
+                                  : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {item.status.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        {item.draftText && (
+                          <div className="mt-2 text-xs text-gray-700">
+                            <span className="font-medium text-gray-900">Draft:</span> {item.draftText}
+                          </div>
+                        )}
+                        {item.canonClaim && (
+                          <div className="mt-1 text-xs text-gray-700">
+                            <span className="font-medium text-gray-900">Canon:</span> {item.canonClaim}
+                          </div>
+                        )}
+                        {item.suggestedAction && (
+                          <div className="mt-2 text-[11px] text-gray-500">{item.suggestedAction}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-600">No contradictions surfaced in this block.</div>
+                )}
+              </div>
+            </details>
+          )}
+
           {showRefinePanel && (
             <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">

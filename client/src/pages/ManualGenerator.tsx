@@ -36,6 +36,7 @@ import {
   PROMPT_LIMITS,
 } from '../utils/promptLimits';
 import { buildPackedPrompt, formatSizeBreakdown, PROMPT_SAFETY_CEILING, type PromptPackConfig } from '../utils/promptPacker';
+import { preformatPromptForAi } from '../utils/promptPreformatter';
 import { reduceStageInputs } from '../utils/stageInputReducer';
 import { getStageContract as getNpcStageContract } from '../config/npcStageContracts';
 import { getNpcSectionChunks, type NpcSectionChunk } from '../config/npcSectionChunks';
@@ -2567,7 +2568,7 @@ export default function ManualGenerator() {
     promptOverrides?: StagePromptOverrides,
   ) => {
     const effectiveRetrySource = promptOverrides?.retrySource ?? null;
-    const effectiveConfig =
+    const runtimeConfig =
       promptOverrides?.flags && Object.keys(promptOverrides.flags).length > 0
         ? {
             ...cfg,
@@ -2577,6 +2578,19 @@ export default function ManualGenerator() {
             },
           }
         : cfg;
+    const promptPreformat = preformatPromptForAi(runtimeConfig.prompt);
+    const effectiveConfig = promptPreformat.changed
+      ? {
+          ...runtimeConfig,
+          prompt: promptPreformat.normalizedPrompt,
+        }
+      : runtimeConfig;
+
+    if (promptPreformat.changed) {
+      console.log(
+        `[Prompt Preformat] Applied ${promptPreformat.kind} normalization (${runtimeConfig.prompt.length.toLocaleString()} -> ${effectiveConfig.prompt.length.toLocaleString()} chars)`,
+      );
+    }
 
     setCurrentPromptNotice(
       promptOverrides?.promptNotice

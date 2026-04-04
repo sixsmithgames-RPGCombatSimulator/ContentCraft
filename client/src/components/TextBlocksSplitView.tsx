@@ -10,6 +10,8 @@ import { contentApi } from '../services/api';
 import ContentRenderer from './generator/ContentRenderer';
 import WritingReaderModal from './generator/WritingReaderModal';
 import { parseAIResponse } from '../utils/jsonParser';
+import type { WritingCanonBlockReport } from '../../../src/shared/canon/writingCanon';
+import { getWritingCanonBadge, getWritingCanonBlockSummary } from '../services/writingCanonPresentation';
 
 const WRITING_TOKENS = [
   'chapter',
@@ -154,11 +156,13 @@ export default function TextBlocksSplitView({
   onCopy,
   onDelete,
   onBlockUpdated,
+  canonReportsByBlockId,
 }: {
   blocks: ContentBlock[];
   onCopy: (block: ContentBlock) => void;
   onDelete: (blockId: string) => void;
   onBlockUpdated?: (updated: ContentBlock) => void;
+  canonReportsByBlockId?: Record<string, WritingCanonBlockReport>;
 }) {
   const [selectedId, setSelectedId] = useState<string>(blocks[0]?.id ?? '');
   const [showReader, setShowReader] = useState(false);
@@ -198,6 +202,7 @@ export default function TextBlocksSplitView({
   }, [blocks]);
 
   const selectedBlock = useMemo(() => blocks.find((b) => b.id === selectedId) ?? null, [blocks, selectedId]);
+  const selectedCanonReport = selectedBlock ? canonReportsByBlockId?.[selectedBlock.id] ?? null : null;
 
   const isIncludedInPublished = (metadata: Record<string, unknown>): boolean => {
     return metadata.include_in_published !== false;
@@ -456,6 +461,8 @@ export default function TextBlocksSplitView({
               const isEditing = editingId === block.id;
               const isSavingTitle = savingTitleId === block.id;
               const isSavingPublish = savingPublishId === block.id;
+              const canonReport = canonReportsByBlockId?.[block.id] ?? null;
+              const canonBadge = getWritingCanonBadge(canonReport);
               return (
                 <div
                   key={block.id}
@@ -541,6 +548,13 @@ export default function TextBlocksSplitView({
                         {status ? ` • ${status}` : ''}
                         {tags.length ? ` • ${tags.slice(0, 2).join(', ')}` : ''}
                       </div>
+                      {canonBadge && (
+                        <div className="mt-1">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${canonBadge.className}`}>
+                            {canonBadge.label}
+                          </span>
+                        </div>
+                      )}
                       {isEditing && titleError && (
                         <div className="text-xs text-red-600 mt-1" onClick={(e) => e.stopPropagation()}>
                           {titleError}
@@ -608,6 +622,20 @@ export default function TextBlocksSplitView({
                       {derived.status ? ` • ${derived.status}` : ''}
                       {derived.tags.length ? ` • ${derived.tags.slice(0, 3).join(', ')}` : ''}
                     </div>
+                    {selectedCanonReport && (
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        {(() => {
+                          const badge = getWritingCanonBadge(selectedCanonReport);
+                          if (!badge) return null;
+                          return (
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.className}`}>
+                              {badge.label}
+                            </span>
+                          );
+                        })()}
+                        <span className="text-xs text-gray-500">{getWritingCanonBlockSummary(selectedCanonReport)}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
@@ -687,6 +715,7 @@ export default function TextBlocksSplitView({
               }
               rawText={derived.rawText}
               initialMetadata={derived.metadata}
+              canonReport={selectedCanonReport}
               deliverable={derived.deliverable}
               initialMode={readerMode}
               onSave={
