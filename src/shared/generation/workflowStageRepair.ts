@@ -4,6 +4,7 @@ import {
   resolveWorkflowStageContractKey,
   type WorkflowStageJsonRecord,
 } from './workflowStageValidation.js';
+import { resolveWorkflowContentType } from './workflowContentType.js';
 
 type JsonRecord = WorkflowStageJsonRecord;
 
@@ -561,15 +562,36 @@ const coerceOptionalPlannerString = (value: unknown, fallback?: unknown): string
   return undefined;
 };
 
+const normalizePlannerDeliverable = (
+  value: unknown,
+  workflowType?: string | null,
+): string => {
+  const rawDeliverable = coerceOptionalPlannerString(value);
+  const resolvedDeliverable = resolveWorkflowContentType(rawDeliverable);
+  const rawWorkflowType = coerceOptionalPlannerString(workflowType);
+  const resolvedWorkflowType = resolveWorkflowContentType(rawWorkflowType);
+
+  if (resolvedWorkflowType !== 'unknown') {
+    // Planner deliverable is descriptive metadata at best; the workflow type is authoritative.
+    return resolvedDeliverable === resolvedWorkflowType
+      ? resolvedDeliverable
+      : resolvedWorkflowType;
+  }
+
+  if (resolvedDeliverable !== 'unknown') {
+    return resolvedDeliverable;
+  }
+
+  return rawWorkflowType ?? 'npc';
+};
+
 const normalizePlannerPayload = (
   payload: JsonRecord,
   workflowType?: string | null,
   configFlags?: JsonRecord,
 ): JsonRecord => {
   const normalized: JsonRecord = {
-    deliverable: typeof payload.deliverable === 'string' && payload.deliverable.trim().length > 0
-      ? payload.deliverable.trim()
-      : workflowType || 'npc',
+    deliverable: normalizePlannerDeliverable(payload.deliverable, workflowType),
     retrieval_hints: normalizePlannerRetrievalHints(payload.retrieval_hints),
     proposals: normalizePlannerProposals(payload.proposals),
     assumptions: normalizeStringArray(payload.assumptions),
@@ -1717,4 +1739,3 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     appliedRepairs,
   };
 }
-

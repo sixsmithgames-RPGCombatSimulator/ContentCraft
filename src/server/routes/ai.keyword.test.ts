@@ -177,6 +177,21 @@ describe('evaluateKeywordExtractorCompliance', () => {
     expect(result.ok).toBe(true);
   });
 
+  it('accepts planner deliverable formatting variants once normalized by shared content-type resolution', () => {
+    const result = validateWorkflowStageContractPayload('planner', {
+      deliverable: 'Journal Entry',
+      retrieval_hints: {
+        entities: [],
+        regions: [],
+        eras: [],
+        keywords: ['reflection'],
+      },
+      proposals: [],
+    }, 'journal_entry');
+
+    expect(result.ok).toBe(true);
+  });
+
   it('rejects missing required contract fields for encounter stages', () => {
     const result = validateWorkflowStageContractPayload('Creator: Rewards', {
       treasure: { gold: '250 gp' },

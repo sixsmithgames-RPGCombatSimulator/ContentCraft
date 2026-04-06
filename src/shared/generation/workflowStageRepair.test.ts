@@ -68,6 +68,57 @@ describe('workflowStageRepair', () => {
     expect(validateWorkflowStageContractPayload('planner', repaired.payload, 'npc')).toEqual({ ok: true });
   });
 
+  it('canonicalizes descriptive planner deliverables to the authoritative workflow type', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'planner',
+      workflowType: 'npc',
+      payload: {
+        deliverable: 'Fiblan character profile and tactical summary',
+        retrieval_hints: {
+          entities: [],
+          regions: [],
+          eras: [],
+          keywords: ['wizard'],
+        },
+        proposals: [],
+      },
+    });
+
+    expect(repaired.payload).toMatchObject({
+      deliverable: 'npc',
+      retrieval_hints: {
+        entities: [],
+        regions: [],
+        eras: [],
+        keywords: ['wizard'],
+      },
+      proposals: [],
+    });
+
+    expect(repaired.appliedRepairs).toContain('planner:normalize');
+    expect(validateWorkflowStageContractPayload('planner', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
+
+  it('normalizes formatting variants of workflow content types during planner repair', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'planner',
+      workflowType: 'journal_entry',
+      payload: {
+        deliverable: 'Journal Entry',
+        retrieval_hints: {
+          entities: [],
+          regions: [],
+          eras: [],
+          keywords: ['reflection'],
+        },
+        proposals: [],
+      },
+    });
+
+    expect(repaired.payload.deliverable).toBe('journal_entry');
+    expect(validateWorkflowStageContractPayload('planner', repaired.payload, 'journal_entry')).toEqual({ ok: true });
+  });
+
   it('infers npc species and race for basic info responses from user prompt context', () => {
     const repaired = repairWorkflowStagePayload({
       stageIdOrName: 'basic_info',

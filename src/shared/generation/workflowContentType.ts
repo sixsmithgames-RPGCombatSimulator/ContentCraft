@@ -24,6 +24,15 @@ const KNOWN_WORKFLOW_CONTENT_TYPES = new Set<WorkflowContentType>(
   Object.values(CONFIG_TYPE_TO_WORKFLOW),
 );
 
+function normalizeWorkflowContentTypeKey(value: string): string {
+  return value
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
 export function resolveWorkflowContentType(
   value: string | WorkflowContentType | undefined | null,
 ): WorkflowContentType {
@@ -35,5 +44,10 @@ export function resolveWorkflowContentType(
     return value as WorkflowContentType;
   }
 
-  return CONFIG_TYPE_TO_WORKFLOW[value] ?? 'unknown';
+  const normalizedKey = normalizeWorkflowContentTypeKey(String(value));
+  if (KNOWN_WORKFLOW_CONTENT_TYPES.has(normalizedKey as WorkflowContentType)) {
+    return normalizedKey as WorkflowContentType;
+  }
+
+  return CONFIG_TYPE_TO_WORKFLOW[normalizedKey] ?? 'unknown';
 }
