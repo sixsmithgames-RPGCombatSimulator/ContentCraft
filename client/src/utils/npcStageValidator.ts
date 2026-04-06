@@ -218,11 +218,50 @@ function validateCharacterBuildStage(output: Record<string, unknown>): Validatio
   };
 }
 
-function validateCharacterBuildEnrichmentStage(): ValidationResult {
+function validateCharacterBuildEnrichmentStage(output: Record<string, unknown>): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // Enrichment responses must not include modifier fields — those are handled by the inventory pass
+  const disallowedModifierFields = ['skill_proficiencies', 'saving_throws'] as const;
+  for (const field of disallowedModifierFields) {
+    if (field in output && hasNonEmptyObjectArray(output[field])) {
+      errors.push(
+        `Enrichment response must not include ${field}. Modifier fields are handled by the inventory pass, not enrichment.`
+      );
+    }
+  }
+
+  // At least one feature array should have entries with name + description
+  const featureFields = ['class_features', 'subclass_features', 'racial_features', 'feats', 'fighting_styles'] as const;
+  let hasAnyEnrichedFeature = false;
+
+  for (const field of featureFields) {
+    const value = output[field];
+    if (!Array.isArray(value)) continue;
+
+    for (const entry of value) {
+      if (
+        isRecord(entry)
+        && typeof entry.name === 'string' && entry.name.trim().length > 0
+        && typeof entry.description === 'string' && entry.description.trim().length > 0
+      ) {
+        hasAnyEnrichedFeature = true;
+        break;
+      }
+    }
+
+    if (hasAnyEnrichedFeature) break;
+  }
+
+  if (!hasAnyEnrichedFeature) {
+    warnings.push('Enrichment response contains no feature entries with both name and description.');
+  }
+
   return {
-    isValid: true,
-    errors: [],
-    warnings: [],
+    isValid: errors.length === 0,
+    errors,
+    warnings,
   };
 }
 
@@ -369,7 +408,7 @@ export function validateNpcStageOutput(
     normalizedName.includes('character_build_feature_enrichment')
     || relaxedName.includes('character build enrichment')
   ) {
-    return validateCharacterBuildEnrichmentStage();
+    return validateCharacterBuildEnrichmentStage(output);
   }
 
   if (normalizedName.includes('core_details') || relaxedName.includes('core details')) {

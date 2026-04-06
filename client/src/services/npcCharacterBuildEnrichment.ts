@@ -367,6 +367,13 @@ function selectBestEnrichedFeatureCandidate(input: {
   return scored[0]?.candidate ?? null;
 }
 
+/**
+ * Returns the initial chunk plan for the Character Build stage.
+ *
+ * `totalChunks` is a minimum estimate (1 inventory + 1 enrichment).
+ * After the inventory pass completes, ManualGenerator recalculates the
+ * real total as `featureBatchCount + 1` and overrides the chunking state.
+ */
 export function buildCharacterBuildChunkPlan(): {
   shouldChunk: boolean;
   totalChunks: number;
@@ -397,6 +404,8 @@ export function getCharacterBuildSystemPrompt(stageKey: string): string {
       'Return only valid JSON matching the requested feature-batch contract.',
       'You are enriching a supplied NPC character-build feature batch, not discovering new features.',
       'Treat feature_batch as authoritative. Return the same features in the same categories and preserve any provided metadata.',
+      'Your response must contain ONLY these five keys: class_features, subclass_features, racial_features, feats, fighting_styles.',
+      'Do NOT include skill_proficiencies or saving_throws — those are handled separately by the inventory pass.',
       'For each returned feature, write a concrete mechanical description explaining what it does, when it applies, and any notable limits, benefits, or triggers.',
       'Do not repeat the feature name as the description.',
       'Do not add extra features, do not drop requested features, and use empty arrays for categories that are not in the current batch.',
