@@ -154,11 +154,37 @@ const GENERIC_CANON_TOKENS = new Set([
   'wizard',
 ]);
 
-function isSpecificClaimKeyword(keyword: string): boolean {
+const GENERIC_RETRIEVAL_KEYWORDS = new Set([
+  '2024',
+  '2024raw',
+  'dnd',
+  'dungeons_and_dragons',
+  'epic',
+  'fantasy',
+  'fiction',
+  'game',
+  'games',
+  'genre',
+  'rpg',
+  'roleplaying',
+  'rules',
+  'tabletop',
+]);
+
+function isSpecificRetrievalKeyword(keyword: string): boolean {
+  if (GENERIC_RETRIEVAL_KEYWORDS.has(keyword)) {
+    return false;
+  }
+
   const tokens = keyword.split(/_+/).filter((token) => token.length > 0);
   if (tokens.length === 0) return false;
 
-  const distinctiveTokens = tokens.filter((token) => token.length >= 4 && !GENERIC_CANON_TOKENS.has(token));
+  const distinctiveTokens = tokens.filter(
+    (token) =>
+      token.length >= 4
+      && !GENERIC_CANON_TOKENS.has(token)
+      && !GENERIC_RETRIEVAL_KEYWORDS.has(token),
+  );
   if (distinctiveTokens.length === 0) {
     return false;
   }
@@ -263,13 +289,15 @@ export async function searchWorkflowCanonByKeywords(input: WorkflowCanonSearchIn
 
     const keywordSlugs = keywords.map(slugify).filter((keyword) => keyword.length > 0);
     const keywordSet = new Set(keywordSlugs);
+    const specificKeywordSlugs = keywordSlugs.filter(isSpecificRetrievalKeyword);
+    const specificKeywordSet = new Set(specificKeywordSlugs);
     const regionAnchors = new Set(['snowdown', 'westphal']);
 
-    const claimKeywords = keywordSlugs
+    const claimKeywords = specificKeywordSlugs
       .filter((keyword) => keyword.length > 3)
       .map((keyword) => ({
         keyword,
-        weight: isSpecificClaimKeyword(keyword) ? 25 : 10,
+        weight: 25,
       }));
 
     const scoredEntities = relevantEntities.map((entity) => {
@@ -285,9 +313,9 @@ export async function searchWorkflowCanonByKeywords(input: WorkflowCanonSearchIn
       let exactEntityMatch = false;
       let structuralMatch = false;
 
-      for (const keyword of keywordSet) {
+      for (const keyword of specificKeywordSet) {
         if (tags.includes(keyword)) {
-          score += 1000;
+          score += 250;
           structuralMatch = true;
         }
       }
@@ -298,7 +326,7 @@ export async function searchWorkflowCanonByKeywords(input: WorkflowCanonSearchIn
         structuralMatch = true;
       }
 
-      for (const keyword of keywordSet) {
+      for (const keyword of specificKeywordSet) {
         if (nameSlug && nameSlug.includes(keyword) && keyword.length > 3) {
           score += 250;
           structuralMatch = true;
@@ -317,13 +345,13 @@ export async function searchWorkflowCanonByKeywords(input: WorkflowCanonSearchIn
         structuralMatch = true;
       }
 
-      if (typeSlug && keywordSet.has(typeSlug)) {
+      if (typeSlug && specificKeywordSet.has(typeSlug)) {
         score += 100;
         structuralMatch = true;
       }
 
       if (regionSlug) {
-        for (const keyword of keywordSet) {
+        for (const keyword of specificKeywordSet) {
           if (regionSlug.includes(keyword)) {
             score += 100;
             structuralMatch = true;
@@ -331,7 +359,7 @@ export async function searchWorkflowCanonByKeywords(input: WorkflowCanonSearchIn
         }
       }
 
-      if (regionAnchors.has(leafId) && keywordSet.has(leafId)) {
+      if (regionAnchors.has(leafId) && specificKeywordSet.has(leafId)) {
         score += 200;
         structuralMatch = true;
       }

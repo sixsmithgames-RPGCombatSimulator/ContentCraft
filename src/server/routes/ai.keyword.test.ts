@@ -161,6 +161,22 @@ describe('evaluateKeywordExtractorCompliance', () => {
     }
   });
 
+  it('accepts planner assumptions as optional metadata', () => {
+    const result = validateWorkflowStageContractPayload('planner', {
+      deliverable: 'npc',
+      retrieval_hints: {
+        entities: [],
+        regions: [],
+        eras: [],
+        keywords: ['Marenport'],
+      },
+      proposals: [],
+      assumptions: ['Assumed Fiblan trained at the Academy of Mystra.'],
+    }, 'npc');
+
+    expect(result.ok).toBe(true);
+  });
+
   it('rejects missing required contract fields for encounter stages', () => {
     const result = validateWorkflowStageContractPayload('Creator: Rewards', {
       treasure: { gold: '250 gp' },

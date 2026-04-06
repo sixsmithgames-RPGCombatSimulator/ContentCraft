@@ -757,25 +757,12 @@ export default function AiAssistantPanel() {
       const inner = (patch as Record<string, unknown>)[stageKey];
       if (!isPlainObject(inner)) return { ok: false, message: 'Stage payload must be an object.' };
 
-      const allowed = getAllowedStageKeys(
-        stageKey,
-        workflowContext?.generatorType || workflowContext?.workflowType,
-        workflowContext?.schema,
-      );
-
-      if (allowed) {
-        const invalid = Object.keys(inner).find((k) => k !== '_meta' && !allowed.includes(k));
-        if (invalid) {
-          return { ok: false, message: `Field ${invalid} is not allowed for this stage.` };
-        }
-      }
-
       const size = JSON.stringify(patch).length;
       if (size > 200_000) return { ok: false, message: 'Patch exceeds 200KB limit.' };
 
       return { ok: true, payload: inner as Record<string, unknown> };
     },
-    [workflowContext?.generatorType, workflowContext?.schema, workflowContext?.workflowType]
+    []
   );
 
   const applyStagePatch = useCallback(

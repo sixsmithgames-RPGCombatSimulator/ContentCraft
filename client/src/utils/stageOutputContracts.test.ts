@@ -109,4 +109,20 @@ describe('validateStageOutput', () => {
 
     expect(result).toEqual({ ok: true });
   });
+
+  it('allows planner assumptions because the shared planner contract treats them as optional metadata', () => {
+    const result = validateStageOutput('planner', {
+      deliverable: 'npc',
+      retrieval_hints: {
+        entities: ['Fiblan'],
+        regions: [],
+        eras: [],
+        keywords: ['Marenport'],
+      },
+      proposals: [],
+      assumptions: ['Assumed Fiblan studied formal wizardry in a coastal academy.'],
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
 });

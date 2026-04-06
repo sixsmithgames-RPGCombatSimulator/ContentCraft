@@ -110,9 +110,9 @@ const STAGE_DEFINITIONS: Record<string, StageDefinition> = {
     retrievalPolicy: 'hints_allowed',
     retryPolicy: DEFAULT_RETRY_POLICY,
     contract: {
-      outputAllowedKeys: ['deliverable', 'story_clock', 'threads', 'retrieval_hints', 'proposals', 'allow_invention', 'rule_base', 'tone', 'mode', 'difficulty', 'realism', 'flags_echo'],
+      outputAllowedKeys: ['deliverable', 'story_clock', 'threads', 'retrieval_hints', 'proposals', 'assumptions', 'allow_invention', 'rule_base', 'tone', 'mode', 'difficulty', 'realism', 'flags_echo'],
       requiredKeys: ['deliverable', 'retrieval_hints', 'proposals'],
-      proxyAllowedKeys: ['deliverable', 'story_clock', 'threads', 'retrieval_hints', 'proposals', 'allow_invention', 'rule_base', 'tone', 'mode', 'difficulty', 'realism', 'flags_echo'],
+      proxyAllowedKeys: ['deliverable', 'story_clock', 'threads', 'retrieval_hints', 'proposals', 'assumptions', 'allow_invention', 'rule_base', 'tone', 'mode', 'difficulty', 'realism', 'flags_echo'],
       fieldRules: {
         proposals: MAY_BE_EMPTY_ARRAY_RULE,
       },

@@ -139,6 +139,38 @@ describe('workflowCanonRetrieval', () => {
     expect(result.factpack.facts[0]?.entity_name).toBe('Fiblan');
   });
 
+  it('ignores generic tag overlap such as RPG system metadata when no specific canon terms match', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('/canon/projects/project-1/entities')) {
+        return createJsonResponse([
+          {
+            _id: 'npc.glatham',
+            canonical_name: 'Glatham Woodspliter Elanithak',
+            tags: ['rpg', 'dungeons_and_dragons', '2024raw'],
+            claims: [
+              { text: 'Alignment: Lawful Neutral' },
+              { text: 'Genre: D&D' },
+            ],
+          },
+        ]);
+      }
+
+      return createJsonResponse([]);
+    });
+
+    const result = await searchWorkflowCanonByKeywords({
+      keywords: ['Fiblan', 'Wizard', 'Human', 'Lawful Neutral', 'RPG', 'Dungeons and Dragons', '2024RAW'],
+      projectId: 'project-1',
+      apiBaseUrl: 'https://example.test',
+      fetchImpl,
+      workflowType: 'npc',
+    });
+
+    expect(result.groundingStatus).toBe('ungrounded');
+    expect(result.matchedEntityCount).toBe(0);
+    expect(result.factpack.facts).toEqual([]);
+  });
+
   it('extracts and deduplicates retrieval hint keywords', () => {
     const keywords = extractRetrievalHintKeywords({
       retrieval_hints: {
