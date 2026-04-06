@@ -137,6 +137,55 @@ function isPlaceholderDescription(name: string, description: string): boolean {
   return normalizeComparableText(name) === normalizeComparableText(description);
 }
 
+function isGenericSubclassSelectionName(name: string): boolean {
+  const normalized = normalizeComparableText(name);
+  return normalized === 'subclass'
+    || normalized.endsWith(' subclass')
+    || normalized.includes('subclass choice')
+    || normalized === 'arcane tradition'
+    || normalized === 'arcane school';
+}
+
+function isGenericSubclassFeatureAggregateName(name: string): boolean {
+  const normalized = normalizeComparableText(name);
+  return normalized === 'subclass feature'
+    || normalized === 'class feature'
+    || normalized.includes('subclass feature')
+    || normalized.includes('arcane tradition feature')
+    || normalized.includes('arcane school feature')
+    || normalized.includes('school feature');
+}
+
+function isSpecificSubclassChoiceName(name: string): boolean {
+  const normalized = normalizeComparableText(name);
+  return normalized.startsWith('school of ')
+    || normalized.startsWith('oath of ')
+    || normalized.startsWith('circle of ')
+    || normalized.startsWith('college of ')
+    || normalized.startsWith('path of ')
+    || normalized.startsWith('way of ')
+    || normalized.startsWith('order of ')
+    || normalized.startsWith('conclave of ')
+    || normalized.startsWith('patron of ')
+    || normalized.startsWith('draconic ')
+    || normalized.includes('arcane tradition ')
+    || normalized.includes('school of ');
+}
+
+function isGenericFeatMarker(name: string): boolean {
+  const normalized = normalizeComparableText(name);
+  return normalized === 'feat'
+    || normalized === 'bonus feat'
+    || normalized === 'variant human feat'
+    || normalized === 'feat variant human';
+}
+
+function isGenericSkillProficiencyMarker(name: string): boolean {
+  const normalized = normalizeComparableText(name);
+  return normalized === 'skill proficiency'
+    || normalized === 'skill proficiency choice';
+}
+
 function normalizeFeatureEntries(value: unknown): JsonRecord[] {
   if (!Array.isArray(value)) {
     return [];
@@ -177,6 +226,76 @@ function normalizeFeatureEntries(value: unknown): JsonRecord[] {
       return normalized;
     })
     .filter((entry): entry is JsonRecord => entry !== null);
+}
+
+function pruneRedundantInventoryFeatureEntries(input: {
+  featuresByField: Partial<Record<CharacterBuildFeatureField, JsonRecord[]>>;
+  hasConcreteSkillProficiencies: boolean;
+}): Partial<Record<CharacterBuildFeatureField, JsonRecord[]>> {
+  const subclassEntries = [
+    ...(input.featuresByField.class_features ?? []),
+    ...(input.featuresByField.subclass_features ?? []),
+  ];
+  const hasConcreteSubclassFeatures = (input.featuresByField.subclass_features ?? []).some((entry) => {
+    const name = coerceNonEmptyString(entry.name);
+    return Boolean(
+      name
+      && !isGenericSubclassSelectionName(name)
+      && !isGenericSubclassFeatureAggregateName(name),
+    );
+  });
+  const hasSpecificSubclassChoice = subclassEntries.some((entry) => {
+    const name = coerceNonEmptyString(entry.name);
+    return Boolean(name && isSpecificSubclassChoiceName(name));
+  });
+  const hasConcreteFeats = (input.featuresByField.feats ?? []).some((entry) => {
+    const name = coerceNonEmptyString(entry.name);
+    return Boolean(name && !isGenericFeatMarker(name));
+  });
+
+  const pruned: Partial<Record<CharacterBuildFeatureField, JsonRecord[]>> = {};
+
+  for (const field of CHARACTER_BUILD_FEATURE_FIELDS) {
+    const entries = input.featuresByField[field] ?? [];
+    pruned[field] = entries.filter((entry) => {
+      const name = coerceNonEmptyString(entry.name);
+      if (!name) {
+        return false;
+      }
+
+      if (
+        field === 'class_features'
+        && isGenericSubclassSelectionName(name)
+        && (hasConcreteSubclassFeatures || hasSpecificSubclassChoice)
+      ) {
+        return false;
+      }
+
+      if (
+        (field === 'class_features' || field === 'subclass_features')
+        && isGenericSubclassFeatureAggregateName(name)
+        && (hasConcreteSubclassFeatures || hasSpecificSubclassChoice)
+      ) {
+        return false;
+      }
+
+      if (field === 'racial_features' && isGenericFeatMarker(name) && hasConcreteFeats) {
+        return false;
+      }
+
+      if (
+        field === 'racial_features'
+        && isGenericSkillProficiencyMarker(name)
+        && input.hasConcreteSkillProficiencies
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  return pruned;
 }
 
 function normalizeModifierEntries(value: unknown): JsonRecord[] {
@@ -316,6 +435,17 @@ function findEnrichedFeatureCandidates(
     }
   }
 
+  if (matched.length === 0 && isGenericSubclassSelectionName(inventoryName)) {
+    for (const candidates of candidatesByName.values()) {
+      for (const candidate of candidates) {
+        const candidateName = coerceNonEmptyString(candidate.entry.name);
+        if (candidateName && isSpecificSubclassChoiceName(candidateName)) {
+          matched.push(candidate);
+        }
+      }
+    }
+  }
+
   return matched;
 }
 
@@ -342,11 +472,21 @@ function selectBestEnrichedFeatureCandidate(input: {
   const scored = input.candidates
     .map((candidate, index) => {
       let score = getConcreteDescriptionScore(inventoryName, candidate.entry);
+      const candidateName = coerceNonEmptyString(candidate.entry.name);
 
       // Prefer candidates that kept the same category, but allow concrete
       // descriptions from a different bucket to recover miscategorized inventory.
       if (candidate.field === input.inventoryField) {
         score += 200;
+      }
+
+      // Generic subclass selectors can be satisfied by a specific subclass choice.
+      if (
+        candidateName
+        && isGenericSubclassSelectionName(inventoryName)
+        && isSpecificSubclassChoiceName(candidateName)
+      ) {
+        score += 300;
       }
 
       return {
@@ -471,18 +611,31 @@ export function buildCharacterBuildStagePrompt(context: StageContext): string {
 
 export function buildCharacterBuildInventoryState(payload: JsonRecord): JsonRecord {
   const inventory: JsonRecord = {};
-  const flattenedFeatures: Array<{ field: CharacterBuildFeatureField; entry: JsonRecord }> = [];
+  const normalizedFeaturesByField: Partial<Record<CharacterBuildFeatureField, JsonRecord[]>> = {};
 
   for (const field of CHARACTER_BUILD_FEATURE_FIELDS) {
-    const entries = normalizeFeatureEntries(payload[field]);
+    normalizedFeaturesByField[field] = normalizeFeatureEntries(payload[field]);
+  }
+
+  const normalizedSkillProficiencies = normalizeModifierEntries(payload.skill_proficiencies);
+  const prunedFeaturesByField = pruneRedundantInventoryFeatureEntries({
+    featuresByField: normalizedFeaturesByField,
+    hasConcreteSkillProficiencies: normalizedSkillProficiencies.length > 0,
+  });
+  const flattenedFeatures: Array<{ field: CharacterBuildFeatureField; entry: JsonRecord }> = [];
+
+  for (const field of CHARACTER_BUILD_MODIFIER_FIELDS) {
+    inventory[field] = field === 'skill_proficiencies'
+      ? normalizedSkillProficiencies
+      : normalizeModifierEntries(payload[field]);
+  }
+
+  for (const field of CHARACTER_BUILD_FEATURE_FIELDS) {
+    const entries = prunedFeaturesByField[field] ?? [];
     inventory[field] = entries;
     for (const entry of stripFeatureDescriptions(entries)) {
       flattenedFeatures.push({ field, entry });
     }
-  }
-
-  for (const field of CHARACTER_BUILD_MODIFIER_FIELDS) {
-    inventory[field] = normalizeModifierEntries(payload[field]);
   }
 
   const featureBatches: JsonRecord[] = [];

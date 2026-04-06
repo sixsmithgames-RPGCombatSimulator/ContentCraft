@@ -278,6 +278,86 @@ describe('npcCharacterBuildEnrichment', () => {
     });
   });
 
+  it('prunes redundant abstract subclass markers before batching concrete subclass features', () => {
+    const inventoryState = buildCharacterBuildInventoryState({
+      class_features: [
+        { name: 'Spellcasting', description: 'Inventory placeholder.' },
+        { name: 'Wizard Subclass', description: 'Inventory placeholder.' },
+        { name: 'Arcane School Feature (Level 6, 10)', description: 'Inventory placeholder.' },
+      ],
+      subclass_features: [
+        { name: 'Arcane Tradition: School of Evocation', description: 'Inventory placeholder.' },
+        { name: 'Evocation Savant', description: 'Inventory placeholder.' },
+        { name: 'Sculpt Spells', description: 'Inventory placeholder.' },
+      ],
+      racial_features: [{ name: 'Feat', description: 'Inventory placeholder.' }],
+      feats: [{ name: 'War Caster', description: 'Inventory placeholder.' }],
+      fighting_styles: [],
+      skill_proficiencies: [{ name: 'Investigation', value: '+8' }],
+      saving_throws: [{ name: 'Intelligence', value: '+8' }],
+    });
+
+    expect(inventoryState.class_features).toEqual([
+      { name: 'Spellcasting', description: 'Inventory placeholder.' },
+    ]);
+    expect(inventoryState.subclass_features).toEqual([
+      { name: 'Arcane Tradition: School of Evocation', description: 'Inventory placeholder.' },
+      { name: 'Evocation Savant', description: 'Inventory placeholder.' },
+      { name: 'Sculpt Spells', description: 'Inventory placeholder.' },
+    ]);
+    expect(inventoryState.racial_features).toEqual([]);
+    expect(inventoryState.feats).toEqual([
+      { name: 'War Caster', description: 'Inventory placeholder.' },
+    ]);
+  });
+
+  it('allows a generic subclass selector to finalize from a specific subclass choice', () => {
+    const inventoryState = buildCharacterBuildInventoryState({
+      class_features: [
+        { name: 'Wizard Subclass', description: 'Inventory placeholder.' },
+      ],
+      subclass_features: [],
+      racial_features: [],
+      feats: [],
+      fighting_styles: [],
+      skill_proficiencies: [],
+      saving_throws: [],
+    });
+
+    const finalized = finalizeCharacterBuildPayload(inventoryState, [
+      {
+        class_features: [
+          {
+            name: 'School of Evocation',
+            description: 'You specialize in shaping raw destructive magic into controlled battlefield effects.',
+          },
+        ],
+        subclass_features: [],
+        racial_features: [],
+        feats: [],
+        fighting_styles: [],
+      },
+    ]);
+
+    expect(finalized).toEqual({
+      ok: true,
+      payload: {
+        class_features: [
+          {
+            name: 'Wizard Subclass',
+            description: 'You specialize in shaping raw destructive magic into controlled battlefield effects.',
+          },
+        ],
+        subclass_features: [],
+        racial_features: [],
+        feats: [],
+        fighting_styles: [],
+        skill_proficiencies: [],
+        saving_throws: [],
+      },
+    });
+  });
+
   it('targets the earliest failed enrichment batch and truncates later cached batches for retry', () => {
     const inventoryState = buildCharacterBuildInventoryState({
       class_features: [

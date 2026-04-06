@@ -98,6 +98,45 @@ Result:
 - Character Build retries can recover from earlier bad enrichment batches instead of looping on the last batch.
 - Equivalent feature names no longer fail finalization just because the model omitted a parenthetical counter.
 
+## 2026-04-06 Follow-Up: Inventory Contract Hardening
+
+### Additional problem discovered
+Retry targeting was improved, but a deeper workflow flaw still remained:
+
+- the Character Build inventory pass could accept abstract labels such as `Wizard Subclass` or `Arcane School Feature (Level 6, 10)` as if they were discrete enrichable requirements,
+- later enrichment batches correctly returned concrete subclass data like `School of Evocation` or `Evocation Savant`,
+- and finalization still treated the earlier abstract label as a missing feature instead of recognizing it as a redundant planning marker.
+
+This meant the pipeline could continue to enter review even when the model had already supplied the real mechanical data needed to finish the build.
+
+### Additional fix implemented
+- `client/src/services/npcCharacterBuildEnrichment.ts`
+  - Inventory normalization now prunes redundant abstract feature markers when more specific subclass, feat, or proficiency data is already present.
+  - Generic subclass selectors can now reconcile against a specific subclass choice during finalization instead of failing as a literal name mismatch.
+
+### Why this is more coherent
+The Character Build process now treats the inventory pass as a source of provisional success criteria rather than unquestionable truth.
+
+- Abstract category labels are no longer promoted into enrichable work items when the inventory already contains concrete details.
+- Enrichment is now focused on discrete mechanics, not on trying to "describe" bookkeeping markers.
+- Finalization can recognize that `Wizard Subclass` was satisfied by a concrete subclass choice like `School of Evocation`.
+
+This keeps the workflow closer to the intended sequence:
+
+1. infer and organize the required mechanical structure,
+2. reduce that structure to concrete feature work items,
+3. enrich those items in batches,
+4. finalize only against real success criteria.
+
+### Additional regression coverage
+- `client/src/services/npcCharacterBuildEnrichment.test.ts`
+  - Added coverage for pruning redundant subclass markers before batching.
+  - Added coverage for reconciling a generic subclass selector from a specific subclass choice.
+
+### Additional verification
+- `npx vitest run client/src/services/npcCharacterBuildEnrichment.test.ts`
+- `npm run build:client`
+
 ## References
 - `client/src/services/npcCharacterBuildEnrichment.ts`
 - `client/src/pages/ManualGenerator.tsx`
