@@ -6,6 +6,7 @@ import {
   buildCharacterBuildInventoryState,
   finalizeCharacterBuildPayload,
   getCharacterBuildFeatureBatchCount,
+  resolveCharacterBuildRetryPlan,
   resolveCharacterBuildExecutionStageKey,
 } from './npcCharacterBuildEnrichment';
 
@@ -207,6 +208,109 @@ describe('npcCharacterBuildEnrichment', () => {
         skill_proficiencies: [{ name: 'Stealth', value: '+13' }],
         saving_throws: [{ name: 'Dexterity', value: '+9' }],
       },
+    });
+  });
+
+  it('matches enrichment aliases like ability score improvement variants and ignores None placeholders', () => {
+    const inventoryState = buildCharacterBuildInventoryState({
+      class_features: [
+        { name: 'Ability Score Improvement (x2)', description: 'Inventory placeholder.' },
+      ],
+      subclass_features: [],
+      racial_features: [],
+      feats: [
+        { name: 'War Caster', description: 'Inventory placeholder.' },
+      ],
+      fighting_styles: [
+        { name: 'None', description: 'Not applicable.' },
+      ],
+      skill_proficiencies: [{ name: 'Arcana', value: '+8' }],
+      saving_throws: [{ name: 'Intelligence', value: '+8' }],
+    });
+
+    const finalized = finalizeCharacterBuildPayload(inventoryState, [
+      {
+        class_features: [
+          {
+            name: 'Ability Score Improvement',
+            description: 'At 4th and 8th levels, you can increase one ability score by 2, or two ability scores by 1, to a maximum of 20.',
+          },
+        ],
+        subclass_features: [],
+        racial_features: [],
+        feats: [
+          {
+            name: 'War Caster',
+            description: 'You have advantage on Constitution saving throws you make to maintain concentration on a spell when you take damage.',
+          },
+        ],
+        fighting_styles: [
+          {
+            name: 'None',
+            description: 'No fighting style applies to this character.',
+          },
+        ],
+      },
+    ]);
+
+    expect(getCharacterBuildFeatureBatchCount(inventoryState)).toBe(1);
+    expect(finalized).toEqual({
+      ok: true,
+      payload: {
+        class_features: [
+          {
+            name: 'Ability Score Improvement (x2)',
+            description: 'At 4th and 8th levels, you can increase one ability score by 2, or two ability scores by 1, to a maximum of 20.',
+          },
+        ],
+        subclass_features: [],
+        racial_features: [],
+        feats: [
+          {
+            name: 'War Caster',
+            description: 'You have advantage on Constitution saving throws you make to maintain concentration on a spell when you take damage.',
+          },
+        ],
+        fighting_styles: [],
+        skill_proficiencies: [{ name: 'Arcana', value: '+8' }],
+        saving_throws: [{ name: 'Intelligence', value: '+8' }],
+      },
+    });
+  });
+
+  it('targets the earliest failed enrichment batch and truncates later cached batches for retry', () => {
+    const inventoryState = buildCharacterBuildInventoryState({
+      class_features: [
+        { name: 'Arcane Recovery', description: 'Inventory placeholder.' },
+        { name: 'Spellcasting', description: 'Inventory placeholder.' },
+        { name: 'Wizard Subclass', description: 'Inventory placeholder.' },
+        { name: 'Ability Score Improvement (x2)', description: 'Inventory placeholder.' },
+      ],
+      subclass_features: [
+        { name: 'Evocation Savant', description: 'Inventory placeholder.' },
+      ],
+      racial_features: [],
+      feats: [{ name: 'War Caster', description: 'Inventory placeholder.' }],
+      fighting_styles: [],
+      skill_proficiencies: [],
+      saving_throws: [],
+    });
+
+    const retryPlan = resolveCharacterBuildRetryPlan({
+      inventoryState,
+      enrichedBatches: [
+        { class_features: [{ name: 'Arcane Recovery', description: 'Concrete text.' }] },
+        { subclass_features: [{ name: 'Evocation Savant', description: 'Concrete text.' }] },
+        { feats: [{ name: 'War Caster', description: 'Concrete text.' }] },
+      ] as Array<Record<string, unknown>>,
+      issuesToAddress: [
+        'class_features[2] Wizard Subclass was not returned in the enrichment pass.; class_features[3] Ability Score Improvement (x2) was not returned in the enrichment pass.',
+      ],
+    });
+
+    expect(retryPlan).toEqual({
+      retryBatchIndex: 0,
+      retainedBatches: [],
     });
   });
 });

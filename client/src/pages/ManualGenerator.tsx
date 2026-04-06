@@ -128,6 +128,7 @@ import {
   isCharacterBuildInternalStageKey,
   readCharacterBuildEnrichedBatchesState,
   readCharacterBuildInventoryState,
+  resolveCharacterBuildRetryPlan,
   resolveCharacterBuildExecutionStageKey,
 } from '../services/npcCharacterBuildEnrichment';
 import ModeSelectionDialog from '../components/ai-assistant/ModeSelectionDialog';
@@ -2608,10 +2609,11 @@ export default function ManualGenerator() {
     const stages = getGeneratorStages(effectiveConfig?.type, STAGE_CATALOG, dynamicNpcStagesRef.current);
     const stage = stages[stageIndex];
 
-    // Store chunkInfo in state so it persists across stages
-    if (chunkInfo) {
-      setCurrentChunkInfo(chunkInfo);
-    }
+    const activeChunkInfo = chunkInfo ?? (isStageChunking ? currentChunkInfo : undefined);
+
+    // Keep chunk info aligned with the active launch context so stale retries
+    // do not inherit the previous batch after chunking finalization errors.
+    setCurrentChunkInfo(activeChunkInfo);
 
     setCompiledStageRequest(null);
 
@@ -2755,7 +2757,7 @@ Validation will reject incorrect field names or missing required fields.`;
         config: effectiveConfig,
         stageResults: results,
         factpack: { facts: [], entities: [], gaps: [] }, // Empty factpack for estimation
-        chunkInfo: chunkInfo || currentChunkInfo,
+        chunkInfo: activeChunkInfo,
         previousDecisions: limitedDecisions,
         unansweredProposals: unansweredProposals,
         npcSectionContext: minimalNpcContext,
@@ -2955,7 +2957,7 @@ Validation will reject incorrect field names or missing required fields.`;
       config: effectiveConfig,
       stageResults: results,
       factpack: limitedFactpack,
-      chunkInfo: chunkInfo || currentChunkInfo,
+      chunkInfo: activeChunkInfo,
       previousDecisions: limitedDecisions,
       unansweredProposals: unansweredProposals,
       npcSectionContext: npcContext,
@@ -3452,7 +3454,7 @@ Output: Valid JSON only. No markdown, no prose.`;
           config: effectiveConfig,
           stageResults: results,
           factpack: limitedFactpack,
-          chunkInfo: chunkInfo || currentChunkInfo,
+            chunkInfo: activeChunkInfo,
           previousDecisions: limitedDecisions,
           unansweredProposals: unansweredProposals,
         };
@@ -4813,6 +4815,11 @@ Output: Valid JSON only. No markdown, no prose.`;
             const finalizedCharacterBuildError = 'error' in finalizedCharacterBuild
               ? finalizedCharacterBuild.error
               : 'Character Build could not be finalized because one or more requested features were still missing concrete descriptions.';
+            const reviewStageResults: StageResults = {
+              ...stageResults,
+              [CHARACTER_BUILD_INVENTORY_STATE_KEY]: inventoryState,
+              [CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY]: createCharacterBuildEnrichedBatchesState(updatedEnrichedBatches),
+            };
             const stageErrorOutput = buildWorkflowStageErrorOutput({
               stageName: currentStage.name,
               errorMessage: finalizedCharacterBuildError,
@@ -4826,6 +4833,7 @@ Output: Valid JSON only. No markdown, no prose.`;
               status: 'review_required',
               message: 'Character Build requires review before it can continue.',
             });
+            setStageResults(reviewStageResults);
             setCurrentStageOutput(stageErrorOutput);
             setShowReviewModal(true);
             setCompiledStageRequest(null);
@@ -4844,6 +4852,11 @@ Output: Valid JSON only. No markdown, no prose.`;
 
           if (!contractValidation.ok || !npcValidation.isValid) {
             const finalValidationError = [contractValidation.error, ...npcValidation.errors].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ');
+            const reviewStageResults: StageResults = {
+              ...stageResults,
+              [CHARACTER_BUILD_INVENTORY_STATE_KEY]: inventoryState,
+              [CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY]: createCharacterBuildEnrichedBatchesState(updatedEnrichedBatches),
+            };
             const stageErrorOutput = buildWorkflowStageErrorOutput({
               stageName: currentStage.name,
               errorMessage: finalValidationError,
@@ -4857,6 +4870,7 @@ Output: Valid JSON only. No markdown, no prose.`;
               status: 'review_required',
               message: 'Character Build requires review before it can continue.',
             });
+            setStageResults(reviewStageResults);
             setCurrentStageOutput(stageErrorOutput);
             setShowReviewModal(true);
             setCompiledStageRequest(null);
@@ -5704,6 +5718,53 @@ Output: Valid JSON only. No markdown, no prose.`;
     return additionalInstructions;
   };
 
+  const resolveCharacterBuildReviewRetryState = (issuesToAddress: string[]) => {
+    const stageForRetry = STAGES[currentStageIndex];
+    if (config?.type !== 'npc' || stageForRetry?.name !== 'Creator: Character Build') {
+      return null;
+    }
+
+    const inventoryState = readCharacterBuildInventoryState(stageResults[CHARACTER_BUILD_INVENTORY_STATE_KEY]);
+    if (!inventoryState) {
+      return null;
+    }
+
+    const existingEnrichedBatches = readCharacterBuildEnrichedBatchesState(
+      stageResults[CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY],
+    );
+    const retryPlan = resolveCharacterBuildRetryPlan({
+      inventoryState,
+      enrichedBatches: existingEnrichedBatches,
+      issuesToAddress,
+    });
+
+    if (!retryPlan) {
+      return null;
+    }
+
+    const featureBatchCount = getCharacterBuildFeatureBatchCount(inventoryState);
+    const totalCharacterBuildChunks = featureBatchCount + 1;
+    const targetStageChunkIndex = retryPlan.retryBatchIndex + 1;
+    const targetChunkInfo = buildWorkflowStageChunkInfoForIndex(
+      targetStageChunkIndex,
+      totalCharacterBuildChunks,
+      { labelPrefix: 'Phase' },
+    );
+    const retryStageResults: StageResults = {
+      ...stageResults,
+      [CHARACTER_BUILD_INVENTORY_STATE_KEY]: inventoryState,
+      [CHARACTER_BUILD_ENRICHED_BATCHES_STATE_KEY]: createCharacterBuildEnrichedBatchesState(retryPlan.retainedBatches),
+    };
+
+    return {
+      retryStageResults,
+      targetStageChunkIndex,
+      targetChunkInfo,
+      totalCharacterBuildChunks,
+      retryBatchIndex: retryPlan.retryBatchIndex,
+    };
+  };
+
   const handleRetryWithAnswers = (answers: Record<string, string>, issuesToAddress: string[], additionalDirection = '') => {
     // Close review modal
     localValidationAutoRetryStageKeyRef.current = null;
@@ -5722,13 +5783,26 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     const stageForRetry = STAGES[currentStageIndex];
     const additionalInstructions = buildRetryAdditionalInstructions(stageForRetry, answers, issuesToAddress, additionalDirection);
+    const characterBuildRetryState = resolveCharacterBuildReviewRetryState(issuesToAddress);
+    const retryStageResults = characterBuildRetryState?.retryStageResults ?? stageResults;
+    const retryChunkInfo = characterBuildRetryState?.targetChunkInfo ?? currentChunkInfo ?? undefined;
+
+    if (characterBuildRetryState) {
+      console.log('[Character Build Retry] Restarting enrichment from batch', characterBuildRetryState.retryBatchIndex + 1);
+      setStageResults(characterBuildRetryState.retryStageResults);
+      setIsStageChunking(true);
+      setCurrentStageChunk(characterBuildRetryState.targetStageChunkIndex);
+      setTotalStageChunks(characterBuildRetryState.totalCharacterBuildChunks);
+      setAccumulatedChunkResults([]);
+      setCurrentChunkInfo(characterBuildRetryState.targetChunkInfo);
+    }
 
     const launchPlan: WorkflowStageLaunchPlan = {
       kind: 'show_stage',
       stageIndex: currentStageIndex,
-      stageResults,
+      stageResults: retryStageResults,
       factpack,
-      chunkInfo: currentChunkInfo || undefined,
+      chunkInfo: retryChunkInfo,
     };
 
     executeWorkflowStageLaunch(launchPlan, {
@@ -5757,12 +5831,26 @@ Output: Valid JSON only. No markdown, no prose.`;
 
     const stageForRetry = STAGES[currentStageIndex];
     const additionalInstructions = buildRetryAdditionalInstructions(stageForRetry, answers, issuesToAddress, additionalDirection);
+    const characterBuildRetryState = resolveCharacterBuildReviewRetryState(issuesToAddress);
+    const retryStageResults = characterBuildRetryState?.retryStageResults ?? stageResults;
+    const retryChunkInfo = characterBuildRetryState?.targetChunkInfo ?? currentChunkInfo ?? undefined;
+
+    if (characterBuildRetryState) {
+      console.log('[Character Build Retry] Restarting enrichment from batch', characterBuildRetryState.retryBatchIndex + 1);
+      setStageResults(characterBuildRetryState.retryStageResults);
+      setIsStageChunking(true);
+      setCurrentStageChunk(characterBuildRetryState.targetStageChunkIndex);
+      setTotalStageChunks(characterBuildRetryState.totalCharacterBuildChunks);
+      setAccumulatedChunkResults([]);
+      setCurrentChunkInfo(characterBuildRetryState.targetChunkInfo);
+    }
+
     const launchPlan: WorkflowStageLaunchPlan = {
       kind: 'show_stage',
       stageIndex: currentStageIndex,
-      stageResults,
+      stageResults: retryStageResults,
       factpack,
-      chunkInfo: currentChunkInfo || undefined,
+      chunkInfo: retryChunkInfo,
     };
 
     executeWorkflowStageLaunch(launchPlan, {

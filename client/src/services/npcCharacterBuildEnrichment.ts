@@ -81,6 +81,58 @@ function normalizeComparableText(value: string): string {
     .trim();
 }
 
+function isIgnorableFeatureName(name: string): boolean {
+  const normalized = normalizeComparableText(name);
+  return normalized === 'none'
+    || normalized === 'n a'
+    || normalized === 'not applicable'
+    || normalized === 'no fighting style'
+    || normalized === 'no fighting styles';
+}
+
+function collapseAdjacentDuplicateTokens(tokens: string[]): string[] {
+  return tokens.filter((token, index) => token.length > 0 && token !== tokens[index - 1]);
+}
+
+function buildFeatureMatchKey(name: string): string {
+  const withoutParentheticals = name.replace(/\([^)]*\)/g, ' ');
+  const normalized = normalizeComparableText(withoutParentheticals);
+  const tokens = collapseAdjacentDuplicateTokens(normalized.split(/\s+/).filter(Boolean));
+  return tokens.join(' ');
+}
+
+function getFeatureMatchTokens(name: string): string[] {
+  return buildFeatureMatchKey(name).split(/\s+/).filter(Boolean);
+}
+
+function areFeatureNamesEquivalent(left: string, right: string): boolean {
+  const leftKey = buildFeatureMatchKey(left);
+  const rightKey = buildFeatureMatchKey(right);
+
+  if (!leftKey || !rightKey) {
+    return false;
+  }
+
+  if (leftKey === rightKey) {
+    return true;
+  }
+
+  const leftTokens = getFeatureMatchTokens(left);
+  const rightTokens = getFeatureMatchTokens(right);
+  const shorterTokens = leftTokens.length <= rightTokens.length ? leftTokens : rightTokens;
+  const longerKey = leftTokens.length <= rightTokens.length ? rightKey : leftKey;
+
+  if (shorterTokens.length >= 3 && longerKey.includes(shorterTokens.join(' '))) {
+    return true;
+  }
+
+  const rightTokenSet = new Set(rightTokens);
+  const overlapCount = leftTokens.filter((token) => rightTokenSet.has(token)).length;
+  const minTokenCount = Math.min(leftTokens.length, rightTokens.length);
+
+  return minTokenCount >= 3 && overlapCount >= minTokenCount;
+}
+
 function isPlaceholderDescription(name: string, description: string): boolean {
   return normalizeComparableText(name) === normalizeComparableText(description);
 }
@@ -97,7 +149,7 @@ function normalizeFeatureEntries(value: unknown): JsonRecord[] {
       }
 
       const name = coerceNonEmptyString(entry.name);
-      if (!name) {
+      if (!name || isIgnorableFeatureName(name)) {
         return null;
       }
 
@@ -243,6 +295,38 @@ function collectEnrichedFeatureCandidates(enrichedBatches: JsonRecord[]): Map<st
   }
 
   return candidatesByName;
+}
+
+function findEnrichedFeatureCandidates(
+  inventoryName: string,
+  candidatesByName: Map<string, EnrichedFeatureCandidate[]>,
+): EnrichedFeatureCandidate[] {
+  const exactCandidates = candidatesByName.get(featureNameLookupKey(inventoryName));
+  if (exactCandidates && exactCandidates.length > 0) {
+    return exactCandidates;
+  }
+
+  const matched: EnrichedFeatureCandidate[] = [];
+  for (const candidates of candidatesByName.values()) {
+    for (const candidate of candidates) {
+      const candidateName = coerceNonEmptyString(candidate.entry.name);
+      if (candidateName && areFeatureNamesEquivalent(inventoryName, candidateName)) {
+        matched.push(candidate);
+      }
+    }
+  }
+
+  return matched;
+}
+
+function extractFeatureNamesFromIssueText(value: string): string[] {
+  return value
+    .split(/;\s*/)
+    .map((segment) => {
+      const match = segment.match(/\]\s+(.+?)\s+(?:was not returned in the enrichment pass|is missing a concrete description)\.?$/i);
+      return match?.[1]?.trim() ?? null;
+    })
+    .filter((name): name is string => Boolean(name));
 }
 
 function selectBestEnrichedFeatureCandidate(input: {
@@ -460,7 +544,7 @@ export function finalizeCharacterBuildPayload(
     const inventoryEntries = normalizeFeatureEntries(inventoryState[field]);
     for (const [index, entry] of inventoryEntries.entries()) {
       const name = entry.name as string;
-      const candidates = enrichedCandidatesByName.get(featureNameLookupKey(name)) ?? [];
+      const candidates = findEnrichedFeatureCandidates(name, enrichedCandidatesByName);
       const enriched = selectBestEnrichedFeatureCandidate({
         inventoryField: field,
         inventoryEntry: entry,
@@ -492,6 +576,40 @@ export function finalizeCharacterBuildPayload(
   }
 
   return { ok: true, payload };
+}
+
+export function resolveCharacterBuildRetryPlan(input: {
+  inventoryState: JsonRecord | null;
+  enrichedBatches: JsonRecord[];
+  issuesToAddress: string[];
+}): { retryBatchIndex: number; retainedBatches: JsonRecord[] } | null {
+  const featureBatches = getFeatureBatchesFromInventoryState(input.inventoryState);
+  if (featureBatches.length === 0) {
+    return null;
+  }
+
+  const issueFeatureNames = input.issuesToAddress
+    .flatMap((issue) => extractFeatureNamesFromIssueText(issue))
+    .filter((name, index, values) => values.indexOf(name) === index);
+
+  if (issueFeatureNames.length === 0) {
+    return null;
+  }
+
+  for (const [batchIndex, batch] of featureBatches.entries()) {
+    const batchFeatureNames = getBatchFeatureNames(batch);
+    const hasRetryTarget = issueFeatureNames.some((issueName) =>
+      batchFeatureNames.some((batchFeatureName) => areFeatureNamesEquivalent(issueName, batchFeatureName)));
+
+    if (hasRetryTarget) {
+      return {
+        retryBatchIndex: batchIndex,
+        retainedBatches: input.enrichedBatches.slice(0, batchIndex),
+      };
+    }
+  }
+
+  return null;
 }
 
 export function isCharacterBuildInternalStageKey(stageKey: string | null | undefined): boolean {
