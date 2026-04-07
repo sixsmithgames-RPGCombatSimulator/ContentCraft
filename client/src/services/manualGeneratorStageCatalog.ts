@@ -21,6 +21,7 @@ import {
   stripStageOutput,
   type GeneratorStagePromptContext as ManualGeneratorStageContext,
 } from './stagePromptShared';
+import { buildRequestBlueprint } from '../utils/requestBlueprint';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -245,11 +246,12 @@ Output ONLY valid JSON. NO markdown. NO prose.
 Start your response with { and end with }.
 
 Treat original_user_request as the primary source of truth.
-Treat purpose, brief, relevant_canon, previous_decisions, and output_schema as the full authoritative context for this stage.
+Treat purpose, brief, relevant_canon, request_blueprint, previous_decisions, and output_schema as the full authoritative context for this stage.
 Do NOT rely on prior conversation history or hidden session memory.
 Use canon only when it is explicitly present in relevant_canon.
 If explicit inputs still leave gaps, record them in proposals[] instead of inventing unsupported canon.
 Incorporate previous_decisions directly and do not ask duplicate questions.
+Use request_blueprint.success_criteria as the acceptance checklist when it is present.
 Return content that matches output_schema exactly.`;
 
 const LEGACY_STYLIST_SYSTEM_PROMPT = `You are the Stylist for structured content generation.
@@ -639,6 +641,10 @@ DO NOT create proposals for ANY topic mentioned in previous_decisions.
 DO NOT ask about topics that are semantically similar to previously decided topics.
 Asking duplicate questions wastes the user's time and will be considered a critical failure.
 
+⚠️ CRITICAL: USE request_blueprint AS THE REQUEST CHECKLIST ⚠️
+If request_blueprint is present, treat explicit_facts and success_criteria as the validated interpretation of the user's request.
+If request_blueprint.blocking_gaps is empty, default proposals[] to [] unless canon creates a direct contradiction or the request is genuinely impossible to complete as written.
+
 Analyze the user prompt and produce a Design Brief JSON with:
 - deliverable: type of content ("scene"|"encounter"|"npc"|"item"|"adventure")
 - story_clock: narrative timing/urgency (optional)
@@ -719,6 +725,7 @@ Choose conservative defaults. Output ONLY valid JSON.`,
         type: context.config.type,
         flags: flagsToUse,
         relevant_canon: createMinimalFactpack(context.factpack),
+        request_blueprint: buildRequestBlueprint(context.config.prompt, context.config.type, context.config.flags),
       };
 
       // Add chunk information if this is a multi-part generation
@@ -768,6 +775,7 @@ Choose conservative defaults. Output ONLY valid JSON.`,
         purpose: context.stageResults.purpose ? stripStageOutput(context.stageResults.purpose as JsonRecord) : undefined,
         deliverable_type: deliverableType !== 'unknown' ? deliverableType : undefined,
         output_schema: getLegacyDeliverableSchemaHint(context),
+        request_blueprint: buildRequestBlueprint(context.config.prompt, context.config.type, context.config.flags),
       };
 
       // NPC SECTION-BASED CHUNKING: Inject section-specific instructions

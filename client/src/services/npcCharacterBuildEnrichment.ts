@@ -2,6 +2,7 @@ import {
   buildWorkflowStagePrompt,
   type GeneratorStagePromptContext as StageContext,
 } from './stagePromptShared';
+import { buildRequestBlueprint, extractNpcRequestFacts } from '../utils/requestBlueprint';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -337,13 +338,15 @@ function getCharacterBuildBasePayload(context: StageContext): Record<string, unk
   const stats = isRecord(context.stageResults['creator:_stats'])
     ? context.stageResults['creator:_stats']
     : null;
+  const requestFacts = extractNpcRequestFacts(context.config.prompt);
 
   return {
-    species: basicInfo?.species || basicInfo?.race,
-    background: basicInfo?.background,
-    class_levels: basicInfo?.class_levels,
-    ability_scores: stats?.ability_scores,
+    species: basicInfo?.species || basicInfo?.race || requestFacts.species || requestFacts.race,
+    background: basicInfo?.background || requestFacts.background,
+    class_levels: basicInfo?.class_levels || requestFacts.class_levels,
+    ability_scores: stats?.ability_scores || requestFacts.ability_scores,
     proficiency_bonus: stats?.proficiency_bonus,
+    request_blueprint: buildRequestBlueprint(context.config.prompt, context.config.type, context.config.flags),
   };
 }
 

@@ -4082,7 +4082,10 @@ Output: Valid JSON only. No markdown, no prose.`;
           metadata,
         });
         setError(message);
-        setLastStageError(message);
+        setLastStageError({
+          stage: 'Workflow',
+          message,
+        });
         return recordPipelineSubmitOutcome({ status: 'error', message });
       }
       const currentStageName: string = currentStage.name;

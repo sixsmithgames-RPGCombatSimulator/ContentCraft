@@ -802,6 +802,45 @@ describe('workflowStageResponse', () => {
     });
   });
 
+  it('derives spellcasting mechanics from string class levels for prepared full casters', () => {
+    const result = parseAndNormalizeWorkflowStageResponse({
+      aiResponse: JSON.stringify({
+        spellcasting_ability: 'Intelligence',
+        spell_save_dc: 15,
+        spell_attack_bonus: 7,
+        spell_slots: { '1': 4, '2': 3, '3': 3, '4': 3, '5': 2 },
+        prepared_spells: {
+          '1st': ['Magic Missile', 'Shield'],
+        },
+      }),
+      stageName: 'Creator: Spellcasting',
+      stageIdentity: 'spellcasting',
+      workflowType: 'npc',
+      stageResults: {
+        'creator:_basic_info': {
+          name: 'Fiblan',
+          class_levels: 'Wizard 10',
+        },
+        'creator:_stats': {
+          ability_scores: { str: 8, dex: 14, con: 15, int: 16, wis: 12, cha: 10 },
+          proficiency_bonus: 4,
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.parsed.resolved_mechanics).toMatchObject({
+      has_spellcasting: true,
+      caster_mode: 'prepared',
+      has_slots: true,
+      spellcasting_ability: 'INT',
+      spell_save_dc: 15,
+      spell_attack_bonus: 7,
+    });
+  });
+
   it('rejects invalid location spaces before the page accepts them', () => {
     const result = parseAndNormalizeWorkflowStageResponse({
       aiResponse: JSON.stringify({

@@ -109,7 +109,7 @@ describe('workflowStageReview', () => {
       },
       {
         question: 'What potions does she carry?',
-        options: ['Healing'],
+        options: ['Healing', 'Antitoxin'],
       },
     ]);
 
@@ -132,7 +132,7 @@ describe('workflowStageReview', () => {
       },
       {
         question: 'What potions does she carry?',
-        options: ['Healing'],
+        options: ['Healing', 'Antitoxin'],
       },
     ], {
       'Which oath does Thyra uphold?': 'Devotion',
@@ -143,6 +143,16 @@ describe('workflowStageReview', () => {
         question: 'What potions does she carry?',
       }),
     ]);
+  });
+
+  it('drops single-option suggestion proposals so they do not pause the pipeline', () => {
+    expect(sanitizeWorkflowProposals([
+      {
+        question: 'Include a crumbling cliffside hazard in the ambush scene.',
+        options: ['Include a crumbling cliffside hazard in the ambush scene.'],
+        default: 'Include a crumbling cliffside hazard in the ambush scene.',
+      },
+    ])).toEqual([]);
   });
 
   it('builds consistent review-modal error payloads', () => {

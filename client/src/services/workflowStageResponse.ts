@@ -1,6 +1,7 @@
 import { formatParseError, parseAIResponse } from '../utils/jsonParser';
 import { validateNpcStageOutput } from '../utils/npcStageValidator';
 import { validateIncomingLocationSpace } from '../utils/locationSpaceValidation';
+import { normalizeNpcClassLevels } from '../utils/requestBlueprint';
 import {
   getStageContract,
   validateStageOutput,
@@ -242,21 +243,18 @@ const getAbilityMod = (score: number | undefined): number => {
 };
 
 const resolveSpellcasting = (context: JsonRecord): SpellcastingNormalized | null => {
-  const classLevels = context.class_levels as JsonRecord[] | undefined;
+  const classLevels = normalizeNpcClassLevels(context.class_levels);
   const abilityScores = context.ability_scores as JsonRecord | undefined;
   const proficiency = context.proficiency_bonus as number | undefined;
 
-  if (!classLevels || !Array.isArray(classLevels) || classLevels.length === 0) return null;
+  if (!classLevels || classLevels.length === 0) return null;
 
   const casterInfo = classLevels
-    .filter((cl) => isRecord(cl) && typeof cl.class === 'string')
     .map((cl) => {
-      const rawLevel = (cl as JsonRecord).level;
-      const parsedLevel = typeof rawLevel === 'number' ? rawLevel : Number.parseInt(String(rawLevel ?? '0'), 10) || 0;
       return {
-        name: String((cl as JsonRecord).class).toLowerCase(),
-        level: parsedLevel,
-        subclass: isRecord(cl) && typeof cl.subclass === 'string' ? String(cl.subclass).toLowerCase() : undefined,
+        name: String(cl.class).toLowerCase(),
+        level: typeof cl.level === 'number' ? cl.level : Number.parseInt(String(cl.level ?? '0'), 10) || 0,
+        subclass: typeof cl.subclass === 'string' ? cl.subclass.toLowerCase() : undefined,
       };
     });
 
@@ -648,5 +646,4 @@ export function parseAndNormalizeWorkflowStageResponse(
     contractKey,
   };
 }
-
 

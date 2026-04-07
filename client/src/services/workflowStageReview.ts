@@ -126,8 +126,9 @@ const normalizeProposal = (proposal: unknown, index: number): JsonRecord | null 
       .filter((option): option is string => option !== null)
     : [];
 
-  const options = optionsRaw.length > 0 ? optionsRaw : choices;
-  if (options.length === 0) return null;
+  const options = Array.from(new Set((optionsRaw.length > 0 ? optionsRaw : choices).map((option) => option.trim())))
+    .filter((option) => option.length > 0);
+  if (options.length < 2) return null;
 
   const defaultValue = (() => {
     if (typeof proposal.default === 'string' && proposal.default.trim().length > 0) {
