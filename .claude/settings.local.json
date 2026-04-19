@@ -44,7 +44,14 @@
       "Bash(node -e:*)",
       "Bash(echo:*)",
       "Bash(unset:*)",
-      "Bash(node --input-type=module -e:*)"
+      "Bash(node --input-type=module -e:*)",
+      "Bash(netstat:*)",
+      "Bash(node check-projects.js:*)",
+      "Bash(node restore-projects.js:*)",
+      "Bash(node find-health-book.js:*)",
+      "Bash(node sync-project-names.js:*)",
+      "Bash(node check-health-book.js:*)",
+      "Bash(node sync-content-blocks.js:*)"
     ],
     "deny": [],
     "ask": []

@@ -6,8 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "tsx watch --env-file=.env src/server/index.ts",
+    "dev:server": "tsx watch src/server/index.ts",
     "dev:client": "cd client && npm run dev",
+    "local": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build": "npm run build:server && npm run build:client && npm run copy:client",
     "build:server": "tsc -p tsconfig.server.json && node --input-type=module -e \"import { mkdirSync, cpSync } from 'node:fs'; mkdirSync('dist/server', { recursive: true }); cpSync('src/server/schemas', 'dist/server/schemas', { recursive: true }); cpSync('schema/npc', 'dist/server/schemas/npc', { recursive: true });\"",
     "build:client": "cd client && npm run build",

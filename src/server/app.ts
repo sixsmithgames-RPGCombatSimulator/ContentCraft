@@ -9,9 +9,18 @@ import helmet from 'helmet';
 import { config } from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 import { apiRouter } from './routes/index.js';
 
-config();
+// Load .env.local first (for local development), then .env (for defaults)
+// .env.local takes precedence and is gitignored
+// Use override: true to ensure local settings override any pre-loaded env vars
+if (existsSync('.env.local')) {
+  config({ path: '.env.local', override: true });
+  console.log('✓ Loaded .env.local for local development');
+} else {
+  config();
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

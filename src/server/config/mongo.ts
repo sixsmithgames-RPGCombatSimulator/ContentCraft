@@ -17,8 +17,6 @@ import type { SchemaRegistryEntry } from '../models/SchemaRegistry.js';
 import type { NpcRecord } from '../models/NpcRecord.js';
 import type { EncounterRecord } from '../models/EncounterRecord.js';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/dndgen';
-
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
@@ -26,6 +24,9 @@ export async function connectToMongo(): Promise<Db | null> {
   if (db) {
     return db;
   }
+
+  // Read MONGODB_URI at runtime (not at module load time)
+  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/dndgen';
 
   // Skip MongoDB if URI is not configured
   if (!process.env.MONGODB_URI) {

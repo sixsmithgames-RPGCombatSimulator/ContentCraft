@@ -8,6 +8,12 @@
     <!-- Sixsmith Games Auth Guard -->
     <script>
       (function() {
+        // Skip Clerk auth guard for local development
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          console.log('✓ Local development mode - Clerk auth guard bypassed');
+          return;
+        }
+
         var PUBLISHABLE_KEY = 'pk_live_Y2xlcmsuc2l4c21pdGhnYW1lcy5jb20k';
         var SIGN_IN_URL = 'https://www.sixsmithgames.com/sign-in?redirect_url=' + encodeURIComponent(window.location.href);
         var PRICING_URL = 'https://www.sixsmithgames.com/pricing';

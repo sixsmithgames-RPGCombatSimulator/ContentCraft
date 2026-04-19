@@ -1039,12 +1039,12 @@ export default function WritingReaderModal({
   const canonSummary = getWritingCanonBlockSummary(canonReport);
   const canonPanelClassName =
     canonReport && (canonReport.conflictCount > 0 || canonReport.ambiguityCount > 0)
-      ? 'bg-amber-50 border-amber-200'
-      : 'bg-slate-50 border-slate-200';
+      ? 'bg-amber-50 border-amber-200 dark:border-amber-400/30 dark:bg-amber-500/10'
+      : 'bg-slate-50 border-slate-200 dark:border-slate-700 dark:bg-slate-800/60';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="bg-gray-900 text-white">
           <div className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1263,8 +1263,8 @@ export default function WritingReaderModal({
             <details className={`mb-4 rounded-lg border ${canonPanelClassName}`} open={canonReport.reviewRequired}>
               <summary className="cursor-pointer select-none px-4 py-3 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-gray-900">Canon Check</div>
-                  <div className="text-xs text-gray-600 mt-1">{canonSummary}</div>
+                  <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">Canon Check</div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-slate-300">{canonSummary}</div>
                 </div>
                 {canonBadge && (
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${canonBadge.className}`}>
@@ -1274,55 +1274,58 @@ export default function WritingReaderModal({
               </summary>
               <div className="px-4 pb-4 space-y-3">
                 {canonReport.entityNames.length > 0 && (
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-gray-600 dark:text-slate-300">
                     Linked canon touched here: {canonReport.entityNames.join(', ')}
                   </div>
                 )}
                 {canonReport.items.length > 0 ? (
                   <div className="space-y-3">
                     {canonReport.items.map((item) => (
-                      <div key={item.key} className="rounded-lg border border-white/70 bg-white/70 p-3">
+                      <div
+                        key={item.key}
+                        className="rounded-lg border border-white/70 bg-white/70 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 dark:shadow-none"
+                      >
                         <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-medium text-gray-900">{item.message}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-slate-100">{item.message}</div>
                           <span
                             className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
                               item.severity === 'high'
-                                ? 'bg-amber-100 text-amber-900'
+                                ? 'bg-amber-100 text-amber-900 dark:bg-amber-400/15 dark:text-amber-200'
                                 : item.severity === 'medium'
-                                  ? 'bg-yellow-100 text-yellow-900'
-                                  : 'bg-slate-100 text-slate-700'
+                                  ? 'bg-yellow-100 text-yellow-900 dark:bg-yellow-400/15 dark:text-yellow-200'
+                                  : 'bg-slate-100 text-slate-700 dark:bg-slate-700/70 dark:text-slate-200'
                             }`}
                           >
                             {item.status.replace(/_/g, ' ')}
                           </span>
                         </div>
                         {item.draftText && (
-                          <div className="mt-2 text-xs text-gray-700">
-                            <span className="font-medium text-gray-900">Draft:</span> {item.draftText}
+                          <div className="mt-2 text-xs text-gray-700 dark:text-slate-300">
+                            <span className="font-medium text-gray-900 dark:text-slate-100">Draft:</span> {item.draftText}
                           </div>
                         )}
                         {item.canonClaim && (
-                          <div className="mt-1 text-xs text-gray-700">
-                            <span className="font-medium text-gray-900">Canon:</span> {item.canonClaim}
+                          <div className="mt-1 text-xs text-gray-700 dark:text-slate-300">
+                            <span className="font-medium text-gray-900 dark:text-slate-100">Canon:</span> {item.canonClaim}
                           </div>
                         )}
                         {item.suggestedAction && (
-                          <div className="mt-2 text-[11px] text-gray-500">{item.suggestedAction}</div>
+                          <div className="mt-2 text-[11px] text-gray-500 dark:text-slate-400">{item.suggestedAction}</div>
                         )}
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-xs text-gray-600">No contradictions surfaced in this block.</div>
+                  <div className="text-xs text-gray-600 dark:text-slate-300">No contradictions surfaced in this block.</div>
                 )}
               </div>
             </details>
           )}
 
           {showRefinePanel && (
-            <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
+            <div className="mb-4 space-y-3 rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-400/20 dark:bg-gradient-to-br dark:from-slate-800 dark:to-slate-900 dark:ring-1 dark:ring-white/5">
               <div className="flex items-center justify-between gap-3">
-                <div className="font-medium text-purple-900 flex items-center gap-2">
+                <div className="flex items-center gap-2 font-medium text-purple-900 dark:text-purple-200">
                   <Wand2 className="w-4 h-4" />
                   Refine with AI
                 </div>
@@ -1338,11 +1341,11 @@ export default function WritingReaderModal({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Section</label>
+                  <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-slate-300">Section</label>
                   <select
                     value={refineSection}
                     onChange={(e) => setRefineSection(e.target.value as 'draft' | 'summary' | 'outline' | 'chapter')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                   >
                     <option value="draft">Draft</option>
                     <option value="summary">Summary</option>
@@ -1352,11 +1355,11 @@ export default function WritingReaderModal({
                 </div>
                 {refineSection === 'chapter' && (
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Chapter</label>
+                    <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-slate-300">Chapter</label>
                     <select
                       value={refineChapterTitle}
                       onChange={(e) => setRefineChapterTitle(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                     >
                       {extractChapters.map((ch) => (
                         <option key={ch.title} value={ch.title}>
@@ -1367,44 +1370,44 @@ export default function WritingReaderModal({
                   </div>
                 )}
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Goal / instructions</label>
+                  <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-slate-300">Goal / instructions</label>
                   <input
                     type="text"
                     value={refineGoal}
                     onChange={(e) => setRefineGoal(e.target.value)}
                     placeholder="e.g., tighten prose, increase tension, add clearer headings, remove repetition"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                   />
                 </div>
               </div>
 
               <details>
-                <summary className="cursor-pointer text-sm text-purple-900">Preview prompt</summary>
-                <pre className="mt-2 bg-white border border-purple-200 rounded-md p-3 text-xs whitespace-pre-wrap font-mono max-h-60 overflow-auto">
+                <summary className="cursor-pointer text-sm text-purple-900 dark:text-purple-200">Preview prompt</summary>
+                <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded-md border border-purple-200 bg-white p-3 font-mono text-xs dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
                   {refinePrompt}
                 </pre>
               </details>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Paste AI revised text</label>
+                  <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-slate-300">Paste AI revised text</label>
                   <textarea
                     value={refineResult}
                     onChange={(e) => setRefineResult(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                     rows={6}
                     placeholder="Paste the revised output here..."
                   />
                 </div>
                 <div className="flex flex-col justify-between">
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-gray-600 dark:text-slate-400">
                     Apply will switch to Edit mode and insert/replace the relevant section.
                   </div>
                   <div className="flex items-center gap-2 justify-end">
                     <button
                       type="button"
                       onClick={() => setRefineResult('')}
-                      className="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                      className="rounded px-3 py-1.5 text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
                     >
                       Clear
                     </button>
@@ -1562,11 +1565,11 @@ export default function WritingReaderModal({
               </div>
             </div>
           ) : viewMode === 'formatted' ? (
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100">
               <ContentRenderer content={formattedContentForDisplay} deliverable={deliverable} />
             </div>
           ) : (
-            <pre className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm whitespace-pre-wrap font-mono">
+            <pre className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm whitespace-pre-wrap font-mono dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
               {rawContentForDisplay}
             </pre>
           )}
