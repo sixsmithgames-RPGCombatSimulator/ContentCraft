@@ -1268,33 +1268,37 @@ export default function ManualGenerator() {
       : STAGES.length - 1;
     const terminalStage = terminalStageIndex >= 0 ? STAGES[terminalStageIndex] : undefined;
     const currentRunStage = getCurrentWorkflowStageIdentity(workflowType, terminalStage);
-    const currentAttemptId = currentRunStage
-      ? getStageAttempt(workflowRunState, currentRunStage.stageKey)?.attemptId
-      : undefined;
 
     if ((_sessionStatus === 'error' || error) && currentRunStage && error) {
-      setWorkflowRunState((prev) => markStageError(prev, currentRunStage.stageKey, currentRunStage.stageLabel, error, {
-        attemptId: currentAttemptId,
-      }));
+      setWorkflowRunState((prev) => {
+        const currentAttemptId = currentRunStage ? getStageAttempt(prev, currentRunStage.stageKey)?.attemptId : undefined;
+        return markStageError(prev, currentRunStage.stageKey, currentRunStage.stageLabel, error, {
+          attemptId: currentAttemptId,
+        });
+      });
       return;
     }
 
     if (_sessionStatus === 'awaiting_user_decisions' && currentRunStage) {
-      setWorkflowRunState((prev) => markRunAwaitingUserDecisions(prev, currentRunStage.stageKey, currentRunStage.stageLabel, {
-        attemptId: currentAttemptId,
-      }));
+      setWorkflowRunState((prev) => {
+        const currentAttemptId = currentRunStage ? getStageAttempt(prev, currentRunStage.stageKey)?.attemptId : undefined;
+        return markRunAwaitingUserDecisions(prev, currentRunStage.stageKey, currentRunStage.stageLabel, {
+          attemptId: currentAttemptId,
+        });
+      });
       return;
     }
 
     if ((_sessionStatus === 'complete' || isComplete) && currentRunStage) {
       setWorkflowRunState((prev) => {
+        const currentAttemptId = currentRunStage ? getStageAttempt(prev, currentRunStage.stageKey)?.attemptId : undefined;
         const accepted = markStageAccepted(prev, currentRunStage.stageKey, currentRunStage.stageLabel, {
           attemptId: currentAttemptId,
         });
         return markRunComplete(accepted);
       });
     }
-  }, [config, _sessionStatus, error, isComplete, currentStageIndex, STAGES, workflowRunState]);
+  }, [config, _sessionStatus, error, isComplete, currentStageIndex, STAGES]);
 
   useEffect(() => {
     if (!config) {
