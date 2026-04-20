@@ -14,6 +14,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useMemo,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
@@ -310,34 +311,61 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
     saveProviderConfig(config);
   }, []);
 
+  const contextValue = useMemo(
+    () => ({
+      isPanelOpen,
+      togglePanel,
+      openPanel,
+      closePanel,
+      workflowContext,
+      setWorkflowContext,
+      applyChanges,
+      registerApplyChanges,
+      submitPipelineResponse,
+      registerSubmitPipelineResponse,
+      workflowStageFailureHandler,
+      registerWorkflowStageFailureHandler,
+      workflowRunStateDispatcher,
+      registerWorkflowRunStateDispatcher,
+      prepareWorkflowStageRequest,
+      registerPrepareWorkflowStageRequest,
+      messages,
+      addMessage,
+      clearMessages,
+      providerConfig,
+      setProviderConfig: handleSetProviderConfig,
+      assistMode,
+      setAssistMode,
+    }),
+    [
+      isPanelOpen,
+      togglePanel,
+      openPanel,
+      closePanel,
+      workflowContext,
+      setWorkflowContext,
+      applyChanges,
+      registerApplyChanges,
+      submitPipelineResponse,
+      registerSubmitPipelineResponse,
+      workflowStageFailureHandler,
+      registerWorkflowStageFailureHandler,
+      workflowRunStateDispatcher,
+      registerWorkflowRunStateDispatcher,
+      prepareWorkflowStageRequest,
+      registerPrepareWorkflowStageRequest,
+      messages,
+      addMessage,
+      clearMessages,
+      providerConfig,
+      handleSetProviderConfig,
+      assistMode,
+      setAssistMode,
+    ]
+  );
+
   return (
-    <AiAssistantContext.Provider
-      value={{
-        isPanelOpen,
-        togglePanel,
-        openPanel,
-        closePanel,
-        workflowContext,
-        setWorkflowContext,
-        applyChanges,
-        registerApplyChanges,
-        submitPipelineResponse,
-        registerSubmitPipelineResponse,
-        workflowStageFailureHandler,
-        registerWorkflowStageFailureHandler,
-        workflowRunStateDispatcher,
-        registerWorkflowRunStateDispatcher,
-        prepareWorkflowStageRequest,
-        registerPrepareWorkflowStageRequest,
-        messages,
-        addMessage,
-        clearMessages,
-        providerConfig,
-        setProviderConfig: handleSetProviderConfig,
-        assistMode,
-        setAssistMode,
-      }}
-    >
+    <AiAssistantContext.Provider value={contextValue}>
       {children}
     </AiAssistantContext.Provider>
   );
