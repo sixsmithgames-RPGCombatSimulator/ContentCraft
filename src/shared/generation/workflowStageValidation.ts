@@ -163,6 +163,14 @@ export function validateWorkflowStageContractPayload(
       continue;
     }
 
+    if (rule.type === 'string_or_object') {
+      const isObject = typeof value === 'object' && value !== null && !Array.isArray(value);
+      if (typeof value !== 'string' && !isObject) {
+        return { ok: false, error: `Field ${field} must be a string or object.` };
+      }
+      continue;
+    }
+
     if (rule.type === 'string' && typeof value !== 'string') {
       return { ok: false, error: `Field ${field} must be a string.` };
     }

@@ -262,7 +262,9 @@ function extractAttributes(text: string): ExtractedAttribute[] {
     const bornMatch = trimmed.match(/\bborn in\s+([^,.;]+(?:\s+of\s+[^,.;]+)?)/i);
     if (bornMatch?.[1]) pushAttribute(attributes, 'born_in', bornMatch[1], trimmed);
 
-    const fromMatch = trimmed.match(/\bfrom\s+([^,.;]+(?:\s+of\s+[^,.;]+)?)/i);
+    // Only match "from" in birthplace-specific contexts (hails/comes/originates/traveled/arrived from)
+    // Exclude generic usage like "from a perspective" or "from X to Y"
+    const fromMatch = trimmed.match(/\b(?:hails?|comes?|came|originat(?:es?|ed)|travel(?:ed|s)?|arrived?)\s+from\s+([^,.;]+(?:\s+of\s+[^,.;]+)?)/i);
     if (fromMatch?.[1]) pushAttribute(attributes, 'born_in', fromMatch[1], trimmed);
 
     const ageMatch = trimmed.match(/\b(\d{1,3})\s*years?\s+old\b/i);

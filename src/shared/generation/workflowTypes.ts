@@ -55,7 +55,7 @@ export type StageFieldValidationPolicy =
   | 'may_be_empty'
   | 'non_empty_if_present';
 
-export type StageValueType = 'array' | 'object' | 'string' | 'number' | 'boolean';
+export type StageValueType = 'array' | 'object' | 'string' | 'number' | 'boolean' | 'string_or_object';
 
 export interface StageFieldRule {
   policy: StageFieldValidationPolicy;

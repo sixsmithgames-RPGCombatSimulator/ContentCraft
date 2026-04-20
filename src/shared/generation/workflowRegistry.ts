@@ -541,7 +541,8 @@ const STAGE_DEFINITIONS: Record<string, StageDefinition> = {
       outputAllowedKeys: ['name', 'item_type', 'item_subtype', 'rarity', 'attunement', 'description', 'appearance', 'weight', 'value'],
       requiredKeys: ['name', 'item_type', 'rarity', 'attunement', 'description', 'appearance'],
       fieldRules: {
-        attunement: { policy: 'required', type: 'object' },
+        // Accept both the newer object shape and legacy string values like "Required".
+        attunement: { policy: 'required', type: 'string_or_object' },
       },
     },
   },
