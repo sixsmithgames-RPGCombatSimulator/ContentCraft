@@ -15,6 +15,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  useRef,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
@@ -258,11 +259,12 @@ function saveProviderConfig(config: AiProviderConfig) {
 export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [workflowContext, setWorkflowContext] = useState<AiAssistantWorkflowContext | null>(null);
-  const [applyChanges, setApplyChanges] = useState<ApplyChangesCallback | null>(null);
-  const [submitPipelineResponse, setSubmitPipelineResponse] = useState<SubmitPipelineResponseCallback | null>(null);
-  const [workflowStageFailureHandler, setWorkflowStageFailureHandler] = useState<WorkflowStageFailureCallback | null>(null);
-  const [workflowRunStateDispatcher, setWorkflowRunStateDispatcherState] = useState<WorkflowRunStateDispatcher | null>(null);
-  const [prepareWorkflowStageRequest, setPrepareWorkflowStageRequest] = useState<PrepareWorkflowStageRequestCallback | null>(null);
+  // Use refs for callback storage to avoid re-rendering context consumers when callbacks change
+  const applyChangesRef = useRef<ApplyChangesCallback | null>(null);
+  const submitPipelineResponseRef = useRef<SubmitPipelineResponseCallback | null>(null);
+  const workflowStageFailureHandlerRef = useRef<WorkflowStageFailureCallback | null>(null);
+  const workflowRunStateDispatcherRef = useRef<WorkflowRunStateDispatcher | null>(null);
+  const prepareWorkflowStageRequestRef = useRef<PrepareWorkflowStageRequestCallback | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [providerConfig, setProviderConfigState] = useState<AiProviderConfig>(loadProviderConfig);
   const [assistMode, setAssistMode] = useState<AssistMode>(null);
@@ -272,24 +274,23 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
   const closePanel = useCallback(() => setIsPanelOpen(false), []);
 
   const registerApplyChanges = useCallback((cb: ApplyChangesCallback | null) => {
-    // Wrap in a function to avoid React treating it as a state updater
-    setApplyChanges(() => cb);
+    applyChangesRef.current = cb;
   }, []);
 
   const registerSubmitPipelineResponse = useCallback((cb: SubmitPipelineResponseCallback | null) => {
-    setSubmitPipelineResponse(() => cb);
+    submitPipelineResponseRef.current = cb;
   }, []);
 
   const registerWorkflowStageFailureHandler = useCallback((cb: WorkflowStageFailureCallback | null) => {
-    setWorkflowStageFailureHandler(() => cb);
+    workflowStageFailureHandlerRef.current = cb;
   }, []);
 
   const registerWorkflowRunStateDispatcher = useCallback((cb: WorkflowRunStateDispatcher | null) => {
-    setWorkflowRunStateDispatcherState(() => cb);
+    workflowRunStateDispatcherRef.current = cb;
   }, []);
 
   const registerPrepareWorkflowStageRequest = useCallback((cb: PrepareWorkflowStageRequestCallback | null) => {
-    setPrepareWorkflowStageRequest(() => cb);
+    prepareWorkflowStageRequestRef.current = cb;
   }, []);
 
   const addMessage = useCallback(
@@ -319,15 +320,16 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
       closePanel,
       workflowContext,
       setWorkflowContext,
-      applyChanges,
+      // Read refs directly - they'll always be current, but won't trigger re-renders when changed
+      applyChanges: applyChangesRef.current,
       registerApplyChanges,
-      submitPipelineResponse,
+      submitPipelineResponse: submitPipelineResponseRef.current,
       registerSubmitPipelineResponse,
-      workflowStageFailureHandler,
+      workflowStageFailureHandler: workflowStageFailureHandlerRef.current,
       registerWorkflowStageFailureHandler,
-      workflowRunStateDispatcher,
+      workflowRunStateDispatcher: workflowRunStateDispatcherRef.current,
       registerWorkflowRunStateDispatcher,
-      prepareWorkflowStageRequest,
+      prepareWorkflowStageRequest: prepareWorkflowStageRequestRef.current,
       registerPrepareWorkflowStageRequest,
       messages,
       addMessage,
@@ -338,21 +340,17 @@ export function AiAssistantProvider({ children }: { children: ReactNode }) {
       setAssistMode,
     }),
     [
+      // Callback refs NOT included - they change frequently but consumers get latest via .current
       isPanelOpen,
       togglePanel,
       openPanel,
       closePanel,
       workflowContext,
       setWorkflowContext,
-      applyChanges,
       registerApplyChanges,
-      submitPipelineResponse,
       registerSubmitPipelineResponse,
-      workflowStageFailureHandler,
       registerWorkflowStageFailureHandler,
-      workflowRunStateDispatcher,
       registerWorkflowRunStateDispatcher,
-      prepareWorkflowStageRequest,
       registerPrepareWorkflowStageRequest,
       messages,
       addMessage,
