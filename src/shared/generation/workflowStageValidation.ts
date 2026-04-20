@@ -141,12 +141,17 @@ export function validateWorkflowStageContractPayload(
 
   const fieldRules = contract.fieldRules ?? {};
   for (const [field, rule] of Object.entries(fieldRules)) {
-    const value = obj[field];
+    let value = obj[field];
     if (value === undefined || value === null) {
       continue;
     }
 
     if (rule.type === 'array') {
+      // Auto-normalize: convert string to single-element array
+      if (typeof value === 'string' && value.trim().length > 0) {
+        obj[field] = [value.trim()];
+        value = obj[field];
+      }
       if (!Array.isArray(value)) {
         return { ok: false, error: `Field ${field} must be an array.` };
       }
