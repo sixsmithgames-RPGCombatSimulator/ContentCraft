@@ -9,6 +9,8 @@ export interface Project {
   description: string;
   type: ProjectType;
   status: ProjectStatus;
+  productKey?: 'contentcraft' | 'gamemastercraft' | 'sagacraft';
+  workspaceType?: string;
   createdAt: Date;
   updatedAt: Date;
 }

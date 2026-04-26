@@ -8,9 +8,11 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { ProjectType, ProjectStatus } from '../types';
 import { projectApi } from '../services/api';
+import { getProductConfig } from '../config/products';
 
 export const CreateProject: React.FC = () => {
   const navigate = useNavigate();
+  const product = getProductConfig();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -24,7 +26,7 @@ export const CreateProject: React.FC = () => {
     e.preventDefault();
 
     if (!formData.title.trim()) {
-      setError('Project title is required');
+      setError(`${product.workspaceNoun} title is required`);
       return;
     }
 
@@ -32,15 +34,22 @@ export const CreateProject: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await projectApi.create(formData);
+      // Add product context to the form data
+      const projectData = {
+        ...formData,
+        productKey: product.key,
+        workspaceType: product.defaultWorkspaceType,
+      };
+
+      const response = await projectApi.create(projectData);
 
       if (response.success && response.data) {
         navigate(`/projects/${response.data.id}`);
       } else {
-        setError(response.error || 'Failed to create project');
+        setError(response.error || `Failed to create ${product.workspaceNoun.toLowerCase()}`);
       }
     } catch (err) {
-      setError('Failed to create project');
+      setError(`Failed to create ${product.workspaceNoun.toLowerCase()}`);
       console.error('Error creating project:', err);
     } finally {
       setLoading(false);
@@ -63,8 +72,8 @@ export const CreateProject: React.FC = () => {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Create New Project</h1>
-          <p className="text-gray-600 mt-2">Start a new content creation project</p>
+          <h1 className="text-3xl font-bold text-gray-900">{product.primaryCta}</h1>
+          <p className="text-gray-600 mt-2">Start a new content creation {product.workspaceNoun.toLowerCase()}</p>
         </div>
       </div>
 
@@ -77,7 +86,7 @@ export const CreateProject: React.FC = () => {
       <form onSubmit={handleSubmit} className="card space-y-6">
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-            Project Title *
+            {product.workspaceNoun} Title *
           </label>
           <input
             type="text"
@@ -85,14 +94,14 @@ export const CreateProject: React.FC = () => {
             value={formData.title}
             onChange={(e) => handleChange('title', e.target.value)}
             className="input"
-            placeholder="Enter your project title..."
+            placeholder={`Enter your ${product.workspaceNoun.toLowerCase()} title...`}
             required
           />
         </div>
 
         <div>
           <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-2">
-            Project Type *
+            {product.workspaceNoun} Type *
           </label>
           <select
             id="type"
@@ -120,7 +129,7 @@ export const CreateProject: React.FC = () => {
             onChange={(e) => handleChange('description', e.target.value)}
             className="input"
             rows={4}
-            placeholder="Describe your project (optional)..."
+            placeholder={`Describe your ${product.workspaceNoun.toLowerCase()} (optional)...`}
           />
         </div>
 
@@ -154,7 +163,7 @@ export const CreateProject: React.FC = () => {
             className="btn-primary"
             disabled={loading}
           >
-            {loading ? 'Creating...' : 'Create Project'}
+            {loading ? 'Creating...' : product.primaryCta}
           </button>
         </div>
       </form>

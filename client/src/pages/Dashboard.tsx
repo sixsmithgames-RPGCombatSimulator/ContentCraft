@@ -9,6 +9,7 @@ import { PlusIcon, Search, Filter, BookOpen, ArrowUpRight, Layers, ClipboardCopy
 import { ProjectCard } from '../components/ProjectCard';
 import { Project, ProjectType } from '../types';
 import { projectApi } from '../services/api';
+import { getProductConfig } from '../config/products';
 
 export const Dashboard: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -16,6 +17,7 @@ export const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<ProjectType | 'all'>('all');
+  const product = getProductConfig();
 
   useEffect(() => {
     loadProjects();
@@ -84,8 +86,8 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Your Projects</h1>
-        <p className="text-gray-600 mt-2">Manage and organize your content creation projects</p>
+        <h1 className="text-3xl font-bold text-gray-900">Your {product.workspaceNounPlural}</h1>
+        <p className="text-gray-600 mt-2">Manage and organize your content creation {product.workspaceNounPlural.toLowerCase()}</p>
       </div>
 
       {projects.length > 0 && (
@@ -95,7 +97,7 @@ export const Dashboard: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search projects..."
+                placeholder={`Search ${product.workspaceNounPlural.toLowerCase()}...`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="input pl-10"
@@ -132,9 +134,9 @@ export const Dashboard: React.FC = () => {
                 <PlusIcon className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">New Project</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">New {product.workspaceNoun}</h3>
                 <p className="mt-1 max-w-[16rem] text-sm leading-relaxed text-gray-600 dark:text-slate-400">
-                  Start something new without leaving your project overview.
+                  Start something new without leaving your {product.workspaceNoun.toLowerCase()} overview.
                 </p>
               </div>
             </div>
@@ -150,9 +152,9 @@ export const Dashboard: React.FC = () => {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary-50 mb-5">
                   <BookOpen className="w-8 h-8 text-primary-600" />
                 </div>
-                <h3 className="text-2xl font-semibold text-gray-900 mb-3">Welcome to ContentCraft</h3>
+                <h3 className="text-2xl font-semibold text-gray-900 mb-3">Welcome to {product.name}</h3>
                 <p className="text-gray-500 text-base leading-relaxed">
-                  Organize your writing projects and generate AI-ready prompts. Create your first project from the tile below to get started.
+                  {product.emptyStateBody}
                 </p>
               </div>
 
@@ -168,7 +170,7 @@ export const Dashboard: React.FC = () => {
                     <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80 text-primary-600 shadow-sm dark:bg-slate-800/80 dark:text-blue-300">
                       <PlusIcon className="w-5 h-5" />
                     </div>
-                    <h4 className="mt-6 font-semibold text-gray-900 dark:text-slate-100">New Project</h4>
+                    <h4 className="mt-6 font-semibold text-gray-900 dark:text-slate-100">New {product.workspaceNoun}</h4>
                     <p className="mt-1 text-sm leading-relaxed text-gray-600 dark:text-slate-400">
                       Start a fresh workspace for your next story, campaign, or research build.
                     </p>
@@ -193,7 +195,7 @@ export const Dashboard: React.FC = () => {
             </div>
           ) : (
             <div className="text-center">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No projects match your filters</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No {product.workspaceNounPlural.toLowerCase()} match your filters</h3>
               <p className="text-gray-600">Try adjusting your search or filter criteria</p>
             </div>
           )}

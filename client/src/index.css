@@ -1,3 +1,5 @@
+/* Tailwind CSS directives - processed by PostCSS */
+/* stylelint-disable */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -93,6 +95,88 @@
   .input {
     @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-slate-900 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-400;
   }
+}
+
+/* Product-specific theme classes */
+.theme-contentcraft {
+  --brand-primary: 37 99 235; /* blue-600 */
+}
+
+.theme-gamemastercraft {
+  --brand-primary: 147 51 234; /* purple-600 */
+}
+
+.theme-sagacraft {
+  --brand-primary: 16 185 129; /* emerald-600 */
+}
+
+/* Apply brand primary color to primary elements */
+.theme-contentcraft .btn-primary {
+  background-color: rgb(var(--brand-primary));
+}
+
+.theme-contentcraft .btn-primary:hover {
+  background-color: rgb(29 78 216); /* blue-700 */
+}
+
+.theme-gamemastercraft .btn-primary {
+  background-color: rgb(var(--brand-primary));
+}
+
+.theme-gamemastercraft .btn-primary:hover {
+  background-color: rgb(126 34 206); /* purple-700 */
+}
+
+.theme-sagacraft .btn-primary {
+  background-color: rgb(var(--brand-primary));
+}
+
+.theme-sagacraft .btn-primary:hover {
+  background-color: rgb(5 150 105); /* emerald-700 */
+}
+
+/* Update primary color utilities for each theme */
+.theme-contentcraft .text-primary-600 { color: rgb(var(--brand-primary)); }
+.theme-contentcraft .bg-primary-600 { background-color: rgb(var(--brand-primary)); }
+.theme-contentcraft .border-primary-600 { border-color: rgb(var(--brand-primary)); }
+.theme-contentcraft .text-primary-700 { color: rgb(29 78 216); }
+.theme-contentcraft .bg-primary-700 { background-color: rgb(29 78 216); }
+.theme-contentcraft .border-primary-700 { border-color: rgb(29 78 216); }
+.theme-contentcraft .text-primary-500 { color: rgb(59 130 246); }
+.theme-contentcraft .bg-primary-500 { background-color: rgb(59 130 246); }
+.theme-contentcraft .border-primary-500 { border-color: rgb(59 130 246); }
+
+.theme-gamemastercraft .text-primary-600 { color: rgb(var(--brand-primary)); }
+.theme-gamemastercraft .bg-primary-600 { background-color: rgb(var(--brand-primary)); }
+.theme-gamemastercraft .border-primary-600 { border-color: rgb(var(--brand-primary)); }
+.theme-gamemastercraft .text-primary-700 { color: rgb(126 34 206); }
+.theme-gamemastercraft .bg-primary-700 { background-color: rgb(126 34 206); }
+.theme-gamemastercraft .border-primary-700 { border-color: rgb(126 34 206); }
+.theme-gamemastercraft .text-primary-500 { color: rgb(168 85 247); }
+.theme-gamemastercraft .bg-primary-500 { background-color: rgb(168 85 247); }
+.theme-gamemastercraft .border-primary-500 { border-color: rgb(168 85 247); }
+
+.theme-sagacraft .text-primary-600 { color: rgb(var(--brand-primary)); }
+.theme-sagacraft .bg-primary-600 { background-color: rgb(var(--brand-primary)); }
+.theme-sagacraft .border-primary-600 { border-color: rgb(var(--brand-primary)); }
+.theme-sagacraft .text-primary-700 { color: rgb(5 150 105); }
+.theme-sagacraft .bg-primary-700 { background-color: rgb(5 150 105); }
+.theme-sagacraft .border-primary-700 { border-color: rgb(5 150 105); }
+.theme-sagacraft .text-primary-500 { color: rgb(16 185 129); }
+.theme-sagacraft .bg-primary-500 { background-color: rgb(16 185 129); }
+.theme-sagacraft .border-primary-500 { border-color: rgb(16 185 129); }
+
+/* Focus ring colors */
+.theme-contentcraft .input:focus {
+  --tw-ring-color: rgb(var(--brand-primary));
+}
+
+.theme-gamemastercraft .input:focus {
+  --tw-ring-color: rgb(var(--brand-primary));
+}
+
+.theme-sagacraft .input:focus {
+  --tw-ring-color: rgb(var(--brand-primary));
 }
 
 @layer utilities {

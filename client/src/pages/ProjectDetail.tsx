@@ -937,34 +937,36 @@ export const ProjectDetail: React.FC = () => {
         <div
           className={`rounded-lg border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${
             canonReport?.summary.reviewRequired
-              ? 'border-amber-200 bg-amber-50'
-              : 'border-slate-200 bg-slate-50'
+              ? 'border-amber-200 bg-amber-50 dark:border-amber-400/30 dark:bg-amber-500/10'
+              : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/70'
           }`}
         >
           <div className="flex items-start gap-3">
             <div
               className={`mt-0.5 rounded-full p-2 ${
-                canonReport?.summary.reviewRequired ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'
+                canonReport?.summary.reviewRequired
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-200'
+                  : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
               }`}
             >
               <AlertCircle className="w-4 h-4" />
             </div>
             <div>
-              <div className="font-semibold text-gray-900">Canon Check</div>
-              <div className="text-sm text-gray-700">{getWritingCanonProjectSummary(canonReport)}</div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="font-semibold text-gray-900 dark:text-slate-100">Canon Check</div>
+              <div className="text-sm text-gray-700 dark:text-slate-200">{getWritingCanonProjectSummary(canonReport)}</div>
+              <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                 {canonReport
                   ? `Scope: ${canonReport.searchedScope}${canonReport.warningMessage ? ` • ${canonReport.warningMessage}` : ''}`
                   : 'Subtle contradiction checks run against linked canon while you write.'}
               </div>
-              {canonCheckError && <div className="text-xs text-red-600 mt-1">{canonCheckError}</div>}
+              {canonCheckError && <div className="mt-1 text-xs text-red-600 dark:text-red-300">{canonCheckError}</div>}
             </div>
           </div>
           <button
             type="button"
             onClick={() => void scanCanonConsistency(contentBlocks)}
             disabled={canonCheckLoading}
-            className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
           >
             <RotateCw className={`w-4 h-4 ${canonCheckLoading ? 'animate-spin' : ''}`} />
             {canonCheckLoading ? 'Checking…' : 'Recheck'}

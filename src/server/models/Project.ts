@@ -21,6 +21,8 @@ interface ProjectDocument {
   description: string;
   type: string;
   status: string;
+  productKey?: string;
+  workspaceType?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,6 +38,8 @@ function mapMongoDocToProject(doc: ProjectDocument): Project {
     description: doc.description || '',
     type: doc.type as ProjectType,
     status: doc.status as ProjectStatus,
+    productKey: doc.productKey as 'contentcraft' | 'gamemastercraft' | 'sagacraft',
+    workspaceType: doc.workspaceType,
     createdAt: new Date(doc.createdAt),
     updatedAt: new Date(doc.updatedAt)
   };
@@ -52,6 +56,8 @@ interface ProjectRow {
   description: string;
   type: string;
   status: string;
+  product_key?: string;
+  workspace_type?: string;
   created_at: string;
   updated_at: string;
 }
@@ -63,6 +69,8 @@ function mapSqliteRowToProject(row: ProjectRow): Project {
     description: row.description || '',
     type: row.type as ProjectType,
     status: row.status as ProjectStatus,
+    productKey: row.product_key as 'contentcraft' | 'gamemastercraft' | 'sagacraft',
+    workspaceType: row.workspace_type,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at)
   };
@@ -86,6 +94,8 @@ export class ProjectModel {
         description: data.description ?? '',
         type: data.type,
         status: data.status,
+        productKey: data.productKey || 'contentcraft', // Fallback for existing projects
+        workspaceType: data.workspaceType || 'creative_project', // Fallback for existing projects
         createdAt: now,
         updatedAt: now
       };
@@ -94,9 +104,9 @@ export class ProjectModel {
     }
 
     await dbRun(
-      `INSERT INTO projects (id, user_id, title, description, type, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, userId, data.title, data.description ?? '', data.type, data.status, now, now]
+      `INSERT INTO projects (id, user_id, title, description, type, status, product_key, workspace_type, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, userId, data.title, data.description ?? '', data.type, data.status, data.productKey || 'contentcraft', data.workspaceType || 'creative_project', now, now] // Fallback for existing projects
     );
     const row = await dbGet('SELECT * FROM projects WHERE id = ?', [id]);
     return mapSqliteRowToProject(row);
@@ -164,6 +174,8 @@ export class ProjectModel {
       if (data.description !== undefined) $set.description = data.description;
       if (data.type !== undefined) $set.type = data.type;
       if (data.status !== undefined) $set.status = data.status;
+      if (data.productKey !== undefined) $set.productKey = data.productKey;
+      if (data.workspaceType !== undefined) $set.workspaceType = data.workspaceType;
 
       const result = await getMongoCollection().findOneAndUpdate(
         { _id: id, userId },
@@ -180,6 +192,8 @@ export class ProjectModel {
     if (data.description !== undefined) { fields.push('description = ?'); values.push(data.description); }
     if (data.type !== undefined) { fields.push('type = ?'); values.push(data.type); }
     if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status); }
+    if (data.productKey !== undefined) { fields.push('product_key = ?'); values.push(data.productKey); }
+    if (data.workspaceType !== undefined) { fields.push('workspace_type = ?'); values.push(data.workspaceType); }
 
     values.push(id, userId);
     await dbRun(

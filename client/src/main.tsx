@@ -8,6 +8,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { ThemeProvider } from './contexts/ThemeContext.tsx'
+import { updateProductSEO } from './utils/seo'
+
+// Update SEO metadata based on product configuration
+updateProductSEO()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

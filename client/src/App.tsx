@@ -15,12 +15,15 @@ import ManualGenerator from './pages/ManualGenerator';
 import CopyrightFooter from './components/layout/CopyrightFooter';
 import { AiAssistantProvider } from './contexts/AiAssistantContext';
 import AiAssistantPanel from './components/ai-assistant/AiAssistantPanel';
+import { getProductConfig } from './config/products';
 
 function App() {
+  const product = getProductConfig();
+  
   return (
     <Router>
       <AiAssistantProvider>
-        <div className="min-h-screen bg-gray-50 text-gray-900 transition-colors dark:bg-slate-950 dark:text-slate-100 flex flex-col">
+        <div className={`min-h-screen bg-gray-50 text-gray-900 transition-colors dark:bg-slate-950 dark:text-slate-100 flex flex-col ${product.themeClass}`}>
           <Navbar />
           <main className="container mx-auto px-4 py-8 flex-1">
             <Routes>

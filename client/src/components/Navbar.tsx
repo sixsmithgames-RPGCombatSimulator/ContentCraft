@@ -8,10 +8,12 @@ import { Link, useLocation } from 'react-router-dom';
 import { HomeIcon, BookOpenIcon, MoonIcon, SunIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useTheme } from '../contexts/ThemeContext';
+import { getProductConfig } from '../config/products';
 
 export const Navbar: React.FC = () => {
   const location = useLocation();
   const { isDark, toggleTheme } = useTheme();
+  const product = getProductConfig();
 
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm transition-colors dark:bg-slate-900 dark:border-slate-800">
@@ -20,7 +22,7 @@ export const Navbar: React.FC = () => {
           <div className="flex items-center space-x-8">
             <Link to="/" className="flex items-center space-x-2">
               <BookOpenIcon className="w-8 h-8 text-primary-600" />
-              <span className="text-xl font-bold text-gray-900 dark:text-slate-100">ContentCraft</span>
+              <span className="text-xl font-bold text-gray-900 dark:text-slate-100">{product.name}</span>
             </Link>
 
             <div className="flex space-x-4">
@@ -34,7 +36,7 @@ export const Navbar: React.FC = () => {
                 )}
               >
                 <HomeIcon className="w-4 h-4" />
-                <span>Dashboard</span>
+                <span>{product.navigationLabels.dashboard}</span>
               </Link>
             </div>
           </div>
