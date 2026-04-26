@@ -26,7 +26,39 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+// Support multiple CORS origins for multi-brand deployment
+const getDefaultCorsOrigin = () => {
+  const vercelUrl = process.env.VERCEL_URL;
+  const corsOrigin = process.env.CORS_ORIGIN;
+  
+  console.log(`🔍 CORS Debug - VERCEL_URL: ${vercelUrl}, CORS_ORIGIN: ${corsOrigin}`);
+  
+  // If CORS_ORIGIN is explicitly set, use it (for individual Vercel projects)
+  if (corsOrigin) {
+    console.log(`✅ Using explicit CORS_ORIGIN: ${corsOrigin}`);
+    return corsOrigin;
+  }
+  
+  // Auto-detect based on VERCEL_URL for multi-brand setup
+  if (vercelUrl) {
+    if (vercelUrl.includes('contentcraft')) {
+      console.log(`✅ Auto-detected ContentCraft CORS origin`);
+      return 'https://contentcraft.sixsmithgames.com';
+    } else if (vercelUrl.includes('gmcraft')) {
+      console.log(`✅ Auto-detected GameMasterCraft CORS origin`);
+      return 'https://gmcraft.sixsmithgames.com';
+    } else if (vercelUrl.includes('sagacraft')) {
+      console.log(`✅ Auto-detected SagaCraft CORS origin`);
+      return 'https://sagacraft.sixsmithgames.com';
+    }
+  }
+  
+  // Fallback to localhost for development
+  console.log(`⚠️ Using fallback CORS origin: http://localhost:5173`);
+  return 'http://localhost:5173';
+};
+
+const CORS_ORIGIN = getDefaultCorsOrigin();
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Configure Helmet for production
