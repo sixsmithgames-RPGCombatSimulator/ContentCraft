@@ -18,7 +18,7 @@ import { mapAndValidateNpc } from '../services/npcSchemaMapper.js';
 import { validateMonsterStrict, isMonsterContent } from '../validation/monsterValidator.js';
 import type { GeneratedContentDocument } from '../models/GeneratedContent.js';
 import type { CanonEntity } from '../models/CanonEntity.js';
-import { clerkAuthMiddleware, AuthRequest } from '../middleware/clerkAuth.js';
+import { clerkAuthFixedMiddleware, AuthRequest } from '../middleware/clerkAuthFixed.js';
 import { resolveGeneratedContentType } from '../../shared/generation/generatedContentType.js';
 import type { WritingCanonProjectReport } from '../../shared/canon/writingCanon.js';
 import { buildWritingCanonProjectReport } from '../services/writingCanonConsistency.js';
@@ -26,7 +26,7 @@ import { buildWritingCanonProjectReport } from '../services/writingCanonConsiste
 export const contentRouter = Router();
 
 // Apply auth middleware to all routes
-contentRouter.use(clerkAuthMiddleware);
+contentRouter.use(clerkAuthFixedMiddleware);
 
 async function loadCanonEntitiesForConsistency(userId: string, projectId: string): Promise<{
   entities: CanonEntity[];

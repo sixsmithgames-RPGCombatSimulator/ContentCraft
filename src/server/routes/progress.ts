@@ -7,7 +7,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { clerkAuthMiddleware, AuthRequest } from '../middleware/clerkAuth.js';
+import { clerkAuthFixedMiddleware, AuthRequest } from '../middleware/clerkAuthFixed.js';
 import { getWorkflowDefinition } from '../../shared/generation/workflowRegistry.js';
 import { resolveWorkflowContentType } from '../../shared/generation/workflowContentType.js';
 
@@ -17,7 +17,7 @@ const __dirname = path.dirname(__filename);
 export const progressRouter = Router();
 
 // Apply auth middleware to all routes
-progressRouter.use(clerkAuthMiddleware);
+progressRouter.use(clerkAuthFixedMiddleware);
 
 type ProgressEntryLike = Record<string, unknown>;
 

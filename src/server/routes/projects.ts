@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { ProjectModel } from '../models/index.js';
 import { ProjectSchema, PaginationSchema } from '../../shared/validators/index.js';
 import { APIResponse, PaginatedResponse, ProjectStatus } from '../../shared/types/index.js';
-import { clerkAuthMiddleware, AuthRequest } from '../middleware/clerkAuth.js';
+import { clerkAuthFixedMiddleware, AuthRequest } from '../middleware/clerkAuthFixed.js';
 
 export const projectRouter = Router();
 
@@ -54,7 +54,7 @@ function resolveProjectsErrorResponse(error: unknown, fallbackError: string): AP
 }
 
 // Apply Clerk auth middleware to all routes
-projectRouter.use(clerkAuthMiddleware);
+projectRouter.use(clerkAuthFixedMiddleware);
 
 projectRouter.get('/', async (req, res) => {
   try {
