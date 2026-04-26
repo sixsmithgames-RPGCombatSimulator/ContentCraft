@@ -11,10 +11,10 @@ import App from './App.tsx'
 import { ThemeProvider } from './contexts/ThemeContext.tsx'
 import { updateProductSEO } from './utils/seo'
 
-const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const clerkPublishableKey = import.meta.env.VITE_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 if (!clerkPublishableKey) {
-  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+  throw new Error("Missing VITE_PUBLIC_CLERK_PUBLISHABLE_KEY");
 }
 
 // Update SEO metadata based on product configuration

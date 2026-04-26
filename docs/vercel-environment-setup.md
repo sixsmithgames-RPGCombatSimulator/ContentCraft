@@ -7,7 +7,9 @@ Each product deployment needs its own Vercel project with specific environment v
 ### ContentCraft (contentcraft.sixsmithgames.com)
 ```bash
 NODE_ENV=production
-CORS_ORIGIN=https://contentcraft.sixsmithgames.com
+VITE_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+CORS_ORIGIN=https://contentcraft.sixsmithgames.com,https://gmcraft.sixsmithgames.com,https://sagacraft.sixsmithgames.com
 MONGODB_URI=mongodb+srv://[username]:[password]@cluster.mongodb.net/contentcraft
 DATABASE_URL=sqlite:./database.sqlite
 ```
@@ -15,7 +17,9 @@ DATABASE_URL=sqlite:./database.sqlite
 ### GameMasterCraft (gmcraft.sixsmithgames.com)
 ```bash
 NODE_ENV=production
-CORS_ORIGIN=https://gmcraft.sixsmithgames.com
+VITE_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+CORS_ORIGIN=https://contentcraft.sixsmithgames.com,https://gmcraft.sixsmithgames.com,https://sagacraft.sixsmithgames.com
 MONGODB_URI=mongodb+srv://[username]:[password]@cluster.mongodb.net/gmcraft
 DATABASE_URL=sqlite:./database.sqlite
 ```
@@ -23,7 +27,9 @@ DATABASE_URL=sqlite:./database.sqlite
 ### SagaCraft (sagacraft.sixsmithgames.com)
 ```bash
 NODE_ENV=production
-CORS_ORIGIN=https://sagacraft.sixsmithgames.com
+VITE_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+CORS_ORIGIN=https://contentcraft.sixsmithgames.com,https://gmcraft.sixsmithgames.com,https://sagacraft.sixsmithgames.com
 MONGODB_URI=mongodb+srv://[username]:[password]@cluster.mongodb.net/sagacraft
 DATABASE_URL=sqlite:./database.sqlite
 ```
