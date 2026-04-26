@@ -12,26 +12,23 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
   timeout: 10000,
 });
 
-// Add request interceptor for debugging and Clerk authentication
+type AuthOptions = {
+  token?: string | null;
+};
+
+function authHeaders(token?: string | null) {
+  return token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+}
+
+// Add request interceptor for debugging
 api.interceptors.request.use(
   (config) => {
     console.log('API Request:', config.method?.toUpperCase(), config.url);
-    
-    // Add Clerk session token to Authorization header
-    if (window.Clerk && window.Clerk.session) {
-      const token = window.Clerk.session.getToken();
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-        console.log('Added Clerk token to request');
-      }
-    }
-    
     return config;
   },
   (error) => {
@@ -53,8 +50,10 @@ api.interceptors.response.use(
 );
 
 export const projectApi = {
-  getAll: async (page = 1, limit = 20): Promise<PaginatedResponse<Project>> => {
-    const response = await api.get(`/projects?page=${page}&limit=${limit}`);
+  getAll: async ({ token }: AuthOptions = {}): Promise<PaginatedResponse<Project>> => {
+    const response = await api.get(`/projects?page=1&limit=20`, {
+      headers: authHeaders(token),
+    });
     return response.data;
   },
 

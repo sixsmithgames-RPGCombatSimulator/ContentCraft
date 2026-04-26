@@ -6,12 +6,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PlusIcon, Search, Filter, BookOpen, ArrowUpRight, Layers, ClipboardCopy } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
 import { ProjectCard } from '../components/ProjectCard';
 import { Project, ProjectType } from '../types';
 import { projectApi } from '../services/api';
 import { getProductConfig } from '../config/products';
 
 export const Dashboard: React.FC = () => {
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,13 +22,27 @@ export const Dashboard: React.FC = () => {
   const product = getProductConfig();
 
   useEffect(() => {
+    if (!isLoaded) return;
+
+    if (!isSignedIn) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+
     loadProjects();
-  }, []);
+  }, [isLoaded, isSignedIn, getToken]);
 
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const response = await projectApi.getAll();
+      const token = await getToken();
+
+      if (!token) {
+        throw new Error("Clerk loaded, user signed in, but no token was returned.");
+      }
+
+      const response = await projectApi.getAll({ token });
       if (response.success && response.data) {
         setProjects(response.data);
       } else {
