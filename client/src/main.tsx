@@ -17,10 +17,12 @@ if (!clerkPublishableKey) {
   throw new Error("Missing VITE_PUBLIC_CLERK_PUBLISHABLE_KEY");
 }
 
-// Update SEO metadata based on product configuration
-updateProductSEO()
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error('Root element not found');
+}
 
-createRoot(document.getElementById('root')!).render(
+createRoot(rootElement).render(
   <StrictMode>
     <ClerkProvider publishableKey={clerkPublishableKey}>
       <ThemeProvider>
@@ -29,3 +31,6 @@ createRoot(document.getElementById('root')!).render(
     </ClerkProvider>
   </StrictMode>,
 )
+
+// Update SEO metadata based on product configuration after DOM is ready
+updateProductSEO()
