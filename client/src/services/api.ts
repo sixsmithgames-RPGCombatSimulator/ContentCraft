@@ -18,10 +18,20 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// Add request interceptor for debugging
+// Add request interceptor for debugging and Clerk authentication
 api.interceptors.request.use(
   (config) => {
     console.log('API Request:', config.method?.toUpperCase(), config.url);
+    
+    // Add Clerk session token to Authorization header
+    if (window.Clerk && window.Clerk.session) {
+      const token = window.Clerk.session.getToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        console.log('Added Clerk token to request');
+      }
+    }
+    
     return config;
   },
   (error) => {
