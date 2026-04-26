@@ -8,12 +8,12 @@ import { nanoid } from 'nanoid';
 import { getRunsCollection, getArtifactsCollection } from '../config/mongo.js';
 import { createRun, getStageOrder, type StageName } from '../models/Run.js';
 import { Orchestrator } from '../orchestration/Orchestrator.js';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { clerkAuthMiddleware, AuthRequest } from '../middleware/clerkAuth.js';
 
 export const runsRouter = Router();
 
-// Apply auth middleware to all routes
-runsRouter.use(authMiddleware);
+// Apply Clerk auth middleware to all routes
+runsRouter.use(clerkAuthMiddleware);
 
 /**
  * POST /api/runs

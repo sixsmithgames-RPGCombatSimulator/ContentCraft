@@ -8,14 +8,14 @@ import multer from 'multer';
 import { createRequire } from 'module';
 import { logger } from '../utils/logger.js';
 import { parseHomebrewChunk, parseTextToEntry } from '../parsers/homebrewParser.js';
-import { authMiddleware } from '../middleware/auth.js';
+import { clerkAuthMiddleware } from '../middleware/clerkAuth.js';
 
 const require = createRequire(import.meta.url);
 
 export const homebrewRouter = Router();
 
 // Apply auth middleware to all routes
-homebrewRouter.use(authMiddleware);
+homebrewRouter.use(clerkAuthMiddleware);
 
 // Configure multer for file uploads
 const upload = multer({

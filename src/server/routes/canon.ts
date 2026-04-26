@@ -18,13 +18,13 @@ import { GeneratedContentDocument } from '../models/GeneratedContent.js';
 import { generateEmbedding, findTopKSimilar } from '../utils/embeddings.js';
 import { logger } from '../utils/logger.js';
 import { LibraryCollection, generateCollectionId } from '../models/LibraryCollection.js';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { clerkAuthMiddleware, AuthRequest } from '../middleware/clerkAuth.js';
 import { createProjectContentLibraryDraft, type ProjectContentLibraryDraft } from '../services/projectContentLibraryMapper.js';
 
 export const canonRouter = Router();
 
 // Apply auth middleware to all routes
-canonRouter.use(authMiddleware);
+canonRouter.use(clerkAuthMiddleware);
 
 const isPromotionDraft = (
   value: ReturnType<typeof createProjectContentLibraryDraft>,

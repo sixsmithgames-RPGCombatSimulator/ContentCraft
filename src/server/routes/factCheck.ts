@@ -8,12 +8,12 @@ import { getDb } from '../config/mongo.js';
 import type { CanonEntity } from '../models/CanonEntity.js';
 import fs from 'fs/promises';
 import path from 'path';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { clerkAuthMiddleware, AuthRequest } from '../middleware/clerkAuth.js';
 
 const router = Router();
 
 // Apply auth middleware to all routes
-router.use(authMiddleware);
+router.use(clerkAuthMiddleware);
 
 interface DuplicateGroup {
   text: string;

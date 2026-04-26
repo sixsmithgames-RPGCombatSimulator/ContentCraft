@@ -7,12 +7,12 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { nanoid } from 'nanoid';
 import { validateSchema } from '../middleware/validateSchema.js';
 import { getNpcRecordsCollection } from '../config/mongo.js';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { clerkAuthMiddleware, AuthRequest } from '../middleware/clerkAuth.js';
 
 export const npcRecordsRouter = Router();
 
 // Apply auth middleware to all routes
-npcRecordsRouter.use(authMiddleware);
+npcRecordsRouter.use(clerkAuthMiddleware);
 
 npcRecordsRouter.post('/', validateSchema('npc'), async (req: Request, res: Response, next: NextFunction) => {
   try {

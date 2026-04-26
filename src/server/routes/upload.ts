@@ -9,12 +9,12 @@ import { generateLibraryEntityId, type CanonEntity, type EntityType } from '../m
 import { generateChunkId, type CanonChunk } from '../models/CanonChunk.js';
 import { logger } from '../utils/logger.js';
 import { NpcValidationError, validateNpcStrict } from '../validation/npcValidator.js';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { clerkAuthMiddleware, AuthRequest } from '../middleware/clerkAuth.js';
 
 export const uploadRouter = Router();
 
-// Apply auth middleware to all routes
-uploadRouter.use(authMiddleware);
+// Apply Clerk auth middleware to all routes
+uploadRouter.use(clerkAuthMiddleware);
 
 const ALLOWED_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'npc',
