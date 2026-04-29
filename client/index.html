@@ -5,74 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ContentCraft - AI Content Creation</title>
-    <!-- Sixsmith Games Auth Guard -->
+    <!-- Product Detection for SEO/Meta -->
     <script>
       (function() {
-        // Skip Clerk auth guard for local development
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-          console.log('✓ Local development mode - Clerk auth guard bypassed');
-          return;
-        }
-
-        var PUBLISHABLE_KEY = 'pk_live_Y2xlcmsuc2l4c21pdGhnYW1lcy5jb20k';
-        var SIGN_IN_URL = 'https://www.sixsmithgames.com/sign-in?redirect_url=' + encodeURIComponent(window.location.href);
-        var PRICING_URL = 'https://www.sixsmithgames.com/pricing';
-        var DUMMY_EMAILS = ['sexsmith2005@gmail.com'];
-        var ADMIN_EMAILS = ('' || '').split(',').map(function(e){ return e.trim().toLowerCase(); }).filter(Boolean);
-
-        function showGate(message, url, btnText) {
-          // Product-specific configuration
-          var productConfig = {
-            'contentcraft': {
-              icon: '/icons/contentcraft-icon.png',
-              tagline: 'Transform Your Ideas Into Compelling Content',
-              gradient: 'linear-gradient(135deg,#3b82f6,#8b5cf6)',
-              description: 'AI-powered writing assistant for fiction, non-fiction, articles, and more.'
-            },
-            'gamemastercraft': {
-              icon: '/icons/gamemastercraft-icon.png',
-              tagline: 'Epic Adventures Await Your Command',
-              gradient: 'linear-gradient(135deg,#8b5cf6,#a855f7)',
-              description: 'Complete D&D toolkit with NPCs, encounters, locations, and campaign management.'
-            },
-            'sagacraft': {
-              icon: '/icons/sagacraft-icon.png',
-              tagline: 'Your Story, Perfectly Told',
-              gradient: 'linear-gradient(135deg,#10b981,#34d399)',
-              description: 'Professional writing platform for authors, journalists, and content creators.'
-            }
-          };
-          
-          var config = productConfig[APP_SLUG] || productConfig['contentcraft'];
-          
-          document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#0f172a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;text-align:center;padding:2rem;">'
-            + '<img src="' + config.icon + '" alt="' + PRODUCT_NAME + '" style="width:120px;height:120px;margin-bottom:1.5rem;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);" />'
-            + '<h1 style="font-size:2.5rem;font-weight:800;margin-bottom:0.5rem;background:' + config.gradient + ';-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">' + PRODUCT_NAME + '</h1>'
-            + '<p style="font-size:1.25rem;color:#94a3b8;margin-bottom:1rem;font-weight:500;">' + config.tagline + '</p>'
-            + '<p style="color:#cbd5e1;margin-bottom:2rem;max-width:500px;line-height:1.6;">' + config.description + '</p>'
-            + '<div style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:1.5rem;margin-bottom:2rem;max-width:500px;">'
-            + '<p style="color:#f1f5f9;margin-bottom:1rem;font-weight:600;">' + message + '</p>'
-            + '<p style="color:#94a3b8;font-size:0.875rem;">Join thousands of creators using ' + PRODUCT_NAME + ' to bring their visions to life.</p>'
-            + '</div>'
-            + '<a href="' + url + '" style="background:' + config.gradient + ';color:#fff;padding:1rem 2.5rem;border-radius:50px;text-decoration:none;font-weight:700;font-size:1.1rem;box-shadow:0 4px 15px rgba(0,0,0,0.2);transition:transform 0.2s,box-shadow 0.2s;display:inline-block;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 20px rgba(0,0,0,0.3)\'" onmouseout="this.style.transform=\'translateY(0)\';this.style.boxShadow=\'0 4px 15px rgba(0,0,0,0.2)\'">' + btnText + '</a>'
-            + '<div style="margin-top:2rem;display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">'
-            + '<a href="https://www.sixsmithgames.com/pricing" style="color:#94a3b8;text-decoration:none;font-size:0.875rem;">View Plans →</a>'
-            + '<span style="color:#475569;">•</span>'
-            + '<a href="https://www.sixsmithgames.com" style="color:#94a3b8;text-decoration:none;font-size:0.875rem;">Sixsmith Games</a>'
-            + '</div>'
-            + '</div>';
-        }
-
-        function isDummySubscriber(email) {
-          return DUMMY_EMAILS.indexOf((email || '').toLowerCase()) !== -1;
-        }
-        function isAdmin(email) {
-          return ADMIN_EMAILS.length > 0 && ADMIN_EMAILS.indexOf((email || '').toLowerCase()) !== -1;
-        }
-
-        // Dynamic product detection based on hostname
         var hostname = window.location.hostname;
-        var APP_SLUG = 'contentcraft'; // default
+        var APP_SLUG = 'contentcraft';
         var PRODUCT_NAME = 'ContentCraft';
         
         if (hostname.includes('gamemastercraft')) {
@@ -83,34 +20,9 @@
           PRODUCT_NAME = 'SagaCraft';
         }
         
-        var BUNDLE_SLUG = 'bundle';
-
-        function hasAppAccess(meta) {
-          var status = meta.subscriptionStatus;
-          if (status !== 'active' && status !== 'trialing') return false;
-          var plans = meta.subscriptionPlans;
-          if (Array.isArray(plans)) return plans.indexOf(APP_SLUG) !== -1 || plans.indexOf(BUNDLE_SLUG) !== -1;
-          var plan = meta.subscriptionPlan;
-          return plan === APP_SLUG || plan === BUNDLE_SLUG;
-        }
-
-        var script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
-        script.setAttribute('data-clerk-publishable-key', PUBLISHABLE_KEY);
-        script.onload = function() {
-          window.Clerk.load().then(function() {
-            var user = window.Clerk.user;
-            if (!user) {
-              showGate('Unlock your creative potential with ' + PRODUCT_NAME + '. Sign in to access AI-powered tools and transform your ideas into reality.', SIGN_IN_URL, 'Sign In & Start Creating →');
-              return;
-            }
-            var email = (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) || '';
-            var meta = user.publicMetadata || {};
-            if (isAdmin(email) || isDummySubscriber(email) || hasAppAccess(meta)) { return; }
-            showGate('Ready to elevate your creative journey? Get instant access to ' + PRODUCT_NAME + ' premium features and join our community of successful creators.', PRICING_URL, 'Choose Your Plan →');
-          });
-        };
-        document.head.appendChild(script);
+        // Expose for legacy compatibility
+        window.APP_SLUG = APP_SLUG;
+        window.PRODUCT_NAME = PRODUCT_NAME;
       })();
     </script>
   </head>
