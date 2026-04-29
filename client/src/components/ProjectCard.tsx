@@ -15,13 +15,18 @@ interface ProjectCardProps {
   onDelete?: (id: string) => void;
 }
 
-const PROJECT_TYPE_LABELS = {
+const PROJECT_TYPE_LABELS: Record<string, string> = {
   [ProjectType.FICTION]: 'Fiction',
   [ProjectType.NON_FICTION]: 'Non-Fiction',
   [ProjectType.DND_ADVENTURE]: 'D&D Adventure',
   [ProjectType.DND_HOMEBREW]: 'D&D Homebrew',
-  [ProjectType.HEALTH_ADVICE]: 'Health Advice',
-  [ProjectType.RESEARCH]: 'Research',
+  [ProjectType.STORY_ARC]: 'Story Arc',
+  [ProjectType.SCENE]: 'Scene',
+  [ProjectType.OUTLINE]: 'Outline',
+  [ProjectType.CHAPTER]: 'Chapter',
+  [ProjectType.MEMOIR]: 'Memoir',
+  [ProjectType.JOURNAL]: 'Journal Entry',
+  [ProjectType.OTHER_WRITING]: 'Other Writing',
 };
 
 const STATUS_COLORS = {

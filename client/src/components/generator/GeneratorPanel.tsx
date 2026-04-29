@@ -61,9 +61,12 @@ export default function GeneratorPanel({ onGenerate, isLoading = false, projectT
     }
     if (
       projectType === ProjectType.NON_FICTION ||
-      projectType === ProjectType.RESEARCH ||
-      projectType === ProjectType.HEALTH_ADVICE ||
-      projectType === ProjectType.FICTION
+      projectType === ProjectType.FICTION ||
+      projectType === ProjectType.OUTLINE ||
+      projectType === ProjectType.CHAPTER ||
+      projectType === ProjectType.MEMOIR ||
+      projectType === ProjectType.JOURNAL ||
+      projectType === ProjectType.OTHER_WRITING
     ) {
       return 'writing';
     }
@@ -76,8 +79,11 @@ export default function GeneratorPanel({ onGenerate, isLoading = false, projectT
     }
     if (
       projectType === ProjectType.NON_FICTION ||
-      projectType === ProjectType.RESEARCH ||
-      projectType === ProjectType.HEALTH_ADVICE
+      projectType === ProjectType.OUTLINE ||
+      projectType === ProjectType.CHAPTER ||
+      projectType === ProjectType.MEMOIR ||
+      projectType === ProjectType.JOURNAL ||
+      projectType === ProjectType.OTHER_WRITING
     ) {
       return ['writing'];
     }
@@ -86,12 +92,20 @@ export default function GeneratorPanel({ onGenerate, isLoading = false, projectT
 
   const inferDefaultType = (domain: 'rpg' | 'writing'): GenerationConfig['type'] => {
     if (domain === 'writing') {
-      if (
-        projectType === ProjectType.NON_FICTION ||
-        projectType === ProjectType.RESEARCH ||
-        projectType === ProjectType.HEALTH_ADVICE
-      ) {
+      if (projectType === ProjectType.NON_FICTION) {
         return 'nonfiction';
+      }
+      if (projectType === ProjectType.CHAPTER) {
+        return 'chapter';
+      }
+      if (projectType === ProjectType.MEMOIR) {
+        return 'memoir';
+      }
+      if (projectType === ProjectType.JOURNAL) {
+        return 'journal_entry';
+      }
+      if (projectType === ProjectType.OTHER_WRITING) {
+        return 'other_writing';
       }
       return 'outline';
     }

@@ -31,11 +31,16 @@ export const CONTENT_LIMITS = {
 
 export const PROJECT_TYPE_LABELS = {
   fiction: 'Fiction',
-  'non-fiction': 'Non-Fiction',
+  nonfiction: 'Non-Fiction',
   'dnd-adventure': 'D&D Adventure',
   'dnd-homebrew': 'D&D Homebrew',
-  'health-advice': 'Health Advice',
-  research: 'Research'
+  'story-arc': 'Story Arc',
+  scene: 'Scene',
+  outline: 'Outline',
+  chapter: 'Chapter',
+  memoir: 'Memoir',
+  'journal-entry': 'Journal Entry',
+  'other-writing': 'Other Writing',
 } as const;
 
 export const CONTENT_TYPE_LABELS = {

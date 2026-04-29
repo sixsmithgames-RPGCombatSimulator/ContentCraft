@@ -114,8 +114,13 @@ export const CreateProject: React.FC = () => {
             <option value={ProjectType.NON_FICTION}>Non-Fiction</option>
             <option value={ProjectType.DND_ADVENTURE}>D&D Adventure</option>
             <option value={ProjectType.DND_HOMEBREW}>D&D Homebrew</option>
-            <option value={ProjectType.HEALTH_ADVICE}>Health Advice</option>
-            <option value={ProjectType.RESEARCH}>Research</option>
+            <option value={ProjectType.STORY_ARC}>Story Arc</option>
+            <option value={ProjectType.SCENE}>Scene</option>
+            <option value={ProjectType.OUTLINE}>Outline</option>
+            <option value={ProjectType.CHAPTER}>Chapter</option>
+            <option value={ProjectType.MEMOIR}>Memoir</option>
+            <option value={ProjectType.JOURNAL}>Journal Entry</option>
+            <option value={ProjectType.OTHER_WRITING}>Other Writing</option>
           </select>
         </div>
 

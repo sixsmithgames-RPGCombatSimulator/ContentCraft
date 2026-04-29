@@ -30,11 +30,16 @@ export interface ContentBlock {
 
 export enum ProjectType {
   FICTION = 'fiction',
-  NON_FICTION = 'non-fiction',
+  NON_FICTION = 'nonfiction',
   DND_ADVENTURE = 'dnd-adventure',
   DND_HOMEBREW = 'dnd-homebrew',
-  HEALTH_ADVICE = 'health-advice',
-  RESEARCH = 'research'
+  STORY_ARC = 'story-arc',
+  SCENE = 'scene',
+  OUTLINE = 'outline',
+  CHAPTER = 'chapter',
+  MEMOIR = 'memoir',
+  JOURNAL = 'journal-entry',
+  OTHER_WRITING = 'other-writing',
 }
 
 export enum ProjectStatus {
