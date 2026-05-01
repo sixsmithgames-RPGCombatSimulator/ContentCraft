@@ -62,18 +62,24 @@ export const projectApi = {
     return response.data;
   },
 
-  create: async (data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<APIResponse<Project>> => {
-    const response = await api.post('/projects', data);
+  create: async (data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>, { token }: AuthOptions = {}): Promise<APIResponse<Project>> => {
+    const response = await api.post('/projects', data, {
+      headers: authHeaders(token),
+    });
     return response.data;
   },
 
-  update: async (id: string, data: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>): Promise<APIResponse<Project>> => {
-    const response = await api.put(`/projects/${id}`, data);
+  update: async (id: string, data: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>, { token }: AuthOptions = {}): Promise<APIResponse<Project>> => {
+    const response = await api.put(`/projects/${id}`, data, {
+      headers: authHeaders(token),
+    });
     return response.data;
   },
 
-  delete: async (id: string): Promise<APIResponse> => {
-    const response = await api.delete(`/projects/${id}`);
+  delete: async (id: string, { token }: AuthOptions = {}): Promise<APIResponse> => {
+    const response = await api.delete(`/projects/${id}`, {
+      headers: authHeaders(token),
+    });
     return response.data;
   },
 };

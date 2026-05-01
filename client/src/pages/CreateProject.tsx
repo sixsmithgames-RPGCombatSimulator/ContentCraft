@@ -6,6 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
 import { ProjectType, ProjectStatus } from '../types';
 import { projectApi } from '../services/api';
 import { getProductConfig } from '../config/products';
@@ -28,6 +29,7 @@ const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
 export const CreateProject: React.FC = () => {
   const navigate = useNavigate();
   const product = getProductConfig();
+  const { getToken } = useAuth();
 
   // Filter available project types based on product config
   const availableTypes = useMemo(() => {
@@ -68,7 +70,12 @@ export const CreateProject: React.FC = () => {
         workspaceType: product.defaultWorkspaceType,
       };
 
-      const response = await projectApi.create(projectData);
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Authentication required. Please sign in.');
+      }
+
+      const response = await projectApi.create(projectData, { token });
 
       if (response.success && response.data) {
         navigate(`/projects/${response.data.id}`);

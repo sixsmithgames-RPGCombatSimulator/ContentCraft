@@ -58,7 +58,8 @@ export const Dashboard: React.FC = () => {
 
   const handleDeleteProject = async (id: string) => {
     try {
-      const response = await projectApi.delete(id);
+      const token = await getToken();
+      const response = await projectApi.delete(id, { token });
       if (response.success) {
         setProjects(projects.filter(p => p.id !== id));
       } else {
