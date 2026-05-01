@@ -5,10 +5,16 @@
 
 import { useAuth } from '@clerk/clerk-react';
 import { Navigate, useLocation, Outlet } from 'react-router-dom';
+import { isLocalMode } from '../../utils/localMode';
 
 const RequireAuth = () => {
-  const { isLoaded, isSignedIn } = useAuth();
   const location = useLocation();
+
+  if (isLocalMode()) {
+    return <Outlet />;
+  }
+
+  const { isLoaded, isSignedIn } = useAuth();
 
   if (!isLoaded) {
     return (

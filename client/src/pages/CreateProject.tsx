@@ -6,8 +6,9 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { useAuth } from '@clerk/clerk-react';
 import { ProjectType, ProjectStatus } from '../types';
+import { isLocalMode } from '../utils/localMode';
+import { useAppAuth } from '../utils/useLocalAuth';
 import { projectApi } from '../services/api';
 import { getProductConfig } from '../config/products';
 
@@ -29,7 +30,8 @@ const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
 export const CreateProject: React.FC = () => {
   const navigate = useNavigate();
   const product = getProductConfig();
-  const { getToken } = useAuth();
+  const localMode = isLocalMode();
+  const { getToken } = useAppAuth();
 
   // Filter available project types based on product config
   const availableTypes = useMemo(() => {
@@ -70,8 +72,8 @@ export const CreateProject: React.FC = () => {
         workspaceType: product.defaultWorkspaceType,
       };
 
-      const token = await getToken();
-      if (!token) {
+      const token = localMode ? null : await getToken();
+      if (!localMode && !token) {
         throw new Error('Authentication required. Please sign in.');
       }
 

@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "cross-env LOCAL_MODE=true vite",
     "build": "vite build",
     "build:check": "tsc -b && vite build",
     "lint": "eslint .",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
+    "cross-env": "^7.0.3",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "^5.0.3",

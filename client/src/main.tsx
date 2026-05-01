@@ -10,10 +10,11 @@ import './index.css'
 import App from './App.tsx'
 import { ThemeProvider } from './contexts/ThemeContext.tsx'
 import { updateProductSEO } from './utils/seo'
+import { isLocalMode } from './utils/localMode'
 
 const clerkPublishableKey = import.meta.env.VITE_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-if (!clerkPublishableKey) {
+if (!isLocalMode() && !clerkPublishableKey) {
   throw new Error("Missing VITE_PUBLIC_CLERK_PUBLISHABLE_KEY");
 }
 
@@ -22,13 +23,21 @@ if (!rootElement) {
   throw new Error('Root element not found');
 }
 
+const appTree = (
+  <ThemeProvider>
+    <App />
+  </ThemeProvider>
+);
+
 createRoot(rootElement).render(
   <StrictMode>
-    <ClerkProvider publishableKey={clerkPublishableKey}>
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>
-    </ClerkProvider>
+    {isLocalMode() ? (
+      appTree
+    ) : (
+      <ClerkProvider publishableKey={clerkPublishableKey!}>
+        {appTree}
+      </ClerkProvider>
+    )}
   </StrictMode>,
 )
 
