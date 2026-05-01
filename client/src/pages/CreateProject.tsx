@@ -3,20 +3,47 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { ProjectType, ProjectStatus } from '../types';
 import { projectApi } from '../services/api';
 import { getProductConfig } from '../config/products';
 
+/** Human-readable labels for project types */
+const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+  [ProjectType.FICTION]: 'Fiction',
+  [ProjectType.NON_FICTION]: 'Non-Fiction',
+  [ProjectType.DND_ADVENTURE]: 'D&D Adventure',
+  [ProjectType.DND_HOMEBREW]: 'D&D Homebrew',
+  [ProjectType.STORY_ARC]: 'Story Arc',
+  [ProjectType.SCENE]: 'Scene',
+  [ProjectType.OUTLINE]: 'Outline',
+  [ProjectType.CHAPTER]: 'Chapter',
+  [ProjectType.MEMOIR]: 'Memoir',
+  [ProjectType.JOURNAL]: 'Journal Entry',
+  [ProjectType.OTHER_WRITING]: 'Other Writing',
+};
+
 export const CreateProject: React.FC = () => {
   const navigate = useNavigate();
   const product = getProductConfig();
+
+  // Filter available project types based on product config
+  const availableTypes = useMemo(() => {
+    const allTypes = Object.values(ProjectType);
+    return allTypes.filter(type => product.projectTypes.includes(type));
+  }, [product.projectTypes]);
+
+  // Default to first available type if FICTION isn't valid for this product
+  const defaultType = availableTypes.includes(ProjectType.FICTION)
+    ? ProjectType.FICTION
+    : (availableTypes[0] ?? ProjectType.FICTION);
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    type: ProjectType.FICTION,
+    type: defaultType,
     status: ProjectStatus.DRAFT,
   });
   const [loading, setLoading] = useState(false);
@@ -110,17 +137,9 @@ export const CreateProject: React.FC = () => {
             className="input"
             required
           >
-            <option value={ProjectType.FICTION}>Fiction</option>
-            <option value={ProjectType.NON_FICTION}>Non-Fiction</option>
-            <option value={ProjectType.DND_ADVENTURE}>D&D Adventure</option>
-            <option value={ProjectType.DND_HOMEBREW}>D&D Homebrew</option>
-            <option value={ProjectType.STORY_ARC}>Story Arc</option>
-            <option value={ProjectType.SCENE}>Scene</option>
-            <option value={ProjectType.OUTLINE}>Outline</option>
-            <option value={ProjectType.CHAPTER}>Chapter</option>
-            <option value={ProjectType.MEMOIR}>Memoir</option>
-            <option value={ProjectType.JOURNAL}>Journal Entry</option>
-            <option value={ProjectType.OTHER_WRITING}>Other Writing</option>
+            {availableTypes.map(type => (
+              <option key={type} value={type}>{PROJECT_TYPE_LABELS[type]}</option>
+            ))}
           </select>
         </div>
 

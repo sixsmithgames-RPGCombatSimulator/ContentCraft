@@ -28,6 +28,8 @@ export interface ProductConfig {
     timeline: string;
     notes: string;
   };
+  /** Which project types are available for creation in this product */
+  projectTypes: string[];
 }
 
 export const PRODUCT_CONFIGS: Record<ProductKey, ProductConfig> = {
@@ -62,6 +64,7 @@ export const PRODUCT_CONFIGS: Record<ProductKey, ProductConfig> = {
       timeline: "Timeline",
       notes: "Notes",
     },
+    projectTypes: ["fiction", "nonfiction", "dnd-adventure", "dnd-homebrew", "story-arc", "scene", "outline", "chapter", "memoir", "journal-entry", "other-writing"],
   },
 
   gamemastercraft: {
@@ -95,6 +98,7 @@ export const PRODUCT_CONFIGS: Record<ProductKey, ProductConfig> = {
       timeline: "Timeline",
       notes: "Session Notes",
     },
+    projectTypes: ["dnd-adventure", "dnd-homebrew", "story-arc", "scene"],
   },
 
   sagacraft: {
@@ -128,6 +132,7 @@ export const PRODUCT_CONFIGS: Record<ProductKey, ProductConfig> = {
       timeline: "Timeline",
       notes: "Draft Notes",
     },
+    projectTypes: ["fiction", "story-arc", "scene", "outline", "chapter", "memoir", "journal-entry", "other-writing"],
   },
 };
 
