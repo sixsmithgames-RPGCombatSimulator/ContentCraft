@@ -43,10 +43,18 @@ export async function generateStructuredJson(systemInstruction: string, input: u
         throw Object.assign(new Error('Gemini returned invalid JSON after a constrained retry.'), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
       }
     } catch (error: any) {
-      const transient = error?.name === 'AbortError' || error?.code === 'GMC_TEMPORARILY_UNAVAILABLE';
+      const transportFailure = !error?.code && error?.name !== 'AbortError';
+      const transient = error?.name === 'AbortError' || error?.code === 'GMC_TEMPORARILY_UNAVAILABLE' || transportFailure;
       if (transient && attempt === 0) { lastError = error; continue; }
       if (error?.name === 'AbortError') {
         throw Object.assign(new Error('Gemini timed out after a retry.'), { status: 504, code: 'GMC_TIMEOUT' });
+      }
+      if (transportFailure) {
+        throw Object.assign(new Error('Gemini transport failed after a retry.'), {
+          status: 503,
+          code: 'GMC_TEMPORARILY_UNAVAILABLE',
+          cause: error instanceof Error ? error.message : String(error),
+        });
       }
       throw error;
     } finally {

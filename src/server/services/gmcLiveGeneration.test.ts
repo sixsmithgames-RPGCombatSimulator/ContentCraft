@@ -29,4 +29,29 @@ describe('generateStructuredJson', () => {
     await expect(generateStructuredJson('Return narration.', {})).resolves.toEqual({ narration: 'Recovered' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('retries a transport failure instead of leaking an HTTP 500', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: '{"narration":"Recovered after transport failure"}' }] } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateStructuredJson('Return narration.', {})).resolves.toEqual({ narration: 'Recovered after transport failure' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps a repeated transport failure to a retryable service error', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateStructuredJson('Return narration.', {})).rejects.toMatchObject({
+      status: 503,
+      code: 'GMC_TEMPORARILY_UNAVAILABLE',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
