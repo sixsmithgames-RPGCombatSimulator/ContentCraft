@@ -4,4 +4,4 @@
  */
 
 export const isLocalMode = (): boolean =>
-  import.meta.env.VITE_LOCAL_MODE === 'true';
+  import.meta.env.DEV && import.meta.env.VITE_LOCAL_MODE === 'true';

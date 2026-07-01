@@ -4,11 +4,13 @@
  */
 
 import React from 'react';
+import { SignedIn, UserButton } from '@clerk/clerk-react';
 import { Link, useLocation } from 'react-router-dom';
 import { HomeIcon, BookOpenIcon, MoonIcon, SunIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useTheme } from '../contexts/ThemeContext';
 import { getProductConfig } from '../config/products';
+import { isLocalMode } from '../utils/localMode';
 
 export const Navbar: React.FC = () => {
   const location = useLocation();
@@ -52,6 +54,15 @@ export const Navbar: React.FC = () => {
               {isDark ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
               <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
             </button>
+            {isLocalMode() ? (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                Local mode
+              </span>
+            ) : (
+              <SignedIn>
+                <UserButton />
+              </SignedIn>
+            )}
           </div>
         </div>
       </div>

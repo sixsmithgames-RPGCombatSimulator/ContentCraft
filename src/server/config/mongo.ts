@@ -71,6 +71,9 @@ async function createIndexes(database: Db): Promise<void> {
   await database.collection('canon_entities').createIndex({ 'aliases': 1 });
   await database.collection('canon_entities').createIndex({ scope: 1, type: 1, canonical_name: 1 });
   await database.collection('canon_entities').createIndex({ tags: 1, era: 1, region: 1 });
+  await database.collection('canon_entities').createIndex({ userId: 1, project_id: 1, type: 1, 'details.entityTier': 1 });
+  await database.collection('canon_entities').createIndex({ userId: 1, project_id: 1, type: 1, 'details.memory.tier': 1, 'details.memory.currentLocationId': 1 });
+  await database.collection('canon_entities').createIndex({ userId: 1, project_id: 1, type: 1, 'details.memory.ownerEntityId': 1 });
 
   // Canon chunks indexes
   await database.collection('canon_chunks').createIndex({ entity_id: 1 });
@@ -97,6 +100,18 @@ async function createIndexes(database: Db): Promise<void> {
   await database.collection('encounter_records').createIndex({ project_id: 1, canonical_id: 1 }, { unique: true });
   await database.collection('encounter_records').createIndex({ tags: 1 });
   await database.collection('encounter_records').createIndex({ 'normalized.title': 'text', 'normalized.description': 'text' });
+
+  // GameMasterCraft live-session integration indexes
+  await database.collection('gmc_campaign_state').createIndex({ userId: 1, campaignId: 1 }, { unique: true });
+  await database.collection('gmc_scenes').createIndex({ userId: 1, campaignId: 1, updatedAt: -1 });
+  await database.collection('gmc_facts').createIndex({ userId: 1, campaignId: 1, locked: 1, createdAt: -1 });
+  await database.collection('gmc_facts').createIndex({ userId: 1, campaignId: 1, 'scope.kind': 1, 'scope.tier': 1, 'scope.locationId': 1 });
+  await database.collection('gmc_facts').createIndex({ userId: 1, campaignId: 1, 'scope.entityId': 1, 'scope.tier': 1 });
+  await database.collection('gmc_facts').createIndex({ text: 'text' });
+  await database.collection('gmc_threads').createIndex({ userId: 1, campaignId: 1, status: 1 });
+  await database.collection('gmc_threads').createIndex({ userId: 1, campaignId: 1, status: 1, deadlineAt: 1 });
+  await database.collection('gmc_threads').createIndex({ userId: 1, campaignId: 1, 'scope.kind': 1, 'scope.tier': 1, 'scope.locationId': 1 });
+  await database.collection('gmc_sessions').createIndex({ userId: 1, campaignId: 1, createdAt: -1 });
 
   console.log('✓ MongoDB indexes created');
 }
