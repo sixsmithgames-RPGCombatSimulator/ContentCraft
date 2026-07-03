@@ -357,14 +357,49 @@ gmcV1Router.post('/ai/adjudicate-skill-check', asyncRoute((req, res) => ai(req, 
 Choose exactly one resolutionMode:
 - no_roll: there is no meaningful uncertainty, no consequential failure, the attempt is impossible, or it is routine. Routine success may be narrated normally.
 - passive: passive Perception or passive Insight meets the DC, so the character notices or understands automatically without revealing a check.
-- player_roll: the character is consciously attempting something uncertain and the player may know a check is occurring. Active searches for physical clues commonly use Investigation; broad sensory awareness commonly uses Perception.
+- player_roll: the character is consciously attempting something uncertain and the player may know a check is occurring.
 - hidden_roll: knowing a roll occurred or seeing its result would reveal hidden information, including whether someone is following, watching, lying, concealed, or absent. The server will roll privately and narration must never mention the check.
+
+Choose Perception versus Investigation by the purpose of the action, not by whether the player used words such as look, search, inspect, examine, or investigate:
+- Wisdom (Perception) detects or locates what can be noticed through the senses. Use it for looking around, watching, scanning, listening, smelling, spotting movement or hidden creatures, noticing visible details, and ordinary searches of a room, body, container, or area. Active searching does not make the check Investigation.
+- Intelligence (Investigation) interprets evidence and reasons toward a conclusion. Use it for connecting clues, deciding what evidence matters, reconstructing events, deciphering information, solving puzzles, finding patterns, and determining how or why a mechanism works, broke, or was altered.
+- Ask what success answers. If it answers "What do I notice?" or "Where is it?", prefer Perception. If it answers "What does this mean?", "How does this work?", or "What can I deduce?", prefer Investigation.
+- A methodical search may use Investigation only when organization, inference, or understanding is the obstacle. Do not select Investigation merely because the search is deliberate or targets a physical clue.
 
 Do not narrate evidence, clues, observers, success, failure, or ambiguity before a required roll. For player_roll, provide brief preRollNarration that positions the attempt without resolving it, and five concrete scene-specific stake bands keyed criticalFailure, partial, success, greatSuccess, criticalSuccess. Each band must tell the player what changes at that outcome; do not use generic boilerplate. Use only these skills when applicable: acrobatics, animal_handling, arcana, athletics, deception, history, insight, intimidation, investigation, medicine, nature, perception, performance, persuasion, religion, sleight_of_hand, stealth, survival. Use a DC from 5 to 30 and rollMode normal|advantage|disadvantage. Consult playerCharacter passives and modifiers. If a passive floor resolves the information, choose passive rather than player_roll.
 
 Return {resolutionMode,skill,ability,dc,rollMode,reason,preRollNarration,stakes:{criticalFailure,partial,success,greatSuccess,criticalSuccess},confidence}.`, ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'])));
 gmcV1Router.post('/ai/narrate-skill-check-result', asyncRoute((req, res) => ai(req, res, `Narrate the authoritative VCS skill-check result and continue directly from the player's original action. Use authoritativeCheckOutcome and the matching scene-specific stake in rollRequest.stakes. Never change the d20, modifier, total, DC, margin, or outcome band. Do not replay actions completed before this check. If rollRequest.visibility is hidden, never mention a roll, DC, failure, success, modifier, or that hidden information was tested; simply narrate what the character perceives from the authoritative outcome. For a visible player roll, natural prose may reflect the quality of the result but should not read like a rules log. Resolve the attempted action, preserve uncertainty that the outcome band does not reveal, and stop at the next player decision. Return {narration,proposedCanonChanges,proposedVcsExports,riskLevel,syncNotes,gmPrivateNotes}.`, ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'])));
-gmcV1Router.post('/ai/respond-ooc', asyncRoute((req, res) => ai(req, res, 'Respond out of character as the DM to the player, using conversationHistory and campaign context. Answer every direct player question before offering next steps. Do not narrate the player character taking actions. Clearly distinguish rules/table discussion from in-world facts. If the player identifies a continuity or plausibility problem, do not defend the narration by inventing an unsupported explanation: acknowledge the concrete inconsistency, state the corrected interpretation, and say whether a retcon is needed. If the player asks whether a check is appropriate, apply dmCheckPolicy and explain the decision and stakes directly. Return {response,continuityNotes,proposedCanonChanges}.', ['response', 'continuityNotes', 'proposedCanonChanges'])));
+gmcV1Router.post('/ai/respond-ooc', asyncRoute((req, res) => ai(req, res, 'Respond out of character as the DM to the player, using conversationHistory and campaign context. Answer every direct player question before offering next steps. Do not narrate the player character taking actions. Clearly distinguish rules/table discussion from in-world facts. If the player identifies a continuity or plausibility problem, do not defend the narration by inventing an unsupported explanation: acknowledge the concrete inconsistency, state the corrected interpretation, and say whether a retcon is needed. If the player asks whether a check is appropriate, apply dmCheckPolicy and explain the decision and stakes directly. Never claim that a VCS character sheet, inventory, currency balance, hit points, hit dice, or XP was updated; the caller performs and confirms authoritative writes separately. Return {response,continuityNotes,proposedCanonChanges}.', ['response', 'continuityNotes', 'proposedCanonChanges'])));
+gmcV1Router.post('/ai/plan-character-sheet-mutation', asyncRoute((req, res) => ai(req, res, `Decide whether this interaction establishes or explicitly requests an authoritative VCS character-sheet change. Use currentSheet as the starting authority and the ordered conversationHistory to distinguish newly established changes from possessions or costs already synchronized. The candidateResponse is prose only and is not proof that a write occurred.
+
+Return a mutation only for confirmed acquisitions, losses, expenditures, healing, damage, rests, or explicit bookkeeping corrections. Do not mutate for plans, attempts, hypothetical rewards, disputed outcomes, or merely mentioning an existing possession. When the player asks to backfill an established but unsynchronized reward, include it once. A prior conversation entry whose sheetMutation status is applied is already synchronized and must never be applied again.
+
+Currency rules:
+- Use mode delta for coin gained or spent so existing recorded wealth is preserved. Values may be positive or negative integers.
+- Use mode set only when the player explicitly gives an authoritative replacement balance for the whole denomination or requests a correction to that exact total.
+- Never reinterpret a newly gained amount as the character's whole balance.
+
+Inventory rules:
+- add contains only items newly owned by the character; use a stable concise name and quantity.
+- remove contains items actually lost, consumed, sold, or transferred, with quantity when known.
+- Do not put currency in inventory items.
+
+HP, hit-dice, and XP rules:
+- Use delta for newly established damage, healing, spent/recovered dice, or manual XP adjustments.
+- Use set only for an explicit authoritative correction.
+- Ordinary GMA milestone/challenge XP awards are handled by a separate audited path, so leave XP unchanged unless the player explicitly requests a manual correction.
+
+Return {
+  shouldMutate,
+  confidence,
+  reason,
+  currency:{mode:'none|delta|set',cp,sp,ep,gp,pp},
+  items:{add:[{name,quantity}],remove:[{name,quantity}]},
+  hitPoints:{mode:'none|delta|set',current,maximum,temporary},
+  hitDice:{mode:'none|delta|set',total,spent},
+  experiencePoints:{mode:'none|delta|set',value}
+}. Use zero for unused numeric values, empty arrays for unused item operations, and confidence from 0 to 1.`, ['shouldMutate', 'confidence', 'reason', 'currency', 'items', 'hitPoints', 'hitDice', 'experiencePoints'])));
 gmcV1Router.post('/ai/retcon-narration', asyncRoute((req, res) => ai(req, res, 'Apply the player retcon instruction as an authoritative correction to recent conversationHistory. Discard contradicted narration and preserve everything not affected. The corrected narration becomes established current state: concrete possessions, discoveries, injuries, deaths, positions, and completed searches it states must not be awarded or performed again in later turns. Continue from the corrected state without replaying earlier beats. Do not alter VCS mechanics unless an authoritative restored VCS snapshot is supplied. If the corrected continuation reaches a check, the supplied dmCheckPolicy is binding and all stakes must be disclosed before requesting the roll. Return {narration,correctionSummary,proposedCanonChanges,continuityNotes}.', ['narration', 'correctionSummary', 'proposedCanonChanges', 'continuityNotes'])));
 gmcV1Router.post('/ai/generate-npc-dialogue', asyncRoute((req, res) => ai(req, res, 'Generate canon-aware NPC dialogue. Preserve secrets and motivations. Return {dialogue, narration, proposedCanonChanges}.', ['dialogue', 'narration', 'proposedCanonChanges'])));
 gmcV1Router.post('/ai/extract-canon-changes', asyncRoute((req, res) => ai(req, res, `Extract only durable, newly established story memory from the ordered transcript. Use campaignDashboard to avoid duplicating existing entities or records. The latest retcon supersedes contradicted text. Player plans, questions, speculation, failed narration, and unconfirmed possibilities are not canon. Raw mechanics become memory only when they create a durable story consequence.
@@ -392,15 +427,26 @@ Return {
   openThreads:[{title,description,deadlineDescription,consequence,scope:{kind,tier,locationId,locationName,entityId,entityName}}],
   sessionZeroSummary:{summary,keyDecisions,safetyNotes,playStyleNotes}
 }. FACT scope tier must be geographic (world, city, district, site, room) or entity (bbeg, lieutenant, henchman, contact). NPC entityTier uses bbeg, lieutenant, henchman, or contact. Every open thread is an EVENT: give it a meaningful trigger/deadline and a concrete consequence if it goes unaddressed. Generate 3-6 durable initial facts, 2-4 NPCs, and 3-5 open threads.`, ['campaign', 'startingLocation', 'openingScene', 'initialFacts', 'initialNpcs', 'openThreads', 'sessionZeroSummary'])));
-gmcV1Router.post('/ai/detect-encounter-transition', asyncRoute((req, res) => ai(req, res, `Decide whether the supplied player instruction and current scene have crossed into an encounter that needs a VCS BattleRoom. Ordinary travel, investigation, dialogue, shopping, downtime, roleplay, and non-hostile uncertainty do not need a BattleRoom. Create one only when turn-by-turn positioning, attacks, spells, hazards, or initiative are immediately necessary. Return {shouldCreateBattleRoom,confidence,reason,encounterBrief}. confidence must be 0-1.`, ['shouldCreateBattleRoom', 'confidence', 'reason', 'encounterBrief'])));
+gmcV1Router.post('/ai/detect-encounter-transition', asyncRoute((req, res) => ai(req, res, `Decide whether the supplied player instruction and established current scene have crossed into an encounter that needs a VCS BattleRoom right now. Default to continued narrative play.
+
+A BattleRoom is appropriate only when all are true:
+- A concrete attack, hostile confrontation, chase, or immediate tactical hazard has actually begun in the current moment.
+- The order and position of multiple actors now matter before the next outcome can be resolved fairly.
+- The scene cannot be resolved cleanly with narration, one ability check, or a short sequence of checks.
+
+Do not create a BattleRoom for following or watching someone, scouting, sneaking, pickpocketing, lifting a purse, preparing a distraction, creating or waiting for an opportunity, setting a trap that has not triggered, stating a hoped-for knockout, or describing a plan that might lead to violence later. A desired future result such as knocking someone down or out is not an immediate attack when the current action is still arranging the opportunity. Heists, cons, escapes, and social maneuvers remain narrative unless active opposition makes turn order necessary. Do not add extra opponents merely to justify combat.
+
+Return {shouldCreateBattleRoom,requiresTurnOrder,triggeredNow,transitionType,confidence,reason,encounterBrief}. requiresTurnOrder and triggeredNow must be booleans. transitionType must be one of none|combat|chase|tactical_hazard. encounterBrief is null unless shouldCreateBattleRoom is true. confidence must be 0-1.`, ['shouldCreateBattleRoom', 'requiresTurnOrder', 'triggeredNow', 'transitionType', 'confidence', 'reason', 'encounterBrief'])));
 gmcV1Router.post('/ai/plan-encounter', asyncRoute((req, res) => ai(req, res, `Prepare a complete VCS encounter from the campaign context, current scene, player instruction, and player-character summary. Respect canon and safety boundaries. Do not decide player-character actions. Return {
   name,
   objective,
+  situation,
+  playerOptions:[{label,description}],
   map:{width,height,gridSize,feetPerCell,gridType,imageUrl,walls,doors,fogOfWar},
   playerStart:{gridX,gridY},
   opponents:[{name,kind,role,hitPoints,armorClass,speed,initiativeModifier,abilities,conditions,gridX,gridY,actions:[{name,type,attackBonus,range,damage:[{dice,bonus,type}],saveDc,saveAbility,onSuccessfulSave,conditions}]}],
   gmNotes
-}. Use practical grid coordinates inside the map. Supply 1-6 opponents, complete combat statistics, and at least one mechanically executable attack or spell for each. kind must be npc or monster. imageUrl may be null; walls, doors, and fog still constitute an authoritative tactical map.`, ['name', 'objective', 'map', 'playerStart', 'opponents', 'gmNotes'])));
+}. situation is a concise present-tense handoff explaining what just made turn order necessary and what is happening now. objective states the player's immediate goal without assuming they must kill or attack anyone. playerOptions contains 3-5 materially different, nonbinding approaches that are legal in the scene; include nonviolent, evasive, social, environmental, or escape options whenever plausible. These are prompts, not decisions for the player. Use practical grid coordinates inside the map. Supply 1-6 opponents, complete combat statistics, and at least one mechanically executable attack or spell for each. kind must be npc or monster. imageUrl may be null; walls, doors, and fog still constitute an authoritative tactical map.`, ['name', 'objective', 'situation', 'playerOptions', 'map', 'playerStart', 'opponents', 'gmNotes'])));
 gmcV1Router.post('/ai/plan-combat-turn', asyncRoute((req, res) => ai(req, res, `Control exactly one non-player combatant turn in the supplied authoritative VCS BattleRoom. Use only IDs, statistics, token actions, targets, and positions present in the supplied state. Never choose or alter the player character's actions. Return {
   actorId,
   movement:{tokenId,gridX,gridY,reason},
