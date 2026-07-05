@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { parseSmartJson } from '../../shared/generation/smartJsonParser.js';
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
 const USAGE_LOG_LIMIT = 500;
@@ -26,8 +27,9 @@ type GeminiUsageEvent = {
 const geminiUsageLog: GeminiUsageEvent[] = [];
 
 function parseJson(text: string): any {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  return JSON.parse(cleaned);
+  const parsed = parseSmartJson(text, { requireObject: false });
+  if (parsed.ok === false) throw new Error(parsed.message);
+  return parsed.value;
 }
 
 function envInteger(name: string, fallback: number) {

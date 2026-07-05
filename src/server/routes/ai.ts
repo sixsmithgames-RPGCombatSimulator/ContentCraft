@@ -18,6 +18,7 @@ import {
 import { resolveWorkflowContentType } from '../../shared/generation/workflowContentType.js';
 import { repairWorkflowStagePayload } from '../../shared/generation/workflowStageRepair.js';
 import { validateWorkflowStageContractPayload as validateSharedWorkflowStageContractPayload } from '../../shared/generation/workflowStageValidation.js';
+import { parseSmartJson } from '../../shared/generation/smartJsonParser.js';
 import type {
   WorkflowAcceptanceState,
   WorkflowCanonSummary,
@@ -1437,10 +1438,12 @@ function extractJsonPatch(rawText: string): { ok: true; patch?: Record<string, u
     }
 
     try {
-      const parsed = JSON.parse(jsonText);
-      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return { ok: false, message: 'JSON patch must be an object.' };
+      const smartParsed = parseSmartJson(jsonText, { requireObject: true, allowSingleItemArray: false, maxLength: MAX_PATCH_BYTES });
+      if (smartParsed.ok === false) {
+        return { ok: false, message: smartParsed.message };
       }
+      warnings.push(...smartParsed.warnings);
+      const parsed = smartParsed.value as Record<string, unknown>;
 
       const forbiddenKeys = ['projectId', 'stageId', 'stageRunId'];
       for (const key of forbiddenKeys) {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { ProjectStatus, ProjectType } from '../../shared/types/index.js';
+import { parseSmartJson } from '../../shared/generation/smartJsonParser.js';
 
 import { ProjectModel, ContentBlockModel } from '../models/index.js';
 import { getDb } from '../config/mongo.js';
@@ -338,6 +339,24 @@ async function ai(req: Request, res: Response, instruction: string, requiredKeys
 
 gmcV1Router.get('/ai/usage', asyncRoute(async (_req, res) => {
   res.json(getGeminiUsageSnapshot());
+}));
+
+gmcV1Router.post('/tools/parse-json', asyncRoute(async (req, res) => {
+  const parsed = parseSmartJson(req.body?.text, {
+    requireObject: req.body?.requireObject !== false,
+    allowSingleItemArray: true,
+    maxLength: 200_000,
+  });
+  if (parsed.ok === false) {
+    fail(req, res, 400, 'INVALID_JSON', parsed.message, { warnings: parsed.warnings });
+    return;
+  }
+  res.json({
+    value: parsed.value,
+    foundJsonBlock: parsed.foundJsonBlock,
+    repaired: parsed.repaired,
+    warnings: parsed.warnings,
+  });
 }));
 
 gmcV1Router.post('/ai/classify-intent', asyncRoute((req, res) => ai(req, res, 'Classify the input. Return {intentType, confidence, structuredIntent, requiresVcs, requiresGameMasterCraft}. Allowed intentType values: narrative_action, mechanical_action, mixed_action, canon_query, rules_query, generation_request, prep_request, sync_request, correction, retcon, ooc_question, system_command.', ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'])));
