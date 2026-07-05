@@ -18,7 +18,7 @@ import {
   updateEntity,
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
-import { generateStructuredJson, generationPrompts } from '../services/gmcLiveGeneration.js';
+import { generateStructuredJson, generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
 
 export const gmcV1Router = Router();
 gmcV1Router.use(integrationAuth);
@@ -40,7 +40,7 @@ const asyncRoute = (handler: (req: Request, res: Response) => Promise<void>) => 
   try { await handler(req, res); }
   catch (cause: any) {
     if (cause?.message?.includes('required')) { fail(req, res, 400, 'VALIDATION_ERROR', cause.message); return; }
-    if (cause?.code) { fail(req, res, cause.status ?? 500, cause.code, cause.message); return; }
+    if (cause?.code) { fail(req, res, cause.status ?? 500, cause.code, cause.message, cause.details ?? {}); return; }
     next(cause);
   }
 };
@@ -329,12 +329,16 @@ gmcV1Router.patch('/sessions/:sessionId/summary', asyncRoute(async (req, res) =>
 }));
 
 async function ai(req: Request, res: Response, instruction: string, requiredKeys: string[]) {
-  const output = await generateStructuredJson(instruction, req.body);
+  const output = await generateStructuredJson(instruction, req.body, { operation: req.path, correlationId: correlationId(req) });
   if (!output || typeof output !== 'object' || requiredKeys.some((key) => output[key] === undefined)) {
     throw Object.assign(new Error(`Structured AI response is missing required fields: ${requiredKeys.join(', ')}.`), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
   }
   res.json(output);
 }
+
+gmcV1Router.get('/ai/usage', asyncRoute(async (_req, res) => {
+  res.json(getGeminiUsageSnapshot());
+}));
 
 gmcV1Router.post('/ai/classify-intent', asyncRoute((req, res) => ai(req, res, 'Classify the input. Return {intentType, confidence, structuredIntent, requiresVcs, requiresGameMasterCraft}. Allowed intentType values: narrative_action, mechanical_action, mixed_action, canon_query, rules_query, generation_request, prep_request, sync_request, correction, retcon, ooc_question, system_command.', ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'])));
 gmcV1Router.post('/ai/generate-narration', asyncRoute((req, res) => ai(req, res, `Continue directly from the established current state in conversationHistory. The supplied continuityContract is binding.
