@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { getDb } from '../config/mongo.js';
 
 export interface IntegrationRequest extends Request {
@@ -40,19 +41,24 @@ function bearerToken(req: Request) {
   return String(req.header('Authorization') || '').match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || '';
 }
 
-function base64UrlDecode(value: string) {
-  const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
-  return Buffer.from(padded, 'base64').toString('utf8');
+// Clerk's networkless verification key: Dashboard -> API keys -> JWT public key.
+// Accepts full PEM (possibly with literal "\n" escapes) or the bare base64 body.
+function clerkVerificationKey() {
+  const raw = String(process.env.CLERK_JWT_KEY || '').trim();
+  if (!raw) return '';
+  const unescaped = raw.includes('\\n') ? raw.replace(/\\n/g, '\n') : raw;
+  if (unescaped.includes('-----BEGIN')) return unescaped;
+  const body = unescaped.replace(/\s+/g, '').match(/.{1,64}/g)?.join('\n') || '';
+  return `-----BEGIN PUBLIC KEY-----\n${body}\n-----END PUBLIC KEY-----`;
 }
 
-function decodeClerkToken(token: string): ClerkTokenPayload | null {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
+function verifyClerkToken(token: string): ClerkTokenPayload | null {
+  const key = clerkVerificationKey();
+  if (!key || token.split('.').length !== 3) return null;
   try {
-    const payload = JSON.parse(base64UrlDecode(parts[1]));
-    if (!payload?.sub) return null;
-    if (payload.exp && Number(payload.exp) < Math.floor(Date.now() / 1000)) return null;
-    return payload;
+    const payload = jwt.verify(token, key, { algorithms: ['RS256'] });
+    if (typeof payload !== 'object' || payload === null || !payload.sub) return null;
+    return payload as ClerkTokenPayload;
   } catch {
     return null;
   }
@@ -146,7 +152,7 @@ export async function integrationAuth(req: Request, res: Response, next: NextFun
     return;
   }
 
-  const clerk = decodeClerkToken(supplied);
+  const clerk = verifyClerkToken(supplied);
   if (clerk) {
     integrationReq.userId = clerk.sub;
     try {
@@ -159,16 +165,16 @@ export async function integrationAuth(req: Request, res: Response, next: NextFun
     return;
   }
 
-  if (serviceConfigured) {
-    res.setHeader('WWW-Authenticate', 'Bearer');
-    res.status(401).json({
-      error: { code: 'AUTH_REQUIRED', message: 'Invalid GameMasterCraft service credential or Clerk token.', correlationId: req.header('X-Sixsmith-Correlation-Id') || null, details: {} },
-    });
-    return;
-  }
-
+  const clerkConfigured = Boolean(clerkVerificationKey());
+  const message = clerkConfigured
+    ? serviceConfigured
+      ? 'Invalid GameMasterCraft service credential or Clerk token.'
+      : 'Invalid Clerk token. Service auth is not configured.'
+    : serviceConfigured
+      ? 'Invalid GameMasterCraft service credential. Clerk token verification is not configured (CLERK_JWT_KEY).'
+      : 'Clerk token verification is not configured on this server (CLERK_JWT_KEY), and service auth is not configured.';
   res.setHeader('WWW-Authenticate', 'Bearer');
   res.status(401).json({
-    error: { code: 'AUTH_REQUIRED', message: 'A valid Clerk token is required. Service auth is not configured.', correlationId: req.header('X-Sixsmith-Correlation-Id') || null, details: {} },
+    error: { code: 'AUTH_REQUIRED', message, correlationId: req.header('X-Sixsmith-Correlation-Id') || null, details: {} },
   });
 }
