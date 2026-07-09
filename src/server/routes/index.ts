@@ -26,9 +26,9 @@ apiRouter.use('/canon/fact-check', factCheckRouter);
 apiRouter.use('/config', configRouter);
 apiRouter.use('/upload', uploadRouter);
 apiRouter.use('/homebrew', homebrewRouter);
-apiRouter.use('/', progressRouter);
 apiRouter.use('/ai', aiRouter);
 apiRouter.use('/gmc/v1', gmcV1Router);
+apiRouter.use('/', progressRouter);
 
 apiRouter.get('/health', (_req, res) => {
   res.json({ success: true, message: 'ContentCraft API is running' });
