@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, FileText, BookOpen, Wand2, Eye, Search, Filter, Copy, GripVertical, ArrowUpDown, Check, X, AlertCircle, RotateCw } from 'lucide-react';
 import { Project, ContentBlock, ProjectType, ContentType } from '../types';
-import { projectApi, contentApi, API_BASE_URL } from '../services/api';
+import { projectApi, contentApi, API_BASE_URL, authHeaders, setApiAuthToken } from '../services/api';
 import GeneratedContentModal, { type GeneratedContentDoc } from '../components/generator/GeneratedContentModal';
 import ContentRenderer from '../components/generator/ContentRenderer';
 import EditContentModal from '../components/generator/EditContentModal';
@@ -19,6 +19,8 @@ import type {
   WritingCanonProjectReport,
 } from '../../../src/shared/canon/writingCanon';
 import { getWritingCanonBadge, getWritingCanonBlockSummary, getWritingCanonProjectSummary } from '../services/writingCanonPresentation';
+import { useAppAuth } from '../utils/useLocalAuth';
+import { isLocalMode } from '../utils/localMode';
 
 const PROJECT_TYPE_LABELS: Record<string, string> = {
   [ProjectType.FICTION]: 'Fiction',
@@ -478,6 +480,8 @@ const ContentBlockBody: React.FC<{
 export const ProjectDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const localMode = isLocalMode();
+  const { isLoaded, isSignedIn, getToken } = useAppAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [contentBlocks, setContentBlocks] = useState<ContentBlock[]>([]);
   const [generatedContent, setGeneratedContent] = useState<GeneratedContentDoc[]>([]);
@@ -507,6 +511,19 @@ export const ProjectDetail: React.FC = () => {
   const [canonCheckError, setCanonCheckError] = useState<string | null>(null);
   const canonScanRequestIdRef = useRef(0);
 
+  const loadAuthToken = useCallback(async () => {
+    if (localMode) {
+      setApiAuthToken(null);
+      return null;
+    }
+    if (!isLoaded) return null;
+    if (!isSignedIn) throw new Error('Authentication required.');
+    const token = await getToken();
+    if (!token) throw new Error("Clerk loaded, user signed in, but no token was returned.");
+    setApiAuthToken(token);
+    return token;
+  }, [getToken, isLoaded, isSignedIn, localMode]);
+
   const canonReportsByBlockId = useMemo<Record<string, WritingCanonBlockReport>>(
     () =>
       Object.fromEntries(
@@ -529,6 +546,7 @@ export const ProjectDetail: React.FC = () => {
   const loadProject = useCallback(async () => {
     if (!id) return;
     try {
+      await loadAuthToken();
       const response = await projectApi.getById(id);
       if (response.success && response.data) {
         setProject(response.data);
@@ -539,7 +557,7 @@ export const ProjectDetail: React.FC = () => {
       setError('Failed to load project');
       console.error('Error loading project:', err);
     }
-  }, [id]);
+  }, [id, loadAuthToken]);
 
   const scanCanonConsistency = useCallback(
     async (blocks: ContentBlock[]) => {
@@ -560,6 +578,7 @@ export const ProjectDetail: React.FC = () => {
       setCanonCheckLoading(true);
       setCanonCheckError(null);
       try {
+        await loadAuthToken();
         const response = await contentApi.scanProjectCanonCheck(
           id,
           writingBlocks.map((block) => block.id),
@@ -580,7 +599,7 @@ export const ProjectDetail: React.FC = () => {
         }
       }
     },
-    [id],
+    [id, loadAuthToken],
   );
 
   const filteredContentBlocks = useMemo(() => {
@@ -639,6 +658,7 @@ export const ProjectDetail: React.FC = () => {
     if (!id) return;
     setReorderSaving(true);
     try {
+      await loadAuthToken();
       const ids = orderedBlocksForReorder.map((b) => b.id);
       const response = await contentApi.reorder(id, ids);
       if (!response.success) throw new Error(response.error || 'Failed to reorder');
@@ -707,6 +727,7 @@ export const ProjectDetail: React.FC = () => {
     if (!id) return;
     try {
       setLoading(true);
+      await loadAuthToken();
       const response = await contentApi.getByProjectId(id);
       if (response.success && response.data) {
         setContentBlocks(response.data);
@@ -716,13 +737,16 @@ export const ProjectDetail: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, loadAuthToken]);
 
   const loadGeneratedContent = useCallback(async () => {
     if (!id) return;
     try {
+      const token = await loadAuthToken();
       console.log('[ProjectDetail] Loading generated content for project:', id);
-      const response = await fetch(`${API_BASE_URL}/content/generated/list/${id}`);
+      const response = await fetch(`${API_BASE_URL}/content/generated/list/${id}`, {
+        headers: authHeaders(token),
+      });
       console.log('[ProjectDetail] API response status:', response.status);
 
       if (response.ok) {
@@ -746,15 +770,20 @@ export const ProjectDetail: React.FC = () => {
       console.error('[ProjectDetail] Error loading generated content:', err);
       setGeneratedContent([]);
     }
-  }, [id]);
+  }, [id, loadAuthToken]);
 
   useEffect(() => {
-    if (id) {
-      loadProject();
-      loadContent();
-      loadGeneratedContent();
+    if (!id || !isLoaded) return;
+    if (!localMode && !isSignedIn) {
+      setProject(null);
+      setError('Authentication required.');
+      setLoading(false);
+      return;
     }
-  }, [id, loadProject, loadContent, loadGeneratedContent]);
+    loadProject();
+    loadContent();
+    loadGeneratedContent();
+  }, [id, isLoaded, isSignedIn, localMode, loadProject, loadContent, loadGeneratedContent]);
 
   useEffect(() => {
     canonScanRequestIdRef.current += 1;
@@ -777,6 +806,7 @@ export const ProjectDetail: React.FC = () => {
     if (!newBlock.title.trim()) return;
 
     try {
+      await loadAuthToken();
       const response = await contentApi.create({
         projectId: id!,
         title: newBlock.title,
@@ -802,6 +832,7 @@ export const ProjectDetail: React.FC = () => {
     }
 
     try {
+      await loadAuthToken();
       const response = await contentApi.delete(blockId);
       if (response.success) {
         setContentBlocks(contentBlocks.filter(b => b.id !== blockId));

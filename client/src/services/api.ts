@@ -3,7 +3,7 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import axios from 'axios';
+import axios, { AxiosHeaders } from 'axios';
 import { Project, ContentBlock, APIResponse, PaginatedResponse } from '../types';
 import type { WritingCanonProjectReport } from '../../../src/shared/canon/writingCanon';
 
@@ -19,15 +19,28 @@ type AuthOptions = {
   token?: string | null;
 };
 
-function authHeaders(token?: string | null) {
-  return token
-    ? { Authorization: `Bearer ${token}` }
+let apiAuthToken: string | null = null;
+
+export function setApiAuthToken(token: string | null) {
+  apiAuthToken = token;
+}
+
+export function authHeaders(token?: string | null) {
+  const resolvedToken = token === undefined ? apiAuthToken : token;
+  return resolvedToken
+    ? { Authorization: `Bearer ${resolvedToken}` }
     : {};
 }
 
 // Add request interceptor for debugging
 api.interceptors.request.use(
   (config) => {
+    if (apiAuthToken) {
+      config.headers = AxiosHeaders.from(config.headers);
+      if (!config.headers.has('Authorization')) {
+        config.headers.set('Authorization', `Bearer ${apiAuthToken}`);
+      }
+    }
     console.log('API Request:', config.method?.toUpperCase(), config.url);
     return config;
   },

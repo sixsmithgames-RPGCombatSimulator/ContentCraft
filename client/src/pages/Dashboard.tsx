@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { PlusIcon, Search, Filter, BookOpen, ArrowUpRight, Layers, ClipboardCopy } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
 import { Project, ProjectType } from '../types';
-import { projectApi } from '../services/api';
+import { projectApi, setApiAuthToken } from '../services/api';
 import { getProductConfig } from '../config/products';
 import { useAppAuth } from '../utils/useLocalAuth';
 import { isLocalMode } from '../utils/localMode';
@@ -39,6 +39,7 @@ export const Dashboard: React.FC = () => {
     try {
       setLoading(true);
       const token = localMode ? null : await getToken();
+      setApiAuthToken(token);
 
       if (!localMode && !token) {
         throw new Error("Clerk loaded, user signed in, but no token was returned.");
@@ -61,6 +62,7 @@ export const Dashboard: React.FC = () => {
   const handleDeleteProject = async (id: string) => {
     try {
       const token = localMode ? null : await getToken();
+      setApiAuthToken(token);
       const response = await projectApi.delete(id, { token });
       if (response.success) {
         setProjects(projects.filter(p => p.id !== id));
