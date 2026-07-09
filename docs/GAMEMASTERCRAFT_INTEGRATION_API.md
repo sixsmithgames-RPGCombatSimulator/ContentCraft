@@ -4,15 +4,24 @@ The `/api/gmc/v1` API is the canon and generation surface used by GameMaster Ass
 
 ## Authentication
 
-Local `SINGLE_USER_MODE=true` uses `DEFAULT_USER_ID`. Otherwise every request requires:
+Local `SINGLE_USER_MODE=true` uses `DEFAULT_USER_ID`. Otherwise requests may use
+the same delegated Clerk bearer token as the rest of GameMasterCraft:
+
+```http
+Authorization: Bearer <Clerk session token>
+X-Sixsmith-Correlation-Id: <UUID>
+```
+
+For trusted backend jobs, service auth remains supported:
 
 ```http
 Authorization: Bearer <GMC_SERVICE_API_KEY>
-X-Sixsmith-User-Id: <Clerk user ID>
+X-Sixsmith-User-Id: <Clerk user ID or existing GMC user email>
 X-Sixsmith-Correlation-Id: <UUID>
 ```
 
 The service key must contain at least 32 characters and must remain server-side.
+When a Clerk token is supplied, GMC derives the owner from the token `sub`.
 
 ## Campaign and live context
 

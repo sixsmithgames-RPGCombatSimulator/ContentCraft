@@ -4,7 +4,6 @@ import { ProjectStatus, ProjectType } from '../../shared/types/index.js';
 import { parseSmartJson } from '../../shared/generation/smartJsonParser.js';
 
 import { ProjectModel, ContentBlockModel } from '../models/index.js';
-import { getDb } from '../config/mongo.js';
 import { integrationAuth, type IntegrationRequest } from '../middleware/integrationAuth.js';
 import {
   buildMemoryContext,
@@ -29,6 +28,75 @@ const correlationId = (req: Request) => req.header('X-Sixsmith-Correlation-Id') 
 
 function fail(req: Request, res: Response, status: number, code: string, message: string, details: Record<string, unknown> = {}) {
   res.status(status).json({ error: { code, message, correlationId: correlationId(req), details } });
+}
+
+function parseGameClockText(value: unknown) {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  const dayMatch = text.match(/\bday\s*(\d{1,5})\b/i);
+  const meridiemMatch = text.match(/\b(\d{1,2})(?::([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)\b/i);
+  const twentyFourHourMatch = meridiemMatch ? null : text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  const day = dayMatch ? Math.max(1, Number(dayMatch[1])) : null;
+  let hour: number | null = null;
+  let minute: number | null = null;
+  const second = 0;
+  if (meridiemMatch) {
+    const rawHour = Number(meridiemMatch[1]);
+    const period = meridiemMatch[3].toLowerCase().replace(/\./g, '');
+    if (rawHour >= 1 && rawHour <= 12) {
+      hour = rawHour % 12 + (period === 'pm' ? 12 : 0);
+      minute = Number(meridiemMatch[2] ?? 0);
+    }
+  } else if (twentyFourHourMatch) {
+    hour = Number(twentyFourHourMatch[1]);
+    minute = Number(twentyFourHourMatch[2]);
+  }
+  const timeOfDayMatch = text.match(/\b(dawn|morning|noon|afternoon|evening|dusk|night|midnight)\b/i);
+  const timeOfDay = hour === null && timeOfDayMatch ? timeOfDayMatch[1].toLowerCase() : null;
+  if (day === null && hour === null && !timeOfDay) return null;
+  const elapsedSeconds = day !== null && hour !== null
+    ? ((day - 1) * 86400) + (hour * 3600) + ((minute ?? 0) * 60) + second
+    : null;
+  return { calendar: 'campaign', day, hour, minute, second, elapsedSeconds, label: null, timeOfDay, notes: '' };
+}
+
+function normalizeGameClock(input: any = {}, previous: Record<string, any> = {}) {
+  const rawSource = input?.gameClock !== undefined ? input.gameClock : input;
+  const parsedRaw = parseGameClockText(rawSource);
+  if ((typeof rawSource !== 'object' || rawSource === null || Array.isArray(rawSource)) && parsedRaw) {
+    return { ...previous, ...parsedRaw, updatedAt: new Date() };
+  }
+  const source = rawSource && typeof rawSource === 'object' && !Array.isArray(rawSource) ? rawSource : {};
+  const parsedText = parseGameClockText(source.label ?? source.display ?? source.timeOfDay ?? '');
+  const numberOrPrevious = (key: string, min: number, max: number) => {
+    const value = Number(source[key] ?? parsedText?.[key as keyof typeof parsedText] ?? previous[key]);
+    return Number.isFinite(value) ? Math.max(min, Math.min(max, Math.floor(value))) : null;
+  };
+  const hour = numberOrPrevious('hour', 0, 23);
+  const minute = numberOrPrevious('minute', 0, 59);
+  const second = numberOrPrevious('second', 0, 59) ?? 0;
+  const day = numberOrPrevious('day', 1, 100000);
+  const computedElapsed = day !== null && hour !== null
+    ? ((day - 1) * 86400) + (hour * 3600) + ((minute ?? 0) * 60) + second
+    : null;
+  const elapsedSeconds = Number(source.elapsedSeconds ?? parsedText?.elapsedSeconds ?? previous.elapsedSeconds ?? computedElapsed);
+  const rawLabel = String(source.label ?? source.display ?? previous.label ?? previous.display ?? '').trim();
+  const label = parsedText ? '' : rawLabel;
+  const timeOfDay = String(source.timeOfDay ?? parsedText?.timeOfDay ?? previous.timeOfDay ?? '').trim();
+  return {
+    ...(previous ?? {}),
+    ...(source ?? {}),
+    day,
+    hour,
+    minute,
+    second,
+    elapsedSeconds: Number.isFinite(elapsedSeconds) ? Math.max(0, Math.floor(elapsedSeconds)) : null,
+    label: label || null,
+    timeOfDay: timeOfDay || null,
+    calendar: String(source.calendar ?? previous.calendar ?? 'campaign').trim() || 'campaign',
+    notes: String(source.notes ?? previous.notes ?? '').trim(),
+    updatedAt: new Date(),
+  };
 }
 
 async function campaign(req: Request, res: Response, id = req.params.campaignId) {
@@ -76,11 +144,11 @@ gmcV1Router.get('/campaigns/:campaignId', asyncRoute(async (req, res) => {
 gmcV1Router.get('/campaigns/:campaignId/dashboard', asyncRoute(async (req, res) => {
   const project = await campaign(req, res); if (!project) return;
   const uid = userId(req); const id = req.params.campaignId;
-  const [{ blocks }, state, scenes, npcs, locations, facts, threads, session] = await Promise.all([
+  const [{ blocks }, state, scenes, npcs, locations, session] = await Promise.all([
     ContentBlockModel.findByProjectId(uid, id, { page: 1, limit: 250 }),
     collections.state().findOne({ userId: uid, campaignId: id }),
     collections.scenes().find({ userId: uid, campaignId: id }).sort({ updatedAt: -1 }).limit(100).toArray(),
-    listEntities(uid, id, 'npc'), listEntities(uid, id, 'location'), listFacts(uid, id), listThreads(uid, id, { status: 'open' }),
+    listEntities(uid, id, 'npc'), listEntities(uid, id, 'location'),
     collections.sessions().find({ userId: uid, campaignId: id }).sort({ endedAt: -1, createdAt: -1 }).limit(1).next(),
   ]);
   const currentScene = scenes.find((scene: any) => scene._id === state?.currentSceneId) ?? null;
@@ -94,9 +162,34 @@ gmcV1Router.get('/campaigns/:campaignId/dashboard', asyncRoute(async (req, res) 
     campaign: project, currentScene, currentLocation,
     presentNpcs: npcs.filter((npc: any) => present.has(npc._id)),
     relevantFacts: memoryContext.facts.slice(0, 50), openThreads: memoryContext.events,
+    campaignState: state ?? null,
+    gameClock: state?.gameClock ?? null,
     memoryContext,
     recentSummary: session?.summary ?? null, contentSummary: blocks.map((block) => ({ id: block.id, title: block.title, type: block.type, metadata: block.metadata })),
   });
+}));
+
+gmcV1Router.get('/campaigns/:campaignId/time', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req); const id = req.params.campaignId;
+  const state = await collections.state().findOne({ userId: uid, campaignId: id });
+  res.json({ gameClock: state?.gameClock ?? null, campaignState: state ?? null });
+}));
+
+gmcV1Router.patch('/campaigns/:campaignId/time', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req); const id = req.params.campaignId;
+  const previous = await collections.state().findOne({ userId: uid, campaignId: id });
+  const gameClock = req.body?.gameClock === null ? null : normalizeGameClock(req.body ?? {}, previous?.gameClock ?? {});
+  const state = await collections.state().findOneAndUpdate(
+    { userId: uid, campaignId: id },
+    {
+      $set: { gameClock, updatedAt: new Date() },
+      $setOnInsert: { userId: uid, campaignId: id },
+    },
+    { upsert: true, returnDocument: 'after' },
+  );
+  res.json({ gameClock: state?.gameClock ?? gameClock, campaignState: state });
 }));
 
 gmcV1Router.get('/campaigns/:campaignId/scenes/current', asyncRoute(async (req, res) => {
@@ -364,7 +457,9 @@ gmcV1Router.post('/ai/generate-narration', asyncRoute((req, res) => ai(req, res,
 First determine the player's NEW intent in the current instruction relative to the final assistant turn. Repeated wording may describe a multi-step method or refer to completed work; it is not permission to perform completed steps again. Deictic words such as "other", "next", "then", "after", "already", "again", and "continue" must advance their referent. Preserve all established positions, injuries, deaths, possessions, discoveries, searches, dialogue, and consequences, with the latest retcon taking precedence. Never re-award loot, re-search the same target, re-enter a location, or replay movement already completed. Resolve or materially advance each distinct new action in order. Do not merely paraphrase the instruction. Stop only at a genuine player decision or a check that the binding dmCheckPolicy actually requires.
 Planning is not execution. If the player says they start to plan, formulate or devise a plan, consider options, think about acting, watch, wait, or observe, keep them in that mental or observational state. Do not choose a plan for them, move them, manipulate an object, spend a resource, trigger a hazard, advance time pressure, or infer that a contemplated future action has begun. "Formulate a plan to sabotage it" does not authorize sabotage. Offer only information already available for deliberation and stop for the player's concrete decision.
 Use the supplied authoritative VCS result and campaign memory. Never invent, change, or recompute mechanical numbers. Do not contradict locked facts. Use playerCharacter capabilities and passive scores; never surface hidden reads. Before requesting an eligible roll, state its DC and every scene-specific outcome band. Canon proposals must use recordType FACT, ITEM, or EVENT; FACT includes scope, ITEM includes itemTier/location/ownership, and EVENT includes a deadline plus the consequence of inaction.
-Return {narration, npcDialogue, requiresVcsResolution, proposedCanonChanges, proposedVcsExports, riskLevel, syncNotes, gmPrivateNotes}.`, ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'])));
+Use the supplied treasureRewardPolicy when the interaction establishes loot, coin, valuables, gear, or magic. This is a high-magic solo campaign; reward pacing should be more favorable than standard party play while remaining plausible in the scene and avoiding duplicate awards.
+The supplied gameTimePolicy and gameTimeContext are binding. Keep in-world time consistent. As a courtesy, mention current time of day/night and realistic travel or activity durations when the player is choosing where to go or what to spend time doing. If an action, rest, ritual, search, travel, wait, conversation, or other activity consumes meaningful time, state the duration in narration and return proposedTimeAdvance. Combat uses VCS scale: one round is about 6 seconds; do not turn every individual turn into a separate large time jump. Do not advance time for pure planning or observation unless the player actually waits or spends time. If the exact clock is unknown, say so briefly and use relative durations until a clock anchor is established.
+Return {narration, npcDialogue, requiresVcsResolution, proposedCanonChanges, proposedVcsExports, proposedTimeAdvance, riskLevel, syncNotes, gmPrivateNotes}. proposedTimeAdvance is null or {shouldAdvance,seconds,minutes,reason,activity,clockAfter}.`, ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'])));
 gmcV1Router.post('/ai/validate-narration-continuity', asyncRoute((req, res) => ai(req, res, `Act as a strict continuity editor, not a storyteller. Compare candidateNarration with the ordered conversationHistory, current instruction, continuityContract, authoritative VCS state, and campaign dashboard.
 Mark the candidate invalid if it repeats an action already completed; awards the same item, money, information, damage, movement, or search result twice; contradicts the latest retcon or established state; ignores referents such as "other" or "next"; converts planning, considering, thinking, watching, or waiting into execution of a contemplated action; fails to resolve or materially advance an explicit new action; substitutes a recap for progress; or narrates a roll-dependent outcome without an authoritative result. A short orientation phrase is allowed, but the response must move forward without exceeding the player's stated intent.
 If valid, preserve candidateNarration exactly as correctedNarration. If invalid, write a minimally changed replacement that repairs every listed issue, honors the player's actual intent, preserves authoritative mechanics and established facts, and stops at the next genuine decision or properly framed roll. Do not add new mechanics merely to make the prose interesting.
@@ -394,12 +489,18 @@ Choose Perception versus Investigation by the purpose of the action, not by whet
 
 Do not narrate evidence, clues, observers, success, failure, or ambiguity before a required roll. For player_roll, provide brief preRollNarration that positions the attempt without resolving it, and five concrete scene-specific stake bands keyed criticalFailure, partial, success, greatSuccess, criticalSuccess. Each band must tell the player what changes at that outcome; do not use generic boilerplate. Use only these skills when applicable: acrobatics, animal_handling, arcana, athletics, deception, history, insight, intimidation, investigation, medicine, nature, perception, performance, persuasion, religion, sleight_of_hand, stealth, survival. Use a DC from 5 to 30 and rollMode normal|advantage|disadvantage. Consult playerCharacter passives and modifiers. If a passive floor resolves the information, choose passive rather than player_roll.
 
-Return {resolutionMode,skill,ability,dc,rollMode,reason,preRollNarration,stakes:{criticalFailure,partial,success,greatSuccess,criticalSuccess},confidence}.`, ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'])));
-gmcV1Router.post('/ai/narrate-skill-check-result', asyncRoute((req, res) => ai(req, res, `Narrate the authoritative VCS skill-check result and continue directly from the player's original action. Use authoritativeCheckOutcome and the matching scene-specific stake in rollRequest.stakes. Never change the d20, modifier, total, DC, margin, or outcome band. Do not replay actions completed before this check. If rollRequest.visibility is hidden, never mention a roll, DC, failure, success, modifier, or that hidden information was tested; simply narrate what the character perceives from the authoritative outcome. For a visible player roll, natural prose may reflect the quality of the result but should not read like a rules log. Resolve the attempted action, preserve uncertainty that the outcome band does not reveal, and stop at the next player decision. Return {narration,proposedCanonChanges,proposedVcsExports,riskLevel,syncNotes,gmPrivateNotes}.`, ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'])));
-gmcV1Router.post('/ai/respond-ooc', asyncRoute((req, res) => ai(req, res, 'Respond out of character as the DM to the player, using conversationHistory and campaign context. Answer every direct player question before offering next steps. Do not narrate the player character taking actions. Clearly distinguish rules/table discussion from in-world facts. If the player identifies a continuity or plausibility problem, do not defend the narration by inventing an unsupported explanation: acknowledge the concrete inconsistency, state the corrected interpretation, and say whether a retcon is needed. When initiative or a check is challenged, compare it to the player\'s actual wording rather than actions invented by prior narration. Planning, considering, thinking, watching, and waiting are not execution; acknowledge an erroneous initiative transition when no concrete tactical action occurred. If the player asks whether a check is appropriate, apply dmCheckPolicy and explain the decision and stakes directly. Never claim that a VCS character sheet, inventory, currency balance, hit points, hit dice, or XP was updated; the caller performs and confirms authoritative writes separately. Return {response,continuityNotes,proposedCanonChanges}.', ['response', 'continuityNotes', 'proposedCanonChanges'])));
+The supplied gameTimePolicy is binding. If the check itself would consume meaningful time, include that in the lite stakes and full stakes as a concrete cost or pressure. If two approaches differ primarily by time, make that clear.
+Return {resolutionMode,skill,ability,dc,rollMode,reason,preRollNarration,stakes:{criticalFailure,partial,success,greatSuccess,criticalSuccess},estimatedTimeCost,confidence}.`, ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'])));
+gmcV1Router.post('/ai/narrate-skill-check-result', asyncRoute((req, res) => ai(req, res, `Narrate the authoritative VCS skill-check result and continue directly from the player's original action. Use authoritativeCheckOutcome and the matching scene-specific stake in rollRequest.stakes. Never change the d20, modifier, total, DC, margin, or outcome band. Do not replay actions completed before this check. If rollRequest.visibility is hidden, never mention a roll, DC, failure, success, modifier, or that hidden information was tested; simply narrate what the character perceives from the authoritative outcome. For a visible player roll, natural prose may reflect the quality of the result but should not read like a rules log. Resolve the attempted action, preserve uncertainty that the outcome band does not reveal, and stop at the next player decision.
+Use the supplied treasureRewardPolicy when the resolved check establishes loot, coin, valuables, gear, or magic. This is a high-magic solo campaign; reward pacing should be more favorable than standard party play while remaining plausible and avoiding duplicates.
+The supplied gameTimePolicy and gameTimeContext are binding. If the resolved check consumed meaningful travel, searching, waiting, conversation, ritual, or other activity time, state that duration and return proposedTimeAdvance. Keep time costs consistent with the original stakes and do not add extra time beyond the outcome band.
+Return {narration,proposedCanonChanges,proposedVcsExports,proposedTimeAdvance,riskLevel,syncNotes,gmPrivateNotes}. proposedTimeAdvance is null or {shouldAdvance,seconds,minutes,reason,activity,clockAfter}.`, ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'])));
+gmcV1Router.post('/ai/respond-ooc', asyncRoute((req, res) => ai(req, res, 'Respond out of character as the DM to the player, using conversationHistory and campaign context. Answer every direct player question before offering next steps. Do not narrate the player character taking actions. Clearly distinguish rules/table discussion from in-world facts. If the player identifies a continuity or plausibility problem, do not defend the narration by inventing an unsupported explanation: acknowledge the concrete inconsistency, state the corrected interpretation, and say whether a retcon is needed. When initiative or a check is challenged, compare it to the player\'s actual wording rather than actions invented by prior narration. Planning, considering, thinking, watching, and waiting are not execution; acknowledge an erroneous initiative transition when no concrete tactical action occurred. If the player asks whether a check is appropriate, apply dmCheckPolicy and explain the decision and stakes directly. If the player asks about time, answer from gameTimeContext and gameTimePolicy, distinguishing exact clock time from estimates. Never claim that a VCS character sheet, inventory, currency balance, hit points, hit dice, XP, or the campaign clock was updated; the caller performs and confirms authoritative writes separately. Return {response,continuityNotes,proposedCanonChanges}.', ['response', 'continuityNotes', 'proposedCanonChanges'])));
 gmcV1Router.post('/ai/plan-character-sheet-mutation', asyncRoute((req, res) => ai(req, res, `Decide whether this interaction establishes or explicitly requests an authoritative VCS character-sheet change. Use currentSheet as the starting authority and the ordered conversationHistory to distinguish newly established changes from possessions or costs already synchronized. The candidateResponse is prose only and is not proof that a write occurred.
 
 Return a mutation only for confirmed acquisitions, losses, expenditures, healing, damage, rests, or explicit bookkeeping corrections. Do not mutate for plans, attempts, hypothetical rewards, disputed outcomes, or merely mentioning an existing possession. When the player asks to backfill an established but unsynchronized reward, include it once. A prior conversation entry whose sheetMutation status is applied is already synchronized and must never be applied again.
+
+The supplied treasureRewardPolicy is binding when interpreting newly established coin, valuables, gear, and magic. This is a high-magic solo campaign, so plausible rewards should be more favorable than standard party play. Use the policy baseline as calibration while preserving the fiction and never duplicating already synchronized loot.
 
 Currency rules:
 - Use mode delta for coin gained or spent so existing recorded wealth is preserved. Values may be positive or negative integers.
@@ -426,7 +527,7 @@ Return {
   hitDice:{mode:'none|delta|set',total,spent},
   experiencePoints:{mode:'none|delta|set',value}
 }. Use zero for unused numeric values, empty arrays for unused item operations, and confidence from 0 to 1.`, ['shouldMutate', 'confidence', 'reason', 'currency', 'items', 'hitPoints', 'hitDice', 'experiencePoints'])));
-gmcV1Router.post('/ai/retcon-narration', asyncRoute((req, res) => ai(req, res, 'Apply the player retcon instruction as an authoritative correction to recent conversationHistory. Discard contradicted narration and preserve everything not affected. The corrected narration becomes established current state: concrete possessions, discoveries, injuries, deaths, positions, and completed searches it states must not be awarded or performed again in later turns. Continue from the corrected state without replaying earlier beats. Do not alter VCS mechanics unless an authoritative restored VCS snapshot is supplied. If the corrected continuation reaches a check, the supplied dmCheckPolicy is binding and all stakes must be disclosed before requesting the roll. Return {narration,correctionSummary,proposedCanonChanges,continuityNotes}.', ['narration', 'correctionSummary', 'proposedCanonChanges', 'continuityNotes'])));
+gmcV1Router.post('/ai/retcon-narration', asyncRoute((req, res) => ai(req, res, 'Apply the player retcon instruction as an authoritative correction to recent conversationHistory. Discard contradicted narration and preserve everything not affected. The corrected narration becomes established current state: concrete possessions, discoveries, injuries, deaths, positions, completed searches, and elapsed in-world time it states must not be awarded or performed again in later turns. Continue from the corrected state without replaying earlier beats. Do not alter VCS mechanics or campaign time unless an authoritative restored snapshot or explicit retcon instruction is supplied. If the corrected continuation reaches a check, the supplied dmCheckPolicy is binding and all stakes must be disclosed before requesting the roll. Use gameTimePolicy for any corrected time handling. Return {narration,correctionSummary,proposedCanonChanges,proposedTimeAdvance,continuityNotes}.', ['narration', 'correctionSummary', 'proposedCanonChanges', 'continuityNotes'])));
 gmcV1Router.post('/ai/generate-npc-dialogue', asyncRoute((req, res) => ai(req, res, 'Generate canon-aware NPC dialogue. Preserve secrets and motivations. Return {dialogue, narration, proposedCanonChanges}.', ['dialogue', 'narration', 'proposedCanonChanges'])));
 gmcV1Router.post('/ai/extract-canon-changes', asyncRoute((req, res) => ai(req, res, `Extract only durable, newly established story memory from the ordered transcript. Use campaignDashboard to avoid duplicating existing entities or records. The latest retcon supersedes contradicted text. Player plans, questions, speculation, failed narration, and unconfirmed possibilities are not canon. Raw mechanics become memory only when they create a durable story consequence.
 
@@ -434,7 +535,7 @@ Keep canonical entities separate from memory records:
 - proposedEntities contains newly introduced or materially changed NPCs, locations, and factions. Use entityType 'npc|location|faction'. NPC entityTier is 'bbeg|lieutenant|henchman|contact'. Locations use geographicTier 'world|city|district|site|room' and parentLocationId when known. Use changeType 'create|update' and an existing targetId for updates. Do not create a second entity for a known person or place.
 - FACT is a durable truth. Geographic scope is {kind:'geographic',tier:'world|city|district|site|room',locationId}; entity scope is {kind:'entity',tier:'bbeg|lieutenant|henchman|contact',entityId}. Attach truths about a person to that entity rather than repeating the person as prose.
 - ITEM is one discrete physical object or sensible stack, with itemTier 'plot|mundane|currency|furniture', currentLocationId, ownerEntityId, and ownerType when known. Plot items always surface; currency, mundane items, and furniture remain local. Ownership transfers are updates, not duplicate item creation.
-- EVENT is only a pending pressure that will happen unless interrupted, never a completed past occurrence. It requires deadlineAt or deadlineDescription, a concrete consequence of inaction, and geographic or entity scope.
+- EVENT is only a pending pressure that will happen unless interrupted, never a completed past occurrence. It requires deadlineAt or deadlineDescription, a concrete consequence of inaction, and geographic or entity scope. Use gameTimeContext when interpreting relative deadlines such as tonight, second bell, after the long rest, or when the shipment leaves.
 
 Choose the narrowest correct scope. Prefer room/site over district/city when a truth is local; use world only for genuinely universal truths. Return no proposal for atmospheric prose, repeated facts, or trivial transient motion.
 Return {
@@ -475,7 +576,7 @@ gmcV1Router.post('/ai/plan-encounter', asyncRoute((req, res) => ai(req, res, `Pr
   opponents:[{name,kind,role,hitPoints,armorClass,speed,initiativeModifier,abilities,conditions,gridX,gridY,actions:[{name,type,attackBonus,range,damage:[{dice,bonus,type}],saveDc,saveAbility,onSuccessfulSave,conditions}]}],
   gmNotes
 }. situation is a concise present-tense handoff explaining what just made turn order necessary and what is happening now. objective states the player's immediate goal without assuming they must kill or attack anyone. playerOptions contains 3-5 materially different, nonbinding approaches that are legal in the scene; include nonviolent, evasive, social, environmental, or escape options whenever plausible. These are prompts, not decisions for the player. Use practical grid coordinates inside the map. Supply 1-6 opponents, complete combat statistics, and at least one mechanically executable attack or spell for each. kind must be npc or monster. imageUrl may be null; walls, doors, and fog still constitute an authoritative tactical map.`, ['name', 'objective', 'situation', 'playerOptions', 'map', 'playerStart', 'opponents', 'gmNotes'])));
-gmcV1Router.post('/ai/plan-combat-turn', asyncRoute((req, res) => ai(req, res, `Control exactly one non-player combatant turn in the supplied authoritative VCS BattleRoom. Use only IDs, statistics, token actions, targets, and positions present in the supplied state. Never choose or alter the player character's actions. Return {
+gmcV1Router.post('/ai/plan-combat-turn', asyncRoute((req, res) => ai(req, res, `Control exactly one non-player combatant turn in the supplied authoritative VCS BattleRoom. Use only IDs, statistics, token actions, targets, and positions present in the supplied state. Never choose or alter the player character's actions. Use the combat time scale from gameTimePolicy: one round is about 6 seconds; do not narrate minutes passing inside one turn. Return {
   actorId,
   movement:{tokenId,gridX,gridY,reason},
   action:{type,targetId,attackBonus,modifier,damage,saveDc,saveAbility,saveModifier,onSuccessfulSave,conditions,rollMode},

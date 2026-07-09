@@ -14,18 +14,26 @@ function response() {
   return { res, state };
 }
 
+function base64Url(value: unknown) {
+  return Buffer.from(JSON.stringify(value)).toString('base64url');
+}
+
+function clerkToken(payload: Record<string, unknown>) {
+  return `${base64Url({ alg: 'none', typ: 'JWT' })}.${base64Url(payload)}.signature`;
+}
+
 describe('integrationAuth', () => {
-  it('uses the configured local user in single-user mode', () => {
+  it('uses the configured local user in single-user mode', async () => {
     process.env.SINGLE_USER_MODE = 'true'; process.env.DEFAULT_USER_ID = 'local-gm';
     const req: any = { header: () => undefined };
     const { res } = response(); const next = vi.fn();
-    integrationAuth(req, res, next);
+    await integrationAuth(req, res, next);
     expect(next).toHaveBeenCalledOnce();
     expect(req.userId).toBe('local-gm');
     expect(req.integrationAuth).toBe('local');
   });
 
-  it('requires both a valid service key and user identity', () => {
+  it('accepts a valid service key and user identity', async () => {
     process.env.SINGLE_USER_MODE = 'false';
     process.env.GMC_SERVICE_API_KEY = 'a-secure-service-key-with-at-least-32-characters';
     const values: Record<string, string> = {
@@ -34,18 +42,31 @@ describe('integrationAuth', () => {
     };
     const req: any = { header: (name: string) => values[name] };
     const { res } = response(); const next = vi.fn();
-    integrationAuth(req, res, next);
+    await integrationAuth(req, res, next);
     expect(next).toHaveBeenCalledOnce();
     expect(req.userId).toBe('user_123');
     expect(req.integrationAuth).toBe('service');
   });
 
-  it('fails closed when service auth is not configured', () => {
+  it('accepts a Clerk bearer token without service auth', async () => {
+    process.env.SINGLE_USER_MODE = 'false'; delete process.env.GMC_SERVICE_API_KEY;
+    const values: Record<string, string> = {
+      Authorization: `Bearer ${clerkToken({ sub: 'user_clerk_123', exp: Math.floor(Date.now() / 1000) + 3600 })}`,
+    };
+    const req: any = { header: (name: string) => values[name] };
+    const { res } = response(); const next = vi.fn();
+    await integrationAuth(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(req.userId).toBe('user_clerk_123');
+    expect(req.integrationAuth).toBe('clerk');
+  });
+
+  it('requires a bearer token when service auth is not configured', async () => {
     process.env.SINGLE_USER_MODE = 'false'; delete process.env.GMC_SERVICE_API_KEY;
     const req: any = { header: () => undefined };
     const { res, state } = response();
-    integrationAuth(req, res, vi.fn());
-    expect(state.status).toBe(503);
-    expect(state.body.error.code).toBe('GMC_SERVICE_UNAVAILABLE');
+    await integrationAuth(req, res, vi.fn());
+    expect(state.status).toBe(401);
+    expect(state.body.error.code).toBe('AUTH_REQUIRED');
   });
 });
