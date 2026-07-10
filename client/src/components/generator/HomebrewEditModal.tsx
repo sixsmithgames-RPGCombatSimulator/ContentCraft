@@ -8,6 +8,7 @@ import { X, Save, Search, Filter, ChevronDown, ChevronUp, Trash2, Plus, Edit3, M
 import ClaimsEditor from '../shared/ClaimsEditor';
 import { parseAIResponse, formatParseError } from '../../utils/jsonParser';
 import ConfirmationModal from '../common/ConfirmationModal';
+import { API_BASE_URL, apiFetch } from '../../services/api';
 
 type HomebrewEntry = {
   type: string;
@@ -32,8 +33,6 @@ interface HomebrewEditModalProps {
   onSave: (editedContent: JsonRecord) => void;
   onClose: () => void;
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function HomebrewEditModal({
   isOpen,
@@ -284,12 +283,12 @@ export default function HomebrewEditModal({
     try {
       // Parse both pieces
       const [currentResponse, newResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/homebrew/parse-text`, {
+        apiFetch(`${API_BASE_URL}/homebrew/parse-text`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: remaining, contextType: entry.type }),
         }),
-        fetch(`${API_BASE_URL}/homebrew/parse-text`, {
+        apiFetch(`${API_BASE_URL}/homebrew/parse-text`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: selectedText, contextType: entry.type }),
@@ -514,7 +513,7 @@ export default function HomebrewEditModal({
       };
 
       // Call the upload/approve endpoint
-      const response = await fetch(`${API_BASE_URL}/upload/approve`, {
+      const response = await apiFetch(`${API_BASE_URL}/upload/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

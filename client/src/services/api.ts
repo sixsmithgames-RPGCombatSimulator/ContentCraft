@@ -20,9 +20,14 @@ type AuthOptions = {
 };
 
 let apiAuthToken: string | null = null;
+let apiAuthTokenProvider: (() => Promise<string | null>) | null = null;
 
 export function setApiAuthToken(token: string | null) {
   apiAuthToken = token;
+}
+
+export function setApiAuthTokenProvider(provider: (() => Promise<string | null>) | null) {
+  apiAuthTokenProvider = provider;
 }
 
 export function authHeaders(token?: string | null) {
@@ -30,6 +35,24 @@ export function authHeaders(token?: string | null) {
   return resolvedToken
     ? { Authorization: `Bearer ${resolvedToken}` }
     : {};
+}
+
+async function getApiFetchToken() {
+  if (!apiAuthTokenProvider) return apiAuthToken;
+  const token = await apiAuthTokenProvider();
+  apiAuthToken = token;
+  return token;
+}
+
+export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  if (!headers.has('Authorization')) {
+    const token = await getApiFetchToken();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+  }
+  return fetch(input, { ...init, headers });
 }
 
 // Add request interceptor for debugging

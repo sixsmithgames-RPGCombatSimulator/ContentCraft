@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { X, Package, Check, ChevronRight, Plus, Edit, Search } from 'lucide-react';
-import { API_BASE_URL } from '../../services/api';
+import { API_BASE_URL, apiFetch } from '../../services/api';
 
 interface Collection {
   _id: string;
@@ -81,7 +81,7 @@ export default function CollectionsModal({
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/canon/collections`);
+      const response = await apiFetch(`${API_BASE_URL}/canon/collections`);
 
       if (!response.ok) {
         throw new Error('Failed to load collections');
@@ -104,7 +104,7 @@ export default function CollectionsModal({
 
     try {
       // Link all entities in the collection
-      const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
+      const response = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -140,7 +140,7 @@ export default function CollectionsModal({
       if (entitySort === 'recent') params.set('sort', 'recent');
       params.set('limit', '500');
 
-      const response = await fetch(`${API_BASE_URL}/canon/library?${params}`);
+      const response = await apiFetch(`${API_BASE_URL}/canon/library?${params}`);
       if (!response.ok) throw new Error('Failed to load entities');
 
       const data: LibraryEntitySummary[] = await response.json();
@@ -249,7 +249,7 @@ export default function CollectionsModal({
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/canon/collections/${selectedCollection._id}`, {
+      const response = await apiFetch(`${API_BASE_URL}/canon/collections/${selectedCollection._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -293,7 +293,7 @@ export default function CollectionsModal({
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/canon/collections/${collection._id}`, {
+      const response = await apiFetch(`${API_BASE_URL}/canon/collections/${collection._id}`, {
         method: 'DELETE',
       });
 
@@ -328,7 +328,7 @@ export default function CollectionsModal({
     try {
       const tags = newCollection.tags.split(',').map(t => t.trim()).filter(Boolean);
 
-      const response = await fetch(`${API_BASE_URL}/canon/collections`, {
+      const response = await apiFetch(`${API_BASE_URL}/canon/collections`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

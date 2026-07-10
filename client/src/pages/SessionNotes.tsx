@@ -9,7 +9,7 @@ import {
   StickyNote, Plus, Trash2, Save, AlertCircle, RefreshCw,
   Clock, ChevronRight, Search, FileText,
 } from 'lucide-react';
-import { API_BASE_URL } from '../services/api';
+import { API_BASE_URL, apiFetch } from '../services/api';
 import { getProductConfig } from '../config/products';
 
 /** A note stored as a content block with domain 'notes'. */
@@ -74,7 +74,7 @@ export const SessionNotes: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/content/${projectId}`);
+      const res = await apiFetch(`${API_BASE_URL}/content/${projectId}`);
       if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
       const blocks = await res.json() as RawContentBlock[];
       const parsed = (Array.isArray(blocks) ? blocks : [])
@@ -117,7 +117,7 @@ export const SessionNotes: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/content/${projectId}`, {
+      const res = await apiFetch(`${API_BASE_URL}/content/${projectId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -150,7 +150,7 @@ export const SessionNotes: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/content/${projectId}/${selectedId}`, {
+      const res = await apiFetch(`${API_BASE_URL}/content/${projectId}/${selectedId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -186,7 +186,7 @@ export const SessionNotes: React.FC = () => {
     if (!window.confirm('Delete this note permanently?')) return;
     setDeletingId(noteId);
     try {
-      const res = await fetch(`${API_BASE_URL}/content/${projectId}/${noteId}`, { method: 'DELETE' });
+      const res = await apiFetch(`${API_BASE_URL}/content/${projectId}/${noteId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete note');
       setNotes(prev => prev.filter(n => n.id !== noteId));
       if (selectedId === noteId) {

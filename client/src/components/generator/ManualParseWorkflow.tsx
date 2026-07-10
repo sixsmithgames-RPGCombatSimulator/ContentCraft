@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Check, ArrowRight } from 'lucide-react';
-import { API_BASE_URL } from '../../services/api';
+import { API_BASE_URL, apiFetch } from '../../services/api';
 import { parseAIResponse, formatParseError } from '../../utils/jsonParser';
 import {
   addProgressEntry,
@@ -685,7 +685,7 @@ export default function ManualParseWorkflow({ projectId, onComplete, onCancel }:
     }
 
     try {
-      await fetch(`${API_BASE_URL}/delete-progress?filename=${encodeURIComponent(selectedResumeFilename)}`, {
+      await apiFetch(`${API_BASE_URL}/delete-progress?filename=${encodeURIComponent(selectedResumeFilename)}`, {
         method: 'DELETE',
       });
       await loadResumeCandidates();

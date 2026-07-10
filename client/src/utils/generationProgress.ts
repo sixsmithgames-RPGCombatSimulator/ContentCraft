@@ -8,7 +8,7 @@
  */
 
 import type { LiveMapSpace } from '../types/liveMapTypes';
-import { API_BASE_URL } from '../services/api';
+import { API_BASE_URL, apiFetch } from '../services/api';
 import type { AiCompiledStageRequest } from '../contexts/AiAssistantContext';
 import type { GenerationRunState, WorkflowContentType, WorkflowRetrySource } from '../../../src/shared/generation/workflowTypes';
 
@@ -618,7 +618,7 @@ export async function saveProgressToFile(
       console.warn(`[Progress] Compacted autosave payload for ${session.sessionId}: ${originalChars} -> ${persistedChars} chars`);
     }
 
-    const response = await fetch(`${API_BASE_URL}/save-progress`, {
+    const response = await apiFetch(`${API_BASE_URL}/save-progress`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -656,7 +656,7 @@ export async function loadProgressFromFile(
   filename: string
 ): Promise<GenerationProgress | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/load-progress?filename=${encodeURIComponent(filename)}`);
+    const response = await apiFetch(`${API_BASE_URL}/load-progress?filename=${encodeURIComponent(filename)}`);
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -697,7 +697,7 @@ export async function listProgressFiles(): Promise<Array<{
   recentProgress?: ProgressHistorySummaryEntry[];
 }>> {
   try {
-    const response = await fetch(`${API_BASE_URL}/list-progress`);
+    const response = await apiFetch(`${API_BASE_URL}/list-progress`);
 
     if (!response.ok) {
       throw new Error(`Failed to list progress files: ${response.statusText}`);

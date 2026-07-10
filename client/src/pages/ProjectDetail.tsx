@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, FileText, BookOpen, Wand2, Eye, Search, Filter, Copy, GripVertical, ArrowUpDown, Check, X, AlertCircle, RotateCw } from 'lucide-react';
 import { Project, ContentBlock, ProjectType, ContentType } from '../types';
-import { projectApi, contentApi, API_BASE_URL, authHeaders, setApiAuthToken } from '../services/api';
+import { projectApi, contentApi, API_BASE_URL, apiFetch, setApiAuthToken } from '../services/api';
 import GeneratedContentModal, { type GeneratedContentDoc } from '../components/generator/GeneratedContentModal';
 import ContentRenderer from '../components/generator/ContentRenderer';
 import EditContentModal from '../components/generator/EditContentModal';
@@ -742,11 +742,9 @@ export const ProjectDetail: React.FC = () => {
   const loadGeneratedContent = useCallback(async () => {
     if (!id) return;
     try {
-      const token = await loadAuthToken();
+      await loadAuthToken();
       console.log('[ProjectDetail] Loading generated content for project:', id);
-      const response = await fetch(`${API_BASE_URL}/content/generated/list/${id}`, {
-        headers: authHeaders(token),
-      });
+      const response = await apiFetch(`${API_BASE_URL}/content/generated/list/${id}`);
       console.log('[ProjectDetail] API response status:', response.status);
 
       if (response.ok) {
@@ -1102,7 +1100,8 @@ export const ProjectDetail: React.FC = () => {
                       onClick={async () => {
                         if (confirm('Delete this generated content?')) {
                           try {
-                            await fetch(`${API_BASE_URL}/content/generated/${content._id}`, { method: 'DELETE' });
+                            await loadAuthToken();
+                            await apiFetch(`${API_BASE_URL}/content/generated/${content._id}`, { method: 'DELETE' });
                             loadGeneratedContent();
                           } catch (err) {
                             console.error('Error deleting:', err);

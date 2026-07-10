@@ -9,10 +9,12 @@ import {
   Users, MapPin, Shield, Package, BookText, Clock, Search, Plus,
   Edit2, Unlink, Wand2, ChevronRight, AlertCircle, RefreshCw,
 } from 'lucide-react';
-import { API_BASE_URL } from '../services/api';
+import { API_BASE_URL, apiFetch, setApiAuthToken } from '../services/api';
 import { getProductConfig } from '../config/products';
 import CanonEntityEditor, { type CanonBase } from '../components/canon/CanonEntityEditor';
 import LibraryBrowserModal from '../components/canon/LibraryBrowserModal';
+import { useAppAuth } from '../utils/useLocalAuth';
+import { isLocalMode } from '../utils/localMode';
 
 /** A canon entity as returned by the project entities endpoint. */
 interface CanonEntity extends CanonBase {
@@ -68,6 +70,8 @@ export const WorldBible: React.FC = () => {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const product = getProductConfig();
+  const localMode = isLocalMode();
+  const { isLoaded, isSignedIn, getToken } = useAppAuth();
 
   const [entities, setEntities] = useState<CanonEntity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +82,19 @@ export const WorldBible: React.FC = () => {
   const [showLibraryBrowser, setShowLibraryBrowser] = useState(false);
   const [libraryBrowserTypeFilter, setLibraryBrowserTypeFilter] = useState<string>('');
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+
+  const loadAuthToken = useCallback(async () => {
+    if (localMode) {
+      setApiAuthToken(null);
+      return null;
+    }
+    if (!isLoaded) return null;
+    if (!isSignedIn) throw new Error('Authentication required.');
+    const token = await getToken();
+    if (!token) throw new Error("Clerk loaded, user signed in, but no token was returned.");
+    setApiAuthToken(token);
+    return token;
+  }, [getToken, isLoaded, isSignedIn, localMode]);
 
   const TABS: TabConfig[] = [
     {
@@ -139,7 +156,8 @@ export const WorldBible: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/entities`);
+      await loadAuthToken();
+      const response = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/entities`);
       if (!response.ok) throw new Error(`Failed to load world entries (${response.status})`);
       const data = await response.json() as CanonEntity[];
       setEntities(Array.isArray(data) ? data : []);
@@ -149,7 +167,7 @@ export const WorldBible: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, loadAuthToken]);
 
   useEffect(() => {
     void loadEntities();
@@ -177,7 +195,8 @@ export const WorldBible: React.FC = () => {
     if (!window.confirm(`Remove "${entity.canonical_name}" from this project's world bible?`)) return;
     setUnlinkingId(entity._id);
     try {
-      const linksRes = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`);
+      await loadAuthToken();
+      const linksRes = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links`);
       if (!linksRes.ok) throw new Error('Failed to load project links');
       const links = await linksRes.json() as Array<{ _id: string; library_entity_id: string }>;
       const link = links.find(l => l.library_entity_id === entity._id);
@@ -185,7 +204,7 @@ export const WorldBible: React.FC = () => {
         setError('Link not found — entity may already be unlinked.');
         return;
       }
-      const delRes = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links/${link._id}`, {
+      const delRes = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links/${link._id}`, {
         method: 'DELETE',
       });
       if (!delRes.ok) throw new Error('Failed to remove link');
@@ -201,7 +220,8 @@ export const WorldBible: React.FC = () => {
   const handleSaveEntity = async (updated: CanonBase) => {
     if (!editingEntity) return;
     const entityId = updated._id ?? editingEntity._id;
-    const response = await fetch(`${API_BASE_URL}/canon/entities/${entityId}`, {
+    await loadAuthToken();
+    const response = await apiFetch(`${API_BASE_URL}/canon/entities/${entityId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...editingEntity, ...updated, _id: entityId }),

@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Upload, FileText, CheckCircle, AlertCircle, Loader, Edit, Zap } from 'lucide-react';
-import { API_BASE_URL } from '../../services/api';
+import { API_BASE_URL, apiFetch } from '../../services/api';
 import ManualEntityForm from './ManualEntityForm';
 import ManualParseWorkflow from './ManualParseWorkflow';
 import ProjectContentLibraryPicker from './ProjectContentLibraryPicker';
@@ -84,7 +84,7 @@ export default function UploadModal({ isOpen, initialMode = 'choice', projectId,
           throw new Error('Please enter a source name');
         }
 
-        response = await fetch(`${API_BASE_URL}/upload/text`, {
+        response = await apiFetch(`${API_BASE_URL}/upload/text`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: rawText, sourceName }),
@@ -99,7 +99,7 @@ export default function UploadModal({ isOpen, initialMode = 'choice', projectId,
         formData.append('file', file);
         formData.append('sourceName', sourceName || file.name);
 
-        response = await fetch(`${API_BASE_URL}/upload/document`, {
+        response = await apiFetch(`${API_BASE_URL}/upload/document`, {
           method: 'POST',
           body: formData,
         });
@@ -131,7 +131,7 @@ export default function UploadModal({ isOpen, initialMode = 'choice', projectId,
     try {
       const entitiesToSave = parsedEntities.filter((_, i) => selectedEntities.has(i));
 
-      const response = await fetch(`${API_BASE_URL}/upload/approve`, {
+      const response = await apiFetch(`${API_BASE_URL}/upload/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -172,7 +172,7 @@ export default function UploadModal({ isOpen, initialMode = 'choice', projectId,
     setStep('saving');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/upload/approve`, {
+      const response = await apiFetch(`${API_BASE_URL}/upload/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -210,7 +210,7 @@ export default function UploadModal({ isOpen, initialMode = 'choice', projectId,
         projectId,
       }, null, 2));
 
-      const response = await fetch(`${API_BASE_URL}/upload/approve`, {
+      const response = await apiFetch(`${API_BASE_URL}/upload/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

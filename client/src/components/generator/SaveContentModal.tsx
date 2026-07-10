@@ -13,6 +13,7 @@ import {
   normalizeNpc,
   normalizedNpcToRecord,
 } from './npcUtils';
+import { API_BASE_URL, apiFetch } from '../../services/api';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -97,8 +98,6 @@ interface GeneratedContent {
   ecology?: unknown;
   lore?: unknown;
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface SaveContentModalProps {
   isOpen: boolean;
@@ -597,7 +596,7 @@ export default function SaveContentModal({
         has_persisted_content: !!persistedNpcPayload,
       });
 
-      const saveContentResponse = await fetch(`${API_BASE_URL}/content/generated/save`, {
+      const saveContentResponse = await apiFetch(`${API_BASE_URL}/content/generated/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -852,7 +851,7 @@ export default function SaveContentModal({
           });
 
           // Save entities to library
-          const resourceResponse = await fetch(`${API_BASE_URL}/upload/approve`, {
+          const resourceResponse = await apiFetch(`${API_BASE_URL}/upload/approve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -9,7 +9,7 @@ import {
   Clock, Plus, Edit2, Trash2, AlertCircle, RefreshCw,
   Save, X, ChevronDown, ChevronUp, CalendarDays,
 } from 'lucide-react';
-import { API_BASE_URL } from '../services/api';
+import { API_BASE_URL, apiFetch } from '../services/api';
 import { getProductConfig } from '../config/products';
 
 /** A timeline entity from the canon library. */
@@ -67,7 +67,7 @@ export const ProjectTimeline: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/entities`);
+      const res = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/entities`);
       if (!res.ok) throw new Error(`Failed to load timeline (${res.status})`);
       const data = await res.json() as TimelineEntity[];
       const timelineOnly = (Array.isArray(data) ? data : [])
@@ -91,7 +91,7 @@ export const ProjectTimeline: React.FC = () => {
     setAddSaving(true);
     setError(null);
     try {
-      const entityRes = await fetch(`${API_BASE_URL}/canon/entities`, {
+      const entityRes = await apiFetch(`${API_BASE_URL}/canon/entities`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -111,7 +111,7 @@ export const ProjectTimeline: React.FC = () => {
       }
       const entity = await entityRes.json() as TimelineEntity;
 
-      const linkRes = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
+      const linkRes = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ library_entity_ids: [entity._id] }),
@@ -146,7 +146,7 @@ export const ProjectTimeline: React.FC = () => {
     setEditSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/canon/entities/${editingId}`, {
+      const res = await apiFetch(`${API_BASE_URL}/canon/entities/${editingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -179,12 +179,12 @@ export const ProjectTimeline: React.FC = () => {
     if (!window.confirm(`Remove "${entityName}" from this timeline?`)) return;
     setDeletingId(entityId);
     try {
-      const linksRes = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`);
+      const linksRes = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links`);
       if (!linksRes.ok) throw new Error('Failed to load project links');
       const links = await linksRes.json() as Array<{ _id: string; library_entity_id: string }>;
       const link = links.find(l => l.library_entity_id === entityId);
       if (link) {
-        const delLinkRes = await fetch(
+        const delLinkRes = await apiFetch(
           `${API_BASE_URL}/canon/projects/${projectId}/links/${link._id}`,
           { method: 'DELETE' },
         );

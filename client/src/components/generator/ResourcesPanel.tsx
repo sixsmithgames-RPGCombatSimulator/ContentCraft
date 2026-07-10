@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { BookText, FileText, Plus, Library, FolderOpen, Link as LinkIcon, Package, Search } from 'lucide-react';
-import { API_BASE_URL } from '../../services/api';
+import { API_BASE_URL, apiFetch } from '../../services/api';
 import UploadModal from './UploadModal';
 import LibraryBrowserModal from '../canon/LibraryBrowserModal';
 import CollectionsModal from '../canon/CollectionsModal';
@@ -63,7 +63,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
         url = `${API_BASE_URL}/canon/entities?scope=lib`;
       }
 
-      const response = await fetch(url);
+      const response = await apiFetch(url);
 
       let data: unknown = null;
       try {
@@ -102,8 +102,8 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
   const loadProjectLinkState = useCallback(async () => {
     try {
       const [linksResponse, entitiesResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`),
-        fetch(`${API_BASE_URL}/canon/projects/${projectId}/entities`),
+        apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links`),
+        apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/entities`),
       ]);
 
       const linksData = linksResponse.ok ? (await linksResponse.json() as Array<{ _id: string; library_entity_id: string }>) : [];
@@ -141,7 +141,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
       try {
         setDeletingId(resourceId);
         setErrorMessage(null);
-        const response = await fetch(`${API_BASE_URL}/canon/entities/${resourceId}`, {
+        const response = await apiFetch(`${API_BASE_URL}/canon/entities/${resourceId}`, {
           method: 'DELETE',
         });
 
@@ -181,7 +181,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
       try {
         setDeletingId(`link:${resourceId}`);
         setErrorMessage(null);
-        const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
+        const response = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ library_entity_ids: [resourceId] }),
@@ -214,7 +214,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
       try {
         setDeletingId(`unlink:${resourceId}`);
         setErrorMessage(null);
-        const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/links/${linkId}`, {
+        const response = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links/${linkId}`, {
           method: 'DELETE',
         });
 

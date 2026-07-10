@@ -42,7 +42,7 @@ import { getStageContract as getNpcStageContract } from '../config/npcStageContr
 import { getNpcSectionChunks, type NpcSectionChunk } from '../config/npcSectionChunks';
 import type { LiveMapSpace } from '../types/liveMapTypes';
 import { synchronizeReciprocalDoors } from '../utils/doorSync';
-import { projectApi, API_BASE_URL } from '../services/api';
+import { projectApi, API_BASE_URL, apiFetch } from '../services/api';
 import type { Project } from '../types';
 import { useAiAssistant } from '../contexts/AiAssistantContext';
 import type {
@@ -2499,7 +2499,7 @@ export default function ManualGenerator() {
         const formData = new FormData();
         formData.append('file', generationConfig.homebrewFile);
 
-        const response = await fetch(`${API_BASE_URL}/homebrew/chunk`, {
+        const response = await apiFetch(`${API_BASE_URL}/homebrew/chunk`, {
           method: 'POST',
           body: formData,
         });
@@ -3636,7 +3636,7 @@ Output: Valid JSON only. No markdown, no prose.`;
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/homebrew/parse`, {
+      const response = await apiFetch(`${API_BASE_URL}/homebrew/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -8,7 +8,7 @@ import {
   Unlink2,
   Upload,
 } from 'lucide-react';
-import { API_BASE_URL } from '../../services/api';
+import { API_BASE_URL, apiFetch } from '../../services/api';
 
 type ProjectContentStatus = 'project_only' | 'in_library' | 'linked' | 'unsupported';
 
@@ -70,7 +70,7 @@ export default function ProjectContentLibraryPicker({
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/canon/projects/${projectId}/generated-content-status`);
+      const response = await apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/generated-content-status`);
       let data: unknown = null;
       try {
         data = await response.json();
@@ -145,7 +145,7 @@ export default function ProjectContentLibraryPicker({
   const handlePromote = useCallback(
     async (item: ProjectContentLibraryItem, linkToProject: boolean) => {
       await runAction(`promote:${item.content_id}:${linkToProject ? 'link' : 'update'}`, () =>
-        fetch(`${API_BASE_URL}/canon/projects/${projectId}/promote-generated`, {
+        apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/promote-generated`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -165,7 +165,7 @@ export default function ProjectContentLibraryPicker({
         return;
       }
       await runAction(`link:${item.content_id}`, () =>
-        fetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
+        apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ library_entity_ids: [item.library_entity_id] }),
@@ -182,7 +182,7 @@ export default function ProjectContentLibraryPicker({
         return;
       }
       await runAction(`unlink:${item.content_id}`, () =>
-        fetch(`${API_BASE_URL}/canon/projects/${projectId}/links/${item.link_id}`, {
+        apiFetch(`${API_BASE_URL}/canon/projects/${projectId}/links/${item.link_id}`, {
           method: 'DELETE',
         }),
       );

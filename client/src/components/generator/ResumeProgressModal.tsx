@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Clock, FileText, RotateCcw, Trash2 } from 'lucide-react';
-import { API_BASE_URL } from '../../services/api';
+import { API_BASE_URL, apiFetch } from '../../services/api';
 import {
   listProgressFiles,
   loadProgressFromFile,
@@ -104,7 +104,7 @@ export default function ResumeProgressModal({
     setDeleteConfirm(null);
 
     try {
-      await fetch(`${API_BASE_URL}/delete-progress?filename=${encodeURIComponent(filename)}`, {
+      await apiFetch(`${API_BASE_URL}/delete-progress?filename=${encodeURIComponent(filename)}`, {
         method: 'DELETE',
       });
       await loadProgressFiles();
