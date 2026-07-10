@@ -5,6 +5,7 @@
 
 export interface ProjectLibraryLink {
   _id: string; // Unique link ID
+  userId?: string; // Owning user ID for multi-tenancy
   project_id: string; // Which project this link belongs to
   library_entity_id: string; // Which library entity is linked (e.g., "lib.spell.fireball")
   added_at: Date; // When the link was created

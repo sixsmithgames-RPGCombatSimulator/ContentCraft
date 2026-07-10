@@ -31,6 +31,11 @@ interface RawContentBlock {
   updatedAt: string;
 }
 
+interface ContentBlocksResponse {
+  success?: boolean;
+  data?: RawContentBlock[];
+}
+
 /** Maps a raw content block to a Note if it qualifies as a notes domain block. */
 function blockToNote(block: RawContentBlock): Note | null {
   const meta = (block.metadata ?? {}) as Record<string, unknown>;
@@ -74,9 +79,14 @@ export const SessionNotes: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/content/${projectId}`);
+      const res = await apiFetch(`${API_BASE_URL}/content/project/${projectId}?page=1&limit=250`);
       if (!res.ok) throw new Error(`Failed to load notes (${res.status})`);
-      const blocks = await res.json() as RawContentBlock[];
+      const response = await res.json() as ContentBlocksResponse | RawContentBlock[];
+      const blocks = Array.isArray(response)
+        ? response
+        : Array.isArray(response.data)
+          ? response.data
+          : [];
       const parsed = (Array.isArray(blocks) ? blocks : [])
         .map(blockToNote)
         .filter((n): n is Note => n !== null)
@@ -117,10 +127,11 @@ export const SessionNotes: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/content/${projectId}`, {
+      const res = await apiFetch(`${API_BASE_URL}/content`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          projectId,
           title: 'New Note',
           content: '',
           type: 'text',
@@ -128,7 +139,8 @@ export const SessionNotes: React.FC = () => {
         }),
       });
       if (!res.ok) throw new Error('Failed to create note');
-      const block = await res.json() as RawContentBlock;
+      const response = await res.json() as { success?: boolean; data?: RawContentBlock } | RawContentBlock;
+      const block = 'data' in response && response.data ? response.data : response as RawContentBlock;
       const note = blockToNote(block);
       if (!note) throw new Error('Created block is not a valid note');
       setNotes(prev => [note, ...prev]);
@@ -150,10 +162,11 @@ export const SessionNotes: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/content/${projectId}/${selectedId}`, {
+      const res = await apiFetch(`${API_BASE_URL}/content/${selectedId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          projectId,
           title: editTitle || 'Untitled Note',
           content: editContent,
           type: 'text',
@@ -161,7 +174,8 @@ export const SessionNotes: React.FC = () => {
         }),
       });
       if (!res.ok) throw new Error('Failed to save note');
-      const updated = await res.json() as RawContentBlock;
+      const response = await res.json() as { success?: boolean; data?: RawContentBlock } | RawContentBlock;
+      const updated = 'data' in response && response.data ? response.data : response as RawContentBlock;
       const note = blockToNote(updated) ?? {
         id: selectedId,
         title: editTitle,
@@ -186,7 +200,7 @@ export const SessionNotes: React.FC = () => {
     if (!window.confirm('Delete this note permanently?')) return;
     setDeletingId(noteId);
     try {
-      const res = await apiFetch(`${API_BASE_URL}/content/${projectId}/${noteId}`, { method: 'DELETE' });
+      const res = await apiFetch(`${API_BASE_URL}/content/${noteId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete note');
       setNotes(prev => prev.filter(n => n.id !== noteId));
       if (selectedId === noteId) {

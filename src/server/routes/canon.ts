@@ -97,6 +97,40 @@ const replaceCanonChunksForEntity = async (
   return chunks.length;
 };
 
+const buildProjectLinkOwnerFilter = (
+  projectId: string,
+  userId: string | undefined,
+): Record<string, unknown> => {
+  const ownerClauses: Record<string, unknown>[] = [
+    { userId: { $exists: false }, added_by: { $exists: false } },
+  ];
+  if (typeof userId === 'string' && userId.length > 0) {
+    ownerClauses.unshift({ userId }, { added_by: userId });
+  }
+
+  return {
+    project_id: projectId,
+    $or: ownerClauses,
+  };
+};
+
+const buildProjectLinkIdOwnerFilter = (
+  linkId: string,
+  userId: string | undefined,
+): Record<string, unknown> => {
+  const ownerClauses: Record<string, unknown>[] = [
+    { userId: { $exists: false }, added_by: { $exists: false } },
+  ];
+  if (typeof userId === 'string' && userId.length > 0) {
+    ownerClauses.unshift({ userId }, { added_by: userId });
+  }
+
+  return {
+    _id: linkId,
+    $or: ownerClauses,
+  };
+};
+
 // ============================================================================
 // CANON ENTITY ROUTES - Complete CRUD operations for canon entities
 // ============================================================================
@@ -634,7 +668,7 @@ canonRouter.get('/projects/:projectId/generated-content-status', async (req: Req
       promotableEntityIds.length > 0
         ? entitiesCollection.find({ _id: { $in: promotableEntityIds }, userId: authReq.userId }).toArray()
         : Promise.resolve([]),
-      linksCollection.find({ project_id: projectId }).toArray(),
+      linksCollection.find(buildProjectLinkOwnerFilter(projectId, authReq.userId)).toArray(),
     ]);
 
     const existingEntityIds = new Set(existingEntities.map((entity) => entity._id));
@@ -709,7 +743,7 @@ canonRouter.post('/projects/:projectId/promote-generated', async (req: Request, 
 
     const existingEntities = await entitiesCollection.find({ userId: authReq.userId }).project({ _id: 1, created_at: 1 }).toArray();
     const existingEntityMap = new Map(existingEntities.map((entity) => [entity._id, entity]));
-    const existingLinks = await linksCollection.find({ project_id: projectId }).toArray();
+    const existingLinks = await linksCollection.find(buildProjectLinkOwnerFilter(projectId, authReq.userId)).toArray();
     const existingLinkIds = new Set(existingLinks.map((link) => link._id));
 
     const results: Array<Record<string, unknown>> = [];
@@ -757,9 +791,11 @@ canonRouter.post('/projects/:projectId/promote-generated', async (req: Request, 
         if (!existingLinkIds.has(generatedLinkId)) {
           const link: ProjectLibraryLink = {
             _id: generatedLinkId,
+            userId: authReq.userId,
             project_id: projectId,
             library_entity_id: draft.entityId,
             added_at: new Date(),
+            added_by: authReq.userId,
           };
           await linksCollection.insertOne(link);
           existingLinkIds.add(generatedLinkId);
@@ -800,12 +836,13 @@ canonRouter.post('/projects/:projectId/promote-generated', async (req: Request, 
  */
 canonRouter.get('/projects/:projectId/links', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { projectId } = req.params;
 
     const collection = getProjectLibraryLinksCollection();
 
     const links = await collection
-      .find({ project_id: projectId })
+      .find(buildProjectLinkOwnerFilter(projectId, authReq.userId))
       .sort({ added_at: -1 })
       .toArray();
 
@@ -840,7 +877,7 @@ canonRouter.post('/projects/:projectId/links', async (req: Request, res: Respons
       const linkId = generateLinkId(projectId, entityId);
 
       // Check if already linked
-      const existing = await collection.findOne({ _id: linkId, userId: authReq.userId });
+      const existing = await collection.findOne(buildProjectLinkIdOwnerFilter(linkId, authReq.userId));
       if (existing) {
         alreadyLinked++;
         continue;
@@ -848,9 +885,11 @@ canonRouter.post('/projects/:projectId/links', async (req: Request, res: Respons
 
       const link: ProjectLibraryLink = {
         _id: linkId,
+        userId: authReq.userId,
         project_id: projectId,
         library_entity_id: entityId,
         added_at: new Date(),
+        added_by: authReq.userId,
       };
 
       links.push(link);
@@ -883,7 +922,7 @@ canonRouter.delete('/projects/:projectId/links/:linkId', async (req: Request, re
 
     const collection = getProjectLibraryLinksCollection();
 
-    const result = await collection.deleteOne({ _id: linkId, userId: authReq.userId });
+    const result = await collection.deleteOne(buildProjectLinkIdOwnerFilter(linkId, authReq.userId));
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Link not found' });
@@ -899,11 +938,12 @@ canonRouter.delete('/projects/:projectId/links/:linkId', async (req: Request, re
 
 /**
  * GET /api/canon/projects/:projectId/entities
- * Get all linked library entities for a project (with full entity data)
- * This resolves both direct entity links AND collection links
+ * Get all canon entities active for a project (with full entity data).
+ * This includes project-scoped entities, direct library links, and collection links.
  */
 canonRouter.get('/projects/:projectId/entities', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { projectId } = req.params;
     const { type, tags } = req.query;
 
@@ -911,14 +951,22 @@ canonRouter.get('/projects/:projectId/entities', async (req: Request, res: Respo
     const entitiesCollection = getCanonEntitiesCollection();
     const collectionsCollection = getLibraryCollectionsCollection();
 
-    // Get all links for this project
-    const links = await linksCollection
-      .find({ project_id: projectId })
-      .toArray();
+    const applyProjectEntityFilters = (filter: Record<string, any>) => {
+      if (type && typeof type === 'string') {
+        filter.type = type;
+      }
 
-    if (links.length === 0) {
-      return res.json([]);
-    }
+      if (tags && typeof tags === 'string') {
+        filter.tags = tags;
+      }
+
+      return filter;
+    };
+
+    // Get all linked library resources for this project.
+    const links = await linksCollection
+      .find(buildProjectLinkOwnerFilter(projectId, authReq.userId))
+      .toArray();
 
     // Separate entity IDs and potential collection IDs
     const linkedIds = links.map(link => link.library_entity_id);
@@ -928,7 +976,7 @@ canonRouter.get('/projects/:projectId/entities', async (req: Request, res: Respo
     for (const id of linkedIds) {
       // Check if it's a collection (collections have IDs like "coll_xxx")
       if (id.startsWith('coll_')) {
-        const collection = await collectionsCollection.findOne({ _id: id });
+        const collection = await collectionsCollection.findOne({ _id: id, userId: authReq.userId });
         if (collection && collection.entity_ids) {
           // Add all entity IDs from the collection
           collection.entity_ids.forEach(eid => entityIdsSet.add(eid));
@@ -941,26 +989,32 @@ canonRouter.get('/projects/:projectId/entities', async (req: Request, res: Respo
 
     const entityIds = Array.from(entityIdsSet);
 
-    if (entityIds.length === 0) {
-      return res.json([]);
+    const linkedFilter = applyProjectEntityFilters({
+      _id: { $in: entityIds },
+      userId: authReq.userId,
+    });
+
+    const projectFilter = applyProjectEntityFilters({
+      userId: authReq.userId,
+      $or: [
+        { project_id: projectId },
+        { scope: `proj_${projectId}` },
+      ],
+    });
+
+    const [linkedEntities, projectEntities] = await Promise.all([
+      entityIds.length > 0 ? entitiesCollection.find(linkedFilter).toArray() : Promise.resolve([]),
+      entitiesCollection.find(projectFilter).toArray(),
+    ]);
+
+    const entitiesById = new Map<string, CanonEntity>();
+    for (const entity of [...linkedEntities, ...projectEntities]) {
+      entitiesById.set(entity._id, entity);
     }
 
-    // Build filter for entities
-    const filter: any = { _id: { $in: entityIds } };
-
-    if (type && typeof type === 'string') {
-      filter.type = type;
-    }
-
-    if (tags && typeof tags === 'string') {
-      filter.tags = tags;
-    }
-
-    // Fetch entities
-    const entities = await entitiesCollection
-      .find(filter)
-      .sort({ canonical_name: 1 })
-      .toArray();
+    const entities = Array.from(entitiesById.values()).sort((a, b) =>
+      a.canonical_name.localeCompare(b.canonical_name),
+    );
 
     res.json(entities);
   } catch (error) {

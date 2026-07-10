@@ -330,7 +330,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
       </div>
 
       <p className="text-sm text-gray-600 mb-4">
-        Manage your project's resources and link official library content.
+        Manage this campaign's canon resources and linked library content.
       </p>
 
       {/* Scope Tabs: Project vs Library */}
@@ -344,7 +344,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
           }`}
         >
           <FolderOpen className="w-4 h-4" />
-          Linked Resources{scopeTab === 'project' && ` (${resources.length})`}
+          Campaign Canon{scopeTab === 'project' && ` (${resources.length})`}
         </button>
         <button
           onClick={() => setScopeTab('library')}
@@ -394,9 +394,9 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
           </div>
         ) : (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:bg-blue-500/10 dark:border-blue-400/30">
-            <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">📚 Project canon comes from linked library entries</p>
+            <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">Campaign canon includes linked library entries and project memory</p>
             <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-              Promote content you already made for this project, or link existing library entries. Unlink anything you no longer want the generator to think with.
+              Promote content you already made for this project, link library entries, or review recovered campaign canon used by the generator.
             </p>
             <div className="flex flex-col gap-2 md:flex-row">
               <button
@@ -515,7 +515,7 @@ export default function ResourcesPanel({ projectId }: ResourcesPanelProps) {
           <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
           <p className="font-medium">No {typeFilter !== 'all' ? typeFilter : ''} resources found</p>
           {scopeTab === 'project' ? (
-            <p className="text-sm mt-1">Link library resources to use them in this project</p>
+            <p className="text-sm mt-1">Import, promote, or link canon resources to use them in this campaign</p>
           ) : (
             <p className="text-sm mt-1">Add resources to the library to build your content collection</p>
           )}

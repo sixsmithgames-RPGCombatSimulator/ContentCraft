@@ -37,7 +37,26 @@ async function loadCanonEntitiesForConsistency(userId: string, projectId: string
   const entitiesCollection = getCanonEntitiesCollection();
   const collectionsCollection = getLibraryCollectionsCollection();
 
-  const links = await linksCollection.find({ project_id: projectId, userId }).toArray();
+  const projectEntities = await entitiesCollection
+    .find({
+      userId,
+      $or: [
+        { project_id: projectId },
+        { scope: `proj_${projectId}` },
+      ],
+    })
+    .toArray();
+
+  const links = await linksCollection.find({
+    project_id: projectId,
+    $or: [
+      { userId },
+      { added_by: userId },
+      { userId: { $exists: false }, added_by: { $exists: false } },
+    ],
+  }).toArray();
+
+  const projectEntitiesById = new Map(projectEntities.map((entity) => [entity._id, entity]));
   if (links.length > 0) {
     const linkedIds = links
       .map((link) => (typeof link.library_entity_id === 'string' ? link.library_entity_id : ''))
@@ -63,13 +82,24 @@ async function loadCanonEntitiesForConsistency(userId: string, projectId: string
         .find({ _id: { $in: Array.from(entityIds) }, userId })
         .toArray();
 
-      if (entities.length > 0) {
+      for (const entity of entities) {
+        projectEntitiesById.set(entity._id, entity);
+      }
+
+      if (projectEntitiesById.size > 0) {
         return {
-          entities,
+          entities: Array.from(projectEntitiesById.values()),
           searchedScope: 'project',
         };
       }
     }
+  }
+
+  if (projectEntitiesById.size > 0) {
+    return {
+      entities: Array.from(projectEntitiesById.values()),
+      searchedScope: 'project',
+    };
   }
 
   const libraryEntities = await entitiesCollection

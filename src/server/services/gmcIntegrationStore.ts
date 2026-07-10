@@ -36,6 +36,10 @@ function normalizeScope(input: Record<string, any>) {
   };
 }
 
+function objectRecord(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? { ...(value as Record<string, any>) } : {};
+}
+
 export async function listEntities(userId: string, campaignId: string, kind: GmcEntityKind, search?: string) {
   const filter: Record<string, unknown> = { userId, project_id: campaignId, type: kind };
   if (search) filter.canonical_name = { $regex: search, $options: 'i' };
@@ -93,11 +97,35 @@ export async function updateEntity(userId: string, id: string, kind: GmcEntityKi
   for (const key of ['aliases', 'claims', 'relationships', 'tags', 'details', 'status', 'draft', 'source']) {
     if (input[key] !== undefined) allowed[key] = input[key];
   }
-  if (kind === 'npc' && input.entityTier !== undefined) allowed['details.entityTier'] = includes(ENTITY_SCOPE_TIERS, input.entityTier) ? String(input.entityTier) : 'contact';
+  if (kind === 'npc' && input.entityTier !== undefined) {
+    const entityTier = includes(ENTITY_SCOPE_TIERS, input.entityTier) ? String(input.entityTier) : 'contact';
+    if (allowed.details !== undefined) {
+      allowed.details = { ...objectRecord(allowed.details), entityTier };
+    } else {
+      allowed['details.entityTier'] = entityTier;
+    }
+  }
   if (kind === 'item') {
-    if (input.itemTier !== undefined) allowed['details.memory.tier'] = includes(ITEM_TIERS, input.itemTier) ? String(input.itemTier) : 'mundane';
+    const memoryPatch: Record<string, unknown> = {};
+    if (input.itemTier !== undefined) memoryPatch.tier = includes(ITEM_TIERS, input.itemTier) ? String(input.itemTier) : 'mundane';
     for (const key of ['currentLocationId', 'ownerEntityId', 'ownerType']) {
-      if (input[key] !== undefined) allowed[`details.memory.${key}`] = input[key];
+      if (input[key] !== undefined) memoryPatch[key] = input[key];
+    }
+    if (Object.keys(memoryPatch).length > 0) {
+      if (allowed.details !== undefined) {
+        const details = objectRecord(allowed.details);
+        allowed.details = {
+          ...details,
+          memory: {
+            ...objectRecord(details.memory),
+            ...memoryPatch,
+          },
+        };
+      } else {
+        for (const [key, value] of Object.entries(memoryPatch)) {
+          allowed[`details.memory.${key}`] = value;
+        }
+      }
     }
   }
   allowed.updated_at = now();
