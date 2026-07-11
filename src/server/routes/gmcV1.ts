@@ -19,6 +19,12 @@ import {
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
 import { generateStructuredJson, generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
+import {
+  PLAN_COMBAT_TURN_INSTRUCTION,
+  PLAN_COMBAT_TURN_REQUIRED_KEYS,
+  PLAN_ENCOUNTER_INSTRUCTION,
+  PLAN_ENCOUNTER_REQUIRED_KEYS,
+} from './gmcV1PlanningContracts.js';
 
 export const gmcV1Router = Router();
 gmcV1Router.use(integrationAuth);
@@ -598,21 +604,15 @@ Do not create a BattleRoom for following or watching someone, scouting, sneaking
 Planning language is never a present tactical trigger. "I start to formulate a plan", "I think about sabotaging it", "I consider my options", and similar wording mean the character is only deliberating. Do not convert the object of the plan into an action, invent urgency to force a transition, or claim the player manipulated anything. Existing danger or a possible future consequence is not enough by itself; turn order must be required by something actually happening now.
 
 Return {shouldCreateBattleRoom,requiresTurnOrder,triggeredNow,transitionType,confidence,reason,encounterBrief}. requiresTurnOrder and triggeredNow must be booleans. transitionType must be one of none|combat|chase|tactical_hazard. encounterBrief is null unless shouldCreateBattleRoom is true. confidence must be 0-1.`, ['shouldCreateBattleRoom', 'requiresTurnOrder', 'triggeredNow', 'transitionType', 'confidence', 'reason', 'encounterBrief'])));
-gmcV1Router.post('/ai/plan-encounter', asyncRoute((req, res) => ai(req, res, `Prepare a complete VCS encounter from the campaign context, current scene, player instruction, and player-character summary. Respect canon and safety boundaries. Do not decide player-character actions. Return {
-  name,
-  objective,
-  situation,
-  playerOptions:[{label,description}],
-  map:{width,height,gridSize,feetPerCell,gridType,imageUrl,walls,doors,fogOfWar},
-  playerStart:{gridX,gridY},
-  opponents:[{name,kind,role,hitPoints,armorClass,speed,initiativeModifier,abilities,conditions,gridX,gridY,actions:[{name,type,attackBonus,range,damage:[{dice,bonus,type}],saveDc,saveAbility,onSuccessfulSave,conditions}]}],
-  gmNotes
-}. situation is a concise present-tense handoff explaining what just made turn order necessary and what is happening now. objective states the player's immediate goal without assuming they must kill or attack anyone. playerOptions contains 3-5 materially different, nonbinding approaches that are legal in the scene; include nonviolent, evasive, social, environmental, or escape options whenever plausible. These are prompts, not decisions for the player. Use practical grid coordinates inside the map. Supply 1-6 opponents, complete combat statistics, and at least one mechanically executable attack or spell for each. kind must be npc or monster. imageUrl may be null; walls, doors, and fog still constitute an authoritative tactical map.`, ['name', 'objective', 'situation', 'playerOptions', 'map', 'playerStart', 'opponents', 'gmNotes'])));
-gmcV1Router.post('/ai/plan-combat-turn', asyncRoute((req, res) => ai(req, res, `Control exactly one non-player combatant turn in the supplied authoritative VCS BattleRoom. Use only IDs, statistics, token actions, targets, and positions present in the supplied state. Never choose or alter the player character's actions. Use the combat time scale from gameTimePolicy: one round is about 6 seconds; do not narrate minutes passing inside one turn. Return {
-  actorId,
-  movement:{tokenId,gridX,gridY,reason},
-  action:{type,targetId,attackBonus,modifier,damage,saveDc,saveAbility,saveModifier,onSuccessfulSave,conditions,rollMode},
-  actionName,
-  tacticalReason,
-  endTurn
-}. movement may be null and action may be null. Prefer a legal useful action; use attack or spell shapes supported by VCS. Do not supply manual dice rolls.`, ['actorId', 'movement', 'action', 'actionName', 'tacticalReason', 'endTurn'])));
+gmcV1Router.post('/ai/plan-encounter', asyncRoute((req, res) => ai(
+  req,
+  res,
+  PLAN_ENCOUNTER_INSTRUCTION,
+  [...PLAN_ENCOUNTER_REQUIRED_KEYS],
+)));
+gmcV1Router.post('/ai/plan-combat-turn', asyncRoute((req, res) => ai(
+  req,
+  res,
+  PLAN_COMBAT_TURN_INSTRUCTION,
+  [...PLAN_COMBAT_TURN_REQUIRED_KEYS],
+)));
