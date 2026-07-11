@@ -19,6 +19,7 @@ type LibraryEntity = CanonBase & {
 interface LibraryBrowserModalProps {
   isOpen: boolean;
   projectId: string;
+  initialTypeFilter?: string;
   onClose: () => void;
   onEntitiesLinked: (entityIds: string[]) => void;
 }
@@ -26,6 +27,7 @@ interface LibraryBrowserModalProps {
 export default function LibraryBrowserModal({
   isOpen,
   projectId,
+  initialTypeFilter = '',
   onClose,
   onEntitiesLinked,
 }: LibraryBrowserModalProps) {
@@ -33,7 +35,7 @@ export default function LibraryBrowserModal({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<string>('');
+  const [filterType, setFilterType] = useState<string>(initialTypeFilter);
   const [filterTag, setFilterTag] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

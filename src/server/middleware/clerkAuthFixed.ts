@@ -153,7 +153,8 @@ export async function clerkAuthFixedMiddleware(
         return;
       }
     } catch (decodeError) {
-      console.log('⚠️ JWT decode failed, trying alternative approach:', decodeError.message);
+      const message = decodeError instanceof Error ? decodeError.message : String(decodeError);
+      console.log('⚠️ JWT decode failed, trying alternative approach:', message);
     }
 
     // Fallback: If not a standard JWT, try to extract user info differently

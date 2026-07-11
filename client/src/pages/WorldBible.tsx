@@ -374,6 +374,7 @@ export const WorldBible: React.FC = () => {
         <LibraryBrowserModal
           isOpen
           projectId={projectId}
+          initialTypeFilter={libraryBrowserTypeFilter}
           onClose={() => setShowLibraryBrowser(false)}
           onEntitiesLinked={(_ids) => {
             setShowLibraryBrowser(false);
