@@ -37,4 +37,24 @@ describe('parseSmartJson', () => {
     expect(parsed.ok).toBe(true);
     if (parsed.ok) expect((parsed.value as any).responseText).toBe('Done');
   });
+
+  it('repairs unescaped dialogue quotes inside a JSON string value', () => {
+    const input = '{"responseMode":"in_character","responseText":"Thorne nods. "Agreed. We move now." She points ahead. "Then let us ruin their night."","rollRequest":null}';
+    const parsed = parseSmartJson(input, { requireObject: true });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect((parsed.value as any).responseText).toBe('Thorne nods. "Agreed. We move now." She points ahead. "Then let us ruin their night."');
+      expect(parsed.warnings).toContain('repair:escaped_unescaped_string_quotes');
+    }
+  });
+
+  it('removes file-search citation placeholders without losing surrounding JSON', () => {
+    const input = '{"responseMode":"in_character","responseText":"Proceed :contentReference[oaicite:0]{index=0} now.","rollRequest":null}';
+    const parsed = parseSmartJson(input, { requireObject: true });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect((parsed.value as any).responseText).toBe('Proceed  now.');
+      expect(parsed.warnings).toContain('repair:removed_citation_artifacts');
+    }
+  });
 });

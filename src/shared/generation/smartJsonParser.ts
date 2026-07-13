@@ -16,7 +16,13 @@ function normalizeJsonText(text: unknown): string {
     .replace(/\[cite_start\]/gi, '')
     .replace(/\[cite_end\]/gi, '')
     .replace(/【\d+†source】/g, '')
+    .replace(/:contentReference\[[^\]\r\n]*\]\{[^}\r\n]*\}/gi, '')
+    .replace(/(?:filecite|cite)[^\r\n]*/gi, '')
     .trim();
+}
+
+function containsCitationArtifact(text: unknown): boolean {
+  return /:contentReference\[[^\]\r\n]*\]\{[^}\r\n]*\}|(?:filecite|cite)[^\r\n]*|\[cite_(?:start|end)\]|【\d+†source】/i.test(String(text ?? ''));
 }
 
 function extractBalancedJsonBlock(text: string): string {
@@ -226,9 +232,55 @@ function escapeBareNewlinesInJsonStrings(text: string) {
   return output;
 }
 
+function escapeUnescapedJsonStringQuotes(text: string) {
+  let output = '';
+  let inString = false;
+  let escaped = false;
+  const nextNonWhitespace = (start: number) => {
+    let cursor = start;
+    while (/\s/.test(text[cursor] ?? '')) cursor += 1;
+    return { character: text[cursor] ?? '', index: cursor };
+  };
+  const isStructuralClose = (index: number) => {
+    const next = nextNonWhitespace(index + 1);
+    if (!next.character || next.character === ':' || next.character === '}' || next.character === ']') return true;
+    if (next.character !== ',') return false;
+    const afterComma = nextNonWhitespace(next.index + 1).character;
+    return !afterComma || afterComma === '"' || afterComma === '}' || afterComma === ']';
+  };
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (!inString) {
+      output += character;
+      if (character === '"') inString = true;
+      continue;
+    }
+    if (escaped) {
+      output += character;
+      escaped = false;
+    } else if (character === '\\') {
+      output += character;
+      escaped = true;
+    } else if (character !== '"') {
+      output += character;
+    } else if (isStructuralClose(index)) {
+      output += character;
+      inString = false;
+    } else {
+      output += '\\"';
+    }
+  }
+  return output;
+}
+
 function repairJsonText(text: string): { repaired: string; warnings: string[] } {
   const warnings: string[] = [];
   let repaired = normalizeJsonText(text).replace(/;\s*$/, '');
+  const escapedQuotes = escapeUnescapedJsonStringQuotes(repaired);
+  if (escapedQuotes !== repaired) {
+    repaired = escapedQuotes;
+    warnings.push('repair:escaped_unescaped_string_quotes');
+  }
   const withoutComments = stripJsonComments(repaired);
   if (withoutComments !== repaired) {
     repaired = withoutComments;
@@ -278,6 +330,7 @@ function validateParsedValue(value: unknown, options: SmartJsonParseOptions): st
 }
 
 export function parseSmartJson(text: unknown, options: SmartJsonParseOptions = {}): SmartJsonParseResult {
+  const normalizationWarnings = containsCitationArtifact(text) ? ['repair:removed_citation_artifacts'] : [];
   const raw = normalizeJsonText(text);
   if (!raw) return { ok: false, message: 'JSON text is required.', warnings: [] };
   if (options.maxLength && raw.length > options.maxLength) return { ok: false, message: `JSON text exceeds size limit (${options.maxLength} characters).`, warnings: [] };
@@ -288,7 +341,7 @@ export function parseSmartJson(text: unknown, options: SmartJsonParseOptions = {
       const value = normalizeParsedValue(JSON.parse(candidate), options);
       const validation = validateParsedValue(value, options);
       if (validation) return { ok: false, message: validation, warnings: [] };
-      return { ok: true, value, foundJsonBlock, repaired: false, warnings: [] };
+      return { ok: true, value, foundJsonBlock, repaired: normalizationWarnings.length > 0, warnings: normalizationWarnings };
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
     }
@@ -297,7 +350,8 @@ export function parseSmartJson(text: unknown, options: SmartJsonParseOptions = {
       const value = normalizeParsedValue(JSON.parse(repair.repaired), options);
       const validation = validateParsedValue(value, options);
       if (validation) return { ok: false, message: validation, warnings: repair.warnings };
-      return { ok: true, value, foundJsonBlock, repaired: repair.warnings.length > 0, warnings: repair.warnings };
+      const warnings = [...normalizationWarnings, ...repair.warnings];
+      return { ok: true, value, foundJsonBlock, repaired: warnings.length > 0, warnings };
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
     }
