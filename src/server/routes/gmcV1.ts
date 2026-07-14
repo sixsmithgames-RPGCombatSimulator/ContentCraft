@@ -19,6 +19,7 @@ import {
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
 import { generateStructuredJson, generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
+import { ensureCampaignActor } from '../services/actorEnsureWorkflow.js';
 import {
   PLAN_COMBAT_TURN_INSTRUCTION,
   PLAN_COMBAT_TURN_REQUIRED_KEYS,
@@ -332,7 +333,7 @@ function registerEntityRoutes(kind: GmcEntityKind, plural: string) {
   }));
   if (kind !== 'faction') gmcV1Router.post(`/campaigns/:campaignId/${plural}/generate`, asyncRoute(async (req, res) => {
     if (!await campaign(req, res)) return;
-    const generated = await generateStructuredJson(generationPrompts[kind as 'npc' | 'location' | 'item'], { prompt: req.body?.prompt, campaignId: req.params.campaignId, context: req.body });
+    const generated = await generateStructuredJson(generationPrompts[kind as 'npc' | 'monster' | 'location' | 'item'], { prompt: req.body?.prompt, campaignId: req.params.campaignId, context: req.body });
     if (!generated.name) throw Object.assign(new Error('Generated entity has no name.'), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
     const makeCanon = Boolean(req.body?.makeCanon);
     const entity = makeCanon ? await createEntity(userId(req), req.params.campaignId, kind, { ...generated, draft: false }) : { ...generated, draft: true };
@@ -341,9 +342,16 @@ function registerEntityRoutes(kind: GmcEntityKind, plural: string) {
 }
 
 registerEntityRoutes('npc', 'npcs');
+registerEntityRoutes('monster', 'monsters');
 registerEntityRoutes('location', 'locations');
 registerEntityRoutes('item', 'items');
 registerEntityRoutes('faction', 'factions');
+
+gmcV1Router.post('/campaigns/:campaignId/actors/ensure', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const result = await ensureCampaignActor(userId(req), req.params.campaignId, req.body ?? {});
+  res.status(result.status === 'ready' && 'created' in result && result.created ? 201 : 200).json(result);
+}));
 
 gmcV1Router.post('/items/:itemId/supersede', asyncRoute(async (req, res) => {
   const item = await collections.entities().findOneAndUpdate(

@@ -309,6 +309,7 @@ export async function generateStructuredJson(systemInstruction: string, input: u
 
 export const generationPrompts = {
   npc: 'Create a campaign NPC with name, role, motivation, secrets, relationships, voice, appearance, currentLocationId, arcSummary, status, combatProfile, claims, and tags.',
+  monster: 'Create a campaign monster with name, description, creature type, size, alignment, challenge rating, ability scores, defenses, actions, tactics, ecology, lore, claims, and tags.',
   location: 'Create a campaign location with name, description, parentLocationId, atmosphere, features, secrets, inhabitants, hooks, claims, and tags.',
   item: 'Create a campaign item with name, description, rarity, lore, properties, suggestedVcsPayload, claims, and tags.',
 };

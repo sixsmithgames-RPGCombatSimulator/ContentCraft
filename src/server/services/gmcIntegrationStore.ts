@@ -4,7 +4,8 @@ import { generateProjectEntityId, type EntityType } from '../models/CanonEntity.
 
 const now = () => new Date();
 
-export type GmcEntityKind = 'npc' | 'location' | 'item' | 'faction';
+export type GmcEntityKind = 'npc' | 'monster' | 'location' | 'item' | 'faction';
+export type GmcActorKind = Extract<GmcEntityKind, 'npc' | 'monster'>;
 
 export const MEMORY_RECORD_TYPES = ['FACT', 'ITEM', 'EVENT'] as const;
 export const GEOGRAPHIC_SCOPE_TIERS = ['world', 'city', 'district', 'site', 'room'] as const;
@@ -50,6 +51,140 @@ export async function getEntity(userId: string, id: string, kind?: GmcEntityKind
   const filter: Record<string, unknown> = { _id: id, userId };
   if (kind) filter.type = kind;
   return getCanonEntitiesCollection().findOne(filter);
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export async function findActorEntity(
+  userId: string,
+  campaignId: string,
+  kind: GmcActorKind,
+  input: { canonicalEntityId?: string; name?: string; aliases?: string[] },
+) {
+  if (input.canonicalEntityId) {
+    const byId = await getCanonEntitiesCollection().findOne({
+      _id: input.canonicalEntityId,
+      userId,
+      project_id: campaignId,
+      type: kind,
+    });
+    if (byId) return byId;
+  }
+  const names = [input.name, ...(input.aliases ?? [])]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+  if (!names.length) return null;
+  const exact = names.map((value) => new RegExp(`^${escapeRegex(value)}$`, 'i'));
+  return getCanonEntitiesCollection().findOne({
+    userId,
+    project_id: campaignId,
+    type: kind,
+    $or: [
+      { canonical_name: { $in: exact } },
+      { aliases: { $in: exact } },
+    ],
+  } as any);
+}
+
+export async function upsertCanonicalActor(
+  userId: string,
+  campaignId: string,
+  kind: GmcActorKind,
+  actor: Record<string, any>,
+  generation: Record<string, any>,
+  existingId?: string,
+) {
+  const name = String(actor.name ?? '').trim();
+  if (!name) throw new Error('name is required');
+  const existing = await findActorEntity(userId, campaignId, kind, {
+    canonicalEntityId: existingId,
+    name,
+    aliases: Array.isArray(actor.aliases) ? actor.aliases : [],
+  });
+  if (
+    existing
+    && generation.workflowId
+    && (existing as any).details?.generation?.workflowId === generation.workflowId
+    && (existing as any).details?.profileCompleteness === 'full'
+  ) return existing;
+  const timestamp = now();
+  const schemaVersion = kind === 'npc' ? 'npc/1.1' : 'monster/1.0';
+  const auditEntry = {
+    at: timestamp,
+    action: existing ? 'profile_rebuilt' : 'created',
+    source: 'gmc-actor-workflow',
+    workflowId: generation.workflowId ?? null,
+  };
+  if (existing) {
+    const revision = Math.max(1, Number((existing as any).revision ?? 1)) + 1;
+    const previousDetails = objectRecord((existing as any).details);
+    const aliases = Array.from(new Set([
+      ...((Array.isArray((existing as any).aliases) ? (existing as any).aliases : []) as string[]),
+      ...((Array.isArray(actor.aliases) ? actor.aliases : []) as string[]),
+    ].map((value) => String(value).trim()).filter(Boolean)));
+    return getCanonEntitiesCollection().findOneAndUpdate(
+      { _id: (existing as any)._id, userId, type: kind },
+      {
+        $set: {
+          canonical_name: name,
+          aliases,
+          details: {
+            ...previousDetails,
+            actorProfile: actor,
+            profileCompleteness: 'full',
+            schemaVersion,
+            generation: { ...generation, completedAt: timestamp },
+          },
+          status: (existing as any).status ?? 'active',
+          draft: false,
+          revision,
+          schema_version: schemaVersion,
+          version: `1.0.${revision - 1}`,
+          updated_at: timestamp,
+        },
+        $push: { audit_trail: { $each: [auditEntry], $slice: -100 } } as any,
+      },
+      { returnDocument: 'after' },
+    );
+  }
+  const entityId = generateProjectEntityId(campaignId, kind as EntityType, name);
+  const document: any = {
+    _id: entityId,
+    userId,
+    scope: `proj_${campaignId}`,
+    project_id: campaignId,
+    type: kind,
+    canonical_name: name,
+    aliases: Array.isArray(actor.aliases) ? actor.aliases : [],
+    claims: [],
+    relationships: [],
+    tags: ['actor', kind, 'workflow-generated'],
+    source: 'gamemastercraft',
+    version: '1.0.0',
+    revision: 1,
+    schema_version: schemaVersion,
+    details: {
+      actorProfile: actor,
+      profileCompleteness: 'full',
+      schemaVersion,
+      generation: { ...generation, completedAt: timestamp },
+      ...(kind === 'npc' ? { entityTier: 'contact' } : {}),
+    },
+    status: 'active',
+    draft: false,
+    audit_trail: [auditEntry],
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+  try {
+    await getCanonEntitiesCollection().insertOne(document);
+    return document;
+  } catch (error: any) {
+    if (error?.code !== 11000) throw error;
+    return upsertCanonicalActor(userId, campaignId, kind, actor, generation, entityId);
+  }
 }
 
 export async function createEntity(userId: string, campaignId: string, kind: GmcEntityKind, input: Record<string, any>) {
@@ -276,4 +411,5 @@ export const collections = {
   facts: () => getDb().collection<any>('gmc_facts'),
   threads: () => getDb().collection<any>('gmc_threads'),
   sessions: () => getDb().collection<any>('gmc_sessions'),
+  actorWorkflows: () => getDb().collection<any>('gmc_actor_workflows'),
 };

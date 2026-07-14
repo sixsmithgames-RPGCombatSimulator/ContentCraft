@@ -130,6 +130,12 @@ export interface CanonEntity {
   claims: Claim[]; // Factual statements about this entity
   npc_details?: NPCDetails; // NPC-specific detailed information
   spell_details?: SpellDetails; // Spell-specific detailed information
+  details?: Record<string, unknown>; // Product-specific canonical profile and memory metadata
+  status?: string;
+  draft?: boolean;
+  revision?: number;
+  schema_version?: string;
+  audit_trail?: Array<Record<string, unknown>>;
 
   // Project/Library fields
   project_id?: string; // Only for project-scoped entities
