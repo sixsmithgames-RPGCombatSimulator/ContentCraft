@@ -136,6 +136,26 @@ function normalizeFeatures(value: unknown) {
   });
 }
 
+function normalizeScoredEntries(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (typeof entry === 'string') {
+      const source = entry.trim();
+      if (!source) return [];
+      const match = source.match(/^(.*?)\s*(?:\(|:)\s*([+-]?\d+)\s*\)?$/);
+      const name = String(match?.[1] ?? source).trim();
+      return name ? [{ name, value: match?.[2] ? `${Number(match[2]) >= 0 ? '+' : ''}${Number(match[2])}` : 'proficient' }] : [];
+    }
+    const source = record(entry);
+    const name = nameOf(source);
+    if (!name) return [];
+    const rawValue = source.value ?? source.modifier ?? source.bonus ?? source.score ?? 'proficient';
+    const numeric = Number(rawValue);
+    const value = Number.isFinite(numeric) ? `${numeric >= 0 ? '+' : ''}${numeric}` : String(rawValue);
+    return [{ ...source, name, value }];
+  });
+}
+
 function mergeFeatureMechanics(preferred: unknown, fallback: unknown) {
   const preferredList = Array.isArray(preferred) ? preferred : [];
   const fallbackList = Array.isArray(fallback) ? fallback : [];
@@ -230,6 +250,13 @@ export function composeActorProfile(kind: GmcActorKind, actorSnapshot: JsonRecor
     motivations: stringArray(source.motivations ?? core.goals),
     relationships: relationshipList(relationships),
     equipment: equipmentList(equipment),
+    class_features: normalizeFeatures(source.class_features ?? []),
+    subclass_features: normalizeFeatures(source.subclass_features ?? []),
+    racial_features: normalizeFeatures(source.racial_features ?? []),
+    feats: normalizeFeatures(source.feats ?? []),
+    fighting_styles: normalizeFeatures(source.fighting_styles ?? []),
+    saving_throws: normalizeScoredEntries(source.saving_throws ?? source.savingThrows),
+    skill_proficiencies: normalizeScoredEntries(source.skill_proficiencies ?? source.skills),
     abilities: normalizeFeatures(source.abilities ?? [
       ...(Array.isArray(source.class_features) ? source.class_features : []),
       ...(Array.isArray(source.subclass_features) ? source.subclass_features : []),
@@ -576,6 +603,7 @@ export async function ensureCampaignActor(userId: string, campaignId: string, in
       if (entity) return actorResponse(entity, false, state._id);
     }
     if (input.stageResult === undefined) {
+      if (state.currentStageIndex >= state.stageSequence.length) return finalizeWorkflow(state);
       return { status: 'awaiting_ai', workflowId: state._id, packet: buildActorStagePacket(state) };
     }
     let next: ActorWorkflowDocument;

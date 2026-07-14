@@ -84,6 +84,44 @@ describe('actor ensure workflow contract', () => {
     expect(profile.spellcasting).toBeUndefined();
   });
 
+  it('repairs string feature and proficiency entries while assembling saved stages', () => {
+    const profile: any = composeActorProfile('npc', {
+      name: 'Captain Elara Thorne',
+      actions: [{ name: 'Watch Sabre', attackBonus: 5, damage: '1d8+3' }],
+    }, {
+      basic_info: {
+        name: 'Captain Elara Thorne',
+        description: 'A disciplined harbor Watch captain who protects witnesses and evidence.',
+        species: 'Human', alignment: 'Lawful Good',
+      },
+      stats: {
+        ability_scores: { str: 15, dex: 14, con: 14, int: 12, wis: 14, cha: 13 },
+        armor_class: 16, hit_points: 38, speed: 30,
+      },
+      character_build: {
+        class_features: ['Fighter 4 martial officer build', 'Second Wind: once per short rest'],
+        subclass_features: ['Battle Master Fighter build'],
+        racial_features: ['Human adaptability'],
+        feats: ['No separate feat beyond an ability score improvement'],
+        fighting_styles: ['Dueling'],
+        saving_throws: ['Strength (+4)', 'Constitution: +4'],
+        skill_proficiencies: ['Athletics', 'Insight (+4)', { name: 'Perception', value: 4 }],
+      },
+      combat: { actions: [{ name: 'Watch Sabre', description: 'Melee weapon attack.' }], bonus_actions: [], reactions: [] },
+      relationships: { allies: [], enemies: [], organizations: ['Harbor Watch'] },
+      equipment: { weapons: ['Watch sabre'], armor_and_shields: ['Breastplate'], wondrous_items: [], consumables: [], other_gear: [] },
+    });
+
+    expect(validateActorProfile('npc', profile).valid).toBe(true);
+    expect(profile.class_features[0]).toEqual(expect.objectContaining({ name: 'Fighter 4 martial officer build' }));
+    expect(profile.saving_throws).toEqual([
+      expect.objectContaining({ name: 'Strength', value: '+4' }),
+      expect.objectContaining({ name: 'Constitution', value: '+4' }),
+    ]);
+    expect(profile.skill_proficiencies[0]).toEqual({ name: 'Athletics', value: 'proficient' });
+    expect(profile.skill_proficiencies[2]).toEqual(expect.objectContaining({ name: 'Perception', value: '+4' }));
+  });
+
   it('composes and strictly validates a monster profile', () => {
     const profile: any = composeActorProfile('monster', {}, {
       'monster.basic_info': {
