@@ -77,6 +77,15 @@ const encounterActorShape = {
   actions: [mechanicalActionShape],
   bonusActions: [mechanicalActionShape],
   reactions: [mechanicalActionShape],
+  equipment: [{ name: 'string', kind: 'weapon|armor|shield|consumable|tool|gear|other', quantity: 'number', equipped: 'boolean', notes: 'string|null' }],
+  carriedInventory: {
+    equipped: [{ name: 'string', kind: 'string', quantity: 'number' }],
+    coin: { cp: 'number', sp: 'number', ep: 'number', gp: 'number', pp: 'number' },
+    documents: ['specific fixed documents carried before combat'],
+    consumables: ['specific fixed consumables carried before combat'],
+    concealedItems: ['specific fixed concealed items; discovery may require a check but existence never changes'],
+    other: ['specific fixed carried possessions'],
+  },
   combatPlan: durableCombatPlanShape,
 } as const;
 
@@ -250,7 +259,7 @@ export const PLAN_ENCOUNTER_INSTRUCTION = `Prepare a complete VCS encounter from
 
 This is the durable preparation pass. Resolve likely non-player behavior before initiative so ordinary turns can follow stable objectives without another AI decision. Every creature is a discrete actor: a count of four laborers requires four actor entries with stable IDs and individual combatPlan values. Include every present hostile, ally, and neutral that can act.
 
-For every non-player actor, provide complete combat statistics and available actions plus a durable combatPlan with ordered objectives, deterministic behaviors, morale break/flee/surrender/cower conditions, and communication orders/warnings. Objectives and plan IDs must remain stable for the life of the encounter. A behavior must say what state activates it and what state ends it; do not merely write flavor such as "acts intelligently."
+For every non-player actor, provide complete combat statistics and available actions plus a durable combatPlan with ordered objectives, deterministic behaviors, morale break/flee/surrender/cower conditions, and communication orders/warnings. Every weapon or damaging ability the actor can use must have an executable action with attack/save mechanics and fixed damage entries. Populate equipment and carriedInventory before combat, including equipped weapons and armor, exact coin, documents, consumables, concealed items, and other loot. Combat-capable magic items and weapons are equipped and represented in actions unless a specific fictional reason says otherwise. Objectives and plan IDs must remain stable for the life of the encounter. A behavior must say what state activates it and what state ends it; do not merely write flavor such as "acts intelligently."
 
 Interactive objects are live encounter state, not decorative labels. Give each one a stable ID, location, tokenSearch metadata (preferred asset when known, concise queries/tags, and an allowed generic fallback), initial behavior state, executable interactions, movement/handler requirements, objective links, and terminal states. A cart-withdrawal plan must say exactly how handlers contribute, when the cart moves, and when it escapes or is secured.
 
@@ -271,4 +280,3 @@ Use objectInteraction for carts, levers, cargo, doors, hazards, and other encoun
 
 Return exactly one JSON object matching this schema:
 ${JSON.stringify(COMBAT_TURN_OUTPUT_SCHEMA, null, 2)}`;
-

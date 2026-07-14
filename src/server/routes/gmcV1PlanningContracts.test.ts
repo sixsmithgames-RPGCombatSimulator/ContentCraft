@@ -36,6 +36,12 @@ describe('GMC encounter planning contract', () => {
     expect(actor.actions).toHaveLength(1);
     expect(actor.bonusActions).toHaveLength(1);
     expect(actor.reactions).toHaveLength(1);
+    expect(actor.equipment).toHaveLength(1);
+    expect(actor.carriedInventory).toEqual(expect.objectContaining({
+      equipped: expect.any(Array),
+      coin: expect.any(Object),
+      documents: expect.any(Array),
+    }));
     expect(actor.combatPlan.planId).toMatch(/stable string/i);
     expect(actor.combatPlan.objectives[0]).toEqual(expect.objectContaining({
       id: expect.any(String),
@@ -58,6 +64,7 @@ describe('GMC encounter planning contract', () => {
     }));
     expect(PLAN_ENCOUNTER_INSTRUCTION).toContain('a count of four laborers requires four actor entries');
     expect(PLAN_ENCOUNTER_INSTRUCTION).toContain('remain stable for the life of the encounter');
+    expect(PLAN_ENCOUNTER_INSTRUCTION).toContain('Populate equipment and carriedInventory before combat');
   });
 
   it('defines executable object token-search/behavior and environmental-hazard metadata', () => {
@@ -141,4 +148,3 @@ describe('GMC non-player turn planning contract', () => {
     expect(PLAN_COMBAT_TURN_INSTRUCTION).toContain('legacy fields');
   });
 });
-

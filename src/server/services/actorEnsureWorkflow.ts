@@ -136,6 +136,20 @@ function normalizeFeatures(value: unknown) {
   });
 }
 
+function mergeFeatureMechanics(preferred: unknown, fallback: unknown) {
+  const preferredList = Array.isArray(preferred) ? preferred : [];
+  const fallbackList = Array.isArray(fallback) ? fallback : [];
+  const fallbackByName = new Map(fallbackList.map((entry) => [nameOf(entry).toLowerCase(), record(entry)]));
+  const merged = preferredList.map((entry) => {
+    const source = record(entry);
+    return { ...record(fallbackByName.get(nameOf(source).toLowerCase())), ...source };
+  });
+  for (const entry of fallbackList) {
+    if (!merged.some((candidate) => nameOf(candidate).toLowerCase() === nameOf(entry).toLowerCase())) merged.push(record(entry));
+  }
+  return normalizeFeatures(merged);
+}
+
 function stagePayloads(state: Pick<ActorWorkflowDocument, 'stageResults'>) {
   return Object.entries(state.stageResults)
     .filter(([stageKey]) => !['keyword_extractor', 'planner'].includes(stageKey))
@@ -186,7 +200,7 @@ export function composeActorProfile(kind: GmcActorKind, actorSnapshot: JsonRecor
       ...(hitPoints !== undefined ? { hit_points: hitPoints } : {}),
       ...(source.speed !== undefined ? { speed: normalizeSpeed(source.speed) } : {}),
       abilities: normalizeFeatures(source.abilities ?? source.traits ?? []),
-      actions: normalizeFeatures(source.actions ?? []),
+      actions: mergeFeatureMechanics(source.actions, actorSnapshot.actions),
       bonus_actions: normalizeFeatures(source.bonus_actions ?? source.bonusActions ?? []),
       reactions: normalizeFeatures(source.reactions ?? []),
     };
@@ -222,7 +236,7 @@ export function composeActorProfile(kind: GmcActorKind, actorSnapshot: JsonRecor
       ...(Array.isArray(source.racial_features) ? source.racial_features : []),
       ...(Array.isArray(source.feats) ? source.feats : []),
     ]),
-    actions: normalizeFeatures(source.actions ?? []),
+    actions: mergeFeatureMechanics(source.actions, actorSnapshot.actions),
     bonus_actions: normalizeFeatures(source.bonus_actions ?? source.bonusActions ?? []),
     reactions: normalizeFeatures(source.reactions ?? []),
     ...(spellcastingAbility && spellcastingAbility.toLowerCase() !== 'none' ? {
@@ -289,9 +303,15 @@ export function composeCombatReadyActorProfile(kind: GmcActorKind, actorSnapshot
     ...(armorClass !== undefined ? { armorClass, armor_class: armorClass } : {}),
     ...(source.speed !== undefined ? { speed: source.speed } : {}),
     initiativeModifier: numberFrom(source.initiativeModifier, source.initiative) ?? 0,
+    ability_scores: normalizeAbilityScores(source.ability_scores ?? source.abilities),
+    proficiency_bonus: numberFrom(source.proficiency_bonus, source.proficiencyBonus),
+    skill_proficiencies: Array.isArray(source.skill_proficiencies) ? source.skill_proficiencies : (Array.isArray(source.skills) ? source.skills : record(source.skills)),
+    saving_throws: Array.isArray(source.saving_throws) ? source.saving_throws : (Array.isArray(source.savingThrows) ? source.savingThrows : record(source.savingThrows)),
+    conditions: Array.isArray(source.conditions) ? source.conditions : [],
     actions: Array.isArray(actions) ? actions : [],
     bonus_actions: normalizeFeatures(source.bonus_actions ?? source.bonusActions ?? []),
     reactions: normalizeFeatures(source.reactions ?? []),
+    equipment: Array.isArray(source.equipment) ? [...source.equipment] : record(source.equipment),
     carriedInventory: record(source.carriedInventory ?? source.inventory ?? source.lootManifest),
     profile_detail: 'combat_ready',
   };
@@ -303,6 +323,7 @@ export function validateCombatReadyActorProfile(kind: GmcActorKind, actor: JsonR
   if (!composed.name) errors.push('name is required');
   if (!Number.isFinite(Number(composed.hitPoints?.max)) || Number(composed.hitPoints?.max) < 1) errors.push('positive maximum hit points are required');
   if (!Number.isFinite(Number(composed.armorClass))) errors.push('armor class is required');
+  if (!Array.isArray(composed.actions) || composed.actions.length === 0) errors.push('at least one executable action is required');
   return errors.length
     ? { valid: false as const, actor: composed, details: errors.join('; ') }
     : { valid: true as const, actor: composed };

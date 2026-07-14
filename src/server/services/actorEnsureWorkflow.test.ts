@@ -11,10 +11,12 @@ import {
 
 describe('actor ensure workflow contract', () => {
   it('builds a lightweight combat-ready NPC without requiring narrative workflow fields', () => {
-    const profile = composeCombatReadyActorProfile('npc', {
+    const profile: any = composeCombatReadyActorProfile('npc', {
       name: 'Dock Thug 2', role: 'Cart escort', disposition: 'hostile',
       hitPoints: { current: 16, max: 16 }, armorClass: 13, speed: 30, initiativeModifier: 1,
-      actions: [{ name: 'Club', attackBonus: 3, damage: '1d4+1' }],
+      abilities: { str: 13, dex: 12, con: 12, int: 9, wis: 10, cha: 8 },
+      equipment: { weapons: ['Club'], armor: ['Leather armor'] },
+      actions: [{ name: 'Club', attackBonus: 3, damage: [{ dice: '1d4', bonus: 1, type: 'bludgeoning' }] }],
       carriedInventory: { equipped: ['Club'], coin: { gp: 2 }, documents: [], concealedItems: [] },
     });
 
@@ -22,11 +24,27 @@ describe('actor ensure workflow contract', () => {
     expect(profile.hitPoints).toEqual({ current: 16, max: 16 });
     expect(profile.armor_class).toBe(13);
     expect(profile.profile_detail).toBe('combat_ready');
+    expect(profile.ability_scores.str).toBe(13);
+    expect(profile.equipment.weapons).toEqual(['Club']);
+    expect(profile.actions[0].attackBonus).toBe(3);
     expect(profile.carriedInventory.coin.gp).toBe(2);
   });
 
+  it('rejects a combat-ready shell that cannot take an executable action', () => {
+    const validation = validateCombatReadyActorProfile('npc', {
+      name: 'Unfinished Guard', hitPoints: 12, armorClass: 13, actions: [],
+    });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.details).toContain('at least one executable action');
+  });
+
   it('composes modular NPC stages into the canonical NPC schema', () => {
-    const profile: any = composeActorProfile('npc', { name: 'Captain Mira Vale', aliases: ['Mira'] }, {
+    const profile: any = composeActorProfile('npc', {
+      name: 'Captain Mira Vale', aliases: ['Mira'],
+      actions: [{ name: 'Watch Sabre', actionId: 'watch-sabre', attackBonus: 5, damage: [{ dice: '1d8', bonus: 3, type: 'slashing' }] }],
+      carriedInventory: { equipped: ['Watch sabre', 'Breastplate'], coin: { gp: 12 } },
+    }, {
       basic_info: {
         name: 'Captain Mira Vale',
         description: 'A disciplined harbor officer whose calm attention rarely leaves the waterline.',
@@ -59,6 +77,9 @@ describe('actor ensure workflow contract', () => {
     expect(profile.personality.traits).toEqual(['Calm under pressure']);
     expect(profile.motivations).toEqual(['End the smuggling route']);
     expect(profile.equipment).toEqual(['Watch sabre', 'Breastplate', 'Manacles']);
+    expect(profile.actions[0].attackBonus).toBe(5);
+    expect(profile.actions[0].damage[0].dice).toBe('1d8');
+    expect(profile.carriedInventory.coin.gp).toBe(12);
     expect(profile.relationships[0]).toEqual({ entity: 'Kerrigan Brynn', relationship: 'ally' });
     expect(profile.spellcasting).toBeUndefined();
   });
