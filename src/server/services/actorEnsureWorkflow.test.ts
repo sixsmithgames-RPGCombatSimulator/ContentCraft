@@ -2,11 +2,28 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildActorStagePacket,
+  composeCombatReadyActorProfile,
   composeActorProfile,
+  validateCombatReadyActorProfile,
   validateActorProfile,
 } from './actorEnsureWorkflow.js';
 
 describe('actor ensure workflow contract', () => {
+  it('builds a lightweight combat-ready NPC without requiring narrative workflow fields', () => {
+    const profile = composeCombatReadyActorProfile('npc', {
+      name: 'Dock Thug 2', role: 'Cart escort', disposition: 'hostile',
+      hitPoints: { current: 16, max: 16 }, armorClass: 13, speed: 30, initiativeModifier: 1,
+      actions: [{ name: 'Club', attackBonus: 3, damage: '1d4+1' }],
+      carriedInventory: { equipped: ['Club'], coin: { gp: 2 }, documents: [], concealedItems: [] },
+    });
+
+    expect(validateCombatReadyActorProfile('npc', profile).valid).toBe(true);
+    expect(profile.hitPoints).toEqual({ current: 16, max: 16 });
+    expect(profile.armor_class).toBe(13);
+    expect(profile.profile_detail).toBe('combat_ready');
+    expect(profile.carriedInventory.coin.gp).toBe(2);
+  });
+
   it('composes modular NPC stages into the canonical NPC schema', () => {
     const profile: any = composeActorProfile('npc', { name: 'Captain Mira Vale', aliases: ['Mira'] }, {
       basic_info: {

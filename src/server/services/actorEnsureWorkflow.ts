@@ -21,6 +21,7 @@ import {
 
 type JsonRecord = Record<string, any>;
 type ActorExecutionMode = 'integrated' | 'manual';
+type ActorProfileDetail = 'combat_ready' | 'full';
 
 export interface ActorEnsureInput {
   kind?: GmcActorKind;
@@ -28,6 +29,7 @@ export interface ActorEnsureInput {
   identityHints?: { name?: string; aliases?: string[] };
   purpose?: string;
   actorSnapshot?: JsonRecord;
+  requiredDetail?: ActorProfileDetail;
   executionMode?: ActorExecutionMode | 'automatic';
   workflowId?: string;
   stageResult?: unknown;
@@ -254,6 +256,58 @@ export function validateActorProfile(kind: GmcActorKind, actor: JsonRecord) {
     };
 }
 
+export function composeCombatReadyActorProfile(kind: GmcActorKind, actorSnapshot: JsonRecord) {
+  const source = record(actorSnapshot);
+  const name = String(source.name ?? '').trim();
+  const maxHp = numberFrom(
+    record(source.hitPoints).max,
+    record(source.hitPoints).maximum,
+    record(source.hit_points).average,
+    source.maxHitPoints,
+    source.maxHp,
+    source.hitPoints,
+    source.hit_points,
+    source.hp,
+  );
+  const currentHp = numberFrom(record(source.hitPoints).current, source.currentHitPoints, maxHp);
+  const armorClass = normalizeArmorClass(source.armorClass ?? source.armor_class ?? source.ac);
+  const actions = normalizeFeatures(source.actions ?? []);
+  return {
+    ...source,
+    name,
+    aliases: stringArray(source.aliases),
+    kind,
+    role: String(source.role ?? '').trim(),
+    disposition: String(source.disposition ?? source.allegiance ?? '').trim(),
+    ...(maxHp !== undefined ? {
+      hitPoints: {
+        current: Math.max(0, Math.round(currentHp ?? maxHp)),
+        max: Math.max(1, Math.round(maxHp)),
+      },
+      hit_points: Math.max(1, Math.round(maxHp)),
+    } : {}),
+    ...(armorClass !== undefined ? { armorClass, armor_class: armorClass } : {}),
+    ...(source.speed !== undefined ? { speed: source.speed } : {}),
+    initiativeModifier: numberFrom(source.initiativeModifier, source.initiative) ?? 0,
+    actions: Array.isArray(actions) ? actions : [],
+    bonus_actions: normalizeFeatures(source.bonus_actions ?? source.bonusActions ?? []),
+    reactions: normalizeFeatures(source.reactions ?? []),
+    carriedInventory: record(source.carriedInventory ?? source.inventory ?? source.lootManifest),
+    profile_detail: 'combat_ready',
+  };
+}
+
+export function validateCombatReadyActorProfile(kind: GmcActorKind, actor: JsonRecord) {
+  const composed = composeCombatReadyActorProfile(kind, actor);
+  const errors: string[] = [];
+  if (!composed.name) errors.push('name is required');
+  if (!Number.isFinite(Number(composed.hitPoints?.max)) || Number(composed.hitPoints?.max) < 1) errors.push('positive maximum hit points are required');
+  if (!Number.isFinite(Number(composed.armorClass))) errors.push('armor class is required');
+  return errors.length
+    ? { valid: false as const, actor: composed, details: errors.join('; ') }
+    : { valid: true as const, actor: composed };
+}
+
 function stageResultObject(value: unknown, expectedStageKey: string) {
   const parsed = typeof value === 'string'
     ? parseSmartJson(value, { requireObject: true, maxLength: 1_000_000 })
@@ -335,6 +389,7 @@ function actorResponse(entity: any, created: boolean, workflowId?: string) {
       schemaVersion: String(entity?.schema_version ?? entity?.details?.schemaVersion ?? ''),
       kind: entity?.type,
       name: entity?.canonical_name ?? actor.name,
+      profileCompleteness: String(entity?.details?.profileCompleteness ?? 'full'),
       profile: actor,
     },
   };
@@ -454,6 +509,7 @@ async function runIntegratedWorkflow(state: ActorWorkflowDocument) {
 
 export async function ensureCampaignActor(userId: string, campaignId: string, input: ActorEnsureInput) {
   const kind: GmcActorKind = input.kind === 'monster' ? 'monster' : 'npc';
+  const requiredDetail: ActorProfileDetail = input.requiredDetail === 'combat_ready' ? 'combat_ready' : 'full';
   const executionMode: ActorExecutionMode = input.executionMode === 'manual' ? 'manual' : 'integrated';
   if (input.workflowId) {
     const state = await collections.actorWorkflows().findOne({ _id: input.workflowId, userId, campaignId }) as ActorWorkflowDocument | null;
@@ -479,9 +535,38 @@ export async function ensureCampaignActor(userId: string, campaignId: string, in
     name,
     aliases,
   });
-  if (existing && (existing as any).details?.profileCompleteness === 'full') {
+  const existingCompleteness = String((existing as any)?.details?.profileCompleteness ?? '');
+  if (existing && existingCompleteness === 'full') {
     const validation = validateActorProfile(kind, record((existing as any).details?.actorProfile));
     if (validation.valid) return actorResponse(existing, false);
+  }
+  if (existing && requiredDetail === 'combat_ready' && existingCompleteness === 'combat_ready') {
+    const validation = validateCombatReadyActorProfile(kind, record((existing as any).details?.actorProfile));
+    if (validation.valid) return actorResponse(existing, false);
+  }
+
+  if (requiredDetail === 'combat_ready') {
+    const validation = validateCombatReadyActorProfile(kind, { ...record((existing as any)?.details?.actorProfile), ...actorSnapshot, name, aliases });
+    if (!validation.valid) {
+      throw actorError('The encounter packet does not contain enough mechanics for a combat-ready actor.', 'COMBAT_READY_ACTOR_INVALID', {
+        validationError: validation.details,
+      });
+    }
+    const entity = await upsertCanonicalActor(
+      userId,
+      campaignId,
+      kind,
+      validation.actor,
+      {
+        profileCompleteness: 'combat_ready',
+        schemaVersion: `${kind}/combat-ready/1.0`,
+        source: 'gmc-encounter-contract',
+        executionMode: 'deterministic',
+        purpose: String(input.purpose ?? 'Store the mechanics and identity needed for this encounter actor.'),
+      },
+      existing?._id,
+    );
+    return actorResponse(entity, !existing);
   }
 
   const workflow = getWorkflowDefinition(kind);

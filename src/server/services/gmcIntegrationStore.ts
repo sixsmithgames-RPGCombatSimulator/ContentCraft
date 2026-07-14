@@ -110,11 +110,16 @@ export async function upsertCanonicalActor(
     && (existing as any).details?.profileCompleteness === 'full'
   ) return existing;
   const timestamp = now();
-  const schemaVersion = kind === 'npc' ? 'npc/1.1' : 'monster/1.0';
+  const profileCompleteness = generation.profileCompleteness === 'combat_ready' ? 'combat_ready' : 'full';
+  const schemaVersion = String(
+    generation.schemaVersion
+      ?? (profileCompleteness === 'combat_ready' ? `${kind}/combat-ready/1.0` : (kind === 'npc' ? 'npc/1.1' : 'monster/1.0')),
+  );
+  const generationSource = String(generation.source ?? (profileCompleteness === 'combat_ready' ? 'gmc-encounter-contract' : 'gmc-actor-workflow'));
   const auditEntry = {
     at: timestamp,
-    action: existing ? 'profile_rebuilt' : 'created',
-    source: 'gmc-actor-workflow',
+    action: existing ? (profileCompleteness === 'full' ? 'profile_rebuilt' : 'combat_profile_refreshed') : 'created',
+    source: generationSource,
     workflowId: generation.workflowId ?? null,
   };
   if (existing) {
@@ -133,7 +138,7 @@ export async function upsertCanonicalActor(
           details: {
             ...previousDetails,
             actorProfile: actor,
-            profileCompleteness: 'full',
+            profileCompleteness,
             schemaVersion,
             generation: { ...generation, completedAt: timestamp },
           },
@@ -160,14 +165,14 @@ export async function upsertCanonicalActor(
     aliases: Array.isArray(actor.aliases) ? actor.aliases : [],
     claims: [],
     relationships: [],
-    tags: ['actor', kind, 'workflow-generated'],
+    tags: ['actor', kind, profileCompleteness === 'full' ? 'workflow-generated' : 'encounter-ready'],
     source: 'gamemastercraft',
     version: '1.0.0',
     revision: 1,
     schema_version: schemaVersion,
     details: {
       actorProfile: actor,
-      profileCompleteness: 'full',
+      profileCompleteness,
       schemaVersion,
       generation: { ...generation, completedAt: timestamp },
       ...(kind === 'npc' ? { entityTier: 'contact' } : {}),
