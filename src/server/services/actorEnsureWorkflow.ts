@@ -308,30 +308,64 @@ export function validateCombatReadyActorProfile(kind: GmcActorKind, actor: JsonR
     : { valid: true as const, actor: composed };
 }
 
-function stageResultObject(value: unknown, expectedStageKey: string) {
+function parseNestedStageValue(value: unknown, expectedStageKey: string) {
+  if (typeof value !== 'string') return value;
+  const parsed = parseSmartJson(value, { requireObject: true, maxLength: 1_000_000 });
+  if (!parsed.ok) throw actorError((parsed as { message: string }).message, 'ACTOR_STAGE_JSON_INVALID', {
+    stageKey: expectedStageKey,
+    warnings: parsed.warnings,
+  });
+  return parsed.value;
+}
+
+export function parseActorStageResult(value: unknown, expectedStageKey: string) {
   const parsed = typeof value === 'string'
     ? parseSmartJson(value, { requireObject: true, maxLength: 1_000_000 })
     : { ok: true as const, value, warnings: [], repaired: false, foundJsonBlock: false };
   if (!parsed.ok) throw actorError((parsed as { message: string }).message, 'ACTOR_STAGE_JSON_INVALID', { stageKey: expectedStageKey, warnings: parsed.warnings });
-  const wrapper = record(parsed.value);
-  const suppliedStageKey = String(wrapper.stageKey ?? wrapper.stage?.key ?? '').trim();
+  let wrapper = record(parsed.value);
+  let suppliedStageKey = String(wrapper.stageKey ?? wrapper.stage?.key ?? '').trim();
+  for (let depth = 0; depth < 4; depth += 1) {
+    const envelope = wrapper.actorWorkflowUpdate
+      ?? wrapper.actorWorkflow
+      ?? wrapper.actor_workflow
+      ?? wrapper.data
+      ?? wrapper.payload;
+    const candidate = wrapper.stageResult
+      ?? wrapper.actorStageResult
+      ?? wrapper.actor_stage_result
+      ?? wrapper.result
+      ?? wrapper.output
+      ?? envelope
+      ?? wrapper[expectedStageKey];
+    if (candidate === undefined || candidate === wrapper) break;
+    wrapper = record(parseNestedStageValue(candidate, expectedStageKey));
+    suppliedStageKey ||= String(wrapper.stageKey ?? wrapper.stage?.key ?? '').trim();
+  }
   if (suppliedStageKey && suppliedStageKey !== expectedStageKey) {
     throw actorError(`Expected stage ${expectedStageKey}, but received ${suppliedStageKey}.`, 'ACTOR_STAGE_OUT_OF_ORDER', {
       expectedStageKey,
       suppliedStageKey,
     });
   }
-  const payload = record(wrapper.stageResult ?? wrapper.result ?? wrapper.output ?? parsed.value);
+  const payload = record(wrapper.stageResult ?? wrapper.actorStageResult ?? wrapper.actor_stage_result ?? wrapper.result ?? wrapper.output ?? wrapper);
   const validation = validateWorkflowStageContractPayload(expectedStageKey, payload);
+  const definition = getWorkflowStageSequence(expectedStageKey.startsWith('monster.') ? 'monster' : 'npc')
+    .find((entry) => entry.key === expectedStageKey);
   if (!validation.ok) {
     const validationError = (validation as { ok: false; error: string }).error;
     throw actorError(`Stage ${expectedStageKey} did not satisfy its contract: ${validationError}`, 'ACTOR_STAGE_INVALID', {
       stageKey: expectedStageKey,
       validationError,
+      requiredKeys: definition?.contract?.requiredKeys ?? [],
+      allowedKeys: definition?.contract?.outputAllowedKeys ?? [],
+      receivedKeys: Object.keys(payload),
+      expectedShape: {
+        stageKey: expectedStageKey,
+        stageResult: Object.fromEntries((definition?.contract?.requiredKeys ?? []).map((key) => [key, `<${key}>`])),
+      },
     });
   }
-  const definition = getWorkflowStageSequence(expectedStageKey.startsWith('monster.') ? 'monster' : 'npc')
-    .find((entry) => entry.key === expectedStageKey);
   return definition?.contract
     ? pruneWorkflowStageOutput(payload, definition.contract.outputAllowedKeys) as JsonRecord
     : payload;
@@ -359,6 +393,7 @@ export function buildActorStagePacket(state: ActorWorkflowDocument) {
       'Create concrete story and mechanical detail; do not merely describe what is missing.',
       'Equipment, weapons, armor, and carried treasure are fixed actor inventory and must be usable or discoverable in play.',
       'Return only the requested stage fields. Do not include markdown or commentary.',
+      `Return exactly one JSON object shaped as {"stageKey":"${stage.key}","stageResult":{...}}. Do not wrap it in responseMode, responseText, notes, or another assistant-response envelope.`,
       ...(stage.key === 'spellcasting' ? ['For a non-spellcaster, use spellcasting_ability "none", spell_save_dc 0, and spell_attack_bonus 0.'] : []),
     ],
     context: {
@@ -374,6 +409,7 @@ export function buildActorStagePacket(state: ActorWorkflowDocument) {
       stageKey: stage.key,
       stageResult: Object.fromEntries((stage.contract?.requiredKeys ?? []).map((key) => [key, `<${key}>`])),
     },
+    previousValidationError: state.error?.message ?? null,
   };
 }
 
@@ -434,7 +470,7 @@ async function finalizeWorkflow(state: ActorWorkflowDocument) {
 async function acceptStage(state: ActorWorkflowDocument, result: unknown) {
   const stageKey = state.stageSequence[state.currentStageIndex];
   if (!stageKey) return state;
-  const payload = stageResultObject(result, stageKey);
+  const payload = parseActorStageResult(result, stageKey);
   const timestamp = new Date();
   const next: ActorWorkflowDocument = {
     ...state,
@@ -521,7 +557,20 @@ export async function ensureCampaignActor(userId: string, campaignId: string, in
     if (input.stageResult === undefined) {
       return { status: 'awaiting_ai', workflowId: state._id, packet: buildActorStagePacket(state) };
     }
-    const next = await acceptStage(state, input.stageResult);
+    let next: ActorWorkflowDocument;
+    try {
+      next = await acceptStage(state, input.stageResult);
+    } catch (error: any) {
+      const timestamp = new Date();
+      await collections.actorWorkflows().updateOne(
+        { _id: state._id, userId, campaignId },
+        {
+          $push: { attempts: { stageKey: state.stageSequence[state.currentStageIndex], status: 'rejected', error: error?.message ?? String(error), details: error?.details ?? {}, at: timestamp } },
+          $set: { status: 'awaiting_ai', error: { code: error?.code ?? 'ACTOR_STAGE_INVALID', message: error?.message ?? String(error), details: error?.details ?? {} }, updatedAt: timestamp },
+        } as any,
+      );
+      throw error;
+    }
     if (next.currentStageIndex >= next.stageSequence.length) return finalizeWorkflow(next);
     return { status: 'awaiting_ai', workflowId: next._id, packet: buildActorStagePacket(next) };
   }

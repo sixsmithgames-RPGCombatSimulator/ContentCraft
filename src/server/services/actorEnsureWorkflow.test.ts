@@ -4,6 +4,7 @@ import {
   buildActorStagePacket,
   composeCombatReadyActorProfile,
   composeActorProfile,
+  parseActorStageResult,
   validateCombatReadyActorProfile,
   validateActorProfile,
 } from './actorEnsureWorkflow.js';
@@ -95,5 +96,40 @@ describe('actor ensure workflow contract', () => {
     expect(packet?.stage).toEqual({ key: 'monster.basic_info', label: 'Basic Info', number: 1, total: 5 });
     expect(packet?.contract.requiredKeys).toContain('challenge_rating');
     expect(packet?.returnSchema.stageKey).toBe('monster.basic_info');
+  });
+
+  it('unwraps common assistant envelopes without weakening the active stage contract', () => {
+    const result = parseActorStageResult(JSON.stringify({
+      responseMode: 'ooc',
+      responseText: 'Captain profile stage prepared.',
+      actorWorkflowUpdate: {
+        stageKey: 'basic_info',
+        stageResult: {
+          name: 'Captain Elara Thorne',
+          description: 'A disciplined harbor Watch captain who protects witnesses and evidence.',
+          appearance: 'Weather-dark armor, a close-pinned cloak, and an old brass Watch badge.',
+          background: 'Thorne rose through dock patrols while resisting merchant corruption.',
+          species: 'Human',
+          alignment: 'Lawful Good',
+          class_levels: [{ class: 'Fighter', level: 5 }],
+        },
+      },
+    }), 'basic_info');
+
+    expect(result.name).toBe('Captain Elara Thorne');
+    expect(result.responseMode).toBeUndefined();
+  });
+
+  it('reports exact actor-stage contract diagnostics for a rejected paste', () => {
+    expect(() => parseActorStageResult({
+      stageKey: 'basic_info',
+      stageResult: { name: 'Captain Elara Thorne' },
+    }, 'basic_info')).toThrowError(expect.objectContaining({
+      code: 'ACTOR_STAGE_INVALID',
+      details: expect.objectContaining({
+        receivedKeys: ['name'],
+        requiredKeys: expect.arrayContaining(['description', 'appearance', 'background', 'class_levels']),
+      }),
+    }));
   });
 });
