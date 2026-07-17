@@ -83,7 +83,14 @@ export class ProjectModel {
     userId: string,
     data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<Project> {
-    const id = uuidv4();
+    return this.createWithId(userId, uuidv4(), data);
+  }
+
+  static async createWithId(
+    userId: string,
+    id: string,
+    data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<Project> {
     const now = new Date().toISOString();
 
     if (usesMongo()) {

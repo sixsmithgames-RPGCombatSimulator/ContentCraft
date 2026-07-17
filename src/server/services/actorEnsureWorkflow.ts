@@ -9,6 +9,12 @@ import {
   pruneWorkflowStageOutput,
   validateWorkflowStageContractPayload,
 } from '../../shared/generation/workflowStageValidation.js';
+import { repairWorkflowStagePayload } from '../../shared/generation/workflowStageRepair.js';
+import {
+  normalizeActorFeatureList,
+  normalizeHitDiceNotation,
+  normalizeLegendaryActionBlock,
+} from '../../shared/generation/actorFieldNormalization.js';
 import { validateMonsterStrict } from '../validation/monsterValidator.js';
 import { mapAndValidateNpc } from './npcSchemaMapper.js';
 import { generateStructuredJson } from './gmcLiveGeneration.js';
@@ -127,13 +133,51 @@ function normalizeArmorClass(value: unknown) {
 }
 
 function normalizeFeatures(value: unknown) {
-  if (!Array.isArray(value)) return value;
-  return value.map((entry) => {
-    if (typeof entry === 'string') return { name: entry, description: entry };
-    const source = record(entry);
-    const name = nameOf(source);
-    return name ? { ...source, name, description: String(source.description ?? source.effect ?? name) } : source;
-  });
+  return normalizeActorFeatureList(value);
+}
+
+function normalizeActorSnapshotShape(value: unknown): JsonRecord {
+  const snapshot = record(value);
+  const legacyAbilities = snapshot.abilities;
+  const looksLikeAbilityScores = legacyAbilities && typeof legacyAbilities === 'object' && !Array.isArray(legacyAbilities)
+    && Object.keys(legacyAbilities).some((key) => ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma', 'str', 'dex', 'con', 'int', 'wis', 'cha'].includes(key));
+  return {
+    ...snapshot,
+    ...(looksLikeAbilityScores && snapshot.ability_scores === undefined ? { ability_scores: legacyAbilities } : {}),
+    abilities: Array.isArray(legacyAbilities) ? legacyAbilities : [],
+  };
+}
+
+function resolvedFeatureList(preferred: unknown, derived: unknown) {
+  const explicit = normalizeFeatures(preferred);
+  return Array.isArray(preferred) || explicit.length > 0 ? explicit : normalizeFeatures(derived);
+}
+
+function normalizeCanonicalActorFields(profile: JsonRecord) {
+  const normalized = { ...profile };
+  const legacyAbilities = normalized.abilities;
+  const looksLikeAbilityScores = legacyAbilities && typeof legacyAbilities === 'object' && !Array.isArray(legacyAbilities)
+    && Object.keys(legacyAbilities).some((key) => ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma', 'str', 'dex', 'con', 'int', 'wis', 'cha'].includes(key));
+  if (looksLikeAbilityScores && normalized.ability_scores === undefined) normalized.ability_scores = legacyAbilities;
+  normalized.abilities = Array.isArray(legacyAbilities) ? normalizeFeatures(legacyAbilities) : [];
+  if (normalized.hit_dice !== undefined) {
+    const hitDice = normalizeHitDiceNotation(normalized.hit_dice);
+    if (hitDice) normalized.hit_dice = hitDice;
+  }
+
+  if (normalized.legendary_actions !== undefined) {
+    const legendary = normalizeLegendaryActionBlock(normalized.legendary_actions);
+    if (legendary) normalized.legendary_actions = legendary;
+    else if (
+      (Array.isArray(normalized.legendary_actions) && normalized.legendary_actions.length === 0)
+      || Object.keys(record(normalized.legendary_actions)).length === 0
+    ) delete normalized.legendary_actions;
+  }
+
+  for (const field of ['lair_actions', 'regional_effects'] as const) {
+    if (Array.isArray(normalized[field]) && normalized[field].length === 0) delete normalized[field];
+  }
+  return normalized;
 }
 
 function normalizeScoredEntries(value: unknown) {
@@ -206,7 +250,7 @@ export function composeActorProfile(kind: GmcActorKind, actorSnapshot: JsonRecor
   const hitPoints = normalizeHitPoints(source.hit_points ?? source.hitPoints ?? source.hp ?? source.maxHp);
 
   if (kind === 'monster') {
-    return {
+    return normalizeCanonicalActorFields({
       ...source,
       name,
       description,
@@ -219,11 +263,11 @@ export function composeActorProfile(kind: GmcActorKind, actorSnapshot: JsonRecor
       ...(armorClass !== undefined ? { armor_class: armorClass } : {}),
       ...(hitPoints !== undefined ? { hit_points: hitPoints } : {}),
       ...(source.speed !== undefined ? { speed: normalizeSpeed(source.speed) } : {}),
-      abilities: normalizeFeatures(source.abilities ?? source.traits ?? []),
+      abilities: resolvedFeatureList(source.abilities, source.traits ?? []),
       actions: mergeFeatureMechanics(source.actions, actorSnapshot.actions),
       bonus_actions: normalizeFeatures(source.bonus_actions ?? source.bonusActions ?? []),
       reactions: normalizeFeatures(source.reactions ?? []),
-    };
+    });
   }
 
   const core = record(results.core_details);
@@ -231,7 +275,7 @@ export function composeActorProfile(kind: GmcActorKind, actorSnapshot: JsonRecor
   const equipment = record(results.equipment);
   const spellcasting = record(results.spellcasting);
   const spellcastingAbility = String(spellcasting.spellcasting_ability ?? '').trim();
-  return {
+  return normalizeCanonicalActorFields({
     ...source,
     schema_version: '1.1',
     name,
@@ -257,7 +301,7 @@ export function composeActorProfile(kind: GmcActorKind, actorSnapshot: JsonRecor
     fighting_styles: normalizeFeatures(source.fighting_styles ?? []),
     saving_throws: normalizeScoredEntries(source.saving_throws ?? source.savingThrows),
     skill_proficiencies: normalizeScoredEntries(source.skill_proficiencies ?? source.skills),
-    abilities: normalizeFeatures(source.abilities ?? [
+    abilities: resolvedFeatureList(source.abilities, [
       ...(Array.isArray(source.class_features) ? source.class_features : []),
       ...(Array.isArray(source.subclass_features) ? source.subclass_features : []),
       ...(Array.isArray(source.racial_features) ? source.racial_features : []),
@@ -277,7 +321,7 @@ export function composeActorProfile(kind: GmcActorKind, actorSnapshot: JsonRecor
         known_spells: stringArray(spellcasting.spells_known),
       },
     } : {}),
-  };
+  });
 }
 
 export function validateActorProfile(kind: GmcActorKind, actor: JsonRecord) {
@@ -348,9 +392,41 @@ export function validateCombatReadyActorProfile(kind: GmcActorKind, actor: JsonR
   const composed = composeCombatReadyActorProfile(kind, actor);
   const errors: string[] = [];
   if (!composed.name) errors.push('name is required');
+  if (/\b(?:narrow[- ]faced|scarred|tall|older|young|waxed[- ]coat|below[- ]route|hooded|masked|one[- ]eyed|broad[- ]shouldered)\b/i.test(composed.name)
+    && /\b(?:watch|guard|reader|carrier|runner|handler|holder|dragger|laborer|worker|thug|bandit|sentry|bystander|witness|mage|arcanist)\b/i.test(composed.name)) {
+    errors.push('name contains an appearance/role description; move that text to description and supply a canonical, personal, or numbered type identity');
+  }
   if (!Number.isFinite(Number(composed.hitPoints?.max)) || Number(composed.hitPoints?.max) < 1) errors.push('positive maximum hit points are required');
   if (!Number.isFinite(Number(composed.armorClass))) errors.push('armor class is required');
   if (!Array.isArray(composed.actions) || composed.actions.length === 0) errors.push('at least one executable action is required');
+  for (const [index, action] of (Array.isArray(composed.actions) ? composed.actions : []).entries()) {
+    const source = record(action);
+    const actionName = String(source.name ?? source.label ?? '').trim();
+    if (!actionName || /^(?:action|attack|weapon(?: attack)?|spell|spell attack|unnamed spell|unknown spell)$/i.test(actionName)) {
+      errors.push(`action ${index + 1} requires a real non-placeholder name`);
+      continue;
+    }
+    const type = String(source.type ?? source.actionType ?? '').trim().toLowerCase().replace(/[ -]+/g, '_');
+    const attackLike = ['attack', 'weapon', 'melee', 'ranged', 'spell_attack'].includes(type)
+      || source.attackBonus !== undefined || source.attack_bonus !== undefined || source.toHit !== undefined;
+    const spellLike = type === 'spell';
+    const utility = source.utilitySpell === true || source.effectOnly === true || source.nonDamaging === true;
+    const damageSource = source.damageEntries ?? source.damage_entries ?? source.damage;
+    const damageEntries = Array.isArray(damageSource) ? damageSource : (damageSource ? [damageSource] : []);
+    const validDamage = damageEntries.some((entry) => {
+      const formula = typeof entry === 'string'
+        ? entry
+        : String(record(entry).dice ?? record(entry).formula ?? record(entry).damageFormula ?? '');
+      return /^\s*\d+d\d+(?:\s*[+-]\s*\d+)?\s*$/i.test(formula);
+    });
+    if ((attackLike || (spellLike && !utility && source.saveDc === undefined && record(source.save).dc === undefined)) && !validDamage) {
+      errors.push(`${actionName} is a damaging attack without a valid damage expression`);
+    }
+  }
+  const watchLike = /\bwatch|constable|shield[- ]bearer|ward[- ]reader\b/i.test(`${composed.name} ${composed.role ?? ''}`);
+  if (watchLike && composed.actions.every((action: JsonRecord) => /^unarmed strike$/i.test(String(record(action).name ?? '')))) {
+    errors.push('Watch combatants require their actual issued weapon or spell actions; unarmed-only fallback is not combat ready');
+  }
   return errors.length
     ? { valid: false as const, actor: composed, details: errors.join('; ') }
     : { valid: true as const, actor: composed };
@@ -397,7 +473,14 @@ export function parseActorStageResult(value: unknown, expectedStageKey: string) 
     });
   }
   const payload = record(wrapper.stageResult ?? wrapper.actorStageResult ?? wrapper.actor_stage_result ?? wrapper.result ?? wrapper.output ?? wrapper);
-  const validation = validateWorkflowStageContractPayload(expectedStageKey, payload);
+  const workflowType = expectedStageKey.startsWith('monster.') ? 'monster' : 'npc';
+  const repaired = repairWorkflowStagePayload({
+    stageIdOrName: expectedStageKey,
+    workflowType,
+    payload,
+  });
+  const canonicalPayload = record(repaired.payload);
+  const validation = validateWorkflowStageContractPayload(expectedStageKey, canonicalPayload, workflowType);
   const definition = getWorkflowStageSequence(expectedStageKey.startsWith('monster.') ? 'monster' : 'npc')
     .find((entry) => entry.key === expectedStageKey);
   if (!validation.ok) {
@@ -408,6 +491,7 @@ export function parseActorStageResult(value: unknown, expectedStageKey: string) 
       requiredKeys: definition?.contract?.requiredKeys ?? [],
       allowedKeys: definition?.contract?.outputAllowedKeys ?? [],
       receivedKeys: Object.keys(payload),
+      appliedRepairs: repaired.appliedRepairs,
       expectedShape: {
         stageKey: expectedStageKey,
         stageResult: Object.fromEntries((definition?.contract?.requiredKeys ?? []).map((key) => [key, `<${key}>`])),
@@ -415,8 +499,8 @@ export function parseActorStageResult(value: unknown, expectedStageKey: string) 
     });
   }
   return definition?.contract
-    ? pruneWorkflowStageOutput(payload, definition.contract.outputAllowedKeys) as JsonRecord
-    : payload;
+    ? pruneWorkflowStageOutput(canonicalPayload, definition.contract.outputAllowedKeys) as JsonRecord
+    : canonicalPayload;
 }
 
 export function buildActorStagePacket(state: ActorWorkflowDocument) {
@@ -445,7 +529,7 @@ export function buildActorStagePacket(state: ActorWorkflowDocument) {
       ...(stage.key === 'spellcasting' ? ['For a non-spellcaster, use spellcasting_ability "none", spell_save_dc 0, and spell_attack_bonus 0.'] : []),
     ],
     context: {
-      actorSnapshot: state.actorSnapshot,
+      actorSnapshot: normalizeActorSnapshotShape(state.actorSnapshot),
       completedStages: state.stageResults,
     },
     contract: {
@@ -596,8 +680,16 @@ export async function ensureCampaignActor(userId: string, campaignId: string, in
   const requiredDetail: ActorProfileDetail = input.requiredDetail === 'combat_ready' ? 'combat_ready' : 'full';
   const executionMode: ActorExecutionMode = input.executionMode === 'manual' ? 'manual' : 'integrated';
   if (input.workflowId) {
-    const state = await collections.actorWorkflows().findOne({ _id: input.workflowId, userId, campaignId }) as ActorWorkflowDocument | null;
+    let state = await collections.actorWorkflows().findOne({ _id: input.workflowId, userId, campaignId }) as ActorWorkflowDocument | null;
     if (!state) throw Object.assign(new Error('Actor workflow not found.'), { status: 404, code: 'ACTOR_WORKFLOW_NOT_FOUND' });
+    const normalizedSnapshot = normalizeActorSnapshotShape(state.actorSnapshot);
+    if (JSON.stringify(normalizedSnapshot) !== JSON.stringify(state.actorSnapshot)) {
+      state = { ...state, actorSnapshot: normalizedSnapshot };
+      await collections.actorWorkflows().updateOne(
+        { _id: input.workflowId, userId, campaignId },
+        { $set: { actorSnapshot: normalizedSnapshot, updatedAt: new Date() } },
+      );
+    }
     if (state.status === 'complete' && state.canonicalEntityId) {
       const entity = await findActorEntity(userId, campaignId, state.kind, { canonicalEntityId: state.canonicalEntityId });
       if (entity) return actorResponse(entity, false, state._id);
@@ -624,7 +716,7 @@ export async function ensureCampaignActor(userId: string, campaignId: string, in
     return { status: 'awaiting_ai', workflowId: next._id, packet: buildActorStagePacket(next) };
   }
 
-  const actorSnapshot = record(input.actorSnapshot);
+  const actorSnapshot = normalizeActorSnapshotShape(input.actorSnapshot);
   const name = String(input.identityHints?.name ?? actorSnapshot.name ?? '').trim();
   if (!name) throw Object.assign(new Error('identityHints.name or actorSnapshot.name is required.'), { status: 400, code: 'VALIDATION_ERROR' });
   const aliases = stringArray(input.identityHints?.aliases ?? actorSnapshot.aliases);
@@ -639,8 +731,12 @@ export async function ensureCampaignActor(userId: string, campaignId: string, in
     if (validation.valid) return actorResponse(existing, false);
   }
   if (existing && requiredDetail === 'combat_ready' && existingCompleteness === 'combat_ready') {
-    const validation = validateCombatReadyActorProfile(kind, record((existing as any).details?.actorProfile));
-    if (validation.valid) return actorResponse(existing, false);
+    const existingProfile = record((existing as any).details?.actorProfile);
+    const incomingHasMaterialUpdate = Object.keys(actorSnapshot).some((key) => !['gridX', 'gridY', 'start', 'position', 'conditions'].includes(key));
+    if (!incomingHasMaterialUpdate) {
+      const validation = validateCombatReadyActorProfile(kind, existingProfile);
+      if (validation.valid) return actorResponse(existing, false);
+    }
   }
 
   if (requiredDetail === 'combat_ready') {

@@ -5,6 +5,10 @@ import {
   type WorkflowStageJsonRecord,
 } from './workflowStageValidation.js';
 import { resolveWorkflowContentType } from './workflowContentType.js';
+import {
+  normalizeHitDiceNotation,
+  normalizeLegendaryActionBlock,
+} from './actorFieldNormalization.js';
 
 type JsonRecord = WorkflowStageJsonRecord;
 
@@ -872,6 +876,14 @@ const normalizeAbilityScores = (value: unknown): Record<string, number> | null =
 };
 
 const normalizeSpeedStrings = (value: unknown): Record<string, string> | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { walk: `${value} ft.` };
+  }
+
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return { walk: value.trim() };
+  }
+
   if (!isRecord(value)) {
     return null;
   }
@@ -897,8 +909,8 @@ const normalizeSpeedStrings = (value: unknown): Record<string, string> | null =>
 
 const extractHitDice = (value: unknown): string | undefined => {
   if (typeof value === 'string') {
-    const match = value.match(/\b(\d+d\d+)\b/i);
-    return match?.[1];
+    const match = value.replace(/\s+/g, '').match(/\b(\d+d\d+(?:\+\d+d\d+)*)/i);
+    return match?.[1]?.toLowerCase();
   }
 
   if (!isRecord(value)) {
@@ -912,8 +924,8 @@ const extractHitDice = (value: unknown): string | undefined => {
     return undefined;
   }
 
-  const match = formula.match(/\b(\d+d\d+)\b/i);
-  return match?.[1];
+  const match = formula.replace(/\s+/g, '').match(/\b(\d+d\d+(?:\+\d+d\d+)*)/i);
+  return match?.[1]?.toLowerCase();
 };
 
 const normalizeSpellListMap = (value: unknown, fallbackKey: string): JsonRecord => {
@@ -1730,6 +1742,34 @@ export function repairWorkflowStagePayload(input: WorkflowStageRepairInput): Wor
     if (derivedHitDice) {
       payload = { ...payload, hit_dice: derivedHitDice };
       appliedRepairs.push('stats:derive_hit_dice');
+    }
+  }
+
+  if (contractKey === 'stats' && payload.hit_dice !== undefined) {
+    const normalizedHitDice = normalizeHitDiceNotation(payload.hit_dice);
+    if (normalizedHitDice && normalizedHitDice !== payload.hit_dice) {
+      payload = { ...payload, hit_dice: normalizedHitDice };
+      appliedRepairs.push('stats:normalize_hit_dice');
+    }
+  }
+
+  if (contractKey === 'legendary' || contractKey === 'monster.legendary') {
+    const normalizedLegendary = normalizeLegendaryActionBlock(payload.legendary_actions);
+    if (normalizedLegendary) payload = { ...payload, legendary_actions: normalizedLegendary };
+    else if (payload.legendary_actions !== undefined) {
+      const { legendary_actions: _removed, ...remaining } = payload;
+      payload = remaining;
+    }
+
+    for (const field of ['lair_actions', 'regional_effects'] as const) {
+      if (Array.isArray(payload[field]) && payload[field].length === 0) {
+        const { [field]: _removed, ...remaining } = payload;
+        payload = remaining;
+      }
+    }
+
+    if (JSON.stringify(payload) !== JSON.stringify(input.payload)) {
+      appliedRepairs.push(`${contractKey}:normalize_optional_actions`);
     }
   }
 

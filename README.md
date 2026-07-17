@@ -6,6 +6,15 @@ An iterative content creation app for fiction, non-fiction, D&D adventures, and 
 
 **License**: Proprietary & Confidential
 
+## AI developer trace
+
+Server-side structured generation writes credential-redacted JSONL records to
+`logs/gmc-ai-generation.jsonl`. Each attempt contains the exact Gemini request
+(including the system instruction), correlation ID, operation, model response,
+duration, retry number, and any provider, parsing, or transport error. Set
+`GMC_AI_DEV_LOG_PATH` to use a different local path. This developer diagnostic
+artifact is excluded from source control.
+
 ## Features
 
 ### Core Features

@@ -698,7 +698,7 @@
       "description": "Description of the NPC's lair or base of operations"
     },
     "lair_actions": {
-      "oneOf": [
+      "anyOf": [
         {
           "type": "array",
           "items": { "type": "string" },
@@ -721,7 +721,7 @@
       "description": "Actions available in the NPC's lair"
     },
     "regional_effects": {
-      "oneOf": [
+      "anyOf": [
         {
           "type": "array",
           "items": { "type": "string" },

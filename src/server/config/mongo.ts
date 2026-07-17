@@ -75,6 +75,10 @@ async function createIndexes(database: Db): Promise<void> {
   await database.collection('canon_entities').createIndex({ userId: 1, project_id: 1, type: 1, 'details.memory.tier': 1, 'details.memory.currentLocationId': 1 });
   await database.collection('canon_entities').createIndex({ userId: 1, project_id: 1, type: 1, 'details.memory.ownerEntityId': 1 });
   await database.collection('canon_entities').createIndex({ userId: 1, project_id: 1, type: 1, 'details.profileCompleteness': 1 });
+  await database.collection('canon_entities').createIndex(
+    { userId: 1, project_id: 1, type: 1, canonicalFingerprint: 1 },
+    { unique: true, partialFilterExpression: { canonicalFingerprint: { $type: 'string' } } },
+  );
 
   // Canon chunks indexes
   await database.collection('canon_chunks').createIndex({ entity_id: 1 });
@@ -105,14 +109,30 @@ async function createIndexes(database: Db): Promise<void> {
   // GameMasterCraft live-session integration indexes
   await database.collection('gmc_campaign_state').createIndex({ userId: 1, campaignId: 1 }, { unique: true });
   await database.collection('gmc_scenes').createIndex({ userId: 1, campaignId: 1, updatedAt: -1 });
+  await database.collection('gmc_scenes').createIndex(
+    { userId: 1, campaignId: 1, canonicalFingerprint: 1 },
+    { unique: true, partialFilterExpression: { canonicalFingerprint: { $type: 'string' } } },
+  );
   await database.collection('gmc_facts').createIndex({ userId: 1, campaignId: 1, locked: 1, createdAt: -1 });
   await database.collection('gmc_facts').createIndex({ userId: 1, campaignId: 1, 'scope.kind': 1, 'scope.tier': 1, 'scope.locationId': 1 });
   await database.collection('gmc_facts').createIndex({ userId: 1, campaignId: 1, 'scope.entityId': 1, 'scope.tier': 1 });
   await database.collection('gmc_facts').createIndex({ text: 'text' });
+  await database.collection('gmc_facts').createIndex(
+    { userId: 1, campaignId: 1, canonicalFingerprint: 1 },
+    { unique: true, partialFilterExpression: { canonicalFingerprint: { $type: 'string' } } },
+  );
   await database.collection('gmc_threads').createIndex({ userId: 1, campaignId: 1, status: 1 });
   await database.collection('gmc_threads').createIndex({ userId: 1, campaignId: 1, status: 1, deadlineAt: 1 });
   await database.collection('gmc_threads').createIndex({ userId: 1, campaignId: 1, 'scope.kind': 1, 'scope.tier': 1, 'scope.locationId': 1 });
+  await database.collection('gmc_threads').createIndex(
+    { userId: 1, campaignId: 1, canonicalFingerprint: 1 },
+    { unique: true, partialFilterExpression: { canonicalFingerprint: { $type: 'string' } } },
+  );
   await database.collection('gmc_sessions').createIndex({ userId: 1, campaignId: 1, createdAt: -1 });
+  await database.collection('gmc_sessions').createIndex(
+    { userId: 1, campaignId: 1, canonicalFingerprint: 1 },
+    { unique: true, partialFilterExpression: { canonicalFingerprint: { $type: 'string' } } },
+  );
   await database.collection('gmc_actor_workflows').createIndex({ userId: 1, campaignId: 1, updatedAt: -1 });
   await database.collection('gmc_actor_workflows').createIndex({ userId: 1, campaignId: 1, kind: 1, normalizedName: 1, status: 1 });
 

@@ -112,6 +112,8 @@ POST /api/gmc/v1/facts/{factId}/supersede
 
 Facts are durable, campaign-scoped, optionally secret, lockable, and superseded rather than destructively deleted.
 
+All durable create requests (campaigns, scenes, sessions, facts, items, threads, NPCs, locations, and factions) require a stable `mutationId`. GMC stores or derives a durable operation identity and, for campaign resources, a semantic fingerprint. Repeating the same request returns the original record with `duplicate: true`; reusing an ID for different data returns `409 IDEMPOTENCY_CONFLICT` without changing the original. Exact semantic duplicates are also collapsed, including concurrent retries.
+
 ## Typed canon entities
 
 NPC, location, item, and faction resources support list, get, create, and update. NPCs, locations, and items also support structured Gemini generation:

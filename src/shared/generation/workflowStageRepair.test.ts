@@ -161,6 +161,43 @@ describe('workflowStageRepair', () => {
     expect(validateWorkflowStageContractPayload('stats', repaired.payload, 'npc')).toEqual({ ok: true });
   });
 
+  it('normalizes scalar speed and legacy object-form mixed-class hit dice', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'stats',
+      workflowType: 'npc',
+      payload: {
+        size: 'Medium',
+        ability_scores: { strength: 8, dexterity: 12, constitution: 12, intelligence: 15, wisdom: 13, charisma: 10 },
+        proficiency_bonus: 2,
+        speed: 30,
+        armor_class: 12,
+        hit_points: 18,
+        hit_dice: { d6: 1, d8: 2 },
+        senses: { passive_perception: 13, darkvision: 0, special: [] },
+      },
+    });
+
+    expect(repaired.payload.speed).toEqual({ walk: '30 ft.' });
+    expect(repaired.payload.hit_dice).toBe('1d6+2d8');
+    expect(repaired.appliedRepairs).toContain('stats:normalize_hit_dice');
+    expect(validateWorkflowStageContractPayload('stats', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
+
+  it('omits empty optional legendary fields before canonical composition', () => {
+    const repaired = repairWorkflowStagePayload({
+      stageIdOrName: 'legendary',
+      workflowType: 'npc',
+      payload: {
+        legendary_actions: [],
+        lair_actions: [],
+        regional_effects: [],
+      },
+    });
+
+    expect(repaired.payload).toEqual({});
+    expect(validateWorkflowStageContractPayload('legendary', repaired.payload, 'npc')).toEqual({ ok: true });
+  });
+
   it('normalizes mixed-form stats ability scores and prefers non-placeholder values', () => {
     const repaired = repairWorkflowStagePayload({
       stageIdOrName: 'stats',

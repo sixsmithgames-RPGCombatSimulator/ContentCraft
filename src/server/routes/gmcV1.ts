@@ -9,8 +9,11 @@ import {
   buildMemoryContext,
   collections,
   contradictionCandidates,
-  createEntity,
-  createFact,
+  createEntityMutation,
+  createFactMutation,
+  createSceneMutation,
+  createSessionMutation,
+  createThreadMutation,
   getEntity,
   listEntities,
   listFacts,
@@ -20,7 +23,15 @@ import {
 } from '../services/gmcIntegrationStore.js';
 import { generateStructuredJson, generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
 import { ensureCampaignActor } from '../services/actorEnsureWorkflow.js';
+import { applyCampaignClockMutation } from '../services/campaignClockMutation.js';
+import { createCampaignMutation } from '../services/campaignCreateMutation.js';
 import {
+  AUDIT_RESOLVED_MECHANICS_NARRATION_INSTRUCTION,
+  AUDIT_RESOLVED_MECHANICS_NARRATION_REQUIRED_KEYS,
+  NARRATE_COMBAT_ACTION_RESULT_INSTRUCTION,
+  NARRATE_COMBAT_ACTION_RESULT_REQUIRED_KEYS,
+  NARRATE_COMBAT_TURNS_INSTRUCTION,
+  NARRATE_COMBAT_TURNS_REQUIRED_KEYS,
   PLAN_COMBAT_TURN_INSTRUCTION,
   PLAN_COMBAT_TURN_REQUIRED_KEYS,
   PLAN_ENCOUNTER_INSTRUCTION,
@@ -132,15 +143,24 @@ gmcV1Router.get('/campaigns', asyncRoute(async (req, res) => {
 gmcV1Router.post('/campaigns', asyncRoute(async (req, res) => {
   const title = String(req.body?.title || '').trim();
   if (!title) { fail(req, res, 400, 'VALIDATION_ERROR', 'title is required.'); return; }
-  const created = await ProjectModel.create(userId(req), {
+  const result = await createCampaignMutation({
+    store: ProjectModel,
+    userId: userId(req),
+    mutationId: req.body?.mutationId,
+    input: {
     title,
     description: String(req.body?.description || '').trim(),
     type: ProjectType.DND_ADVENTURE,
     status: ProjectStatus.DRAFT,
     productKey: 'gamemastercraft',
     workspaceType: req.body?.gameMode === 'solo' ? 'solo_campaign' : 'group_campaign',
+    },
   });
-  res.status(201).json({ campaign: created });
+  res.status(result.duplicate ? 200 : 201).json({
+    campaign: result.campaign,
+    mutationId: result.mutationId,
+    duplicate: result.duplicate,
+  });
 }));
 
 gmcV1Router.get('/campaigns/:campaignId', asyncRoute(async (req, res) => {
@@ -186,17 +206,26 @@ gmcV1Router.get('/campaigns/:campaignId/time', asyncRoute(async (req, res) => {
 gmcV1Router.patch('/campaigns/:campaignId/time', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;
   const uid = userId(req); const id = req.params.campaignId;
-  const previous = await collections.state().findOne({ userId: uid, campaignId: id });
-  const gameClock = req.body?.gameClock === null ? null : normalizeGameClock(req.body ?? {}, previous?.gameClock ?? {});
-  const state = await collections.state().findOneAndUpdate(
-    { userId: uid, campaignId: id },
-    {
-      $set: { gameClock, updatedAt: new Date() },
-      $setOnInsert: { userId: uid, campaignId: id },
-    },
-    { upsert: true, returnDocument: 'after' },
-  );
-  res.json({ gameClock: state?.gameClock ?? gameClock, campaignState: state });
+  const mutationId = String(req.body?.mutationId ?? '').trim();
+  const result = await applyCampaignClockMutation({
+    stateCollection: collections.state(),
+    userId: uid,
+    campaignId: id,
+    mutationId,
+    expectedRevision: req.body?.expectedRevision,
+    source: req.body?.source ?? null,
+    createGameClock: (previousGameClock) => (
+      req.body?.gameClock === null ? null : normalizeGameClock(req.body ?? {}, (previousGameClock as Record<string, any>) ?? {})
+    ),
+  });
+  res.json({
+    mutationId: result.mutationId,
+    duplicate: result.duplicate,
+    previousGameClock: result.previousGameClock,
+    gameClock: result.gameClock,
+    gameClockRevision: result.gameClockRevision,
+    campaignState: result.state,
+  });
 }));
 
 gmcV1Router.get('/campaigns/:campaignId/scenes/current', asyncRoute(async (req, res) => {
@@ -210,11 +239,19 @@ gmcV1Router.get('/campaigns/:campaignId/scenes/current', asyncRoute(async (req, 
 gmcV1Router.post('/campaigns/:campaignId/scenes', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;
   if (!String(req.body?.name || '').trim()) { fail(req, res, 400, 'VALIDATION_ERROR', 'name is required.'); return; }
-  const uid = userId(req); const id = req.params.campaignId; const timestamp = new Date();
-  const scene = { _id: randomUUID(), userId: uid, campaignId: id, name: req.body.name, locationId: req.body.locationId ?? null, presentNpcIds: req.body.presentNpcIds ?? [], description: req.body.description ?? '', gmPrivateNotes: req.body.gmPrivateNotes ?? null, status: req.body.status ?? 'active', createdAt: timestamp, updatedAt: timestamp };
-  await collections.scenes().insertOne(scene);
-  if (req.body.makeCurrent !== false) await collections.state().updateOne({ userId: uid, campaignId: id }, { $set: { currentSceneId: scene._id, updatedAt: timestamp } }, { upsert: true });
-  res.status(201).json({ scene });
+  const uid = userId(req); const id = req.params.campaignId;
+  const result = await createSceneMutation(uid, id, req.body);
+  if (req.body.makeCurrent !== false) await collections.state().updateOne(
+    { userId: uid, campaignId: id },
+    { $set: { currentSceneId: result.record._id, updatedAt: new Date() } },
+    { upsert: true },
+  );
+  res.status(result.duplicate ? 200 : 201).json({
+    scene: result.record,
+    mutationId: result.mutationId,
+    duplicate: result.duplicate,
+    duplicateReason: result.duplicateReason,
+  });
 }));
 
 gmcV1Router.patch('/scenes/:sceneId', asyncRoute(async (req, res) => {
@@ -289,7 +326,13 @@ gmcV1Router.get('/facts/:factId', asyncRoute(async (req, res) => {
 
 gmcV1Router.post('/campaigns/:campaignId/facts', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;
-  res.status(201).json({ fact: await createFact(userId(req), req.params.campaignId, req.body) });
+  const result = await createFactMutation(userId(req), req.params.campaignId, req.body);
+  res.status(result.duplicate ? 200 : 201).json({
+    fact: result.record,
+    mutationId: result.mutationId,
+    duplicate: result.duplicate,
+    duplicateReason: result.duplicateReason,
+  });
 }));
 
 gmcV1Router.patch('/facts/:factId', asyncRoute(async (req, res) => {
@@ -324,7 +367,13 @@ function registerEntityRoutes(kind: GmcEntityKind, plural: string) {
   }));
   gmcV1Router.post(`/campaigns/:campaignId/${plural}`, asyncRoute(async (req, res) => {
     if (!await campaign(req, res)) return;
-    res.status(201).json({ [kind]: await createEntity(userId(req), req.params.campaignId, kind, req.body) });
+    const result = await createEntityMutation(userId(req), req.params.campaignId, kind, req.body);
+    res.status(result.duplicate ? 200 : 201).json({
+      [kind]: result.record,
+      mutationId: result.mutationId,
+      duplicate: result.duplicate,
+      duplicateReason: result.duplicateReason,
+    });
   }));
   gmcV1Router.patch(`/${plural}/:${kind}Id`, asyncRoute(async (req, res) => {
     const entity = await updateEntity(userId(req), req.params[`${kind}Id`], kind, req.body);
@@ -336,8 +385,20 @@ function registerEntityRoutes(kind: GmcEntityKind, plural: string) {
     const generated = await generateStructuredJson(generationPrompts[kind as 'npc' | 'monster' | 'location' | 'item'], { prompt: req.body?.prompt, campaignId: req.params.campaignId, context: req.body });
     if (!generated.name) throw Object.assign(new Error('Generated entity has no name.'), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
     const makeCanon = Boolean(req.body?.makeCanon);
-    const entity = makeCanon ? await createEntity(userId(req), req.params.campaignId, kind, { ...generated, draft: false }) : { ...generated, draft: true };
-    res.json({ [kind]: entity, draft: !makeCanon, suggestedFacts: generated.suggestedFacts ?? [] });
+    const committed = makeCanon
+      ? await createEntityMutation(userId(req), req.params.campaignId, kind, { ...generated, draft: false, mutationId: req.body?.mutationId })
+      : null;
+    const entity = committed?.record ?? { ...generated, draft: true };
+    res.status(committed && !committed.duplicate ? 201 : 200).json({
+      [kind]: entity,
+      draft: !makeCanon,
+      suggestedFacts: generated.suggestedFacts ?? [],
+      ...(committed ? {
+        mutationId: committed.mutationId,
+        duplicate: committed.duplicate,
+        duplicateReason: committed.duplicateReason,
+      } : {}),
+    });
   }));
 }
 
@@ -386,20 +447,13 @@ gmcV1Router.post('/campaigns/:campaignId/threads', asyncRoute(async (req, res) =
   if (!String(req.body?.consequence ?? '').trim()) {
     fail(req, res, 400, 'VALIDATION_ERROR', 'EVENT consequence is required.'); return;
   }
-  const timestamp = new Date();
-  const thread = {
-    _id: randomUUID(), userId: userId(req), campaignId: req.params.campaignId,
-    recordType: 'EVENT', title: req.body.title, description: req.body.description ?? '',
-    deadlineAt: req.body.deadlineAt ?? null,
-    deadlineDescription: req.body.deadlineDescription ?? req.body.deadline ?? null,
-    consequence: req.body.consequence ?? '',
-    scope: req.body.scope ?? { kind: 'geographic', tier: 'world', locationId: null, entityId: null },
-    relatedNpcIds: req.body.relatedNpcIds ?? [], relatedLocationIds: req.body.relatedLocationIds ?? [],
-    status: req.body.status ?? 'open',
-    source: req.body.source ?? { system: 'gamemastercraft' },
-    createdAt: timestamp, updatedAt: timestamp,
-  };
-  await collections.threads().insertOne(thread); res.status(201).json({ thread });
+  const result = await createThreadMutation(userId(req), req.params.campaignId, req.body);
+  res.status(result.duplicate ? 200 : 201).json({
+    thread: result.record,
+    mutationId: result.mutationId,
+    duplicate: result.duplicate,
+    duplicateReason: result.duplicateReason,
+  });
 }));
 
 gmcV1Router.patch('/threads/:threadId', asyncRoute(async (req, res) => {
@@ -428,8 +482,14 @@ gmcV1Router.post('/threads/:threadId/supersede', asyncRoute(async (req, res) => 
 
 gmcV1Router.post('/campaigns/:campaignId/sessions', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;
-  const session = { _id: randomUUID(), userId: userId(req), campaignId: req.params.campaignId, ...req.body, createdAt: new Date(), updatedAt: new Date() };
-  await collections.sessions().insertOne(session); res.status(201).json({ sessionId: session._id, session });
+  const result = await createSessionMutation(userId(req), req.params.campaignId, req.body);
+  res.status(result.duplicate ? 200 : 201).json({
+    sessionId: result.record._id,
+    session: result.record,
+    mutationId: result.mutationId,
+    duplicate: result.duplicate,
+    duplicateReason: result.duplicateReason,
+  });
 }));
 
 gmcV1Router.patch('/sessions/:sessionId/summary', asyncRoute(async (req, res) => {
@@ -470,6 +530,8 @@ gmcV1Router.post('/tools/parse-json', asyncRoute(async (req, res) => {
 
 gmcV1Router.post('/ai/classify-intent', asyncRoute((req, res) => ai(req, res, 'Classify the input. Return {intentType, confidence, structuredIntent, requiresVcs, requiresGameMasterCraft}. Allowed intentType values: narrative_action, mechanical_action, mixed_action, canon_query, rules_query, generation_request, prep_request, sync_request, correction, retcon, ooc_question, system_command.', ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'])));
 gmcV1Router.post('/ai/generate-narration', asyncRoute((req, res) => ai(req, res, `Continue directly from the established current state in conversationHistory. The supplied continuityContract is binding.
+PLAYER-FACING FICTION CONTRACT: narration is prose the player can read directly as the scene. Dramatize concrete motion, sensory detail, choices, dialogue, and consequences. Vary sentence openings and use natural short references after introducing a full name; do not repeat a database display name at the start of consecutive sentences. Characters speak only in-world language, never rules, interface, planning-schema, or diagnostic terminology.
+Never expose internal preparation or authority language in narration: no “current records,” “fixed carried inventory,” “authoritative manifest,” “canon data,” “structured output,” “without inventing,” field names such as responseText/sceneSegmentUpdate/proposedCanonChanges, underscore-delimited state codes, or standalone equipment-state labels such as Drawn, Sheathed, Readied, or Secured. Put private diagnostics in gmPrivateNotes. If a missing manifest or required canonical input prevents an exact result, do not disguise the failure as fiction: return a concise actionable diagnostic in gmPrivateNotes and keep narration to established visible action without claiming the unresolved result.
 First determine the player's NEW intent in the current instruction relative to the final assistant turn. Repeated wording may describe a multi-step method or refer to completed work; it is not permission to perform completed steps again. Deictic words such as "other", "next", "then", "after", "already", "again", and "continue" must advance their referent. Preserve all established positions, injuries, deaths, possessions, discoveries, searches, dialogue, and consequences, with the latest retcon taking precedence. Never re-award loot, re-search the same target, re-enter a location, or replay movement already completed. Resolve or materially advance each distinct new action in order. Do not merely paraphrase the instruction. Stop only at a genuine player decision or a check that the binding dmCheckPolicy actually requires.
 The supplied narrativeMomentumPolicy is binding. Treat a compound instruction as one authorization chain: a required roll may pause it, but after the roll resolves complete every remaining authorized step unless the result makes it impossible or creates a significant interruption. Carry established operating methods such as familiar scouting, shield formation, avoiding obvious alarms, following the strongest known lead, and continuing until contact through routine traversal until circumstances materially invalidate them.
 Before stopping, apply all parts of narrativeMomentumPolicy.significantStopAudit. Fresh player input must actually be required; reasonable options must have materially different consequences; and the unresolved choice must not already be answered by the instruction or established method. A junction, warning cord, unattended lamp, door, bend, route marker, suspicious but inert prop, or empty stretch is not independently a decision point merely because it can be described. Re-audit inherited active segments and importantBeats: a prior response naming a micro-beat does not make it significant, so redirect or fold it forward when it lacks material stakes. Apply successful-check benefits and continue toward a valid prepared importantBeat, active opposition, material discovery, costly commitment, irreversible choice, or terminal scene outcome. Do not invent a breadcrumb ladder of micro-obstacles to manufacture prompts.
@@ -482,6 +544,9 @@ The supplied gameTimePolicy and gameTimeContext are binding. Keep in-world time 
 Return {narration, npcDialogue, requiresVcsResolution, proposedCanonChanges, proposedVcsExports, proposedTimeAdvance, sceneSegmentUpdate, riskLevel, syncNotes, gmPrivateNotes}. proposedTimeAdvance is null or {shouldAdvance,seconds,minutes,reason,activity,clockAfter}. sceneSegmentUpdate is null or {status,title,where,when,who,whyPresent,objective,doneWhen,importantBeats,knownDetails,evidenceLedger,stakes,availableRewards,rewardsRealized,rewardsMissed,outcome,arcImpacts,nextSceneSeed}.`, ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'])));
 gmcV1Router.post('/ai/validate-narration-continuity', asyncRoute((req, res) => ai(req, res, `Act as a strict continuity editor, not a storyteller. Compare candidateNarration with the ordered conversationHistory, current instruction, continuityContract, authoritative VCS state, and campaign dashboard.
 Mark the candidate invalid if it repeats an action already completed; awards the same item, money, information, damage, movement, or search result twice; contradicts the latest retcon or established state; ignores referents such as "other" or "next"; converts planning, considering, thinking, watching, or waiting into execution of a contemplated action; fails to resolve or materially advance an explicit new action; substitutes a recap for progress; or narrates a roll-dependent outcome without an authoritative result. A short orientation phrase is allowed, but the response must move forward without exceeding the player's stated intent.
+When resolvedMechanicsContract is supplied, audit at event-level fidelity. authoritativeMechanicalResult, authoritativeOutcome, and rollRequest are complete and immutable. Mark the candidate invalid if it adds any follow-up action, target response after the immediate result, changed position, movement, forced movement, lost balance, condition, injury from zero damage, dialogue, material or construction detail, equipment property, terrain dimension, discovery, loot, reinforcement, or encounter transition that is absent from the supplied state. Atmospheric description may elaborate sound, light, and motion already inherent in the declared action, but may not establish a new durable fact. A zero-damage result is harmless and cannot make the target stumble, stagger, lose balance, slow, drop something, or suffer delayed impairment. Never invent words, movement, choices, or another action for the player character. Correct only the prose; never ask for or replay the mechanic.
+When deterministicFidelityIssues is non-empty, each listed issue and named offending detail is a binding rejection found by the caller's structural validator. Mark the candidate invalid and remove every listed violation in correctedNarration; do not defend, paraphrase, preserve, or replace a rejected detail with another unsupported synonym. On reviewPass 2 or later, audit the correction as strictly as a fresh candidate and do not reintroduce anything rejected in previousReview.
+Also mark it invalid when player-facing prose exposes developer or preparation diagnostics (“current records,” “fixed carried inventory,” “authoritative manifest,” “canon data,” “structured output,” “without inventing”), contains schema field names or underscore-delimited state codes, emits isolated state labels such as Drawn/Sheathed/Secured, repeats a full database display name at the start of consecutive sentences, or puts initiative/actions/HP/DC/VCS/GMA language into character dialogue. correctedNarration must translate mechanics into observable fiction and move private diagnosis to issues rather than preserving it in prose.
 Also mark the candidate invalid if it upgrades a known or repeated detail from sceneImportanceContext into newly damning, substantial, collectible, XP-worthy, or canon-worthy evidence without a new differentiator from the current turn or explicit scene-plan importance. Known violet residue/leakage may be restated as a hazard or continuity reminder; it is not fresh decisive evidence by repetition alone.
 Use narrativeMomentumPolicy to mark the candidate invalid when it stops at routine follow-through, asks the player to repeat an already stated method, fails to finish actions after a resolved roll, or presents a cosmetic/procedural option menu whose choices lack materially different consequences. Minimally extend the correction through those micro-beats to the next significant interruption.
 If valid, preserve candidateNarration exactly as correctedNarration. If invalid, write a minimally changed replacement that repairs every listed issue, honors the player's actual intent, preserves authoritative mechanics and established facts, and stops at the next genuine decision or properly framed roll. Do not add new mechanics merely to make the prose interesting.
@@ -526,11 +591,24 @@ The supplied gameTimePolicy is binding. If the check itself would consume meanin
 Use sceneImportancePolicy and sceneImportanceContext when deciding whether the check discovers something new. Rechecking a known hazard can confirm, avoid, bypass, identify a new differentiator, or establish safe handling, but the stakes must not promise decisive new evidence from a repeated known detail unless the scene scaffold or current method supports it.
 Return {resolutionMode,skill,ability,dc,rollMode,passiveEligible,reason,preRollNarration,stakes:{criticalFailure,partial,success,greatSuccess,criticalSuccess},estimatedTimeCost,confidence}.`, ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'])));
 gmcV1Router.post('/ai/narrate-skill-check-result', asyncRoute((req, res) => ai(req, res, `Narrate the authoritative VCS skill-check result and continue directly from the player's original action. Use authoritativeCheckOutcome and the matching scene-specific stake in rollRequest.stakes. Never change the d20, modifier, total, DC, margin, or outcome band. Do not replay actions completed before this check. If rollRequest.visibility is hidden, never mention a roll, DC, failure, success, modifier, or that hidden information was tested; simply narrate what the character perceives from the authoritative outcome. For a visible player roll, natural prose may reflect the quality of the result but should not read like a rules log. Resolve the attempted action and preserve uncertainty that the outcome band does not reveal.
+Write one to three connected paragraphs of vivid player-facing fiction grounded in concrete motion, sensory evidence, environment, pressure, and consequence. Begin at the checked moment instead of recapping the scene. Vary sentence rhythm and references; never produce a dry report such as “the check succeeds,” “the result is recorded,” or “the character follows through.” Do not expose dice, totals, modifiers, DCs, outcome labels, VCS/GMA/GMC, schemas, IDs, or validation language. Do not invent player-character dialogue or a new decision. Do not invent discoveries, possessions, injuries, movement, NPC knowledge, or follow-up actions beyond the exact outcome band and remaining action already authorized by the instruction.
 The supplied narrativeMomentumPolicy is binding. The roll paused the player's compound instruction; it did not cancel actions that followed the checked step. Finish every remaining authorized action unless the result makes it impossible or creates a significant interruption. Carry established operating methods through routine follow-through, apply the benefit earned by the roll, and stop only after every part of significantStopAudit passes. Do not stop at a junction, alarm, unattended object, route marker, door, bend, or empty stretch merely to offer inspect/scout/bypass choices. Continue to active opposition, a material discovery or tradeoff, a costly or irreversible commitment, a prepared importantBeat, or a terminal scene outcome that genuinely requires fresh input.
 Use the supplied treasureRewardPolicy when the resolved check establishes loot, coin, valuables, gear, or magic. This is a high-magic solo campaign; reward pacing should be more favorable than standard party play while remaining plausible and avoiding duplicates.
 Use the supplied sceneSegmentPolicy and sceneImportancePolicy. Return sceneSegmentUpdate when the check materially changes the active segment, completes it, or reveals that the segment scaffold is missing. Treat repeated known hazards and motifs as continuity unless the authoritative outcome establishes a new differentiator. Do not turn known violet residue/leakage into newly damning evidence or a collection objective by success narration alone.
 The supplied gameTimePolicy and gameTimeContext are binding. If the resolved check consumed meaningful travel, searching, waiting, conversation, ritual, or other activity time, state that duration and return proposedTimeAdvance. Keep time costs consistent with the original stakes and do not add extra time beyond the outcome band.
 Return {narration,proposedCanonChanges,proposedVcsExports,proposedTimeAdvance,sceneSegmentUpdate,riskLevel,syncNotes,gmPrivateNotes}. proposedTimeAdvance is null or {shouldAdvance,seconds,minutes,reason,activity,clockAfter}. sceneSegmentUpdate is null or {status,title,where,when,who,whyPresent,objective,doneWhen,importantBeats,knownDetails,evidenceLedger,stakes,availableRewards,rewardsRealized,rewardsMissed,outcome,arcImpacts,nextSceneSeed}.`, ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'])));
+gmcV1Router.post('/ai/narrate-combat-action-result', asyncRoute((req, res) => ai(
+  req,
+  res,
+  NARRATE_COMBAT_ACTION_RESULT_INSTRUCTION,
+  [...NARRATE_COMBAT_ACTION_RESULT_REQUIRED_KEYS],
+)));
+gmcV1Router.post('/ai/audit-resolved-mechanics-narration', asyncRoute((req, res) => ai(
+  req,
+  res,
+  AUDIT_RESOLVED_MECHANICS_NARRATION_INSTRUCTION,
+  [...AUDIT_RESOLVED_MECHANICS_NARRATION_REQUIRED_KEYS],
+)));
 gmcV1Router.post('/ai/respond-ooc', asyncRoute((req, res) => ai(req, res, 'Respond out of character as the DM to the player, using conversationHistory and campaign context. Answer every direct player question before offering next steps. Do not narrate the player character taking actions. Clearly distinguish rules/table discussion from in-world facts. If the player identifies a continuity or plausibility problem, do not defend the narration by inventing an unsupported explanation: acknowledge the concrete inconsistency, state the corrected interpretation, and say whether a retcon is needed. When initiative or a check is challenged, compare it to the player\'s actual wording rather than actions invented by prior narration. Planning, considering, thinking, watching, and waiting are not execution; acknowledge an erroneous initiative transition when no concrete tactical action occurred. If the player asks whether a check is appropriate, apply dmCheckPolicy and explain the decision and stakes directly. If the player asks about time, answer from gameTimeContext and gameTimePolicy, distinguishing exact clock time from estimates. Never claim that a VCS character sheet, inventory, currency balance, hit points, hit dice, XP, or the campaign clock was updated; the caller performs and confirms authoritative writes separately. Return {response,continuityNotes,proposedCanonChanges}.', ['response', 'continuityNotes', 'proposedCanonChanges'])));
 gmcV1Router.post('/ai/plan-character-sheet-mutation', asyncRoute((req, res) => ai(req, res, `Decide whether this interaction establishes or explicitly requests an authoritative VCS character-sheet change. Use currentSheet as the starting authority and the ordered conversationHistory to distinguish newly established changes from possessions or costs already synchronized. The candidateResponse is prose only and is not proof that a write occurred.
 
@@ -547,6 +625,7 @@ Inventory rules:
 - add contains only items newly owned by the character; use a stable concise name and quantity.
 - remove contains items actually lost, consumed, sold, or transferred, with quantity when known.
 - Do not put currency in inventory items.
+- Never create placeholder or provisional possessions such as “recovered coin pouch,” “unknown loot,” “contents pending,” “exact denominations pending,” or “awaiting authoritative tally.” If the item identity, amount, denomination, quantity, ownership, or manifest is unresolved, return shouldMutate:false and explain the missing authority in reason. Do not convert uncertainty into an inventory label.
 
 HP, hit-dice, and XP rules:
 - Use delta for newly established damage, healing, spent/recovered dice, or manual XP adjustments.
@@ -637,4 +716,10 @@ gmcV1Router.post('/ai/plan-combat-turn', asyncRoute((req, res) => ai(
   res,
   PLAN_COMBAT_TURN_INSTRUCTION,
   [...PLAN_COMBAT_TURN_REQUIRED_KEYS],
+)));
+gmcV1Router.post('/ai/narrate-combat-turns', asyncRoute((req, res) => ai(
+  req,
+  res,
+  NARRATE_COMBAT_TURNS_INSTRUCTION,
+  [...NARRATE_COMBAT_TURNS_REQUIRED_KEYS],
 )));

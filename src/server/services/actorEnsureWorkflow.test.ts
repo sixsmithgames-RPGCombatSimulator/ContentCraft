@@ -39,6 +39,24 @@ describe('actor ensure workflow contract', () => {
     expect(validation.details).toContain('at least one executable action');
   });
 
+  it('rejects descriptive identity labels, placeholder spells, and unarmed-only Watch fallbacks', () => {
+    const descriptive = validateCombatReadyActorProfile('npc', {
+      name: 'Narrow-faced Watch ward-reader', role: 'arcane hazard reader',
+      hitPoints: 18, armorClass: 12,
+      actions: [{ name: 'Spell', type: 'spell', attackBonus: 4, damage: [] }],
+    });
+    expect(descriptive.valid).toBe(false);
+    expect(descriptive.details).toContain('move that text to description');
+    expect(descriptive.details).toContain('non-placeholder name');
+
+    const unarmedWatch = validateCombatReadyActorProfile('npc', {
+      name: 'Constable Orin Hale', role: 'Watch rear guard', hitPoints: 16, armorClass: 14,
+      actions: [{ name: 'Unarmed Strike', type: 'attack', attackBonus: 2, damage: [{ dice: '1d1', type: 'bludgeoning' }] }],
+    });
+    expect(unarmedWatch.valid).toBe(false);
+    expect(unarmedWatch.details).toContain('actual issued weapon or spell actions');
+  });
+
   it('composes modular NPC stages into the canonical NPC schema', () => {
     const profile: any = composeActorProfile('npc', {
       name: 'Captain Mira Vale', aliases: ['Mira'],
@@ -120,6 +138,70 @@ describe('actor ensure workflow contract', () => {
     ]);
     expect(profile.skill_proficiencies[0]).toEqual({ name: 'Athletics', value: 'proficient' });
     expect(profile.skill_proficiencies[2]).toEqual(expect.objectContaining({ name: 'Perception', value: '+4' }));
+  });
+
+  it('repairs the Elowen legacy snapshot shape at the canonical composition boundary', () => {
+    const profile: any = composeActorProfile('npc', {
+      name: 'Ward-Reader Elowen Rusk',
+      description: 'A Watch ward-reader with a narrow face and a careful, analytical manner.',
+      abilities: { strength: 8, dexterity: 12, constitution: 12, intelligence: 15, wisdom: 13, charisma: 10 },
+      hit_dice: { d6: 1, d8: 2 },
+      legendary_actions: [],
+      lair_actions: [],
+      regional_effects: [],
+    }, {
+      basic_info: {
+        name: 'Ward-Reader Elowen Rusk',
+        description: 'A Watch ward-reader with a narrow face and a careful, analytical manner.',
+        species: 'Human',
+      },
+      stats: {
+        size: 'Medium',
+        ability_scores: { strength: 8, dexterity: 12, constitution: 12, intelligence: 15, wisdom: 13, charisma: 10 },
+        proficiency_bonus: 2,
+        speed: 30,
+        armor_class: 12,
+        hit_points: 18,
+        hit_dice: { formula: '1d6 + 2d8' },
+        senses: { passive_perception: 13, darkvision: 0, special: [] },
+      },
+      character_build: {
+        class_features: [{ name: 'Arcane Training', description: 'Elowen is trained to read active wards.' }],
+        subclass_features: [], racial_features: [], feats: [], fighting_styles: [], skill_proficiencies: [], saving_throws: [],
+      },
+      combat: {
+        actions: [{ name: 'Fire Bolt', description: 'Ranged spell attack that deals fire damage.' }],
+        bonus_actions: [], reactions: [],
+      },
+      legendary: { legendary_actions: [], lair_actions: [], regional_effects: [] },
+    });
+
+    expect(profile.hit_dice).toBe('1d6+2d8');
+    expect(profile.abilities).toEqual([expect.objectContaining({ name: 'Arcane Training' })]);
+    expect(profile.legendary_actions).toBeUndefined();
+    expect(profile.lair_actions).toBeUndefined();
+    expect(profile.regional_effects).toBeUndefined();
+    expect(validateActorProfile('npc', profile).valid).toBe(true);
+  });
+
+  it('runs actor stage responses through shared repair before strict validation', () => {
+    const result: any = parseActorStageResult({
+      stageKey: 'stats',
+      stageResult: {
+        size: 'Medium',
+        ability_scores: { strength: 8, dexterity: 12, constitution: 12, intelligence: 15, wisdom: 13, charisma: 10 },
+        proficiency_bonus: 2,
+        speed: 30,
+        armor_class: 12,
+        hit_points: 18,
+        hit_dice: { formula: '1d6 + 2d8' },
+        senses: { passive_perception: 13, darkvision: 0, special: [] },
+      },
+    }, 'stats');
+
+    expect(result.speed).toEqual({ walk: '30 ft.' });
+    expect(result.hit_dice).toBe('1d6+2d8');
+    expect(result.ability_scores).toEqual({ str: 8, dex: 12, con: 12, int: 15, wis: 13, cha: 10 });
   });
 
   it('composes and strictly validates a monster profile', () => {

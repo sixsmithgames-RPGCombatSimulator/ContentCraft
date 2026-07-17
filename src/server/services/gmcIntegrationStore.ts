@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { getDb, getCanonEntitiesCollection } from '../config/mongo.js';
 import { generateProjectEntityId, type EntityType } from '../models/CanonEntity.js';
+import {
+  canonicalMutationDocumentId,
+  insertCanonicalMutation,
+} from './canonicalMutation.js';
 
 const now = () => new Date();
 
@@ -192,43 +196,65 @@ export async function upsertCanonicalActor(
   }
 }
 
-export async function createEntity(userId: string, campaignId: string, kind: GmcEntityKind, input: Record<string, any>) {
-  const name = String(input.name || input.canonical_name || '').trim();
+export async function createEntityMutation(userId: string, campaignId: string, kind: GmcEntityKind, input: Record<string, any>) {
+  const { mutationId, ...inputData } = input;
+  const name = String(inputData.name || inputData.canonical_name || '').trim();
   if (!name) throw new Error('name is required');
   const baseId = generateProjectEntityId(campaignId, kind as EntityType, name);
-  const doc: any = {
-    _id: `${baseId}_${randomUUID().slice(0, 8)}`,
+  const documentId = canonicalMutationDocumentId({
     userId,
-    scope: `proj_${campaignId}`,
-    project_id: campaignId,
-    type: kind,
-    canonical_name: name,
-    aliases: Array.isArray(input.aliases) ? input.aliases : [],
-    claims: Array.isArray(input.claims) ? input.claims : [],
-    relationships: Array.isArray(input.relationships) ? input.relationships : [],
-    tags: Array.isArray(input.tags) ? input.tags : [],
-    source: input.source || 'gamemastercraft',
-    version: '1.0.0',
-    details: kind === 'item' ? {
-      ...(input.details ?? input),
-      memory: {
-        recordType: 'ITEM',
-        tier: includes(ITEM_TIERS, input.itemTier ?? input.details?.memory?.tier) ? String(input.itemTier ?? input.details?.memory?.tier) : 'mundane',
-        currentLocationId: input.currentLocationId ?? input.details?.memory?.currentLocationId ?? null,
-        ownerEntityId: input.ownerEntityId ?? input.details?.memory?.ownerEntityId ?? null,
-        ownerType: input.ownerType ?? input.details?.memory?.ownerType ?? null,
+    campaignId,
+    recordKind: `ENTITY:${kind}`,
+    mutationId,
+    prefix: baseId,
+  });
+  return insertCanonicalMutation({
+    collection: getCanonEntitiesCollection(),
+    userId,
+    campaignId,
+    recordKind: `ENTITY:${kind}`,
+    mutationId,
+    input: inputData,
+    documentId,
+    scopeFilter: { project_id: campaignId, type: kind },
+    buildDocument: ({ documentId: id, timestamp, semanticFingerprint, creationMutation }) => ({
+      _id: id,
+      userId,
+      scope: `proj_${campaignId}`,
+      project_id: campaignId,
+      type: kind,
+      canonical_name: name,
+      aliases: Array.isArray(inputData.aliases) ? inputData.aliases : [],
+      claims: Array.isArray(inputData.claims) ? inputData.claims : [],
+      relationships: Array.isArray(inputData.relationships) ? inputData.relationships : [],
+      tags: Array.isArray(inputData.tags) ? inputData.tags : [],
+      source: inputData.source || 'gamemastercraft',
+      version: '1.0.0',
+      details: kind === 'item' ? {
+        ...(inputData.details ?? inputData),
+        memory: {
+          recordType: 'ITEM',
+          tier: includes(ITEM_TIERS, inputData.itemTier ?? inputData.details?.memory?.tier) ? String(inputData.itemTier ?? inputData.details?.memory?.tier) : 'mundane',
+          currentLocationId: inputData.currentLocationId ?? inputData.details?.memory?.currentLocationId ?? null,
+          ownerEntityId: inputData.ownerEntityId ?? inputData.details?.memory?.ownerEntityId ?? null,
+          ownerType: inputData.ownerType ?? inputData.details?.memory?.ownerType ?? null,
+        },
+      } : {
+        ...(inputData.details ?? inputData),
+        ...(kind === 'npc' ? { entityTier: includes(ENTITY_SCOPE_TIERS, inputData.entityTier ?? inputData.details?.entityTier) ? String(inputData.entityTier ?? inputData.details?.entityTier) : 'contact' } : {}),
       },
-    } : {
-      ...(input.details ?? input),
-      ...(kind === 'npc' ? { entityTier: includes(ENTITY_SCOPE_TIERS, input.entityTier ?? input.details?.entityTier) ? String(input.entityTier ?? input.details?.entityTier) : 'contact' } : {}),
-    },
-    status: input.status ?? 'active',
-    draft: Boolean(input.draft),
-    created_at: now(),
-    updated_at: now(),
-  };
-  await getCanonEntitiesCollection().insertOne(doc);
-  return doc;
+      status: inputData.status ?? 'active',
+      draft: Boolean(inputData.draft),
+      canonicalFingerprint: semanticFingerprint,
+      creationMutation,
+      created_at: timestamp,
+      updated_at: timestamp,
+    }) as any,
+  });
+}
+
+export async function createEntity(userId: string, campaignId: string, kind: GmcEntityKind, input: Record<string, any>) {
+  return (await createEntityMutation(userId, campaignId, kind, input)).record;
 }
 
 export async function updateEntity(userId: string, id: string, kind: GmcEntityKind, input: Record<string, any>) {
@@ -285,20 +311,112 @@ export async function listFacts(userId: string, campaignId: string, query: Recor
   return getDb().collection<any>('gmc_facts').find(filter).sort({ createdAt: -1 }).limit(500).toArray();
 }
 
-export async function createFact(userId: string, campaignId: string, input: Record<string, any>) {
-  const text = String(input.text || '').trim();
+export async function createFactMutation(userId: string, campaignId: string, input: Record<string, any>) {
+  const { mutationId, ...inputData } = input;
+  const text = String(inputData.text || '').trim();
   if (!text) throw new Error('text is required');
-  const doc = {
-    _id: randomUUID(), userId, campaignId, text, recordType: 'FACT', scope: normalizeScope(input),
-    category: input.category ?? 'event',
-    relatedEntityIds: input.relatedEntityIds ?? [], relatedLocationIds: input.relatedLocationIds ?? [],
-    source: input.source ?? { system: 'gamemastercraft' },
-    locked: Boolean(input.locked), secret: Boolean(input.secret),
-    supersededAt: null, supersededByFactId: null, supersedeReason: null,
-    createdAt: now(), updatedAt: now(),
-  };
-  await getDb().collection<any>('gmc_facts').insertOne(doc);
-  return doc;
+  return insertCanonicalMutation({
+    collection: getDb().collection<any>('gmc_facts'),
+    userId,
+    campaignId,
+    recordKind: 'FACT',
+    mutationId,
+    input: inputData,
+    scopeFilter: { campaignId },
+    buildDocument: ({ documentId, timestamp, semanticFingerprint, creationMutation }) => ({
+      _id: documentId, userId, campaignId, text, recordType: 'FACT', scope: normalizeScope(inputData),
+      category: inputData.category ?? 'event',
+      relatedEntityIds: inputData.relatedEntityIds ?? [], relatedLocationIds: inputData.relatedLocationIds ?? [],
+      source: inputData.source ?? { system: 'gamemastercraft' },
+      locked: Boolean(inputData.locked), secret: Boolean(inputData.secret),
+      supersededAt: null, supersededByFactId: null, supersedeReason: null,
+      canonicalFingerprint: semanticFingerprint,
+      creationMutation,
+      createdAt: timestamp, updatedAt: timestamp,
+    }),
+  });
+}
+
+export async function createFact(userId: string, campaignId: string, input: Record<string, any>) {
+  return (await createFactMutation(userId, campaignId, input)).record;
+}
+
+export async function createThreadMutation(userId: string, campaignId: string, input: Record<string, any>) {
+  const { mutationId, ...inputData } = input;
+  return insertCanonicalMutation({
+    collection: getDb().collection<any>('gmc_threads'),
+    userId,
+    campaignId,
+    recordKind: 'EVENT',
+    mutationId,
+    input: inputData,
+    scopeFilter: { campaignId },
+    buildDocument: ({ documentId, timestamp, semanticFingerprint, creationMutation }) => ({
+      _id: documentId, userId, campaignId,
+      recordType: 'EVENT', title: inputData.title, description: inputData.description ?? '',
+      deadlineAt: inputData.deadlineAt ?? null,
+      deadlineDescription: inputData.deadlineDescription ?? inputData.deadline ?? null,
+      consequence: inputData.consequence ?? '',
+      scope: inputData.scope ?? { kind: 'geographic', tier: 'world', locationId: null, entityId: null },
+      relatedNpcIds: inputData.relatedNpcIds ?? [], relatedLocationIds: inputData.relatedLocationIds ?? [],
+      status: inputData.status ?? 'open',
+      source: inputData.source ?? { system: 'gamemastercraft' },
+      canonicalFingerprint: semanticFingerprint,
+      creationMutation,
+      createdAt: timestamp, updatedAt: timestamp,
+    }),
+  });
+}
+
+export async function createSceneMutation(userId: string, campaignId: string, input: Record<string, any>) {
+  const { mutationId, ...inputData } = input;
+  return insertCanonicalMutation({
+    collection: getDb().collection<any>('gmc_scenes'),
+    userId,
+    campaignId,
+    recordKind: 'SCENE',
+    mutationId,
+    input: inputData,
+    scopeFilter: { campaignId },
+    buildDocument: ({ documentId, timestamp, semanticFingerprint, creationMutation }) => ({
+      _id: documentId,
+      userId,
+      campaignId,
+      name: inputData.name,
+      locationId: inputData.locationId ?? null,
+      presentNpcIds: inputData.presentNpcIds ?? [],
+      description: inputData.description ?? '',
+      gmPrivateNotes: inputData.gmPrivateNotes ?? null,
+      status: inputData.status ?? 'active',
+      canonicalFingerprint: semanticFingerprint,
+      creationMutation,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }),
+  });
+}
+
+export async function createSessionMutation(userId: string, campaignId: string, input: Record<string, any>) {
+  const { mutationId, ...inputData } = input;
+  return insertCanonicalMutation({
+    collection: getDb().collection<any>('gmc_sessions'),
+    userId,
+    campaignId,
+    recordKind: 'SESSION',
+    mutationId,
+    input: inputData,
+    scopeFilter: { campaignId },
+    buildDocument: ({ documentId, timestamp, semanticFingerprint, creationMutation }) => ({
+      _id: documentId,
+      userId,
+      campaignId,
+      ...inputData,
+      canonicalFingerprint: semanticFingerprint,
+      creationMutation,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }),
+  });
 }
 
 export async function buildMemoryContext(

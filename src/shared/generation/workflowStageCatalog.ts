@@ -164,6 +164,11 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       outputAllowedKeys: ['size', 'ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'hit_dice', 'senses'],
       requiredKeys: ['size', 'ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'hit_dice', 'senses'],
       proxyAllowedKeys: ['size', 'ability_scores', 'proficiency_bonus', 'speed', 'armor_class', 'hit_points', 'hit_dice', 'senses'],
+      fieldRules: {
+        ability_scores: { policy: 'required', type: 'object' },
+        speed: { policy: 'required', type: 'object' },
+        hit_dice: { policy: 'required', type: 'string' },
+      },
     },
   },
   character_build: {
@@ -280,6 +285,11 @@ const WORKFLOW_STAGE_DEFINITIONS: Record<WorkflowStageKey, WorkflowStageDefiniti
       outputAllowedKeys: ['legendary_actions', 'legendary_resistance', 'lair_actions', 'regional_effects'],
       requiredKeys: [],
       proxyAllowedKeys: ['legendary_actions', 'legendary_resistance', 'lair_actions', 'regional_effects'],
+      fieldRules: {
+        legendary_actions: { policy: 'present_if_applicable', type: 'object' },
+        lair_actions: MAY_BE_EMPTY_ARRAY_RULE,
+        regional_effects: MAY_BE_EMPTY_ARRAY_RULE,
+      },
     },
   },
   relationships: {

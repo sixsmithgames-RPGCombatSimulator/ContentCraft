@@ -22,6 +22,19 @@ describe('npcValidator.validateNpcSafe', () => {
     expect(result.errors.length).toBe(0);
   });
 
+  it('accepts empty lair and regional arrays in the v1.1 union schema', () => {
+    const result = validateNpcSafe({
+      schema_version: '1.1',
+      name: 'Ward-Reader Elowen Rusk',
+      description: 'A Watch ward-reader with a narrow face and a careful, analytical manner.',
+      lair_actions: [],
+      regional_effects: [],
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
   it('treats schema_version variant npc/v1.1 as v1.1', () => {
     const npc = {
       schema_version: 'npc/v1.1',

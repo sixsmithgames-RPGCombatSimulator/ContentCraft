@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { parseSmartJson } from '../../shared/generation/smartJsonParser.js';
+import { appendGenerationDevLog } from './generationDevLog.js';
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
 const USAGE_LOG_LIMIT = 500;
@@ -199,9 +200,17 @@ export function resetGeminiUsageForTests() {
 }
 
 export async function generateStructuredJson(systemInstruction: string, input: unknown, options: { operation?: string; correlationId?: string } = {}): Promise<any> {
-  const apiKey = process.env.GEMINI_API_KEY || '';
-  if (!apiKey) throw Object.assign(new Error('Gemini API key is not configured.'), { status: 503, code: 'GMC_UNAVAILABLE' });
   const operation = options.operation || 'structured-json';
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  if (!apiKey) {
+    const error = Object.assign(new Error('Gemini API key is not configured.'), { status: 503, code: 'GMC_UNAVAILABLE' });
+    await appendGenerationDevLog({
+      source: 'gemini', operation, correlationId: options.correlationId ?? null, model: MODEL,
+      attempt: 0, status: 'error', durationMs: 0,
+      request: { systemInstruction, input }, error,
+    });
+    throw error;
+  }
   let lastError: any = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
@@ -213,7 +222,16 @@ export async function generateStructuredJson(systemInstruction: string, input: u
     };
     const serializedPayload = JSON.stringify(inputPayload);
     const inputBytes = byteLength(serializedPayload);
-    assertTrafficAllowed(operation, inputBytes);
+    try {
+      assertTrafficAllowed(operation, inputBytes);
+    } catch (error) {
+      await appendGenerationDevLog({
+        source: 'gemini', operation, correlationId: options.correlationId ?? null, model: MODEL,
+        attempt: attempt + 1, status: 'blocked', durationMs: 0,
+        request: inputPayload, error,
+      });
+      throw error;
+    }
     const startedAt = Date.now();
     try {
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`, {
@@ -241,6 +259,11 @@ export async function generateStructuredJson(systemInstruction: string, input: u
           errorCode: provider.status || String(provider.code ?? response.status),
           errorMessage: message.slice(0, 500),
         });
+        await appendGenerationDevLog({
+          source: 'gemini', operation, correlationId: options.correlationId ?? null, model: MODEL,
+          attempt: attempt + 1, status: 'error', httpStatus: response.status,
+          durationMs: Date.now() - startedAt, request: inputPayload, response: body, error,
+        });
         if (retryable && attempt === 0) { lastError = error; continue; }
         throw error;
       }
@@ -253,19 +276,18 @@ export async function generateStructuredJson(systemInstruction: string, input: u
           errorCode: 'STRUCTURED_OUTPUT_INVALID',
           errorMessage: 'Gemini returned no structured content.',
         });
-        if (attempt === 0) { lastError = Object.assign(new Error('Gemini returned no structured content.'), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' }); continue; }
-        throw Object.assign(new Error('Gemini returned no structured content.'), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
-      }
-      try {
-        const parsed = parseJson(text);
-        recordUsage({
-          model: MODEL, operation, attempt: attempt + 1, status: 'success',
-          httpStatus: response.status, durationMs: Date.now() - startedAt,
-          inputBytes, outputBytes: byteLength(text),
+        const error = Object.assign(new Error('Gemini returned no structured content.'), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
+        await appendGenerationDevLog({
+          source: 'gemini', operation, correlationId: options.correlationId ?? null, model: MODEL,
+          attempt: attempt + 1, status: 'error', httpStatus: response.status,
+          durationMs: Date.now() - startedAt, request: inputPayload, response: body, error,
         });
-        return parsed;
+        if (attempt === 0) { lastError = error; continue; }
+        throw error;
       }
-      catch {
+      let parsed: any;
+      try { parsed = parseJson(text); }
+      catch (parseError) {
         recordUsage({
           model: MODEL, operation, attempt: attempt + 1, status: 'error',
           httpStatus: response.status, durationMs: Date.now() - startedAt,
@@ -273,9 +295,30 @@ export async function generateStructuredJson(systemInstruction: string, input: u
           errorCode: 'STRUCTURED_OUTPUT_INVALID',
           errorMessage: 'Gemini returned invalid JSON.',
         });
-        if (attempt === 0) { lastError = Object.assign(new Error('Gemini returned invalid JSON.'), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' }); continue; }
-        throw Object.assign(new Error('Gemini returned invalid JSON after a constrained retry.'), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
+        const error = Object.assign(new Error(attempt === 0 ? 'Gemini returned invalid JSON.' : 'Gemini returned invalid JSON after a constrained retry.'), {
+          status: 502, code: 'STRUCTURED_OUTPUT_INVALID', cause: parseError,
+        });
+        await appendGenerationDevLog({
+          source: 'gemini', operation, correlationId: options.correlationId ?? null, model: MODEL,
+          attempt: attempt + 1, status: 'error', httpStatus: response.status,
+          durationMs: Date.now() - startedAt, request: inputPayload,
+          response: { rawText: text }, error,
+        });
+        if (attempt === 0) { lastError = error; continue; }
+        throw error;
       }
+      recordUsage({
+        model: MODEL, operation, attempt: attempt + 1, status: 'success',
+        httpStatus: response.status, durationMs: Date.now() - startedAt,
+        inputBytes, outputBytes: byteLength(text),
+      });
+      await appendGenerationDevLog({
+        source: 'gemini', operation, correlationId: options.correlationId ?? null, model: MODEL,
+        attempt: attempt + 1, status: 'success', httpStatus: response.status,
+        durationMs: Date.now() - startedAt, request: inputPayload,
+        response: { rawText: text, parsed },
+      });
+      return parsed;
     } catch (error: any) {
       const transportFailure = !error?.code && error?.name !== 'AbortError';
       const transient = error?.name === 'AbortError' || error?.code === 'GMC_TEMPORARILY_UNAVAILABLE' || transportFailure;
@@ -286,6 +329,11 @@ export async function generateStructuredJson(systemInstruction: string, input: u
           inputBytes, outputBytes: 0,
           errorCode: error?.name === 'AbortError' ? 'GMC_TIMEOUT' : 'GMC_TRANSPORT_FAILED',
           errorMessage: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500),
+        });
+        await appendGenerationDevLog({
+          source: 'gemini', operation, correlationId: options.correlationId ?? null, model: MODEL,
+          attempt: attempt + 1, status: 'error', httpStatus: null,
+          durationMs: Date.now() - startedAt, request: inputPayload, error,
         });
       }
       if (transient && attempt === 0) { lastError = error; continue; }
@@ -308,8 +356,8 @@ export async function generateStructuredJson(systemInstruction: string, input: u
 }
 
 export const generationPrompts = {
-  npc: 'Create a campaign NPC with name, role, motivation, secrets, relationships, voice, appearance, currentLocationId, arcSummary, status, combatProfile, claims, and tags.',
-  monster: 'Create a campaign monster with name, description, creature type, size, alignment, challenge rating, ability scores, defenses, actions, tactics, ecology, lore, claims, and tags.',
+  npc: 'Create a campaign NPC with a stable identity name, separate description and appearance, role, motivation, secrets, relationships, voice, currentLocationId, arcSummary, status, combatProfile, claims, and tags. Never use an appearance phrase as the name. Reconcile any supplied canonical actor before generating. Include actual equipped weapons, spells, and executable combat actions; every damaging attack needs a non-placeholder name, attack/save mechanics, and valid damage dice.',
+  monster: 'Create a campaign monster with a stable identity name, separate description and appearance, creature type, size, alignment, challenge rating, ability scores, defenses, equipment, spells, actions, tactics, ecology, lore, claims, and tags. Reconcile any supplied canonical creature before generating. Every damaging weapon, spell, or attack needs a non-placeholder name, attack/save mechanics, and valid damage dice.',
   location: 'Create a campaign location with name, description, parentLocationId, atmosphere, features, secrets, inhabitants, hooks, claims, and tags.',
   item: 'Create a campaign item with name, description, rarity, lore, properties, suggestedVcsPayload, claims, and tags.',
 };

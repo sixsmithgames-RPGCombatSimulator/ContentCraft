@@ -107,13 +107,13 @@
     "mythic_actions": { "type": "object" },
     "lair_description": { "type": "string" },
     "lair_actions": {
-      "oneOf": [
+      "anyOf": [
         { "type": "array", "items": { "type": "string" } },
         { "type": "array", "items": { "type": "object" } }
       ]
     },
     "regional_effects": {
-      "oneOf": [
+      "anyOf": [
         { "type": "array", "items": { "type": "string" } },
         { "type": "array", "items": { "type": "object" } }
       ]
