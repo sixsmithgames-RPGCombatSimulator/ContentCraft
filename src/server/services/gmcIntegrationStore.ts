@@ -61,6 +61,30 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function normalizedReferenceIdentity(value: unknown) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .replace(/[‘’]/g, "'")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9']+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function identityRegex(value: string) {
+  return new RegExp(escapeRegex(value).replace(/['’]/g, "['’]"), 'i');
+}
+
+function containsNormalizedIdentity(text: unknown, identity: unknown) {
+  const haystack = ` ${normalizedReferenceIdentity(text)} `;
+  const needle = normalizedReferenceIdentity(identity);
+  return Boolean(needle) && (
+    haystack.includes(` ${needle} `)
+    || haystack.includes(` ${needle}'s `)
+    || haystack.includes(` ${needle}' `)
+  );
+}
+
 export async function findActorEntity(
   userId: string,
   campaignId: string,
@@ -404,7 +428,7 @@ function explicitCanonicalReferenceSpecs(
   records: Record<MemoryReferenceKind, any[]>,
   instruction: string,
 ) {
-  const text = String(instruction ?? '').toLocaleLowerCase();
+  const text = normalizedReferenceIdentity(instruction);
   const specs: MemoryReferenceSpec[] = [];
   for (const kind of ['location', 'npc', 'item', 'faction'] as const) {
     for (const record of records[kind] ?? []) {
@@ -412,7 +436,7 @@ function explicitCanonicalReferenceSpecs(
         record?.canonical_name ?? record?.name ?? record?.title,
         ...(Array.isArray(record?.aliases) ? record.aliases : []),
       ].map((value) => String(value ?? '').trim()).filter((value) => value.length >= 3);
-      const mentioned = identities.find((identity) => text.includes(identity.toLocaleLowerCase()));
+      const mentioned = identities.find((identity) => containsNormalizedIdentity(text, identity));
       if (!mentioned) continue;
       const id = String(record?._id ?? record?.id ?? mentioned);
       const terms = new RegExp(identities.map(escapeRegex).join('|'), 'i');
@@ -428,6 +452,30 @@ function explicitCanonicalReferenceSpecs(
     }
   }
   return specs;
+}
+
+function linkedNpcLocationReferenceSpecs(npcs: any[], instruction: string): MemoryReferenceSpec[] {
+  const text = normalizedReferenceIdentity(instruction);
+  const specs = new Map<string, MemoryReferenceSpec>();
+  for (const npc of npcs ?? []) {
+    const locationName = String(npc?.details?.location ?? '').trim();
+    if (!locationName || !containsNormalizedIdentity(text, locationName)) continue;
+    const npcIdentities = [npc?.canonical_name ?? npc?.name, ...(Array.isArray(npc?.aliases) ? npc.aliases : [])]
+      .map((value) => String(value ?? '').trim()).filter(Boolean);
+    if (!npcIdentities.some((identity) => containsNormalizedIdentity(text, identity))) continue;
+    const npcId = String(npc?._id ?? npc?.id ?? locationName);
+    const key = `linked_location_${npcId.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
+    specs.set(key, {
+      key,
+      kind: 'location',
+      relationship: 'explicit',
+      activity: 'general',
+      label: `location “${locationName}” associated with ${String(npc?.canonical_name ?? npc?.name ?? 'canonical NPC')}`,
+      recordTerms: identityRegex(locationName),
+      evidenceTerms: identityRegex(locationName),
+    });
+  }
+  return [...specs.values()];
 }
 
 /**
@@ -449,8 +497,10 @@ export function resolveMemoryReferences(
   };
   const specs = [
     ...referenceSpecs(instruction),
+    ...linkedNpcLocationReferenceSpecs(byKind.npc, instruction),
     ...explicitCanonicalReferenceSpecs(byKind, instruction),
   ];
+  const normalizedInstruction = normalizedReferenceIdentity(instruction);
   const references = specs.map((spec) => {
     const candidates = (byKind[spec.kind] ?? []).flatMap((record: any) => {
       const corpus = recordCorpusForKind(record, spec.kind);
@@ -459,7 +509,7 @@ export function resolveMemoryReferences(
       const name = String(record?.canonical_name ?? record?.name ?? record?.title ?? '').trim();
       const identities = [name, ...(Array.isArray(record?.aliases) ? record.aliases : [])]
         .map((value) => String(value ?? '').trim()).filter(Boolean);
-      const matchedIdentity = identities.find((identity) => instruction.toLocaleLowerCase().includes(identity.toLocaleLowerCase())) ?? null;
+      const matchedIdentity = identities.find((identity) => containsNormalizedIdentity(normalizedInstruction, identity)) ?? null;
       const explicitlyNamed = Boolean(matchedIdentity);
       const evidence = facts.filter((fact: any) => {
         const text = String(fact?.text ?? '');
@@ -527,6 +577,76 @@ export function resolveMemoryReferences(
       unresolvedKeys: unresolved.map((entry) => entry.key),
     } : null,
   };
+}
+
+export async function prepareMemoryReferences(userId: string, campaignId: string, instruction: string) {
+  const npcs = await listEntities(userId, campaignId, 'npc');
+  const locations = await listEntities(userId, campaignId, 'location');
+  const repairs: any[] = [];
+  for (const npc of npcs) {
+    const locationName = String(npc?.details?.location ?? '').trim();
+    const npcName = String(npc?.canonical_name ?? '').trim();
+    if (!locationName || !npcName) continue;
+    if (!containsNormalizedIdentity(instruction, locationName)) continue;
+    const npcIdentities = [npcName, ...(Array.isArray(npc?.aliases) ? npc.aliases : [])]
+      .map((identity) => String(identity ?? '').trim()).filter(Boolean);
+    if (!npcIdentities.some((identity) => containsNormalizedIdentity(instruction, identity))) continue;
+    let location = locations.find((candidate: any) => [candidate?.canonical_name ?? candidate?.name, ...(Array.isArray(candidate?.aliases) ? candidate.aliases : [])]
+      .some((identity) => normalizedReferenceIdentity(identity) === normalizedReferenceIdentity(locationName)));
+    let materialized = false;
+    let duplicate = false;
+    if (!location) {
+      const repairFingerprint = createHash('sha256').update(stablePresenceJson({ campaignId, npcId: String(npc?._id), locationName: normalizedReferenceIdentity(locationName) })).digest('hex');
+      const created = await createEntityMutation(userId, campaignId, 'location', {
+        mutationId: `materialize-linked-location:${repairFingerprint}`,
+        name: locationName,
+        aliases: [],
+        tags: ['player-known', 'location:canonical', 'location:site', 'relationship:npc-associated', 'normalized-from:embedded-npc-location'],
+        relationships: [{ type: 'associated_npc', targetId: String(npc?._id), name: npcName }],
+        geographicTier: 'site',
+        source: { system: 'gamemastercraft', kind: 'embedded-npc-location-normalization', npcId: String(npc?._id), sourceField: 'details.location' },
+        details: {
+          name: locationName,
+          type: 'Established NPC-associated place',
+          geographicTier: 'site',
+          visibility: 'player-known',
+          associatedNpcId: String(npc?._id),
+          associatedNpcName: npcName,
+          canonicalization: { sourceEntityId: String(npc?._id), sourceField: 'details.location', sourceValue: locationName },
+        },
+        draft: false,
+      });
+      location = created.record;
+      materialized = true;
+      duplicate = created.duplicate;
+      locations.push(created.record);
+    }
+    const locationId = String(location?._id);
+    const locationRelationships = Array.isArray(location?.relationships) ? location.relationships : [];
+    const locationLinked = locationRelationships.some((relationship: any) => String(relationship?.targetId) === String(npc?._id));
+    const npcRelationships = Array.isArray(npc?.relationships) ? npc.relationships : [];
+    const npcLinked = npcRelationships.some((relationship: any) => String(relationship?.targetId) === locationId);
+    const timestamp = now();
+    if (!locationLinked) await (getCanonEntitiesCollection() as any).updateOne(
+      { _id: locationId, userId, project_id: campaignId, type: 'location' },
+      { $addToSet: { relationships: { type: 'associated_npc', targetId: String(npc?._id), name: npcName } }, $set: { updated_at: timestamp } },
+    );
+    if (!npcLinked) await (getCanonEntitiesCollection() as any).updateOne(
+      { _id: String(npc?._id), userId, project_id: campaignId, type: 'npc' },
+      { $addToSet: { relationships: { type: 'associated_location', targetId: locationId, name: locationName } }, $set: { updated_at: timestamp } },
+    );
+    if (materialized || !locationLinked || !npcLinked) repairs.push({
+      kind: 'location', id: locationId, name: locationName,
+      sourceNpcId: String(npc?._id), sourceNpcName: npcName, materialized, duplicate,
+      locationRelationshipRepaired: !locationLinked, npcRelationshipRepaired: !npcLinked,
+    });
+  }
+  const [facts, threads, items, refreshedNpcs, refreshedLocations, factions] = await Promise.all([
+    listFacts(userId, campaignId), listThreads(userId, campaignId), listEntities(userId, campaignId, 'item'),
+    listEntities(userId, campaignId, 'npc'), listEntities(userId, campaignId, 'location'), listEntities(userId, campaignId, 'faction'),
+  ]);
+  const resolution = resolveMemoryReferences({ facts: [...facts, ...threads], items, npcs: refreshedNpcs, locations: refreshedLocations, factions }, instruction);
+  return { repairs, resolution: { ...resolution, canonicalRepairs: repairs } };
 }
 
 type MemoryRestorationRecord = {
@@ -934,6 +1054,123 @@ export function buildProposedScenePresenceContract(input: {
       'The proposal is non-mutating and must be committed before narration is applied.',
       'Only presentNpcs may take a current role in the proposed destination scene.',
     ],
+  };
+}
+
+function exactEntityIdentityMatches(value: unknown, records: any[]) {
+  const normalized = normalizedReferenceIdentity(value);
+  if (!normalized) return [];
+  return records.filter((record: any) => [record?.canonical_name ?? record?.name, ...(Array.isArray(record?.aliases) ? record.aliases : [])]
+    .some((identity) => normalizedReferenceIdentity(identity) === normalized));
+}
+
+function locationDeclarationMatches(where: string, locations: any[]) {
+  const primary = normalizedReferenceIdentity(String(where).split(/[,;\n]/, 1)[0]);
+  const matches = locations.flatMap((location: any) => {
+    const identities = [location?.canonical_name ?? location?.name, ...(Array.isArray(location?.aliases) ? location.aliases : [])]
+      .map((identity) => ({ raw: String(identity ?? '').trim(), normalized: normalizedReferenceIdentity(identity) }))
+      .filter((identity) => identity.normalized);
+    const primaryIdentity = identities.find((identity) => identity.normalized === primary);
+    return primaryIdentity ? [{ location, matchedIdentity: primaryIdentity.raw }] : [];
+  });
+  const byId = new Map<string, any>();
+  for (const match of matches) {
+    const id = String(match.location?._id ?? match.location?.id ?? '');
+    const prior = byId.get(id);
+    if (!prior || String(match.matchedIdentity).length > String(prior.matchedIdentity).length) byId.set(id, match);
+  }
+  return [...byId.values()];
+}
+
+export function resolveSceneTransitionContract(input: {
+  currentContract: any;
+  currentScene: any;
+  locations: any[];
+  npcs: any[];
+  where: string;
+  who: string[];
+  playerCharacterNames?: string[];
+}) {
+  const currentContract = input?.currentContract;
+  if (currentContract?.valid !== true || !currentContract?.revision) {
+    throw Object.assign(new Error('A valid GMC current-scene presence revision is required.'), { status: 409, code: 'GMC_PRESENCE_CONTRACT_REQUIRED' });
+  }
+  const where = String(input?.where ?? '').trim();
+  if (!where) throw Object.assign(new Error('The proposed scene must declare where it occurs.'), { status: 409, code: 'SCENE_DESTINATION_LOCATION_REQUIRED' });
+  const locationMatches = locationDeclarationMatches(where, input?.locations ?? []);
+  if (locationMatches.length !== 1) {
+    const options = locationMatches.map((match) => ({
+      id: String(match.location?._id ?? match.location?.id),
+      name: String(match.location?.canonical_name ?? match.location?.name),
+      matchedIdentity: match.matchedIdentity,
+    }));
+    throw Object.assign(new Error(locationMatches.length
+      ? 'GMC found multiple canonical locations in the structured scene destination. Use one exact primary location name in sceneSegment.where.'
+      : 'GMC could not bind sceneSegment.where to a canonical location. Restore or select the exact location before auditing narration.'), {
+      status: 409,
+      code: locationMatches.length ? 'SCENE_DESTINATION_LOCATION_AMBIGUOUS' : 'SCENE_DESTINATION_LOCATION_UNRESOLVED',
+      details: { where, options },
+    });
+  }
+  const playerNames = new Set((input?.playerCharacterNames ?? []).map(normalizedReferenceIdentity).filter(Boolean));
+  const declaredWho = [...new Set((Array.isArray(input?.who) ? input.who : []).map((value) => String(value ?? '').trim()).filter(Boolean))];
+  const presentNpcIds: string[] = [];
+  const presentNpcs: any[] = [];
+  const nonNpcActors: string[] = [];
+  const unresolvedActors: string[] = [];
+  const ambiguousActors: Array<{ name: string; options: Array<{ id: string; name: string }> }> = [];
+  for (const actorName of declaredWho) {
+    if (playerNames.has(normalizedReferenceIdentity(actorName))) { nonNpcActors.push(actorName); continue; }
+    const matches = exactEntityIdentityMatches(actorName, input?.npcs ?? []);
+    if (matches.length === 1) {
+      const id = String(matches[0]?._id ?? matches[0]?.id);
+      if (!presentNpcIds.includes(id)) {
+        presentNpcIds.push(id);
+        presentNpcs.push({ id, name: String(matches[0]?.canonical_name ?? matches[0]?.name), matchedIdentity: actorName });
+      }
+    } else if (!matches.length) unresolvedActors.push(actorName);
+    else ambiguousActors.push({ name: actorName, options: matches.map((npc: any) => ({ id: String(npc?._id ?? npc?.id), name: String(npc?.canonical_name ?? npc?.name) })) });
+  }
+  if (unresolvedActors.length || ambiguousActors.length) {
+    throw Object.assign(new Error('GMC could not resolve every declared scene actor uniquely. Correct sceneSegment.who before auditing narration.'), {
+      status: 409, code: 'SCENE_DESTINATION_ROSTER_UNRESOLVED', details: { unresolvedActors, ambiguousActors, playerCharacterNames: [...playerNames] },
+    });
+  }
+  const selected = locationMatches[0];
+  const locationId = String(selected.location?._id ?? selected.location?.id);
+  const presenceContract = buildProposedScenePresenceContract({
+    currentContract, location: selected.location, presentNpcIds, npcs: input?.npcs ?? [],
+  });
+  if (!presenceContract.valid) {
+    throw Object.assign(new Error('GMC could not build an exact proposed-scene presence contract.'), {
+      status: 409, code: 'SCENE_PRESENCE_PROPOSAL_INVALID', details: { presenceContract },
+    });
+  }
+  const currentNpcIds = (Array.isArray(currentContract?.exactPresentNpcIds) ? currentContract.exactPresentNpcIds : []).map(String).sort();
+  const proposedNpcIds = [...presentNpcIds].sort();
+  const transitionRequired = String(input?.currentScene?.locationId ?? '') !== locationId
+    || JSON.stringify(currentNpcIds) !== JSON.stringify(proposedNpcIds);
+  const contractSource = {
+    authority: 'gmc.sceneTransition', contractVersion: '2026-07-19.1',
+    baseRevision: currentContract.revision, locationId, presentNpcIds: proposedNpcIds,
+    where, who: declaredWho, nonNpcActors,
+  };
+  return {
+    ...contractSource,
+    revision: createHash('sha256').update(stablePresenceJson(contractSource)).digest('hex'),
+    status: 'resolved',
+    transitionRequired,
+    location: {
+      id: locationId,
+      name: String(selected.location?.canonical_name ?? selected.location?.name),
+      matchedIdentity: selected.matchedIdentity,
+      aliases: Array.isArray(selected.location?.aliases) ? selected.location.aliases : [],
+      details: selected.location?.details ?? {},
+    },
+    presentNpcIds: proposedNpcIds,
+    presentNpcs,
+    nonNpcActors,
+    presenceContract: transitionRequired ? presenceContract : currentContract,
   };
 }
 

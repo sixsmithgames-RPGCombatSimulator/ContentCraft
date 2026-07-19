@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildProposedScenePresenceContract, buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, selectMemoryContext, validateMemoryRestorationCandidate } from './gmcIntegrationStore.js';
+import { buildProposedScenePresenceContract, buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, resolveSceneTransitionContract, selectMemoryContext, validateMemoryRestorationCandidate } from './gmcIntegrationStore.js';
 
 describe('resolveMemoryReferences', () => {
   const bentNail = { _id: 'bent-nail', type: 'location', canonical_name: 'The Bent Nail', tags: ['player-known', 'shop'], details: { type: 'Dock Ward shop', description: 'Mundane trade goods in front and arms, armor, and supplies in the back.' } };
@@ -122,6 +122,21 @@ describe('resolveMemoryReferences', () => {
     expect(reference?.selected?.name).toBe("Old Vesper's Workshop");
     expect(reference?.selected?.matchedIdentity).toBe("Old Vesper's place");
   });
+
+  it('marks an explicitly requested NPC-associated place unresolved when its typed Location entity is missing', () => {
+    const result = resolveMemoryReferences({
+      facts: [], items: [], locations: [], factions: [],
+      npcs: [{
+        _id: 'old-vesper', type: 'npc', canonical_name: 'Old Vesper', aliases: ['magic mentor'],
+        details: { location: "Old Vesper's place" },
+      }],
+    }, "I leave the Bent Nail and go to Old Vesper's place.");
+
+    const location = result.references.find((entry) => entry.key === 'linked_location_old_vesper');
+    expect(result.status).toBe('clarification_required');
+    expect(location?.kind).toBe('location');
+    expect(location?.status).toBe('missing');
+  });
 });
 
 describe('validateMemoryRestorationCandidate', () => {
@@ -204,6 +219,70 @@ describe('buildScenePresenceContract', () => {
     }));
     expect(proposed.presentNpcs.map((npc) => npc.name)).toEqual(['Old Vesper']);
     expect(proposed.knownNonPresentNpcs.map((npc) => npc.name)).toEqual(['Captain Thorne']);
+  });
+});
+
+describe('resolveSceneTransitionContract', () => {
+  const currentContract = buildScenePresenceContract({ _id: 'bent-nail-scene', locationId: 'bent-nail', presentNpcIds: ['mara'] }, [
+    { _id: 'mara', canonical_name: 'Mara Dusk' },
+    { _id: 'vesper', canonical_name: 'Old Vesper', aliases: ['magic mentor'] },
+  ]);
+  const locations = [
+    { _id: 'bent-nail', canonical_name: 'The Bent Nail' },
+    { _id: 'vesper-place', canonical_name: "Old Vesper's place", aliases: ['Vesper place'] },
+    { _id: 'dock-ward', canonical_name: 'Dock Ward' },
+  ];
+  const npcs = [
+    { _id: 'mara', canonical_name: 'Mara Dusk' },
+    { _id: 'vesper', canonical_name: 'Old Vesper', aliases: ['magic mentor'] },
+  ];
+
+  it('resolves one exact destination entity and roster without scoring generic memory references', () => {
+    const contract = resolveSceneTransitionContract({
+      currentContract,
+      currentScene: { _id: 'bent-nail-scene', locationId: 'bent-nail', presentNpcIds: ['mara'] },
+      locations,
+      npcs,
+      where: "Old Vesper’s place, Dock Ward, Waterdeep",
+      who: ['Kerrigan Brynn', 'Old Vesper', 'Old Vesper'],
+      playerCharacterNames: ['Kerrigan Brynn'],
+    });
+
+    expect(contract.status).toBe('resolved');
+    expect(contract.transitionRequired).toBe(true);
+    expect(contract.location).toEqual(expect.objectContaining({ id: 'vesper-place', name: "Old Vesper's place" }));
+    expect(contract.presentNpcIds).toEqual(['vesper']);
+    expect(contract.presenceContract.exactPresentNpcIds).toEqual(['vesper']);
+    expect(contract.nonNpcActors).toEqual(['Kerrigan Brynn']);
+  });
+
+  it('deduplicates multiple aliases of one location but rejects multiple distinct primary locations', () => {
+    const duplicateAlias = resolveSceneTransitionContract({
+      currentContract, currentScene: { locationId: 'bent-nail' }, locations, npcs,
+      where: 'Vesper place, Dock Ward', who: ['Kerrigan Brynn', 'magic mentor'], playerCharacterNames: ['Kerrigan Brynn'],
+    });
+    expect(duplicateAlias.location.id).toBe('vesper-place');
+    expect(duplicateAlias.presentNpcIds).toEqual(['vesper']);
+
+    expect(() => resolveSceneTransitionContract({
+      currentContract, currentScene: { locationId: 'bent-nail' },
+      locations: [...locations, { _id: 'other-vesper-place', canonical_name: 'Vesper place' }], npcs,
+      where: 'Vesper place, Dock Ward', who: ['Kerrigan Brynn', 'Old Vesper'], playerCharacterNames: ['Kerrigan Brynn'],
+    })).toThrowError(expect.objectContaining({ code: 'SCENE_DESTINATION_LOCATION_AMBIGUOUS' }));
+  });
+
+  it('fails closed when a declared actor is neither the identified player nor one canonical NPC', () => {
+    expect(() => resolveSceneTransitionContract({
+      currentContract, currentScene: { locationId: 'bent-nail' }, locations, npcs,
+      where: "Old Vesper's place", who: ['Kerrigan Brynn', 'Old Vesper', 'Unknown Assistant'], playerCharacterNames: ['Kerrigan Brynn'],
+    })).toThrowError(expect.objectContaining({ code: 'SCENE_DESTINATION_ROSTER_UNRESOLVED' }));
+  });
+
+  it('rejects a renamed destination even when the canonical name appears later in the declaration', () => {
+    expect(() => resolveSceneTransitionContract({
+      currentContract, currentScene: { locationId: 'bent-nail' }, locations, npcs,
+      where: "Old Vesper's Workshop, also called Old Vesper's place", who: ['Kerrigan Brynn', 'Old Vesper'], playerCharacterNames: ['Kerrigan Brynn'],
+    })).toThrowError(expect.objectContaining({ code: 'SCENE_DESTINATION_LOCATION_UNRESOLVED' }));
   });
 });
 

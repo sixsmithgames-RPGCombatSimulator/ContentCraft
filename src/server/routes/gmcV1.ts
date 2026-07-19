@@ -20,7 +20,9 @@ import {
   listEntities,
   listFacts,
   listThreads,
+  prepareMemoryReferences,
   resolveMemoryReferences,
+  resolveSceneTransitionContract,
   restoreMemoryReferences,
   updateEntity,
   type GmcEntityKind,
@@ -280,6 +282,34 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/presence/preview', asyncRoute(as
   res.json({ presenceContract });
 }));
 
+gmcV1Router.post('/campaigns/:campaignId/scenes/transition/resolve', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req); const id = req.params.campaignId;
+  const expectedCurrentRevision = String(req.body?.expectedCurrentRevision ?? '').trim();
+  const where = String(req.body?.where ?? '').trim();
+  const who = Array.isArray(req.body?.who) ? req.body.who.map(String) : [];
+  const playerCharacterNames = Array.isArray(req.body?.playerCharacterNames) ? req.body.playerCharacterNames.map(String) : [];
+  if (!expectedCurrentRevision || !where || who.length > 100 || playerCharacterNames.length > 10) {
+    fail(req, res, 400, 'VALIDATION_ERROR', 'expectedCurrentRevision, where, and bounded who/playerCharacterNames arrays are required.'); return;
+  }
+  const [state, npcs, locations] = await Promise.all([
+    collections.state().findOne({ userId: uid, campaignId: id }),
+    listEntities(uid, id, 'npc'),
+    listEntities(uid, id, 'location'),
+  ]);
+  const currentScene = state?.currentSceneId
+    ? await collections.scenes().findOne({ _id: state.currentSceneId, userId: uid, campaignId: id })
+    : null;
+  const currentContract = buildScenePresenceContract(currentScene, npcs);
+  if (!currentContract.valid || currentContract.revision !== expectedCurrentRevision) {
+    fail(req, res, 409, 'SCENE_PRESENCE_REVISION_CONFLICT', 'The GMC current-scene roster changed before the transition could be resolved.', { currentContract }); return;
+  }
+  const sceneTransitionContract = resolveSceneTransitionContract({
+    currentContract, currentScene, locations, npcs, where, who, playerCharacterNames,
+  });
+  res.json({ sceneTransitionContract });
+}));
+
 gmcV1Router.post('/campaigns/:campaignId/scenes', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;
   if (!String(req.body?.name || '').trim()) { fail(req, res, 400, 'VALIDATION_ERROR', 'name is required.'); return; }
@@ -360,6 +390,13 @@ gmcV1Router.post('/campaigns/:campaignId/memory/resolve-references', asyncRoute(
   res.json({
     resolution: resolveMemoryReferences({ facts: [...facts, ...threads], items, npcs, locations, factions }, instruction),
   });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/memory/prepare-references', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const instruction = String(req.body?.instruction ?? '').trim();
+  if (!instruction) { fail(req, res, 400, 'VALIDATION_ERROR', 'instruction is required.'); return; }
+  res.json(await prepareMemoryReferences(userId(req), req.params.campaignId, instruction));
 }));
 
 gmcV1Router.post('/campaigns/:campaignId/memory/restore-references', asyncRoute(async (req, res) => {

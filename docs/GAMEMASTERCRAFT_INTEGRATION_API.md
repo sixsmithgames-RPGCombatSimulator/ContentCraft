@@ -31,6 +31,8 @@ POST /api/gmc/v1/campaigns
 GET /api/gmc/v1/campaigns/{campaignId}
 GET /api/gmc/v1/campaigns/{campaignId}/dashboard
 GET /api/gmc/v1/campaigns/{campaignId}/scenes/current
+POST /api/gmc/v1/campaigns/{campaignId}/scenes/presence/preview
+POST /api/gmc/v1/campaigns/{campaignId}/scenes/transition/resolve
 POST /api/gmc/v1/campaigns/{campaignId}/scenes
 PATCH /api/gmc/v1/scenes/{sceneId}
 ```
@@ -38,6 +40,8 @@ PATCH /api/gmc/v1/scenes/{sceneId}
 The dashboard aggregates current scene/location, present NPCs, scene-relevant memory, recent session summary, and existing project content summaries. `memoryContext` is the authoritative retrieval projection described below; the legacy `relevantFacts` and `openThreads` fields mirror its FACT and EVENT arrays.
 
 `scenePresenceContract` is the revision-bound narration authority. It includes `exactPresentNpcIds`, resolved `presentNpcs`, `knownNonPresentNpcs`, `unresolvedPresentNpcIds`, and `valid`. Its revision covers the scene identity/update, exact roster, and canonical NPC names/aliases. Consumers must fail closed when the contract is invalid or stale; a known non-present NPC cannot act, speak, observe, carry evidence, guard, or receive an assignment. Commit arrivals/departures through the scene API before narrating from the changed roster.
+
+`scenes/transition/resolve` is the authoritative scene-change resolver. It accepts the current presence revision plus structured `where` and `who` fields, requires the destination field to begin with one exact canonical location name or alias, resolves every NPC by canonical identity, and returns one revision-bound `gmc.sceneTransition` contract. Consumers must use that same destination and roster contract for audit and application; they must not score generic memory references or substitute a different scene projection.
 
 ## Memory model: type and scope
 
@@ -56,6 +60,8 @@ ITEM narrative tier is one of `plot`, `mundane`, `currency`, or `furniture`. Loc
 
 ```http
 POST /api/gmc/v1/campaigns/{campaignId}/memory/context
+POST /api/gmc/v1/campaigns/{campaignId}/memory/resolve-references
+POST /api/gmc/v1/campaigns/{campaignId}/memory/prepare-references
 Content-Type: application/json
 
 {
@@ -65,6 +71,8 @@ Content-Type: application/json
 ```
 
 The returned `memoryContext` always includes world FACTs, plot ITEMs, and BBEG/lieutenant entity memory. It adds geographic FACTs/EVENTs whose location is in the current ancestry, minor entity memory only when that entity is present, and mundane/currency/furniture ITEMs only when their location or owner is in the scene. `retrieval.included` and `retrieval.excluded` make the selection auditable.
+
+`memory/resolve-references` is read-only. `memory/prepare-references` is the pre-narration synchronization gate: it performs only deterministic canonical normalization, then returns the same reference-resolution contract. For example, when a player exactly names an NPC-associated place already stored in that NPC's `details.location`, GMC materializes the missing typed Location with provenance and a reciprocal relationship. It does not invent an address, layout, business type, or other setting detail. GMA must run this gate before any narration-related model call and stop for clarification when the returned status is not `resolved`.
 
 New records should use these shapes:
 
