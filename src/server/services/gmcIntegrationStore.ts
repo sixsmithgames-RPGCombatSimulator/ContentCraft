@@ -424,8 +424,13 @@ export function resolveMemoryReferences(
       const explicitlyNamed = Boolean(name && instruction.toLowerCase().includes(name.toLowerCase()));
       const evidence = facts.filter((fact: any) => {
         const text = String(fact?.text ?? '');
-        const linked = [...(fact?.relatedEntityIds ?? []), ...(fact?.relatedNpcIds ?? []), ...(fact?.relatedLocationIds ?? [])].map(String).includes(id);
-        return (linked || (name && text.toLowerCase().includes(name.toLowerCase()))) && spec.evidenceTerms.test(text);
+        const relatedIds = [...(fact?.relatedEntityIds ?? []), ...(fact?.relatedNpcIds ?? []), ...(fact?.relatedLocationIds ?? [])].map(String);
+        const linked = relatedIds.includes(id);
+        // Explicit provenance is authoritative. Once a fact names its related
+        // records by ID, incidental or negative text mentions must not attach
+        // that evidence to a different canonical record.
+        const textLinked = relatedIds.length === 0 && name && text.toLowerCase().includes(name.toLowerCase());
+        return (linked || textLinked) && spec.evidenceTerms.test(text);
       }).map((fact: any) => ({
         id: fact?._id ?? fact?.id ?? null,
         text: String(fact?.text ?? ''),

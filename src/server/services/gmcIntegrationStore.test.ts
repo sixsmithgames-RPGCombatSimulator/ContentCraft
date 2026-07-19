@@ -44,6 +44,24 @@ describe('resolveMemoryReferences', () => {
     }, 'I return to the shop where I last sold armor.');
     expect(result.references.find((entry) => entry.key === 'commerce_location')?.selected?.name).toBe('The Bent Nail');
   });
+
+  it('does not attach explicitly linked evidence to a different record mentioned negatively in its text', () => {
+    const tidyTides = { _id: 'tidy-tides', type: 'location', canonical_name: 'Tidy Tides Inn', tags: ['player-known', 'location:lodging'], details: { type: 'inn' } };
+    const result = resolveMemoryReferences({
+      facts: [{
+        _id: 'clarification-fact',
+        text: 'Not the Salty Tug. Kerrigan is staying at Tidy Tides Inn.',
+        relatedLocationIds: ['tidy-tides'],
+        memory: { gameClock: { day: 4, hour: 11, minute: 15 } },
+      }],
+      items: [], npcs: [], locations: [saltyTug, tidyTides], factions: [],
+    }, 'Go back to the inn where Kerrigan has been staying.');
+
+    const lodging = result.references.find((reference) => reference.key === 'lodging_location');
+    expect(lodging?.status).toBe('resolved');
+    expect(lodging?.selected?.name).toBe('Tidy Tides Inn');
+    expect(lodging?.candidates.find((candidate) => candidate.name === 'The Salty Tug')?.evidence).toEqual([]);
+  });
 });
 
 describe('validateMemoryRestorationCandidate', () => {
