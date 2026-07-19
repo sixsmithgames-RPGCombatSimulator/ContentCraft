@@ -1,5 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { contradictionCandidates, selectMemoryContext } from './gmcIntegrationStore.js';
+import { buildScenePresenceContract, contradictionCandidates, selectMemoryContext } from './gmcIntegrationStore.js';
+
+describe('buildScenePresenceContract', () => {
+  it('publishes an exclusive revision-bound roster and identifies known absent NPCs', () => {
+    const contract = buildScenePresenceContract({
+      _id: 'scene-1',
+      updatedAt: '2026-07-19T12:00:00.000Z',
+      presentNpcIds: ['thorne', 'rusk'],
+    }, [
+      { _id: 'thorne', canonical_name: 'Captain Thorne' },
+      { _id: 'rusk', canonical_name: 'Ward-Reader Rusk' },
+      { _id: 'hale', canonical_name: 'Constable Hale' },
+    ]);
+
+    expect(contract.authority).toBe('gmc.currentScene.presentNpcIds');
+    expect(contract.valid).toBe(true);
+    expect(contract.presentNpcs.map((npc) => npc.name)).toEqual(['Captain Thorne', 'Ward-Reader Rusk']);
+    expect(contract.knownNonPresentNpcs.map((npc) => npc.name)).toEqual(['Constable Hale']);
+    expect(contract.revision).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('does not silently accept a scene roster that references an unknown NPC id', () => {
+    const contract = buildScenePresenceContract({ _id: 'scene-1', presentNpcIds: ['missing'] }, []);
+    expect(contract.valid).toBe(false);
+    expect(contract.unresolvedPresentNpcIds).toEqual(['missing']);
+  });
+});
 
 describe('contradictionCandidates', () => {
   it('flags a negated proposal that overlaps a locked fact', () => {

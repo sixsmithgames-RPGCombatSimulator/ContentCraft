@@ -37,6 +37,8 @@ PATCH /api/gmc/v1/scenes/{sceneId}
 
 The dashboard aggregates current scene/location, present NPCs, scene-relevant memory, recent session summary, and existing project content summaries. `memoryContext` is the authoritative retrieval projection described below; the legacy `relevantFacts` and `openThreads` fields mirror its FACT and EVENT arrays.
 
+`scenePresenceContract` is the revision-bound narration authority. It includes `exactPresentNpcIds`, resolved `presentNpcs`, `knownNonPresentNpcs`, `unresolvedPresentNpcIds`, and `valid`. Its revision covers the scene identity/update, exact roster, and canonical NPC names/aliases. Consumers must fail closed when the contract is invalid or stale; a known non-present NPC cannot act, speak, observe, carry evidence, guard, or receive an assignment. Commit arrivals/departures through the scene API before narrating from the changed roster.
+
 ## Memory model: type and scope
 
 GameMasterCraft stores campaign memory as three explicit record types:

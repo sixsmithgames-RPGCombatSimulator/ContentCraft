@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { getDb, getCanonEntitiesCollection } from '../config/mongo.js';
 import { generateProjectEntityId, type EntityType } from '../models/CanonEntity.js';
 import {
@@ -432,6 +432,65 @@ export async function buildMemoryContext(
     listThreads(userId, campaignId, { status: 'open' }),
   ]);
   return selectMemoryContext({ facts, items, npcs, locations, events }, context);
+}
+
+function stablePresenceJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stablePresenceJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stablePresenceJson(entry)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+function presenceIdentity(npc: any) {
+  const aliases = [
+    ...(Array.isArray(npc?.aliases) ? npc.aliases : []),
+    ...(Array.isArray(npc?.details?.aliases) ? npc.details.aliases : []),
+  ].map(String).map((value) => value.trim()).filter(Boolean);
+  return {
+    id: String(npc?._id ?? npc?.id ?? ''),
+    name: String(npc?.canonical_name ?? npc?.details?.name ?? npc?.name ?? '').trim(),
+    aliases: [...new Set(aliases)].sort(),
+  };
+}
+
+/**
+ * Projects GMC's canonical scene roster into a revision-bound read contract.
+ * Narrators may describe this roster, but cannot maintain a competing presence list.
+ * date_of_change: 2026-07-19
+ */
+export function buildScenePresenceContract(scene: any, npcs: any[]) {
+  const exactPresentNpcIds: string[] = (Array.isArray(scene?.presentNpcIds) ? scene.presentNpcIds : []).map(String);
+  const present = new Set(exactPresentNpcIds);
+  const identities = (Array.isArray(npcs) ? npcs : []).map(presenceIdentity).filter((npc) => npc.id);
+  const presentNpcs = identities.filter((npc) => present.has(npc.id));
+  const knownNonPresentNpcs = identities.filter((npc) => !present.has(npc.id));
+  const unresolvedPresentNpcIds = exactPresentNpcIds.filter((id) => !identities.some((npc) => npc.id === id));
+  const revisionSource = {
+    sceneId: String(scene?._id ?? scene?.id ?? ''),
+    sceneUpdatedAt: scene?.updatedAt ?? null,
+    exactPresentNpcIds,
+    identities,
+  };
+  return {
+    authority: 'gmc.currentScene.presentNpcIds',
+    sceneId: revisionSource.sceneId || null,
+    sceneUpdatedAt: revisionSource.sceneUpdatedAt,
+    revision: createHash('sha256').update(stablePresenceJson(revisionSource)).digest('hex'),
+    exactPresentNpcIds,
+    presentNpcs,
+    knownNonPresentNpcs,
+    unresolvedPresentNpcIds,
+    valid: Boolean(revisionSource.sceneId) && unresolvedPresentNpcIds.length === 0,
+    rules: [
+      'The exactPresentNpcIds roster is exclusive for the current scene state.',
+      'A known non-present NPC cannot act, speak, observe, carry, guard, or receive an assignment in current narration.',
+      'An arrival or departure requires an explicit scene-presence mutation before later narration may rely on the changed roster.',
+    ],
+  };
 }
 
 export function selectMemoryContext(

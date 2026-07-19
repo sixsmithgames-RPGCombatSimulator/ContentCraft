@@ -332,6 +332,7 @@ NARRATIVE QUALITY:
 - Begin at the instant of the declared action without recapping the whole encounter. Vary sentence rhythm and references; do not write a dry event report or repeat a display name at the start of consecutive sentences.
 - Show the result through fiction. Never say that an action “resolves,” that a mechanic “succeeds,” or that a system “records” anything.
 - Do not invent words or decisions for the player character. Do not invent NPC dialogue, knowledge, reinforcements, discoveries, loot, movement, follow-up attacks, reactions, conditions, or scene outcomes absent from the supplied state.
+- campaignDashboard.scenePresenceContract is exact and exclusive. A known non-present NPC cannot act, speak, observe, carry evidence, guard, or receive an assignment. Never infer an arrival or departure from conversation; GMC scene presence must be committed first.
 
 MECHANICAL FIDELITY:
 - A miss makes no damaging contact. A hit with zero damage is harmless but still contacts the declared target; do not relocate the impact to scenery. Show only target contact that turns aside, fails to penetrate, meets resistance, or dissipates without injury, lost balance, forced movement, a condition, delayed impairment, or invented protective equipment. Positive damage produces only an injury proportionate to the result. The target falls, becomes unconscious, dies, or can no longer continue only when authoritativeMechanicalResult says so. Preserve nonlethal intent exactly.
@@ -355,6 +356,7 @@ SOURCE BOUNDARY:
 - authoritativeMechanicalResult and authoritativeOutcome are immutable. Do not reinterpret, recompute, or enlarge them. A zero-damage hit cannot injure, impede, move, stagger, slow, frighten, or disarm the target. A miss cannot make damaging contact. A non-defeat cannot drop or incapacitate the target.
 - conversationHistory and sceneContext may support already-visible setting and continuity only. They do not authorize a new event. campaignContext may disambiguate names but is not an authorized narration source and may not be mined for a motif, clue, hazard, NPC, route, material, or sensory detail merely to enrich this beat.
 - No character or NPC may perform a new action that is absent from instruction and the mechanic. No invented dialogue. No player thoughts, breath, emotion, expertise, or body reaction unless directly inherent in the declared action and established context.
+- campaignDashboard.scenePresenceContract is an exact exclusion boundary even though it is context rather than claim evidence. Reject any active role for knownNonPresentNpcs. Do not repair presence by inventing an arrival; the GMC roster must change before narration.
 - Concrete materials, construction, equipment, surface conditions, measurements, route directions, and sensory properties must appear in the supplied sources. Ordinary connective prose is allowed; new durable or tactical facts are not.
 
 AUDIT METHOD:
