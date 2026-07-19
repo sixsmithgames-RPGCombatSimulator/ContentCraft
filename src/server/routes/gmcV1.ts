@@ -7,6 +7,7 @@ import { ProjectModel, ContentBlockModel } from '../models/index.js';
 import { integrationAuth, type IntegrationRequest } from '../middleware/integrationAuth.js';
 import {
   buildMemoryContext,
+  buildProposedScenePresenceContract,
   buildScenePresenceContract,
   collections,
   contradictionCandidates,
@@ -241,6 +242,42 @@ gmcV1Router.get('/campaigns/:campaignId/scenes/current', asyncRoute(async (req, 
   const state = await collections.state().findOne({ userId: uid, campaignId: id });
   const scene = state?.currentSceneId ? await collections.scenes().findOne({ _id: state.currentSceneId, userId: uid, campaignId: id }) : null;
   res.json({ scene });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/scenes/presence/preview', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req); const id = req.params.campaignId;
+  const expectedCurrentRevision = String(req.body?.expectedCurrentRevision ?? '').trim();
+  const locationId = String(req.body?.locationId ?? '').trim();
+  const rawPresentNpcIds: unknown[] = Array.isArray(req.body?.presentNpcIds) ? req.body.presentNpcIds : [];
+  const presentNpcIds: string[] = [...new Set(rawPresentNpcIds.map((value) => String(value)).filter(Boolean))];
+  if (!expectedCurrentRevision || !locationId || presentNpcIds.length > 100) {
+    fail(req, res, 400, 'VALIDATION_ERROR', 'expectedCurrentRevision, locationId, and no more than 100 presentNpcIds are required.'); return;
+  }
+  const [state, npcs, locations] = await Promise.all([
+    collections.state().findOne({ userId: uid, campaignId: id }),
+    listEntities(uid, id, 'npc'),
+    listEntities(uid, id, 'location'),
+  ]);
+  const currentScene = state?.currentSceneId
+    ? await collections.scenes().findOne({ _id: state.currentSceneId, userId: uid, campaignId: id })
+    : null;
+  const currentContract = buildScenePresenceContract(currentScene, npcs);
+  if (!currentContract.valid || currentContract.revision !== expectedCurrentRevision) {
+    fail(req, res, 409, 'SCENE_PRESENCE_REVISION_CONFLICT', 'The GMC current-scene roster changed before the proposed roster could be validated.', { currentContract }); return;
+  }
+  const location = locations.find((candidate: any) => String(candidate?._id) === locationId);
+  if (!location) { fail(req, res, 404, 'LOCATION_NOT_FOUND', 'The proposed scene location is not canonical GMC data.'); return; }
+  const knownNpcIds = new Set(npcs.map((npc: any) => String(npc?._id)));
+  const unknownNpcIds = presentNpcIds.filter((npcId) => !knownNpcIds.has(npcId));
+  if (unknownNpcIds.length) {
+    fail(req, res, 409, 'SCENE_PRESENCE_NPC_UNRESOLVED', 'The proposed scene roster contains NPC IDs GMC cannot resolve.', { unknownNpcIds }); return;
+  }
+  const presenceContract = buildProposedScenePresenceContract({ currentContract, location, presentNpcIds, npcs });
+  if (!presenceContract.valid) {
+    fail(req, res, 409, 'SCENE_PRESENCE_PROPOSAL_INVALID', 'GMC could not produce a complete proposed-scene roster contract.', { presenceContract }); return;
+  }
+  res.json({ presenceContract });
 }));
 
 gmcV1Router.post('/campaigns/:campaignId/scenes', asyncRoute(async (req, res) => {
@@ -644,7 +681,7 @@ gmcV1Router.post('/ai/audit-resolved-mechanics-narration', asyncRoute((req, res)
   [...AUDIT_RESOLVED_MECHANICS_NARRATION_REQUIRED_KEYS],
 )));
 gmcV1Router.post('/ai/respond-ooc', asyncRoute((req, res) => ai(req, res, 'Respond out of character as the DM to the player, using conversationHistory and campaign context. Answer every direct player question before offering next steps. Do not narrate the player character taking actions. Clearly distinguish rules/table discussion from in-world facts. If the player identifies a continuity or plausibility problem, do not defend the narration by inventing an unsupported explanation: acknowledge the concrete inconsistency, state the corrected interpretation, and say whether a retcon is needed. When initiative or a check is challenged, compare it to the player\'s actual wording rather than actions invented by prior narration. Planning, considering, thinking, watching, and waiting are not execution; acknowledge an erroneous initiative transition when no concrete tactical action occurred. If the player asks whether a check is appropriate, apply dmCheckPolicy and explain the decision and stakes directly. If the player asks about time, answer from gameTimeContext and gameTimePolicy, distinguishing exact clock time from estimates. Never claim that a VCS character sheet, inventory, currency balance, hit points, hit dice, XP, or the campaign clock was updated; the caller performs and confirms authoritative writes separately. Return {response,continuityNotes,proposedCanonChanges}.', ['response', 'continuityNotes', 'proposedCanonChanges'])));
-gmcV1Router.post('/ai/plan-character-sheet-mutation', asyncRoute((req, res) => ai(req, res, `Decide whether this interaction establishes or explicitly requests an authoritative VCS character-sheet change. Use currentSheet as the starting authority and the ordered conversationHistory to distinguish newly established changes from possessions or costs already synchronized. The candidateResponse is prose only and is not proof that a write occurred.
+export const PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION = `Decide whether this interaction establishes or explicitly requests an authoritative VCS character-sheet change. Use currentSheet as the starting authority and the ordered conversationHistory to distinguish newly established changes from possessions or costs already synchronized. The candidateResponse is prose only and is not proof that a write occurred.
 
 Return a mutation only for confirmed acquisitions, losses, expenditures, healing, damage, rests, or explicit bookkeeping corrections. Do not mutate for plans, attempts, hypothetical rewards, disputed outcomes, or merely mentioning an existing possession. When the player asks to backfill an established but unsynchronized reward, include it once. A prior conversation entry whose sheetMutation status is applied is already synchronized and must never be applied again.
 
@@ -658,8 +695,15 @@ Currency rules:
 Inventory rules:
 - add contains only items newly owned by the character; use a stable concise name and quantity.
 - remove contains items actually lost, consumed, sold, or transferred, with quantity when known.
+- All newly acquired weapons and all ammunition go through items.add and remain general inventory. Weapon type, name, damage, attack data, and simulator usability never imply that a weapon is equipped.
 - Do not put currency in inventory items.
 - Never create placeholder or provisional possessions such as “recovered coin pouch,” “unknown loot,” “contents pending,” “exact denominations pending,” or “awaiting authoritative tally.” If the item identity, amount, denomination, quantity, ownership, or manifest is unresolved, return shouldMutate:false and explain the missing authority in reason. Do not convert uncertainty into an inventory label.
+
+Equipped-weapon rules:
+- equippedWeapons means weapons carried ready for immediate use, such as in hand, a holster, scabbard, sling, or another explicitly established ready-access position.
+- Use equippedWeapons.equip or equippedWeapons.unequip only when the player explicitly readies, draws, holsters, stows, equips, or unequips a weapon. These operations move an already-owned quantity atomically between general inventory and Equipped Weapons.
+- Never infer an equip operation from acquisition, item classification, combat statistics, or the fact that VCS could make an attack from the weapon.
+- Ammunition can never be placed in Equipped Weapons; it always remains general inventory.
 
 HP, hit-dice, and XP rules:
 - Use delta for newly established damage, healing, spent/recovered dice, or manual XP adjustments.
@@ -671,11 +715,14 @@ Return {
   confidence,
   reason,
   currency:{mode:'none|delta|set',cp,sp,ep,gp,pp},
-  items:{add:[{name,quantity}],remove:[{name,quantity}]},
+  items:{add:[{name,quantity,type?}],remove:[{name,quantity}]},
+  equippedWeapons:{equip:[{name,quantity}],unequip:[{name,quantity}]},
   hitPoints:{mode:'none|delta|set',current,maximum,temporary},
   hitDice:{mode:'none|delta|set',total,spent},
   experiencePoints:{mode:'none|delta|set',value}
-}. Use zero for unused numeric values, empty arrays for unused item operations, and confidence from 0 to 1.`, ['shouldMutate', 'confidence', 'reason', 'currency', 'items', 'hitPoints', 'hitDice', 'experiencePoints'])));
+}. Use zero for unused numeric values, empty arrays for unused item and equipped-weapon operations, and confidence from 0 to 1.`;
+export const PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS = ['shouldMutate', 'confidence', 'reason', 'currency', 'items', 'equippedWeapons', 'hitPoints', 'hitDice', 'experiencePoints'];
+gmcV1Router.post('/ai/plan-character-sheet-mutation', asyncRoute((req, res) => ai(req, res, PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION, PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS)));
 gmcV1Router.post('/ai/retcon-narration', asyncRoute((req, res) => ai(req, res, 'Apply the player retcon instruction as an authoritative correction to recent conversationHistory. Discard contradicted narration and preserve everything not affected. The corrected narration becomes established current state: concrete possessions, discoveries, injuries, deaths, positions, completed searches, and elapsed in-world time it states must not be awarded or performed again in later turns. Continue from the corrected state without replaying earlier beats. Do not alter VCS mechanics or campaign time unless an authoritative restored snapshot or explicit retcon instruction is supplied. If the corrected continuation reaches a check, the supplied dmCheckPolicy is binding and all stakes must be disclosed before requesting the roll. Use gameTimePolicy for any corrected time handling. Return {narration,correctionSummary,proposedCanonChanges,proposedTimeAdvance,continuityNotes}.', ['narration', 'correctionSummary', 'proposedCanonChanges', 'continuityNotes'])));
 gmcV1Router.post('/ai/generate-npc-dialogue', asyncRoute((req, res) => ai(req, res, 'Generate canon-aware NPC dialogue. Preserve secrets and motivations. Return {dialogue, narration, proposedCanonChanges}.', ['dialogue', 'narration', 'proposedCanonChanges'])));
 gmcV1Router.post('/ai/extract-canon-changes', asyncRoute((req, res) => ai(req, res, `Extract only durable, newly established story memory from the ordered transcript. Use campaignDashboard to avoid duplicating existing entities or records. The latest retcon supersedes contradicted text. Player plans, questions, speculation, failed narration, and unconfirmed possibilities are not canon. Raw mechanics become memory only when they create a durable story consequence.

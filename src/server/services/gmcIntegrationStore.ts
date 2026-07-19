@@ -883,6 +883,59 @@ export function buildScenePresenceContract(scene: any, npcs: any[]) {
   };
 }
 
+/**
+ * Validates an exact proposed scene roster without changing GMC current state.
+ * GMA binds manual review to this revision, then commits the same projection only
+ * after the reviewed result is approved. date_of_change: 2026-07-19
+ */
+export function buildProposedScenePresenceContract(input: {
+  currentContract: any;
+  location: any;
+  presentNpcIds: string[];
+  npcs: any[];
+}) {
+  const currentContract = input?.currentContract;
+  const locationId = String(input?.location?._id ?? input?.location?.id ?? '').trim();
+  const locationName = String(input?.location?.canonical_name ?? input?.location?.details?.name ?? input?.location?.name ?? '').trim();
+  const presentNpcIds = [...new Set((Array.isArray(input?.presentNpcIds) ? input.presentNpcIds : []).map(String).filter(Boolean))].sort();
+  const syntheticId = createHash('sha256').update(stablePresenceJson({ baseRevision: currentContract?.revision ?? null, locationId, presentNpcIds })).digest('hex');
+  const syntheticScene = {
+    _id: `proposed:${syntheticId}`,
+    updatedAt: null,
+    presentNpcIds,
+  };
+  const projected = buildScenePresenceContract(syntheticScene, input?.npcs ?? []);
+  const valid = currentContract?.valid === true
+    && Boolean(currentContract?.revision)
+    && Boolean(locationId)
+    && Boolean(locationName)
+    && projected.unresolvedPresentNpcIds.length === 0;
+  const revisionSource = {
+    authority: 'gmc.proposedScene.presentNpcIds',
+    baseRevision: currentContract?.revision ?? null,
+    currentSceneId: currentContract?.sceneId ?? null,
+    locationId,
+    presentNpcIds,
+    identities: projected.presentNpcs,
+  };
+  return {
+    ...projected,
+    authority: 'gmc.proposedScene.presentNpcIds',
+    sceneId: null,
+    baseRevision: currentContract?.revision ?? null,
+    currentSceneId: currentContract?.sceneId ?? null,
+    locationId,
+    locationName,
+    revision: createHash('sha256').update(stablePresenceJson(revisionSource)).digest('hex'),
+    valid,
+    rules: [
+      'This exact proposed roster is valid only while baseRevision remains GMC current scene authority.',
+      'The proposal is non-mutating and must be committed before narration is applied.',
+      'Only presentNpcs may take a current role in the proposed destination scene.',
+    ],
+  };
+}
+
 export function selectMemoryContext(
   records: { facts: any[]; items: any[]; npcs: any[]; locations: any[]; events: any[] },
   context: { currentLocationId?: string | null; presentNpcIds?: string[] } = {}

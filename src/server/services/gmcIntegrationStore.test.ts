@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, selectMemoryContext, validateMemoryRestorationCandidate } from './gmcIntegrationStore.js';
+import { buildProposedScenePresenceContract, buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, selectMemoryContext, validateMemoryRestorationCandidate } from './gmcIntegrationStore.js';
 
 describe('resolveMemoryReferences', () => {
   const bentNail = { _id: 'bent-nail', type: 'location', canonical_name: 'The Bent Nail', tags: ['player-known', 'shop'], details: { type: 'Dock Ward shop', description: 'Mundane trade goods in front and arms, armor, and supplies in the back.' } };
@@ -162,6 +162,31 @@ describe('buildScenePresenceContract', () => {
     const contract = buildScenePresenceContract({ _id: 'scene-1', presentNpcIds: ['missing'] }, []);
     expect(contract.valid).toBe(false);
     expect(contract.unresolvedPresentNpcIds).toEqual(['missing']);
+  });
+
+  it('previews an exact destination roster without replacing current-scene authority', () => {
+    const currentContract = buildScenePresenceContract({ _id: 'scene-docks', presentNpcIds: ['thorne'] }, [
+      { _id: 'thorne', canonical_name: 'Captain Thorne' },
+      { _id: 'vesper', canonical_name: 'Old Vesper' },
+    ]);
+    const proposed = buildProposedScenePresenceContract({
+      currentContract,
+      location: { _id: 'vesper-shop', canonical_name: "Old Vesper's Workshop" },
+      presentNpcIds: ['vesper'],
+      npcs: [{ _id: 'thorne', canonical_name: 'Captain Thorne' }, { _id: 'vesper', canonical_name: 'Old Vesper' }],
+    });
+
+    expect(proposed).toEqual(expect.objectContaining({
+      authority: 'gmc.proposedScene.presentNpcIds',
+      baseRevision: currentContract.revision,
+      currentSceneId: 'scene-docks',
+      locationId: 'vesper-shop',
+      locationName: "Old Vesper's Workshop",
+      exactPresentNpcIds: ['vesper'],
+      valid: true,
+    }));
+    expect(proposed.presentNpcs.map((npc) => npc.name)).toEqual(['Old Vesper']);
+    expect(proposed.knownNonPresentNpcs.map((npc) => npc.name)).toEqual(['Captain Thorne']);
   });
 });
 

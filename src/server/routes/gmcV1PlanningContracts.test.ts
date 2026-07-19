@@ -16,6 +16,20 @@ import {
   PLAN_ENCOUNTER_INSTRUCTION,
   PLAN_ENCOUNTER_REQUIRED_KEYS,
 } from './gmcV1PlanningContracts.js';
+import {
+  PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION,
+  PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS,
+} from './gmcV1.js';
+
+describe('GMC character-sheet mutation contract', () => {
+  it('separates ownership from explicit ready-access weapon state', () => {
+    expect(PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS).toContain('equippedWeapons');
+    expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION).toContain('All newly acquired weapons and all ammunition go through items.add');
+    expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION).toContain('never imply that a weapon is equipped');
+    expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION).toContain('move an already-owned quantity atomically');
+    expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION).toContain('Ammunition can never be placed in Equipped Weapons');
+  });
+});
 
 describe('GMC encounter planning contract', () => {
   it('runs a separate capability and stress-test pass without treating CR as the difficulty answer', () => {
