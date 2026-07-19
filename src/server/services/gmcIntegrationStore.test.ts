@@ -104,6 +104,23 @@ describe('resolveMemoryReferences', () => {
 
     expect(result.status).toBe('resolved');
     expect(result.references.find((entry) => entry.key === 'implicit_npc_magic_mentor')?.selected?.name).toBe('Old Vesper');
+    expect(result.references.find((entry) => entry.key === 'implicit_npc_magic_mentor')?.selected?.matchedIdentity).toBe('magic mentor');
+  });
+
+  it('returns the exact location alias that bound prose to a canonical destination', () => {
+    const result = resolveMemoryReferences({
+      facts: [], items: [], npcs: [], factions: [],
+      locations: [{
+        _id: 'vesper-shop', type: 'location', canonical_name: "Old Vesper's Workshop",
+        aliases: ["Old Vesper's place"], tags: ['player-known', 'location:workshop'],
+      }],
+    }, "Kerrigan reaches Old Vesper's place in the Dock Ward.");
+
+    const reference = result.references.find((entry) => entry.kind === 'location');
+    expect(reference?.status).toBe('resolved');
+    expect(reference?.selected?.id).toBe('vesper-shop');
+    expect(reference?.selected?.name).toBe("Old Vesper's Workshop");
+    expect(reference?.selected?.matchedIdentity).toBe("Old Vesper's place");
   });
 });
 

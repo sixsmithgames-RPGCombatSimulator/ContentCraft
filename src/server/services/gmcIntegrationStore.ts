@@ -459,7 +459,8 @@ export function resolveMemoryReferences(
       const name = String(record?.canonical_name ?? record?.name ?? record?.title ?? '').trim();
       const identities = [name, ...(Array.isArray(record?.aliases) ? record.aliases : [])]
         .map((value) => String(value ?? '').trim()).filter(Boolean);
-      const explicitlyNamed = identities.some((identity) => instruction.toLocaleLowerCase().includes(identity.toLocaleLowerCase()));
+      const matchedIdentity = identities.find((identity) => instruction.toLocaleLowerCase().includes(identity.toLocaleLowerCase())) ?? null;
+      const explicitlyNamed = Boolean(matchedIdentity);
       const evidence = facts.filter((fact: any) => {
         const text = String(fact?.text ?? '');
         const relatedIds = [...(fact?.relatedEntityIds ?? []), ...(fact?.relatedNpcIds ?? []), ...(fact?.relatedLocationIds ?? [])].map(String);
@@ -477,7 +478,7 @@ export function resolveMemoryReferences(
       })).sort((left, right) => Number(right.campaignMinute ?? -1) - Number(left.campaignMinute ?? -1));
       const latestCampaignMinute = evidence.find((entry) => entry.campaignMinute !== null)?.campaignMinute ?? null;
       const score = 10 + (explicitlyNamed ? 100 : 0) + (evidence.length ? 30 : 0) + Math.min(15, evidence.length * 3) + (record?.tags?.includes?.('player-known') ? 2 : 0);
-      return [{ id, name, kind: spec.kind, score, latestCampaignMinute, explicitlyNamed, record, evidence: evidence.slice(0, 5) }];
+      return [{ id, name, kind: spec.kind, score, latestCampaignMinute, explicitlyNamed, matchedIdentity, record, evidence: evidence.slice(0, 5) }];
     }).sort((left: any, right: any) => (
       right.score - left.score
       || Number(right.latestCampaignMinute ?? -1) - Number(left.latestCampaignMinute ?? -1)
