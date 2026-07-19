@@ -485,6 +485,158 @@ export function resolveMemoryReferences(
   };
 }
 
+type MemoryRestorationRecord = {
+  key: string;
+  kind: MemoryReferenceKind;
+  name: string;
+  nameEvidence: string;
+};
+
+function normalizedQuote(value: unknown) {
+  return String(value ?? '').trim().replace(/^["“”']+|["“”']+$/g, '').trim();
+}
+
+/**
+ * Validates the deliberately narrow result of the manual clarification pass.
+ * The model may identify names, but every accepted name must be a verbatim
+ * quote from the player's answer and must fill exactly one unresolved key.
+ */
+export function validateMemoryRestorationCandidate(input: Record<string, any>) {
+  const answer = String(input?.clarificationAnswer ?? '').trim();
+  const prior = input?.priorResolution;
+  if (!answer) throw Object.assign(new Error('clarificationAnswer is required.'), { status: 400, code: 'VALIDATION_ERROR' });
+  if (prior?.authority !== 'gmc.campaign-memory' || prior?.contractVersion !== '2026-07-19.1' || prior?.status !== 'clarification_required') {
+    throw Object.assign(new Error('A current GMC clarification contract is required.'), { status: 409, code: 'MEMORY_CLARIFICATION_CONTRACT_REQUIRED' });
+  }
+  const unresolved = (Array.isArray(prior.references) ? prior.references : []).filter((reference: any) => reference?.status !== 'resolved');
+  const expected = new Map(unresolved.map((reference: any) => [String(reference.key), reference]));
+  const supplied = Array.isArray(input?.records) ? input.records : [];
+  if (!expected.size || supplied.length !== expected.size) {
+    throw Object.assign(new Error('The restoration must fill every unresolved reference exactly once.'), { status: 409, code: 'MEMORY_RESTORATION_INCOMPLETE' });
+  }
+  const seen = new Set<string>();
+  const records = supplied.map((record: any): MemoryRestorationRecord => {
+    const key = String(record?.key ?? '').trim();
+    const reference: any = expected.get(key);
+    if (!reference || seen.has(key)) throw Object.assign(new Error(`Unexpected or duplicate memory key: ${key || '(blank)'}.`), { status: 409, code: 'MEMORY_RESTORATION_KEY_INVALID' });
+    seen.add(key);
+    const kind = String(record?.kind ?? '') as MemoryReferenceKind;
+    if (kind !== reference.kind) throw Object.assign(new Error(`Memory key ${key} must restore a ${reference.kind}.`), { status: 409, code: 'MEMORY_RESTORATION_KIND_INVALID' });
+    const name = normalizedQuote(record?.name);
+    const evidence = normalizedQuote(record?.nameEvidence);
+    if (!name || !evidence || name.toLocaleLowerCase() !== evidence.toLocaleLowerCase() || !answer.toLocaleLowerCase().includes(evidence.toLocaleLowerCase())) {
+      throw Object.assign(new Error(`The canonical name for ${key} must be quoted verbatim from the player's clarification.`), { status: 409, code: 'MEMORY_RESTORATION_EVIDENCE_REQUIRED' });
+    }
+    return { key, kind, name, nameEvidence: evidence };
+  });
+  return { answer, prior, unresolved, records };
+}
+
+function restorationTags(reference: any, kind: MemoryReferenceKind) {
+  const activity = String(reference?.activity ?? 'general');
+  const role = activity === 'lodging' && kind === 'npc'
+    ? 'innkeeper'
+    : (activity === 'commerce' && kind === 'npc' ? 'merchant' : null);
+  return [...new Set([
+    'player-known', `${kind}:canonical`, `activity:${activity}`, 'relationship:known-to-player',
+    ...(role ? [`role:${role}`] : []),
+    ...(activity === 'lodging' && kind === 'location' ? ['location:lodging'] : []),
+    ...(activity === 'commerce' && kind === 'location' ? ['location:shop'] : []),
+  ])];
+}
+
+export async function restoreMemoryReferences(userId: string, campaignId: string, input: Record<string, any>) {
+  const mutationId = String(input?.mutationId ?? '').trim();
+  const originalInstruction = String(input?.originalInstruction ?? '').trim();
+  if (!mutationId || !originalInstruction) throw Object.assign(new Error('mutationId and originalInstruction are required.'), { status: 400, code: 'VALIDATION_ERROR' });
+  const validated = validateMemoryRestorationCandidate(input);
+  if (String(validated.prior.instruction ?? '').trim() !== originalInstruction) {
+    throw Object.assign(new Error('The clarification is not bound to the original unresolved instruction.'), { status: 409, code: 'MEMORY_CLARIFICATION_STALE' });
+  }
+  const referenceByKey = new Map(validated.unresolved.map((reference: any) => [String(reference.key), reference]));
+  const created: any[] = [];
+  for (const record of validated.records) {
+    const reference: any = referenceByKey.get(record.key);
+    const existing = await getCanonEntitiesCollection().findOne({
+      userId, project_id: campaignId, type: record.kind,
+      canonical_name: { $regex: `^${escapeRegex(record.name)}$`, $options: 'i' },
+    } as any);
+    if (existing) {
+      const updated = await updateEntity(userId, existing._id, record.kind as GmcEntityKind, {
+        tags: [...new Set([...(Array.isArray(existing.tags) ? existing.tags : []), ...restorationTags(reference, record.kind)])],
+        relationships: Array.isArray(existing.relationships) ? existing.relationships : [],
+        details: { ...objectRecord(existing.details), playerClarification: validated.answer, activity: reference?.activity ?? 'general' },
+      });
+      created.push({ key: record.key, kind: record.kind, reference, record: updated, duplicate: true });
+      continue;
+    }
+    const result = await createEntityMutation(userId, campaignId, record.kind as GmcEntityKind, {
+      mutationId: `${mutationId}:${record.key}`,
+      name: record.name,
+      tags: restorationTags(reference, record.kind),
+      relationships: [],
+      source: { system: 'gamemaster-assistant', kind: 'player-memory-clarification', mutationId },
+      details: {
+        name: record.name,
+        role: reference?.label ?? null,
+        type: reference?.label ?? null,
+        activity: reference?.activity ?? 'general',
+        playerClarification: validated.answer,
+        visibility: 'player-known',
+      },
+      draft: false,
+    });
+    created.push({ key: record.key, kind: record.kind, reference, record: result.record, duplicate: result.duplicate });
+  }
+  for (const entry of created) {
+    const peers = created.filter((candidate) => candidate !== entry && candidate.reference?.activity === entry.reference?.activity);
+    const relationships = peers.map((peer) => ({
+      type: entry.kind === 'location' && peer.kind === 'npc'
+        ? (entry.reference?.activity === 'lodging' ? 'lodging_proprietor' : (entry.reference?.activity === 'commerce' ? 'trade_contact' : 'associated_with'))
+        : (entry.kind === 'npc' && peer.kind === 'location' ? 'works_at' : 'associated_with'),
+      targetId: peer.record?._id ?? peer.record?.id,
+      name: peer.record?.canonical_name ?? peer.record?.name,
+    }));
+    if (relationships.length) {
+      entry.record = await updateEntity(userId, entry.record?._id ?? entry.record?.id, entry.kind, {
+        relationships,
+        tags: entry.record?.tags ?? restorationTags(entry.reference, entry.kind),
+        details: entry.record?.details,
+      });
+    }
+  }
+  const locationIds = created.filter((entry) => entry.kind === 'location').map((entry) => entry.record?._id ?? entry.record?.id).filter(Boolean);
+  const entityIds = created.filter((entry) => entry.kind !== 'location').map((entry) => entry.record?._id ?? entry.record?.id).filter(Boolean);
+  const factMutation = await createFactMutation(userId, campaignId, {
+    mutationId: `${mutationId}:evidence`,
+    text: `Player clarification restoring campaign memory: ${validated.answer}`,
+    category: 'continuity',
+    tags: ['memory-clarification', ...new Set(created.map((entry) => `activity:${entry.reference?.activity ?? 'general'}`))],
+    relatedEntityIds: entityIds,
+    relatedLocationIds: locationIds,
+    locked: true,
+    secret: false,
+    memory: { gameClock: input?.gameClock ?? null, sourceInstruction: originalInstruction },
+    source: { system: 'gamemaster-assistant', kind: 'player-memory-clarification', mutationId },
+  });
+  const [facts, threads, items, npcs, locations, factions] = await Promise.all([
+    listFacts(userId, campaignId), listThreads(userId, campaignId),
+    listEntities(userId, campaignId, 'item'), listEntities(userId, campaignId, 'npc'),
+    listEntities(userId, campaignId, 'location'), listEntities(userId, campaignId, 'faction'),
+  ]);
+  const resolution = resolveMemoryReferences({ facts: [...facts, ...threads], items, npcs, locations, factions }, originalInstruction);
+  if (resolution.status !== 'resolved') {
+    throw Object.assign(new Error('Canonical records were restored, but the original references are still not unique. GMA must ask another question.'), {
+      status: 409, code: 'MEMORY_RESTORATION_INCOMPLETE', details: { resolution },
+    });
+  }
+  return {
+    restored: created.map((entry) => ({ key: entry.key, kind: entry.kind, record: entry.record, duplicate: entry.duplicate })),
+    evidenceFact: factMutation.record,
+    resolution,
+  };
+}
+
 export async function createFactMutation(userId: string, campaignId: string, input: Record<string, any>) {
   const { mutationId, ...inputData } = input;
   const text = String(inputData.text || '').trim();

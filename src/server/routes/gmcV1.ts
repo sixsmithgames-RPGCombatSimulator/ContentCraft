@@ -20,6 +20,7 @@ import {
   listFacts,
   listThreads,
   resolveMemoryReferences,
+  restoreMemoryReferences,
   updateEntity,
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
@@ -320,6 +321,13 @@ gmcV1Router.post('/campaigns/:campaignId/memory/resolve-references', asyncRoute(
   res.json({
     resolution: resolveMemoryReferences({ facts: [...facts, ...threads], items, npcs, locations, factions }, instruction),
   });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/memory/restore-references', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req); const id = req.params.campaignId;
+  const state = await collections.state().findOne({ userId: uid, campaignId: id });
+  res.json(await restoreMemoryReferences(uid, id, { ...req.body, gameClock: state?.gameClock ?? null }));
 }));
 
 gmcV1Router.get('/campaigns/:campaignId/canon/locked-facts', asyncRoute(async (req, res) => {

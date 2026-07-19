@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, selectMemoryContext } from './gmcIntegrationStore.js';
+import { buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, selectMemoryContext, validateMemoryRestorationCandidate } from './gmcIntegrationStore.js';
 
 describe('resolveMemoryReferences', () => {
   const bentNail = { _id: 'bent-nail', type: 'location', canonical_name: 'The Bent Nail', tags: ['player-known', 'shop'], details: { type: 'Dock Ward shop', description: 'Mundane trade goods in front and arms, armor, and supplies in the back.' } };
@@ -43,6 +43,38 @@ describe('resolveMemoryReferences', () => {
       ],
     }, 'I return to the shop where I last sold armor.');
     expect(result.references.find((entry) => entry.key === 'commerce_location')?.selected?.name).toBe('The Bent Nail');
+  });
+});
+
+describe('validateMemoryRestorationCandidate', () => {
+  const priorResolution = {
+    authority: 'gmc.campaign-memory', contractVersion: '2026-07-19.1', status: 'clarification_required',
+    instruction: 'Go back to the inn and speak to the innkeeper.',
+    references: [
+      { key: 'lodging_location', kind: 'location', activity: 'lodging', label: 'lodging location', status: 'missing' },
+      { key: 'lodging_proprietor', kind: 'npc', activity: 'lodging', label: 'innkeeper', status: 'missing' },
+    ],
+  };
+
+  it('accepts only complete typed names quoted verbatim from the player', () => {
+    const result = validateMemoryRestorationCandidate({
+      clarificationAnswer: 'The inn is the Tidy Tides Inn. The innkeeper is Vernicle.', priorResolution,
+      records: [
+        { key: 'lodging_location', kind: 'location', name: 'Tidy Tides Inn', nameEvidence: 'Tidy Tides Inn' },
+        { key: 'lodging_proprietor', kind: 'npc', name: 'Vernicle', nameEvidence: 'Vernicle' },
+      ],
+    });
+    expect(result.records.map((record) => record.name)).toEqual(['Tidy Tides Inn', 'Vernicle']);
+  });
+
+  it('rejects names that were not present in the clarification', () => {
+    expect(() => validateMemoryRestorationCandidate({
+      clarificationAnswer: 'The innkeeper is Vernicle.', priorResolution,
+      records: [
+        { key: 'lodging_location', kind: 'location', name: 'Invented Inn', nameEvidence: 'Invented Inn' },
+        { key: 'lodging_proprietor', kind: 'npc', name: 'Vernicle', nameEvidence: 'Vernicle' },
+      ],
+    })).toThrow(/quoted verbatim/);
   });
 });
 
