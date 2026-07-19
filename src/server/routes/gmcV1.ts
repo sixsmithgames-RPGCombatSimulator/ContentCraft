@@ -37,6 +37,8 @@ import {
   NARRATE_COMBAT_TURNS_REQUIRED_KEYS,
   PLAN_COMBAT_TURN_INSTRUCTION,
   PLAN_COMBAT_TURN_REQUIRED_KEYS,
+  PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION,
+  PLAN_ENCOUNTER_CHALLENGE_REQUIRED_KEYS,
   PLAN_ENCOUNTER_INSTRUCTION,
   PLAN_ENCOUNTER_REQUIRED_KEYS,
 } from './gmcV1PlanningContracts.js';
@@ -742,6 +744,12 @@ gmcV1Router.post('/ai/plan-encounter', asyncRoute((req, res) => ai(
   res,
   PLAN_ENCOUNTER_INSTRUCTION,
   [...PLAN_ENCOUNTER_REQUIRED_KEYS],
+)));
+gmcV1Router.post('/ai/plan-encounter-challenge', asyncRoute((req, res) => ai(
+  req,
+  res,
+  PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION,
+  [...PLAN_ENCOUNTER_CHALLENGE_REQUIRED_KEYS],
 )));
 gmcV1Router.post('/ai/plan-combat-turn', asyncRoute((req, res) => ai(
   req,

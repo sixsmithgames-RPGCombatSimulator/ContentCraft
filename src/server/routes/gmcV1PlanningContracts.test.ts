@@ -3,6 +3,7 @@ import {
   AUDIT_RESOLVED_MECHANICS_NARRATION_INSTRUCTION,
   AUDIT_RESOLVED_MECHANICS_NARRATION_REQUIRED_KEYS,
   COMBAT_TURN_OUTPUT_SCHEMA,
+  ENCOUNTER_CHALLENGE_PLAN_OUTPUT_SCHEMA,
   ENCOUNTER_PLANNING_OUTPUT_SCHEMA,
   NARRATE_COMBAT_ACTION_RESULT_INSTRUCTION,
   NARRATE_COMBAT_ACTION_RESULT_REQUIRED_KEYS,
@@ -10,11 +11,47 @@ import {
   NARRATE_COMBAT_TURNS_REQUIRED_KEYS,
   PLAN_COMBAT_TURN_INSTRUCTION,
   PLAN_COMBAT_TURN_REQUIRED_KEYS,
+  PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION,
+  PLAN_ENCOUNTER_CHALLENGE_REQUIRED_KEYS,
   PLAN_ENCOUNTER_INSTRUCTION,
   PLAN_ENCOUNTER_REQUIRED_KEYS,
 } from './gmcV1PlanningContracts.js';
 
 describe('GMC encounter planning contract', () => {
+  it('runs a separate capability and stress-test pass without treating CR as the difficulty answer', () => {
+    expect(PLAN_ENCOUNTER_CHALLENGE_REQUIRED_KEYS).toEqual(expect.arrayContaining([
+      'designIntent',
+      'capabilityAssessment',
+      'performanceAdjustment',
+      'challengeModel',
+      'encounterDesign',
+      'stressTests',
+      'crUse',
+      'validation',
+    ]));
+    expect(ENCOUNTER_CHALLENGE_PLAN_OUTPUT_SCHEMA.challengeModel.pressureAxes).toEqual(expect.any(Array));
+    expect(ENCOUNTER_CHALLENGE_PLAN_OUTPUT_SCHEMA.encounterDesign.threatPalette).toEqual(expect.objectContaining({
+      considered: expect.any(Array),
+      selectedMix: expect.any(Array),
+      selectionReason: expect.any(String),
+    }));
+    expect(ENCOUNTER_CHALLENGE_PLAN_OUTPUT_SCHEMA.stressTests[0]).toEqual(expect.objectContaining({
+      scenario: expect.stringContaining('alpha_strike'),
+      acceptable: expect.any(String),
+      adjustment: expect.any(String),
+    }));
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('Challenge Rating and XP thresholds are reference-only');
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('meaningful actions per round');
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('derive hit chance from attack bonus versus AC');
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('Count once-per-turn damage such as Sneak Attack once');
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('alpha strike');
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('three to five meaningful rounds');
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('Do not hard-counter or switch off the character sheet');
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('support actors necessary work');
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('This is D&D fantasy, not a mundane tactical simulator');
+    expect(PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION).toContain('Do not use a monster as a reskinned sack of HP');
+  });
+
   it('retains legacy encounter fields while requiring durable preparation fields', () => {
     expect(PLAN_ENCOUNTER_REQUIRED_KEYS).toEqual(expect.arrayContaining([
       'name',
@@ -27,6 +64,7 @@ describe('GMC encounter planning contract', () => {
       'gmNotes',
     ]));
     expect(PLAN_ENCOUNTER_REQUIRED_KEYS).toEqual(expect.arrayContaining([
+      'challengePlan',
       'allies',
       'encounterObjectives',
       'sidePlans',
@@ -71,6 +109,7 @@ describe('GMC encounter planning contract', () => {
     expect(PLAN_ENCOUNTER_INSTRUCTION).toContain('a count of four laborers requires four actor entries');
     expect(PLAN_ENCOUNTER_INSTRUCTION).toContain('remain stable for the life of the encounter');
     expect(PLAN_ENCOUNTER_INSTRUCTION).toContain('Populate equipment and carriedInventory before combat');
+    expect(PLAN_ENCOUNTER_INSTRUCTION).toContain('challengePlan is the binding encounter-director pass');
   });
 
   it('defines executable object token-search/behavior and environmental-hazard metadata', () => {

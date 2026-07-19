@@ -381,6 +381,8 @@ function referenceSpecs(instruction: string): MemoryReferenceSpec[] {
     const phrase = String(match[2] ?? '').trim().replace(/\b(?:where|that|who|which|and|then|before|after|for|with|from)\b[\s\S]*$/i, '').trim();
     if (!phrase || /^(?:place|thing|one|way|time|character|campaign|response|name|sell|selling|buy|buying|go|going|see|ask|use|visit|head|return)\b/i.test(phrase)) continue;
     const lower = phrase.toLowerCase();
+    const possessiveCue = /^(?:my|our)$/i.test(String(match[1] ?? ''));
+    if (possessiveCue && !/\b(?:home|house|room|inn|tavern|lodging|shop|store|workroom|person|npc|mentor|captain|keeper|proprietor|owner|contact|friend|ally|merchant|dealer|quartermaster|innkeeper|shopkeeper|barkeep|bartender|guard|witness|item|object|weapon|sword|bow|dagger|armor|key|token|book|letter|device|tool|potion|ring|amulet|stone|component|reagent|faction|guild|watch|order|cult|church|company|gang|crew|family|house|clan|organization)\b/i.test(lower)) continue;
     let kind: MemoryReferenceKind = 'location';
     if (/\b(?:person|npc|mentor|captain|keeper|proprietor|owner|contact|friend|ally|merchant|dealer|quartermaster|innkeeper|shopkeeper|barkeep|bartender|guard|witness)\b/i.test(lower)) kind = 'npc';
     else if (/\b(?:item|object|weapon|sword|bow|dagger|armor|key|token|book|letter|device|tool|potion|ring|amulet|stone|component|reagent)\b/i.test(lower)) kind = 'item';
@@ -394,6 +396,36 @@ function referenceSpecs(instruction: string): MemoryReferenceSpec[] {
     const key = `implicit_${kind}_${meaningful.join('_').toLowerCase()}`;
     if (specs.some((spec) => spec.key === key)) continue;
     specs.push({ key, kind, relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'general', label: `${kind} “${phrase}”`, recordTerms: terms, evidenceTerms: terms });
+  }
+  return specs;
+}
+
+function explicitCanonicalReferenceSpecs(
+  records: Record<MemoryReferenceKind, any[]>,
+  instruction: string,
+) {
+  const text = String(instruction ?? '').toLocaleLowerCase();
+  const specs: MemoryReferenceSpec[] = [];
+  for (const kind of ['location', 'npc', 'item', 'faction'] as const) {
+    for (const record of records[kind] ?? []) {
+      const identities = [
+        record?.canonical_name ?? record?.name ?? record?.title,
+        ...(Array.isArray(record?.aliases) ? record.aliases : []),
+      ].map((value) => String(value ?? '').trim()).filter((value) => value.length >= 3);
+      const mentioned = identities.find((identity) => text.includes(identity.toLocaleLowerCase()));
+      if (!mentioned) continue;
+      const id = String(record?._id ?? record?.id ?? mentioned);
+      const terms = new RegExp(identities.map(escapeRegex).join('|'), 'i');
+      specs.push({
+        key: `explicit_${kind}_${id.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`,
+        kind,
+        relationship: 'explicit',
+        activity: 'general',
+        label: `${kind} “${mentioned}”`,
+        recordTerms: terms,
+        evidenceTerms: terms,
+      });
+    }
   }
   return specs;
 }
@@ -415,13 +447,19 @@ export function resolveMemoryReferences(
     item: records.items ?? [],
     faction: records.factions ?? [],
   };
-  const references = referenceSpecs(instruction).map((spec) => {
+  const specs = [
+    ...referenceSpecs(instruction),
+    ...explicitCanonicalReferenceSpecs(byKind, instruction),
+  ];
+  const references = specs.map((spec) => {
     const candidates = (byKind[spec.kind] ?? []).flatMap((record: any) => {
       const corpus = recordCorpusForKind(record, spec.kind);
       if (!spec.recordTerms.test(corpus)) return [];
       const id = String(record?._id ?? record?.id ?? '');
       const name = String(record?.canonical_name ?? record?.name ?? record?.title ?? '').trim();
-      const explicitlyNamed = Boolean(name && instruction.toLowerCase().includes(name.toLowerCase()));
+      const identities = [name, ...(Array.isArray(record?.aliases) ? record.aliases : [])]
+        .map((value) => String(value ?? '').trim()).filter(Boolean);
+      const explicitlyNamed = identities.some((identity) => instruction.toLocaleLowerCase().includes(identity.toLocaleLowerCase()));
       const evidence = facts.filter((fact: any) => {
         const text = String(fact?.text ?? '');
         const relatedIds = [...(fact?.relatedEntityIds ?? []), ...(fact?.relatedNpcIds ?? []), ...(fact?.relatedLocationIds ?? [])].map(String);
@@ -539,15 +577,25 @@ export function validateMemoryRestorationCandidate(input: Record<string, any>) {
 
 function restorationTags(reference: any, kind: MemoryReferenceKind) {
   const activity = String(reference?.activity ?? 'general');
+  const clarifiedRole = kind === 'npc'
+    ? String(reference?.label ?? '').match(/[“"]([^”"]+)[”"]/)?.[1]?.trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    : null;
   const role = activity === 'lodging' && kind === 'npc'
     ? 'innkeeper'
     : (activity === 'commerce' && kind === 'npc' ? 'merchant' : null);
   return [...new Set([
     'player-known', `${kind}:canonical`, `activity:${activity}`, 'relationship:known-to-player',
     ...(role ? [`role:${role}`] : []),
+    ...(clarifiedRole ? [`role:${clarifiedRole}`] : []),
     ...(activity === 'lodging' && kind === 'location' ? ['location:lodging'] : []),
     ...(activity === 'commerce' && kind === 'location' ? ['location:shop'] : []),
   ])];
+}
+
+function restorationAliases(reference: any, kind: MemoryReferenceKind) {
+  if (kind !== 'npc') return [];
+  const clarifiedRole = String(reference?.label ?? '').match(/[“"]([^”"]+)[”"]/)?.[1]?.trim();
+  return clarifiedRole ? [clarifiedRole] : [];
 }
 
 export async function restoreMemoryReferences(userId: string, campaignId: string, input: Record<string, any>) {
@@ -569,8 +617,14 @@ export async function restoreMemoryReferences(userId: string, campaignId: string
     if (existing) {
       const updated = await updateEntity(userId, existing._id, record.kind as GmcEntityKind, {
         tags: [...new Set([...(Array.isArray(existing.tags) ? existing.tags : []), ...restorationTags(reference, record.kind)])],
+        aliases: [...new Set([...(Array.isArray(existing.aliases) ? existing.aliases : []), ...restorationAliases(reference, record.kind)])],
         relationships: Array.isArray(existing.relationships) ? existing.relationships : [],
-        details: { ...objectRecord(existing.details), playerClarification: validated.answer, activity: reference?.activity ?? 'general' },
+        details: {
+          ...objectRecord(existing.details),
+          playerClarification: validated.answer,
+          activity: reference?.activity ?? 'general',
+          roleAliases: [...new Set([...(Array.isArray(existing?.details?.roleAliases) ? existing.details.roleAliases : []), ...restorationAliases(reference, record.kind)])],
+        },
       });
       created.push({ key: record.key, kind: record.kind, reference, record: updated, duplicate: true });
       continue;
@@ -578,6 +632,7 @@ export async function restoreMemoryReferences(userId: string, campaignId: string
     const result = await createEntityMutation(userId, campaignId, record.kind as GmcEntityKind, {
       mutationId: `${mutationId}:${record.key}`,
       name: record.name,
+      aliases: restorationAliases(reference, record.kind),
       tags: restorationTags(reference, record.kind),
       relationships: [],
       source: { system: 'gamemaster-assistant', kind: 'player-memory-clarification', mutationId },

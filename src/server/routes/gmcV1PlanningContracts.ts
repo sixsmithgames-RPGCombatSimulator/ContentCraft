@@ -100,7 +100,80 @@ const encounterActorShape = {
   combatPlan: durableCombatPlanShape,
 } as const;
 
+export const ENCOUNTER_CHALLENGE_PLAN_OUTPUT_SCHEMA = {
+  designIntent: {
+    storyPurpose: 'why this encounter belongs here and what changes if the player wins, loses, withdraws, or chooses another approach',
+    targetExperience: 'tense|dangerous|climactic',
+    dramaticQuestion: 'one concrete question the encounter answers',
+    stakes: ['specific consequences other than simple HP loss'],
+    protectedFun: ['player capabilities that should receive a fair chance to matter rather than being hard-countered'],
+  },
+  capabilityAssessment: {
+    player: {
+      strengths: ['specific sheet-grounded strengths'],
+      constraints: ['specific sheet-grounded limits or depleted resources'],
+      burstProfile: 'estimated opening-round and best-case output with assumptions',
+      sustainedProfile: 'estimated repeatable output with assumptions',
+      defenseProfile: 'AC, HP, saves, avoidance, mobility, healing, and escape options',
+      controlAndUtility: ['control, scouting, stealth, familiar, mobility, social, or environmental capabilities'],
+    },
+    support: [{ name: 'string', contribution: 'actions, defenses, control, healing, scouting, or objective work', reliability: 'reliable|conditional|limited|unknown' }],
+    sideStrength: {
+      meaningfulActionsPerRound: 'estimated number with assumptions',
+      reactionsAndControl: 'estimated influence on enemy options',
+      effectiveHpAndRecovery: 'estimated side durability with assumptions',
+      unknowns: ['missing data that must not be silently invented'],
+    },
+  },
+  performanceAdjustment: {
+    evidence: ['specific recent-play evidence supplied by GMA'],
+    observedPattern: 'overwhelming|comfortable|tense|costly|unknown',
+    adjustment: 'how this encounter should change because of demonstrated play, without invalidating earned strengths',
+  },
+  challengeModel: {
+    expectedMeaningfulRounds: { minimum: 'integer', maximum: 'integer' },
+    targetOutcome: 'victory should be probable with competent play but carry a credible cost or failure mode',
+    actionEconomy: 'comparison of meaningful player-side and opposing actions, including support and control',
+    accuracyAndSaves: 'estimated hit/save probabilities from actual bonuses, ACs, DCs, and saves when known',
+    timeToDisable: 'estimated rounds for each side to remove or neutralize priority actors, with assumptions',
+    pressureAxes: ['at least three different pressures chosen from damage, control, movement, time, objectives, information, resources, positioning, or social/moral cost'],
+    swingControls: ['telegraphs, staging, morale, reinforcements, escape valves, or fail-forward controls that prevent one bad roll from becoming arbitrary defeat'],
+  },
+  encounterDesign: {
+    threatPalette: {
+      considered: [{ kind: 'humanoid|beast|monstrosity|ooze|undead|construct|elemental|fey|fiend|aberration|dragon|plant|supernatural_hazard|other', concept: 'specific canon-compatible threat', tacticalContribution: 'decision or pressure this adds beyond HP/damage', canonFit: 'established|plausible|requires_seed|rejected' }],
+      selectedMix: ['selected threat concepts or kinds, which may mix faction actors with monsters or magical hazards'],
+      selectionReason: 'why this encounter uses or deliberately defers actual monsters and fantasy elements',
+    },
+    enemyRoles: [{ role: 'string', purpose: 'what tactical question this role creates', count: 'integer or bounded range' }],
+    opposingCapabilities: ['capabilities that create decisions without simply nullifying the player sheet'],
+    simultaneousObjectives: ['objectives that force prioritization and give support actors useful work'],
+    terrainAndObjects: ['terrain, cover, elevation, routes, devices, or hazards with counterplay'],
+    escalation: ['state-based escalation beats or reinforcements; never arbitrary HP inflation'],
+    telegraphs: ['observable warnings before severe attacks, hazards, or reinforcements'],
+    counterplay: ['at least two viable responses to each major pressure'],
+    failForward: ['consequences that continue the story after loss, retreat, escape, or partial success'],
+    retreatAndSurrender: ['credible off-ramps for both sides'],
+  },
+  stressTests: [{
+    scenario: 'alpha_strike|bad_initiative|focus_fire|control_lock|support_split|objective_ignored|resource_depleted|other',
+    expectedResult: 'what likely happens under this scenario',
+    acceptable: 'boolean',
+    adjustment: 'required design change when unacceptable, or none',
+  }],
+  crUse: {
+    referenceOnly: 'must be true',
+    notes: 'how CR/XP was used only as a loose sanity check and where capability analysis overrode it',
+  },
+  validation: {
+    readyForEncounterBuild: 'boolean',
+    issues: ['blocking issues'],
+    warnings: ['non-blocking uncertainties'],
+  },
+} as const;
+
 export const ENCOUNTER_PLANNING_OUTPUT_SCHEMA = {
+  challengePlan: ENCOUNTER_CHALLENGE_PLAN_OUTPUT_SCHEMA,
   name: 'string',
   objective: 'legacy concise player-facing objective string',
   situation: 'concise present-tense tactical handoff',
@@ -255,6 +328,7 @@ export const COMBAT_TURN_OUTPUT_SCHEMA = {
 } as const;
 
 export const PLAN_ENCOUNTER_REQUIRED_KEYS = [
+  'challengePlan',
   'name',
   'objective',
   'situation',
@@ -268,6 +342,17 @@ export const PLAN_ENCOUNTER_REQUIRED_KEYS = [
   'interactiveObjects',
   'environmentalHazards',
   'gmNotes',
+] as const;
+
+export const PLAN_ENCOUNTER_CHALLENGE_REQUIRED_KEYS = [
+  'designIntent',
+  'capabilityAssessment',
+  'performanceAdjustment',
+  'challengeModel',
+  'encounterDesign',
+  'stressTests',
+  'crUse',
+  'validation',
 ] as const;
 
 export const PLAN_COMBAT_TURN_REQUIRED_KEYS = [
@@ -369,7 +454,30 @@ AUDIT METHOD:
 
 Return exactly {valid,issues:[{code,explanation,claim}],correctedNarration,claimAudit:[{claim,sourceEvidence:[{source,sourceText}],unsupportedDetails,problem}]}. valid is true only when every sentence is fully supported and unchanged.`;
 
-export const PLAN_ENCOUNTER_INSTRUCTION = `Prepare a complete VCS encounter from the campaign context, current scene, player instruction, and player-character summary. Respect canon and safety boundaries. Do not decide player-character actions.
+export const PLAN_ENCOUNTER_CHALLENGE_INSTRUCTION = `Act as the encounter director before any roster, statistics, or map is finalized. Produce a challenge plan from the story purpose, current scene, playerCapabilityProfile, support context, current resources, recentPerformanceEvidence, and campaign canon. This is a separate analytical and creative pass. Do not create the final encounter packet and do not decide player-character actions.
+
+CHALLENGE METHOD:
+- Challenge Rating and XP thresholds are reference-only sanity checks. Never select enemies or declare difficulty from CR alone.
+- Estimate the player side's meaningful actions per round, reactions, control, mobility, scouting, burst damage, sustained damage, accuracy, save pressure, effective HP, recovery, and escape options. Include familiars and every support NPC expected to act. State assumptions and unknowns.
+- Estimate opposing action economy, accuracy, save pressure, control, durability, and time-to-disable. When mechanics are known, derive hit chance from attack bonus versus AC (including advantage/disadvantage), save-failure chance from DC versus save bonus, expected damage from those probabilities and average dice, and rounds-to-disable from effective HP divided by expected applied damage. Count once-per-turn damage such as Sneak Attack once, not once per hit. Use ranges when data is incomplete; do not invent missing sheet values or present false precision.
+- Stress-test at least alpha strike, bad initiative, focus fire, control/disable, support split, ignored objective, and depleted-resource scenarios. A plan is not ready if a common player tactic trivially ends it or if one ordinary bad roll produces an unavoidable player-character death.
+- A challenging encounter normally aims for roughly three to five meaningful rounds, victory being probable with competent play, and at least one credible cost or failure mode. This is a target, not a rigid quota: chase, stealth, negotiation, hazard, and objective encounters may use different clocks.
+
+CREATIVE DIRECTION:
+- This is D&D fantasy, not a mundane tactical simulator. Explicitly consider at least one canon-appropriate monster, magical creature, supernatural hazard, or magically altered environment alongside humanoid opposition. Select actual monsters when their ecology, faction relationship, location, and story purpose fit; if you defer them, record the concrete reason in threatPalette rather than defaulting silently to more guards, thugs, or laborers.
+- Monsters must create a distinctive tactical or narrative question through senses, movement, behavior, vulnerabilities, resistances, control, transformation, ecology, or interaction with the environment. Do not use a monster as a reskinned sack of HP, introduce it randomly, or use an immunity solely to invalidate the player's signature capability. A faction can handle, summon, bargain with, flee from, exploit, or accidentally unleash a monster.
+- Preserve earned strengths. Let signature capabilities such as stealth, Sneak Attack, mobility, a familiar, or allied support create real advantage, then make the encounter evolve through alerted behavior, divided objectives, terrain, cover, time pressure, morale, or reinforcements. Do not hard-counter or switch off the character sheet.
+- Increase decision density before raw numbers. Prefer mixed enemy roles, simultaneous objectives, moving threats, usable terrain, interactive objects, information pressure, alarms, captives, escapes, hazards, and changing states over simply adding HP, damage, or bodies.
+- Give support actors necessary work. Enemy pressure can split the Watch, threaten civilians/evidence, contest an exit, or require someone to hold a mechanism, but it must arise from the fiction and remain mechanically executable.
+- Telegraph severe attacks, hazards, and reinforcements. Provide at least two viable counterplays for each major pressure plus credible retreat, surrender, partial-success, and fail-forward outcomes.
+- Use recentPerformanceEvidence to adjust. If recent opposition was removed easily, increase coordination, role diversity, objective pressure, and adaptive response before increasing lethality. If recent play was costly, protect recovery and reduce swing.
+
+Return exactly one JSON object matching this schema:
+${JSON.stringify(ENCOUNTER_CHALLENGE_PLAN_OUTPUT_SCHEMA, null, 2)}`;
+
+export const PLAN_ENCOUNTER_INSTRUCTION = `Prepare a complete VCS encounter from the campaign context, current scene, player instruction, playerCapabilityProfile, and the supplied challengePlan. Respect canon and safety boundaries. Do not decide player-character actions.
+
+The challengePlan is the binding encounter-director pass. Echo it unchanged in challengePlan, then realize it through the roster, map, objectives, hazards, interactive objects, side plans, morale, and contingencies. If its validation.readyForEncounterBuild is false, do not disguise the problem with arbitrary CR, HP, damage, or extra bodies. Preserve its protectedFun, telegraphs, counterplay, stress-test corrections, fail-forward outcomes, and support roles.
 
 This is the durable preparation pass. Resolve likely non-player behavior before initiative so ordinary turns can follow stable objectives without another AI decision. Every creature is a discrete actor: a count of four laborers requires four actor entries with stable IDs and individual combatPlan values. Include every present hostile, ally, and neutral that can act.
 

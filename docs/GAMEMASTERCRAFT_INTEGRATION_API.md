@@ -152,12 +152,21 @@ POST /api/gmc/v1/ai/extract-canon-changes
 POST /api/gmc/v1/ai/summarize-session
 POST /api/gmc/v1/ai/build-campaign-foundation
 POST /api/gmc/v1/ai/detect-encounter-transition
+POST /api/gmc/v1/ai/plan-encounter-challenge
 POST /api/gmc/v1/ai/plan-encounter
 POST /api/gmc/v1/ai/plan-combat-turn
 ```
 
 Narration instructions explicitly prohibit inventing or recomputing VCS mechanics, require locked-canon compliance, and stop at the next player decision. Narration consumes the ordered recent conversation timeline so it continues from the latest established scene rather than replaying a prior beat. OOC responses remain table talk, while retcon responses explicitly supersede contradicted narration.
-Encounter planning supplies tactical map geometry, opponents, token positions,
-and VCS-executable actions. Combat-turn planning controls only non-player
-combatants; VCS remains responsible for dice, damage, conditions, initiative,
-and durable mechanical state.
+Encounter planning starts with a separate challenge-direction pass. That pass
+compares the live player and support capabilities, resources, recent encounter
+performance, action economy, expected accuracy and damage, time to disable,
+objectives, and adverse stress cases. Challenge rating is reference-only. The
+director also records a threat palette that considers canon-appropriate
+monsters, magical creatures, supernatural hazards, and mixed faction/monster
+encounters instead of silently defaulting to humanoids. The resulting challenge
+plan is binding input to the construction pass, which then
+supplies tactical map geometry, opponents, token positions, and VCS-executable
+actions. Combat-turn planning controls only non-player combatants; VCS remains
+responsible for dice, damage, conditions, initiative, and durable mechanical
+state.

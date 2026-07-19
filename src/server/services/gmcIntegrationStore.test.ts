@@ -62,6 +62,49 @@ describe('resolveMemoryReferences', () => {
     expect(lodging?.selected?.name).toBe('Tidy Tides Inn');
     expect(lodging?.candidates.find((candidate) => candidate.name === 'The Salty Tug')?.evidence).toEqual([]);
   });
+
+  it('resolves an explicitly named canonical item with ownership and memory tags intact', () => {
+    const bag = {
+      _id: 'bag-of-holding', type: 'item', canonical_name: 'Bag of Holding', aliases: ['Supervisor satchel'],
+      tags: ['player-known', 'item:magic', 'rarity:uncommon', 'owner:player', 'source:sump-chapel'],
+      details: {
+        magical: true, rarity: 'uncommon', ownerName: 'Kerrigan Brynn',
+        memory: { recordType: 'ITEM', tier: 'plot', ownerType: 'player' },
+      },
+    };
+    const result = resolveMemoryReferences({
+      facts: [], items: [bag], npcs: [], locations: [], factions: [],
+    }, 'Kerrigan keeps the Bag of Holding and takes it to her mentor for examination.');
+
+    const reference = result.references.find((entry) => entry.kind === 'item');
+    expect(result.status).toBe('resolved');
+    expect(reference?.selected?.id).toBe('bag-of-holding');
+    expect(reference?.selected?.record.tags).toContain('owner:player');
+    expect(reference?.selected?.record.details.memory.tier).toBe('plot');
+  });
+
+  it('does not turn ordinary possessive prose into a campaign location reference', () => {
+    const result = resolveMemoryReferences({
+      facts: [], items: [], npcs: [], locations: [bentNail], factions: [],
+    }, 'You bargain like someone who has already decided what my shelf space is worth.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.references).toEqual([]);
+  });
+
+  it('resolves a clarified role alias to the canonical NPC', () => {
+    const result = resolveMemoryReferences({
+      facts: [], items: [], locations: [], factions: [],
+      npcs: [{
+        _id: 'old-vesper', type: 'npc', canonical_name: 'Old Vesper', aliases: ['magic mentor'],
+        tags: ['player-known', 'npc:canonical', 'role:magic-mentor'],
+        details: { role: "Kerrigan Brynn's established magic mentor" },
+      }],
+    }, 'Then I go see my magic mentor.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.references.find((entry) => entry.key === 'implicit_npc_magic_mentor')?.selected?.name).toBe('Old Vesper');
+  });
 });
 
 describe('validateMemoryRestorationCandidate', () => {
