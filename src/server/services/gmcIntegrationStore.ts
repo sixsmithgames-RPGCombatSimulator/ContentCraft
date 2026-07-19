@@ -311,6 +311,180 @@ export async function listFacts(userId: string, campaignId: string, query: Recor
   return getDb().collection<any>('gmc_facts').find(filter).sort({ createdAt: -1 }).limit(500).toArray();
 }
 
+type MemoryReferenceKind = 'location' | 'npc' | 'item' | 'faction';
+
+type MemoryReferenceSpec = {
+  key: string;
+  kind: MemoryReferenceKind;
+  relationship: 'most_recent' | 'explicit';
+  activity: 'lodging' | 'commerce' | 'meeting' | 'general';
+  label: string;
+  recordTerms: RegExp;
+  evidenceTerms: RegExp;
+};
+
+function campaignMinuteFromText(value: unknown) {
+  const text = String(value ?? '');
+  const match = text.match(/\bday\s*(\d{1,5})\b[\s\S]{0,60}?\b(\d{1,2})(?::([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)\b/i);
+  if (!match) return null;
+  let hour = Number(match[2]);
+  const period = match[4].toLowerCase().replace(/\./g, '');
+  if (hour === 12) hour = 0;
+  if (period === 'pm') hour += 12;
+  return Number(match[1]) * 1440 + hour * 60 + Number(match[3] ?? 0);
+}
+
+function campaignMinuteFromRecord(record: any) {
+  const clock = record?.memory?.gameClock ?? record?.source?.gameClock ?? null;
+  const day = Number(clock?.day);
+  const hour = Number(clock?.hour);
+  const minute = Number(clock?.minute ?? 0);
+  if (Number.isFinite(day) && Number.isFinite(hour) && Number.isFinite(minute)) return day * 1440 + hour * 60 + minute;
+  return campaignMinuteFromText(record?.text ?? record?.description);
+}
+
+function recordCorpus(record: any) {
+  return JSON.stringify({
+    name: record?.canonical_name ?? record?.name ?? record?.title,
+    aliases: record?.aliases,
+    tags: record?.tags,
+    relationships: record?.relationships,
+    details: record?.details,
+  });
+}
+
+function recordCorpusForKind(record: any, kind: MemoryReferenceKind) {
+  if (kind !== 'npc') return recordCorpus(record);
+  return JSON.stringify({
+    name: record?.canonical_name ?? record?.name,
+    aliases: record?.aliases,
+    tags: record?.tags,
+    relationships: record?.relationships,
+    role: record?.details?.role ?? record?.details?.actorProfile?.role,
+  });
+}
+
+function referenceSpecs(instruction: string): MemoryReferenceSpec[] {
+  const text = String(instruction ?? '');
+  const mostRecent = /\b(?:back to|return(?:ing|ed)? to|same|usual|last|previous(?:ly)?|again|where\s+\w+\s+(?:stayed|slept|lodged))\b/i.test(text);
+  const specs: MemoryReferenceSpec[] = [];
+  if (/\b(?:inn|tavern|lodg(?:e|ed|ing)?|room for the night|sleep|slept|stayed|staying|night's? rest)\b/i.test(text)) {
+    specs.push({ key: 'lodging_location', kind: 'location', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'lodging', label: 'lodging location', recordTerms: /\b(?:inn|tavern|lodg|hostel|boarding)\b/i, evidenceTerms: /\b(?:stay(?:ed|ing)?|slept|lodg|room key|night's? rest|paid for (?:the )?night)\b/i });
+    specs.push({ key: 'lodging_proprietor', kind: 'npc', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'lodging', label: 'innkeeper or lodging proprietor', recordTerms: /\b(?:innkeeper|barkeep|bartender|proprietor|landlord|landlady|lodging host)\b/i, evidenceTerms: /\b(?:innkeeper|barkeep|bartender|proprietor|room key|paid for (?:the )?night|lodging)\b/i });
+  }
+  if (/\b(?:sell|sold|selling|buy|bought|shop|store|merchant|dealer|quartermaster|outfitter|trade|hagg(?:le|led|ling)|gear|supplies|arms|armor)\b/i.test(text)) {
+    specs.push({ key: 'commerce_location', kind: 'location', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'commerce', label: 'shop or trade location', recordTerms: /\b(?:shop|store|market|merchant|quartermaster|outfitter|trade|goods|arms|armor|supplies)\b/i, evidenceTerms: /\b(?:sell|sold|buy|bought|trade|traded|haggl|apprais|offer|store credit|quartermaster)\b/i });
+    specs.push({ key: 'commerce_contact', kind: 'npc', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'commerce', label: 'merchant or trade contact', recordTerms: /\b(?:merchant|dealer|quartermaster|outfitter|shopkeeper|trader|appraiser|sells?)\b/i, evidenceTerms: /\b(?:sell|sold|buy|bought|trade|traded|haggl|apprais|offer|store credit|quartermaster)\b/i });
+  }
+  const implicitMentions = [...text.matchAll(/\b(back to|return(?:ing|ed)? to|same|usual|last|previous(?:ly visited)?|my|our)\s+(?:the\s+)?([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,2})/gi)];
+  for (const match of implicitMentions) {
+    const phrase = String(match[2] ?? '').trim().replace(/\b(?:where|that|who|which|and|then|before|after|for|with|from)\b[\s\S]*$/i, '').trim();
+    if (!phrase || /^(?:place|thing|one|way|time|character|campaign|response|name|sell|selling|buy|buying|go|going|see|ask|use|visit|head|return)\b/i.test(phrase)) continue;
+    const lower = phrase.toLowerCase();
+    let kind: MemoryReferenceKind = 'location';
+    if (/\b(?:person|npc|mentor|captain|keeper|proprietor|owner|contact|friend|ally|merchant|dealer|quartermaster|innkeeper|shopkeeper|barkeep|bartender|guard|witness)\b/i.test(lower)) kind = 'npc';
+    else if (/\b(?:item|object|weapon|sword|bow|dagger|armor|key|token|book|letter|device|tool|potion|ring|amulet|stone|component|reagent)\b/i.test(lower)) kind = 'item';
+    else if (/\b(?:faction|guild|watch|order|cult|church|company|gang|crew|family|house|clan|organization)\b/i.test(lower)) kind = 'faction';
+    const duplicateDomain = (kind === 'location' && specs.some((spec) => spec.kind === 'location' && spec.recordTerms.test(phrase)))
+      || (kind === 'npc' && specs.some((spec) => spec.kind === 'npc' && spec.recordTerms.test(phrase)));
+    if (duplicateDomain) continue;
+    const meaningful = phrase.split(/\s+/).filter((word) => word.length >= 3 && !/^(?:the|same|usual|last|old|new|different)$/i.test(word));
+    if (!meaningful.length) continue;
+    const terms = new RegExp(meaningful.map(escapeRegex).join('|'), 'i');
+    const key = `implicit_${kind}_${meaningful.join('_').toLowerCase()}`;
+    if (specs.some((spec) => spec.key === key)) continue;
+    specs.push({ key, kind, relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'general', label: `${kind} “${phrase}”`, recordTerms: terms, evidenceTerms: terms });
+  }
+  return specs;
+}
+
+/**
+ * Resolves implicit campaign references from canonical records using typed
+ * relationships and campaign time. It never converts a lexical match into an
+ * established relationship without supporting visit/activity evidence.
+ * date_of_change: 2026-07-19
+ */
+export function resolveMemoryReferences(
+  records: { facts: any[]; items: any[]; npcs: any[]; locations: any[]; factions?: any[] },
+  instruction: string,
+) {
+  const facts = Array.isArray(records.facts) ? records.facts : [];
+  const byKind: Record<MemoryReferenceKind, any[]> = {
+    location: records.locations ?? [],
+    npc: records.npcs ?? [],
+    item: records.items ?? [],
+    faction: records.factions ?? [],
+  };
+  const references = referenceSpecs(instruction).map((spec) => {
+    const candidates = (byKind[spec.kind] ?? []).flatMap((record: any) => {
+      const corpus = recordCorpusForKind(record, spec.kind);
+      if (!spec.recordTerms.test(corpus)) return [];
+      const id = String(record?._id ?? record?.id ?? '');
+      const name = String(record?.canonical_name ?? record?.name ?? record?.title ?? '').trim();
+      const explicitlyNamed = Boolean(name && instruction.toLowerCase().includes(name.toLowerCase()));
+      const evidence = facts.filter((fact: any) => {
+        const text = String(fact?.text ?? '');
+        const linked = [...(fact?.relatedEntityIds ?? []), ...(fact?.relatedNpcIds ?? []), ...(fact?.relatedLocationIds ?? [])].map(String).includes(id);
+        return (linked || (name && text.toLowerCase().includes(name.toLowerCase()))) && spec.evidenceTerms.test(text);
+      }).map((fact: any) => ({
+        id: fact?._id ?? fact?.id ?? null,
+        text: String(fact?.text ?? ''),
+        campaignMinute: campaignMinuteFromRecord(fact),
+        createdAt: fact?.createdAt ?? null,
+      })).sort((left, right) => Number(right.campaignMinute ?? -1) - Number(left.campaignMinute ?? -1));
+      const latestCampaignMinute = evidence.find((entry) => entry.campaignMinute !== null)?.campaignMinute ?? null;
+      const score = 10 + (explicitlyNamed ? 100 : 0) + (evidence.length ? 30 : 0) + Math.min(15, evidence.length * 3) + (record?.tags?.includes?.('player-known') ? 2 : 0);
+      return [{ id, name, kind: spec.kind, score, latestCampaignMinute, explicitlyNamed, record, evidence: evidence.slice(0, 5) }];
+    }).sort((left: any, right: any) => (
+      right.score - left.score
+      || Number(right.latestCampaignMinute ?? -1) - Number(left.latestCampaignMinute ?? -1)
+      || left.name.localeCompare(right.name)
+    ));
+    const established = candidates.filter((candidate: any) => candidate.evidence.length > 0 || candidate.explicitlyNamed);
+    const selected = established.length === 1
+      || (established.length > 1 && (
+        established[0].explicitlyNamed
+        || established[0].score >= established[1].score + 6
+        || Number(established[0].latestCampaignMinute ?? -1) > Number(established[1].latestCampaignMinute ?? -1)
+      ))
+      ? established[0]
+      : null;
+    const status = selected ? 'resolved' : (candidates.length ? 'ambiguous' : 'missing');
+    return {
+      key: spec.key,
+      label: spec.label,
+      kind: spec.kind,
+      relationship: spec.relationship,
+      activity: spec.activity,
+      status,
+      selected,
+      candidates: candidates.slice(0, 6),
+      integrityReason: selected
+        ? null
+        : (candidates.length
+          ? `Canonical ${spec.kind} candidates exist, but GMC has no unique time-ranked ${spec.activity} relationship.`
+          : `GMC has no canonical ${spec.kind} matching the requested ${spec.activity} role.`),
+    };
+  });
+  const unresolved = references.filter((reference) => reference.status !== 'resolved');
+  const options = [...new Map(unresolved.flatMap((reference) => reference.candidates)
+    .map((candidate: any) => [candidate.id, { id: candidate.id, name: candidate.name, kind: candidate.kind }])).values()];
+  return {
+    authority: 'gmc.campaign-memory',
+    contractVersion: '2026-07-19.1',
+    instruction,
+    status: unresolved.length ? 'clarification_required' : 'resolved',
+    references,
+    clarification: unresolved.length ? {
+      question: options.length
+        ? `Which established ${unresolved.map((entry) => entry.label).join(' and ')} did you mean?`
+        : `GMC is missing the established ${unresolved.map((entry) => entry.label).join(' and ')}. What canonical name should be restored?`,
+      options,
+      unresolvedKeys: unresolved.map((entry) => entry.key),
+    } : null,
+  };
+}
+
 export async function createFactMutation(userId: string, campaignId: string, input: Record<string, any>) {
   const { mutationId, ...inputData } = input;
   const text = String(inputData.text || '').trim();
@@ -326,6 +500,8 @@ export async function createFactMutation(userId: string, campaignId: string, inp
     buildDocument: ({ documentId, timestamp, semanticFingerprint, creationMutation }) => ({
       _id: documentId, userId, campaignId, text, recordType: 'FACT', scope: normalizeScope(inputData),
       category: inputData.category ?? 'event',
+      tags: Array.isArray(inputData.tags) ? inputData.tags : [],
+      memory: objectRecord(inputData.memory),
       relatedEntityIds: inputData.relatedEntityIds ?? [], relatedLocationIds: inputData.relatedLocationIds ?? [],
       source: inputData.source ?? { system: 'gamemastercraft' },
       locked: Boolean(inputData.locked), secret: Boolean(inputData.secret),
@@ -359,6 +535,8 @@ export async function createThreadMutation(userId: string, campaignId: string, i
       consequence: inputData.consequence ?? '',
       scope: inputData.scope ?? { kind: 'geographic', tier: 'world', locationId: null, entityId: null },
       relatedNpcIds: inputData.relatedNpcIds ?? [], relatedLocationIds: inputData.relatedLocationIds ?? [],
+      tags: Array.isArray(inputData.tags) ? inputData.tags : [],
+      memory: objectRecord(inputData.memory),
       status: inputData.status ?? 'open',
       source: inputData.source ?? { system: 'gamemastercraft' },
       canonicalFingerprint: semanticFingerprint,

@@ -1,5 +1,50 @@
 import { describe, expect, it } from 'vitest';
-import { buildScenePresenceContract, contradictionCandidates, selectMemoryContext } from './gmcIntegrationStore.js';
+import { buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, selectMemoryContext } from './gmcIntegrationStore.js';
+
+describe('resolveMemoryReferences', () => {
+  const bentNail = { _id: 'bent-nail', type: 'location', canonical_name: 'The Bent Nail', tags: ['player-known', 'shop'], details: { type: 'Dock Ward shop', description: 'Mundane trade goods in front and arms, armor, and supplies in the back.' } };
+  const saltyTug = { _id: 'salty-tug', type: 'location', canonical_name: 'The Salty Tug', tags: ['player-known', 'tavern'], details: { type: 'Dock Ward tavern' } };
+  const mara = { _id: 'mara', type: 'npc', canonical_name: 'Mara Dusk', tags: ['player-known', 'quartermaster'], details: { role: 'Watch-friendly quartermaster and appraiser' } };
+
+  it('uses typed activity evidence and campaign time to resolve the last established shop and contact', () => {
+    const result = resolveMemoryReferences({
+      locations: [bentNail], npcs: [mara], items: [], factions: [],
+      facts: [{
+        _id: 'trade-1',
+        text: 'At Day 2, 8:10 PM, Kerrigan trades armor to Mara Dusk at The Bent Nail after haggling over store credit.',
+        relatedEntityIds: ['mara'], relatedLocationIds: ['bent-nail'],
+      }],
+    }, 'In the morning I go back to sell the extra armor at the shop we used before.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.references.find((entry) => entry.key === 'commerce_location')?.selected?.name).toBe('The Bent Nail');
+    expect(result.references.find((entry) => entry.key === 'commerce_contact')?.selected?.name).toBe('Mara Dusk');
+  });
+
+  it('does not mistake a tavern visit for an established lodging relationship', () => {
+    const result = resolveMemoryReferences({
+      locations: [saltyTug], npcs: [], items: [], factions: [],
+      facts: [{ _id: 'meeting-1', text: 'At Day 2, 7:15 PM, Kerrigan meets Captain Thorne at The Salty Tug.', relatedLocationIds: ['salty-tug'] }],
+    }, 'I go back to the inn where I stayed and speak with the same innkeeper.');
+
+    expect(result.status).toBe('clarification_required');
+    expect(result.references.find((entry) => entry.key === 'lodging_location')?.status).toBe('ambiguous');
+    expect(result.references.find((entry) => entry.key === 'lodging_proprietor')?.status).toBe('missing');
+    expect(result.clarification?.options).toEqual([{ id: 'salty-tug', name: 'The Salty Tug', kind: 'location' }]);
+  });
+
+  it('time-ranks multiple established referents instead of choosing alphabetically', () => {
+    const result = resolveMemoryReferences({
+      locations: [bentNail, { ...bentNail, _id: 'old-shop', canonical_name: 'Old Lantern Market' }],
+      npcs: [], items: [], factions: [],
+      facts: [
+        { text: 'At Day 1, 9:00 AM, Kerrigan sold gear at Old Lantern Market.', relatedLocationIds: ['old-shop'] },
+        { text: 'At Day 3, 8:00 AM, Kerrigan sold armor at The Bent Nail.', relatedLocationIds: ['bent-nail'] },
+      ],
+    }, 'I return to the shop where I last sold armor.');
+    expect(result.references.find((entry) => entry.key === 'commerce_location')?.selected?.name).toBe('The Bent Nail');
+  });
+});
 
 describe('buildScenePresenceContract', () => {
   it('publishes an exclusive revision-bound roster and identifies known absent NPCs', () => {

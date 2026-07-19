@@ -19,6 +19,7 @@ import {
   listEntities,
   listFacts,
   listThreads,
+  resolveMemoryReferences,
   updateEntity,
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
@@ -301,6 +302,24 @@ gmcV1Router.post('/campaigns/:campaignId/memory/context', asyncRoute(async (req,
     presentNpcIds: req.body?.presentNpcIds ?? scene?.presentNpcIds ?? [],
   });
   res.json({ memoryContext });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/memory/resolve-references', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req); const id = req.params.campaignId;
+  const instruction = String(req.body?.instruction ?? '').trim();
+  if (!instruction) { fail(req, res, 400, 'VALIDATION_ERROR', 'instruction is required.'); return; }
+  const [facts, threads, items, npcs, locations, factions] = await Promise.all([
+    listFacts(uid, id),
+    listThreads(uid, id),
+    listEntities(uid, id, 'item'),
+    listEntities(uid, id, 'npc'),
+    listEntities(uid, id, 'location'),
+    listEntities(uid, id, 'faction'),
+  ]);
+  res.json({
+    resolution: resolveMemoryReferences({ facts: [...facts, ...threads], items, npcs, locations, factions }, instruction),
+  });
 }));
 
 gmcV1Router.get('/campaigns/:campaignId/canon/locked-facts', asyncRoute(async (req, res) => {
