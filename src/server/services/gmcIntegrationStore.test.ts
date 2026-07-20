@@ -97,6 +97,20 @@ describe('resolveMemoryReferences', () => {
       allowedEntityTypes: ['npc'],
       allowSceneSettingCreation: false,
     }));
+    expect(classifyWorldGenerationIntent('Kerrigan is in Waterdeep and goes looking for someone cruel and self-absorbed.')).toEqual(expect.objectContaining({
+      mode: 'world_generation_allowed',
+      allowedEntityTypes: ['location', 'npc'],
+      allowSceneSettingCreation: true,
+    }));
+    expect(classifyWorldGenerationIntent('You can create names for places and people. Create locations for residences, inns, Watch facilities, temples, wizard towers, guild halls, warehouses, and district boundaries.')).toEqual(expect.objectContaining({
+      mode: 'world_generation_allowed',
+      allowedEntityTypes: ['location', 'npc'],
+      allowSceneSettingCreation: true,
+    }));
+    expect(classifyWorldGenerationIntent('Retrieve the already-established Waterdeep locations and develop those existing records in more detail.')).toEqual(expect.objectContaining({
+      mode: 'canonical_only',
+      allowedEntityTypes: [],
+    }));
   });
 
   it('uses typed activity evidence and campaign time to resolve the last established shop and contact', () => {

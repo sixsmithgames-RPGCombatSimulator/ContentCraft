@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 const SENSITIVE_KEY = /^(?:authorization|api[-_]?key|access[-_]?token|refresh[-_]?token|service[-_]?key|password|cookie|set-cookie)$/i;
@@ -29,7 +30,12 @@ function sanitize(value: any, seen = new WeakSet<object>()): any {
 }
 
 export function generationDevLogPath() {
-  return path.resolve(process.env.GMC_AI_DEV_LOG_PATH || path.join(process.cwd(), 'logs', 'gmc-ai-generation.jsonl'));
+  const configured = String(process.env.GMC_AI_DEV_LOG_PATH ?? '').trim();
+  if (configured) return path.resolve(configured);
+  const directory = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME
+    ? os.tmpdir()
+    : path.join(process.cwd(), 'logs');
+  return path.resolve(directory, 'gmc-ai-generation.jsonl');
 }
 
 export async function appendGenerationDevLog(entry: Record<string, any>) {

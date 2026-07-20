@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { generationDevLogPath } from './generationDevLog.js';
 import { generateStructuredJson, getGeminiUsageSnapshot, resetGeminiUsageForTests } from './gmcLiveGeneration.js';
 
 const original = process.env.GEMINI_API_KEY;
@@ -9,6 +10,7 @@ const originalGuard = process.env.GEMINI_TRAFFIC_GUARD_REQUESTS;
 const originalWarning = process.env.GEMINI_TRAFFIC_WARNING_REQUESTS;
 const originalWindow = process.env.GEMINI_TRAFFIC_WINDOW_MS;
 const originalDevLogPath = process.env.GMC_AI_DEV_LOG_PATH;
+const originalVercel = process.env.VERCEL;
 let devLogDirectory = '';
 beforeEach(() => {
   devLogDirectory = mkdtempSync(path.join(os.tmpdir(), 'gmc-ai-dev-log-'));
@@ -27,10 +29,18 @@ afterEach(() => {
   else process.env.GEMINI_TRAFFIC_WINDOW_MS = originalWindow;
   if (originalDevLogPath === undefined) delete process.env.GMC_AI_DEV_LOG_PATH;
   else process.env.GMC_AI_DEV_LOG_PATH = originalDevLogPath;
+  if (originalVercel === undefined) delete process.env.VERCEL;
+  else process.env.VERCEL = originalVercel;
   if (devLogDirectory) rmSync(devLogDirectory, { recursive: true, force: true });
 });
 
 describe('generateStructuredJson', () => {
+  it('uses the writable serverless temp directory when no explicit developer trace path is configured', () => {
+    delete process.env.GMC_AI_DEV_LOG_PATH;
+    process.env.VERCEL = '1';
+    expect(generationDevLogPath()).toBe(path.join(os.tmpdir(), 'gmc-ai-generation.jsonl'));
+  });
+
   it('fails closed when the server-side Gemini key is unavailable', async () => {
     delete process.env.GEMINI_API_KEY;
     await expect(generateStructuredJson('Return JSON.', {})).rejects.toMatchObject({

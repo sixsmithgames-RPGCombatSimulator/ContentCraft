@@ -420,14 +420,17 @@ export function classifyWorldGenerationIntent(instruction: string) {
   const text = String(instruction ?? '').trim();
   const generativeAction = /\b(?:find|look(?:ing)?\s+for|search(?:ing)?\s+for|seek(?:ing)?|hunt(?:ing)?\s+for|scout(?:ing)?\s+for|explore|wander|pick(?:ing)?\s+out|choose|locate)\b/i.test(text);
   const indefiniteTarget = /\b(?:a|an|some|someone|somebody|somewhere|new|another|any)\b/i.test(text);
+  const explicitCreationAction = /\b(?:create|generate|invent|introduce|populate|add|draft|design|name|make\s+up|establish\s+(?:a|an|some|new|additional))\b/i.test(text);
+  const establishedOnly = /\b(?:already[- ]established|existing|previously established|those|these)\b/i.test(text)
+    && !/\b(?:new|additional|another|create names?|invent|make up|you (?:can|may) create)\b/i.test(text);
   const canonicalLocationCue = /\b(?:back\s+to|return(?:ing|ed)?\s+to|same|usual|last|previous(?:ly)?|again|where\s+\w+\s+(?:stayed|slept|lodged))\b/i.test(text);
-  const departure = /\b(?:leave|depart|head\s+out|go|walk|travel|ride|sail|move\s+on)\b/i.test(text);
-  const openEnded = generativeAction && indefiniteTarget;
+  const departure = /\b(?:leave|depart|head\s+out|set\s+out|go(?:es|ing)?|went|walk|travel|ride|sail|move\s+on)\b/i.test(text);
+  const openEnded = (generativeAction && indefiniteTarget) || (explicitCreationAction && !establishedOnly);
   const allowedEntityTypes: MemoryReferenceKind[] = [];
-  if (openEnded && /\b(?:someone|somebody|person|people|mark|target|contact|patron|customer|merchant|guide|hire|recruit|witness|victim|opponent|ally|companion)\b/i.test(text)) allowedEntityTypes.push('npc');
-  if (openEnded && !canonicalLocationCue && (departure || /\b(?:somewhere|place|area|location|destination|district|ward|street|lane|alley|market|inn|tavern|shop|store|workshop|room|building|route|neighbou?rhood)\b/i.test(text))) allowedEntityTypes.push('location');
-  if (openEnded && /\b(?:thing|item|object|weapon|armor|key|book|letter|device|tool|potion|ring|amulet|component|reagent|clue|evidence)\b/i.test(text)) allowedEntityTypes.push('item');
-  if (openEnded && /\b(?:faction|guild|watch|order|cult|church|company|gang|crew|family|house|clan|organization|group)\b/i.test(text)) allowedEntityTypes.push('faction');
+  if (openEnded && /\b(?:someone|somebody|persons?|people|npcs?|characters?|marks?|targets?|contacts?|patrons?|customers?|merchants?|guides?|hires?|recruits?|witnesses?|victims?|opponents?|allies|companions?)\b/i.test(text)) allowedEntityTypes.push('npc');
+  if (openEnded && !canonicalLocationCue && (departure || /\b(?:somewhere|places?|areas?|locations?|destinations?|districts?|wards?|streets?|lanes?|alleys?|markets?|inns?|taverns?|boarding houses?|residences?|homes?|houses?|shops?|stores?|workshops?|rooms?|buildings?|facilities?|courts?|offices?|temples?|chapels?|healers?|clinics?|towers?|guild halls?|entertainment (?:places?|venues?)|theaters?|warehouses?|boundaries|routes?|neighbou?rhoods?)\b/i.test(text))) allowedEntityTypes.push('location');
+  if (openEnded && /\b(?:things?|items?|objects?|weapons?|armou?r|keys?|books?|letters?|devices?|tools?|potions?|rings?|amulets?|components?|reagents?|clues?|evidence)\b/i.test(text)) allowedEntityTypes.push('item');
+  if (openEnded && /\b(?:factions?|guilds?\b(?!\s+halls?)|watch\b(?!\s+facilit)|orders?|cults?|churches?|companies|gangs?|crews?|families|clans?|organizations?|groups?)\b/i.test(text)) allowedEntityTypes.push('faction');
   const uniqueTypes = [...new Set(allowedEntityTypes)].sort();
   const source = {
     authority: 'gmc.worldGenerationPolicy',
