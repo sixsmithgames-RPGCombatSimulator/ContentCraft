@@ -388,6 +388,25 @@ function recordCorpusForKind(record: any, kind: MemoryReferenceKind) {
   });
 }
 
+const IMPLICIT_REFERENCE_KIND_TERMS: ReadonlyArray<readonly [MemoryReferenceKind, RegExp]> = [
+  ['npc', /\b(?:person|npc|mentor|captain|keeper|proprietor|owner|contact|friend|ally|merchant|dealer|quartermaster|innkeeper|shopkeeper|barkeep|bartender|guard|witness)\b/i],
+  ['item', /\b(?:item|object|weapon|sword|bow|dagger|armor|key|token|book|letter|device|frame|tool|potion|ring|amulet|stone|component|reagent|residue)\b/i],
+  ['faction', /\b(?:faction|guild|watch|order|cult|church|company|gang|crew|family|house|clan|organization)\b/i],
+  ['location', /\b(?:place|location|destination|site|room|inn|tavern|lodging|shop|store|workshop|workroom|home|house|market|office|warehouse|dock|docks|harbor|ward|street|lane|alley|route|sewer|tunnel|cellar|basement|floor|stair|stairs|chamber|hall|corridor|chapel|temple)\b/i],
+];
+
+/**
+ * Classify only typed campaign referents. Abstract idioms such as "on the
+ * same page", "the last word", or "our current plan" are deliberately not
+ * coerced into locations merely because they follow a recency cue.
+ */
+function implicitReferenceKind(phrase: string): MemoryReferenceKind | null {
+  for (const [kind, terms] of IMPLICIT_REFERENCE_KIND_TERMS) {
+    if (terms.test(phrase)) return kind;
+  }
+  return null;
+}
+
 function referenceSpecs(instruction: string): MemoryReferenceSpec[] {
   const text = String(instruction ?? '');
   const mostRecent = /\b(?:back to|return(?:ing|ed)? to|same|usual|last|previous(?:ly)?|again|where\s+\w+\s+(?:stayed|slept|lodged))\b/i.test(text);
@@ -403,14 +422,10 @@ function referenceSpecs(instruction: string): MemoryReferenceSpec[] {
   const implicitMentions = [...text.matchAll(/\b(back to|return(?:ing|ed)? to|same|usual|last|previous(?:ly visited)?|my|our)\s+(?:the\s+)?([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,2})/gi)];
   for (const match of implicitMentions) {
     const phrase = String(match[2] ?? '').trim().replace(/\b(?:where|that|who|which|and|then|before|after|for|with|from)\b[\s\S]*$/i, '').trim();
-    if (!phrase || /^(?:place|thing|one|way|time|character|campaign|response|name|sell|selling|buy|buying|go|going|see|ask|use|visit|head|return)\b/i.test(phrase)) continue;
+    if (!phrase || /^(?:thing|one|way|time|character|campaign|response|name|sell|selling|buy|buying|go|going|see|ask|use|visit|head|return)\b/i.test(phrase)) continue;
     const lower = phrase.toLowerCase();
-    const possessiveCue = /^(?:my|our)$/i.test(String(match[1] ?? ''));
-    if (possessiveCue && !/\b(?:home|house|room|inn|tavern|lodging|shop|store|workroom|person|npc|mentor|captain|keeper|proprietor|owner|contact|friend|ally|merchant|dealer|quartermaster|innkeeper|shopkeeper|barkeep|bartender|guard|witness|item|object|weapon|sword|bow|dagger|armor|key|token|book|letter|device|tool|potion|ring|amulet|stone|component|reagent|faction|guild|watch|order|cult|church|company|gang|crew|family|house|clan|organization)\b/i.test(lower)) continue;
-    let kind: MemoryReferenceKind = 'location';
-    if (/\b(?:person|npc|mentor|captain|keeper|proprietor|owner|contact|friend|ally|merchant|dealer|quartermaster|innkeeper|shopkeeper|barkeep|bartender|guard|witness)\b/i.test(lower)) kind = 'npc';
-    else if (/\b(?:item|object|weapon|sword|bow|dagger|armor|key|token|book|letter|device|tool|potion|ring|amulet|stone|component|reagent)\b/i.test(lower)) kind = 'item';
-    else if (/\b(?:faction|guild|watch|order|cult|church|company|gang|crew|family|house|clan|organization)\b/i.test(lower)) kind = 'faction';
+    const kind = implicitReferenceKind(lower);
+    if (!kind) continue;
     const duplicateDomain = (kind === 'location' && specs.some((spec) => spec.kind === 'location' && spec.recordTerms.test(phrase)))
       || (kind === 'npc' && specs.some((spec) => spec.kind === 'npc' && spec.recordTerms.test(phrase)));
     if (duplicateDomain) continue;

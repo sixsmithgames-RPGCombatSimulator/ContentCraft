@@ -92,6 +92,43 @@ describe('resolveMemoryReferences', () => {
     expect(result.references).toEqual([]);
   });
 
+  it('does not turn abstract recency idioms into campaign references', () => {
+    const result = resolveMemoryReferences({
+      facts: [], items: [], npcs: [], locations: [bentNail], factions: [],
+    }, 'Make sure we are on the same page, honor the last word on our current plan, and return to form.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.references).toEqual([]);
+  });
+
+  it('does not invent a location named page from the Old Vesper transaction follow-up', () => {
+    const result = resolveMemoryReferences({
+      facts: [], items: [], npcs: [], locations: [], factions: [],
+    }, 'I talk to Vesper about the transaction we just agreed to. Make sure we are on the same page. Then I ask what he thinks the residue we found on the frame below is.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.references.some((entry) => entry.key.includes('page'))).toBe(false);
+  });
+
+  it('continues to resolve typed implicit places, people, and items', () => {
+    const workshop = { _id: 'workshop', type: 'location', canonical_name: "Old Vesper's place", tags: ['player-known', 'workshop'] };
+    const mentor = { _id: 'mentor', type: 'npc', canonical_name: 'Old Vesper', tags: ['player-known', 'mentor'] };
+    const component = { _id: 'component', type: 'item', canonical_name: 'Phase-Lock Prism', tags: ['player-known', 'component'] };
+    const result = resolveMemoryReferences({
+      locations: [workshop], npcs: [mentor], items: [component], factions: [],
+      facts: [
+        { text: "At Day 4, 11:40 AM, Kerrigan returned to Old Vesper's workshop.", relatedLocationIds: ['workshop'] },
+        { text: 'Old Vesper is Kerrigan’s established mentor.', relatedEntityIds: ['mentor'] },
+        { text: 'The Phase-Lock Prism is the component committed to the bracket.', relatedEntityIds: ['component'] },
+      ],
+    }, 'I go back to the workshop. I ask the same mentor. I examine the same component.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.references.find((entry) => entry.kind === 'location')?.selected?.id).toBe('workshop');
+    expect(result.references.find((entry) => entry.kind === 'npc')?.selected?.id).toBe('mentor');
+    expect(result.references.find((entry) => entry.kind === 'item')?.selected?.id).toBe('component');
+  });
+
   it('resolves a clarified role alias to the canonical NPC', () => {
     const result = resolveMemoryReferences({
       facts: [], items: [], locations: [], factions: [],
