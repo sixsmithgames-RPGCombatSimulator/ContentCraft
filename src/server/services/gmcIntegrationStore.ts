@@ -1072,6 +1072,148 @@ export function buildProposedScenePresenceContract(input: {
   };
 }
 
+function narrativePresencePattern(value: unknown) {
+  return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function narrativePresenceSentences(value: unknown) {
+  return String(value ?? '')
+    .split(/(?<=[.!?…][”'\"]?)\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function narrativeIdentityReferences(npc: any) {
+  const name = String(npc?.name ?? '').trim();
+  const aliases = Array.isArray(npc?.aliases) ? npc.aliases : [];
+  return [...new Set([name, ...aliases]
+    .map((entry) => String(entry ?? '').trim())
+    .filter((entry) => entry.length >= 3))]
+    .sort((left, right) => right.length - left.length);
+}
+
+function narrativeReferenceMatch(text: string, references: string[]) {
+  for (const reference of references) {
+    const match = new RegExp(`\\b${narrativePresencePattern(reference)}\\b`, 'i').exec(text);
+    if (match) return { reference, index: match.index };
+  }
+  return null;
+}
+
+function narrativeReferenceIsRemoteOrReported(sentence: string, reference: string, index: number) {
+  const escaped = narrativePresencePattern(reference);
+  const nearby = sentence.slice(Math.max(0, index - 120), Math.min(sentence.length, index + reference.length + 140));
+  const explicitNonLocal = /\b(?:not present|absent|elsewhere|away|below|above|upstairs|downstairs|outside|off[- ]site|back at|over at|aboard|in custody|at the watch|at headquarters|from afar|in another|in the other|there rather than here)\b/i.test(nearby);
+  const historical = /\b(?:previously|earlier|before|formerly|had already|used to|recalled|remembered|recovered from|taken from|received from|seized from|salvaged from|belonged to|owned by)\b/i.test(nearby);
+  const discussedByAnother = new RegExp(`\\b(?:says?|asks?|answers?|explains?|warns?|thinks?|believes?|suspects?|supposes?|knows?|recalls?|remembers?|describes?|mentions?|discusses?)\\b[^.\\n]{0,180}\\b${escaped}\\b`, 'i').test(sentence)
+    && !new RegExp(`\\b${escaped}\\b[^.\\n]{0,45}\\b(?:says?|asks?|answers?|explains?|warns?|thinks?|believes?|suspects?|supposes?|knows?)\\b`, 'i').test(sentence);
+  const speculativeSubject = new RegExp(`\\b${escaped}\\b[^.\\n]{0,45}\\b(?:may|might|could|would|probably|likely|apparently|reportedly|seems?|appears?|is believed|is thought|was|were|had)\\b`, 'i').test(sentence);
+  const topicOnly = new RegExp(`\\b(?:about|regarding|concerning|of|from)\\s+(?:the\\s+)?${escaped}\\b`, 'i').test(sentence);
+  return explicitNonLocal || historical || discussedByAnother || speculativeSubject || topicOnly;
+}
+
+function narrativeReferenceHasUnambiguousLocalRole(sentence: string, reference: string) {
+  const escaped = narrativePresencePattern(reference);
+  const subjectAction = new RegExp(`\\b${escaped}(?:'s|’s)?\\b[^.\\n]{0,55}\\b(?:says?|speaks?|asks?|answers?|replies?|gives?|hands?|takes?|receives?|arrives?|enters?|joins?|waits?|stands?|sits?|walks?|moves?|watches?|observes?|guards?|helps?|attacks?|casts?|holds?|carries?|touches?|opens?|closes?|nods?|turns?)\\b`, 'i').test(sentence);
+  const actedUpon = new RegExp(`\\b(?:gives?|hands?|shows?|tells?|asks?|leads?|follows?|joins?|greets?|helps?|attacks?|touches?|watches?|guards?)\\b[^.\\n]{0,55}\\b${escaped}\\b`, 'i').test(sentence);
+  const explicitLocality = new RegExp(`\\b${escaped}\\b[^.\\n]{0,70}\\b(?:beside|next to|across from|in front of|behind|with)\\s+(?:Kerrigan|you|Vesper)\\b|\\b${escaped}\\b[^.\\n]{0,70}\\b(?:here|in the room|at the table|through the door)\\b`, 'i').test(sentence);
+  return subjectAction || actedUpon || explicitLocality;
+}
+
+/**
+ * Binds narrative use of known NPC identities to one GMC presence revision.
+ * Remote, historical, reported, and speculative references remain legal; only
+ * an exact roster declaration or an unambiguous scene-local role is blocking.
+ * date_of_change: 2026-07-20
+ */
+export function validateNarrativePresenceContract(input: {
+  presenceContract: any;
+  responseMode?: string;
+  responseText?: string;
+  sceneSegment?: any;
+  candidateFingerprint?: string | null;
+}) {
+  const presenceContract = input?.presenceContract;
+  if (presenceContract?.valid !== true || !presenceContract?.revision) {
+    throw Object.assign(new Error('A valid GMC scene-presence contract is required to validate narration.'), {
+      status: 409,
+      code: 'GMC_PRESENCE_CONTRACT_REQUIRED',
+    });
+  }
+  const responseMode = String(input?.responseMode ?? 'in_character');
+  const responseText = String(input?.responseText ?? '');
+  const sceneSegment = input?.sceneSegment && typeof input.sceneSegment === 'object' && !Array.isArray(input.sceneSegment)
+    ? input.sceneSegment
+    : null;
+  const issues: any[] = [];
+  const references: any[] = [];
+  if (responseMode !== 'ooc') {
+    const declaredWho = Array.isArray(sceneSegment?.who) ? sceneSegment.who.map(String) : [];
+    const narrativeSentences = narrativePresenceSentences(responseText);
+    for (const npc of presenceContract.knownNonPresentNpcs ?? []) {
+      const identityReferences = narrativeIdentityReferences(npc);
+      if (!identityReferences.length) continue;
+      for (const actor of declaredWho) {
+        const match = narrativeReferenceMatch(actor, identityReferences);
+        if (!match) continue;
+        const issue = {
+          code: 'ABSENT_NPC_DECLARED_PRESENT',
+          field: 'sceneSegment.who',
+          npcId: npc.id,
+          name: npc.name,
+          reference: match.reference,
+          excerpt: actor,
+          explanation: `${npc.name} is listed in sceneSegment.who but is absent from GMC's selected scene roster.`,
+        };
+        issues.push(issue);
+        references.push({ ...issue, usage: 'scene_roster_violation' });
+        break;
+      }
+      for (const sentence of narrativeSentences) {
+        const match = narrativeReferenceMatch(sentence, identityReferences);
+        if (!match) continue;
+        const remoteOrReported = narrativeReferenceIsRemoteOrReported(sentence, match.reference, match.index);
+        const localRole = narrativeReferenceHasUnambiguousLocalRole(sentence, match.reference);
+        const usage = localRole && !remoteOrReported ? 'scene_local_violation' : 'remote_historical_or_discussed';
+        references.push({ npcId: npc.id, name: npc.name, reference: match.reference, excerpt: sentence, usage });
+        if (usage === 'scene_local_violation') {
+          issues.push({
+            code: 'ABSENT_NPC_LOCAL_ROLE',
+            field: 'responseText',
+            npcId: npc.id,
+            name: npc.name,
+            reference: match.reference,
+            excerpt: sentence,
+            explanation: `${npc.name} receives an unambiguous scene-local role but is absent from GMC's selected scene roster.`,
+          });
+        }
+      }
+    }
+  }
+  const contractSource = {
+    authority: 'gmc.narrativePresence',
+    contractVersion: '2026-07-20.1',
+    presenceRevision: presenceContract.revision,
+    candidateFingerprint: input?.candidateFingerprint ?? null,
+    responseMode,
+    responseText,
+    sceneWho: Array.isArray(sceneSegment?.who) ? sceneSegment.who : [],
+    issues,
+  };
+  return {
+    ...contractSource,
+    revision: createHash('sha256').update(stablePresenceJson(contractSource)).digest('hex'),
+    valid: issues.length === 0,
+    issues,
+    references,
+    rules: [
+      'GMC sceneSegment.who is an exact roster declaration.',
+      'Known non-present NPCs may be discussed remotely, historically, speculatively, or through reported information.',
+      'Only an unambiguous scene-local role for a known non-present NPC is blocking.',
+    ],
+  };
+}
+
 function exactEntityIdentityMatches(value: unknown, records: any[]) {
   const normalized = normalizedReferenceIdentity(value);
   if (!normalized) return [];

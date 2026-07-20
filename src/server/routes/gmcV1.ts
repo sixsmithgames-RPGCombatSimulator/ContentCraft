@@ -25,6 +25,7 @@ import {
   resolveSceneTransitionContract,
   restoreMemoryReferences,
   updateEntity,
+  validateNarrativePresenceContract,
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
 import { generateStructuredJson, generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
@@ -310,10 +311,86 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/transition/resolve', asyncRoute(
   res.json({ sceneTransitionContract });
 }));
 
+gmcV1Router.post('/campaigns/:campaignId/scenes/narrative/validate', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req); const id = req.params.campaignId;
+  const expectedCurrentRevision = String(req.body?.expectedCurrentRevision ?? '').trim();
+  const responseMode = String(req.body?.responseMode ?? 'in_character').trim();
+  const responseText = String(req.body?.responseText ?? '');
+  const sceneSegment = req.body?.sceneSegment && typeof req.body.sceneSegment === 'object' && !Array.isArray(req.body.sceneSegment)
+    ? req.body.sceneSegment
+    : null;
+  const playerCharacterNames = Array.isArray(req.body?.playerCharacterNames) ? req.body.playerCharacterNames.map(String) : [];
+  if (!expectedCurrentRevision || responseText.length > 200_000 || playerCharacterNames.length > 10) {
+    fail(req, res, 400, 'VALIDATION_ERROR', 'expectedCurrentRevision, bounded responseText, and no more than 10 playerCharacterNames are required.'); return;
+  }
+  const [state, npcs, locations] = await Promise.all([
+    collections.state().findOne({ userId: uid, campaignId: id }),
+    listEntities(uid, id, 'npc'),
+    listEntities(uid, id, 'location'),
+  ]);
+  const currentScene = state?.currentSceneId
+    ? await collections.scenes().findOne({ _id: state.currentSceneId, userId: uid, campaignId: id })
+    : null;
+  const currentContract = buildScenePresenceContract(currentScene, npcs);
+  if (!currentContract.valid || currentContract.revision !== expectedCurrentRevision) {
+    fail(req, res, 409, 'SCENE_PRESENCE_REVISION_CONFLICT', 'The GMC current-scene roster changed before narration could be validated.', { currentContract }); return;
+  }
+  let sceneTransitionContract = null;
+  let selectedPresenceContract = currentContract;
+  if (responseMode !== 'ooc' && ['active', 'redirected'].includes(String(sceneSegment?.status ?? ''))) {
+    sceneTransitionContract = resolveSceneTransitionContract({
+      currentContract,
+      currentScene,
+      locations,
+      npcs,
+      where: String(sceneSegment?.where ?? ''),
+      who: Array.isArray(sceneSegment?.who) ? sceneSegment.who.map(String) : [],
+      playerCharacterNames,
+    });
+    selectedPresenceContract = sceneTransitionContract.presenceContract;
+  }
+  const narrativePresenceContract = validateNarrativePresenceContract({
+    presenceContract: selectedPresenceContract,
+    responseMode,
+    responseText,
+    sceneSegment,
+    candidateFingerprint: String(req.body?.candidateFingerprint ?? '').trim() || null,
+  });
+  res.json({ narrativePresenceContract, sceneTransitionContract });
+}));
+
 gmcV1Router.post('/campaigns/:campaignId/scenes', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;
   if (!String(req.body?.name || '').trim()) { fail(req, res, 400, 'VALIDATION_ERROR', 'name is required.'); return; }
   const uid = userId(req); const id = req.params.campaignId;
+  const expectedCurrentRevision = String(req.body?.expectedCurrentRevision ?? '').trim();
+  const expectedPresenceRevision = String(req.body?.expectedPresenceRevision ?? '').trim();
+  if (req.body.makeCurrent !== false && (expectedCurrentRevision || expectedPresenceRevision)) {
+    if (!expectedCurrentRevision || !expectedPresenceRevision) {
+      fail(req, res, 400, 'VALIDATION_ERROR', 'Both expectedCurrentRevision and expectedPresenceRevision are required for a revision-bound current-scene commit.'); return;
+    }
+    const [state, npcs, locations] = await Promise.all([
+      collections.state().findOne({ userId: uid, campaignId: id }),
+      listEntities(uid, id, 'npc'),
+      listEntities(uid, id, 'location'),
+    ]);
+    const currentScene = state?.currentSceneId
+      ? await collections.scenes().findOne({ _id: state.currentSceneId, userId: uid, campaignId: id })
+      : null;
+    const currentContract = buildScenePresenceContract(currentScene, npcs);
+    if (!currentContract.valid || currentContract.revision !== expectedCurrentRevision) {
+      fail(req, res, 409, 'SCENE_PRESENCE_REVISION_CONFLICT', 'The GMC current scene changed before the prepared transition could commit.', { currentContract }); return;
+    }
+    const locationId = String(req.body?.locationId ?? '').trim();
+    const location = locations.find((candidate: any) => String(candidate?._id) === locationId);
+    const presentNpcIds = Array.isArray(req.body?.presentNpcIds) ? req.body.presentNpcIds.map(String) : [];
+    if (!location) { fail(req, res, 404, 'LOCATION_NOT_FOUND', 'The prepared scene location is no longer canonical GMC data.'); return; }
+    const proposedPresence = buildProposedScenePresenceContract({ currentContract, location, presentNpcIds, npcs });
+    if (!proposedPresence.valid || proposedPresence.revision !== expectedPresenceRevision) {
+      fail(req, res, 409, 'SCENE_PRESENCE_PROPOSAL_CONFLICT', 'The exact prepared destination roster no longer matches GMC canon.', { proposedPresence }); return;
+    }
+  }
   const result = await createSceneMutation(uid, id, req.body);
   if (req.body.makeCurrent !== false) await collections.state().updateOne(
     { userId: uid, campaignId: id },

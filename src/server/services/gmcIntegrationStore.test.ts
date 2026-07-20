@@ -1,5 +1,78 @@
 import { describe, expect, it } from 'vitest';
-import { buildProposedScenePresenceContract, buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, resolveSceneTransitionContract, selectMemoryContext, validateMemoryRestorationCandidate } from './gmcIntegrationStore.js';
+import { buildProposedScenePresenceContract, buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, resolveSceneTransitionContract, selectMemoryContext, validateMemoryRestorationCandidate, validateNarrativePresenceContract } from './gmcIntegrationStore.js';
+
+describe('validateNarrativePresenceContract', () => {
+  const presenceContract = buildScenePresenceContract({
+    _id: 'vesper-scene',
+    updatedAt: '2026-07-20T10:00:00.000Z',
+    presentNpcIds: ['vesper'],
+  }, [
+    { _id: 'vesper', canonical_name: 'Old Vesper', aliases: ['Vesper'] },
+    { _id: 'guide', canonical_name: 'Dock-Pole Guide' },
+    { _id: 'wardwright', canonical_name: 'Unidentified Binding Flux Wardwright' },
+    { _id: 'coordinator', canonical_name: 'Unidentified Black Seal Coordinator' },
+  ]);
+
+  it('allows present NPCs to discuss, infer, and report on absent people elsewhere', () => {
+    const contract = validateNarrativePresenceContract({
+      presenceContract,
+      responseMode: 'in_character',
+      responseText: 'Vesper studies the residue. He suspects the Dock-Pole Guide below carried orders from the Unidentified Black Seal Coordinator, while the Unidentified Binding Flux Wardwright may have stabilized the frame elsewhere.',
+      sceneSegment: {
+        status: 'active',
+        who: ['Kerrigan Brynn', 'Old Vesper'],
+      },
+    });
+
+    expect(contract.valid).toBe(true);
+    expect(contract.issues).toEqual([]);
+    expect(contract.references.map((entry) => entry.usage)).toEqual([
+      'remote_historical_or_discussed',
+      'remote_historical_or_discussed',
+      'remote_historical_or_discussed',
+    ]);
+  });
+
+  it('rejects an absent NPC declared in the exact scene roster', () => {
+    const contract = validateNarrativePresenceContract({
+      presenceContract,
+      responseMode: 'in_character',
+      responseText: 'Vesper studies the residue.',
+      sceneSegment: { status: 'completed', who: ['Kerrigan Brynn', 'Old Vesper', 'Dock-Pole Guide'] },
+    });
+
+    expect(contract.valid).toBe(false);
+    expect(contract.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'ABSENT_NPC_DECLARED_PRESENT', name: 'Dock-Pole Guide', field: 'sceneSegment.who' }),
+    ]));
+  });
+
+  it('rejects an unambiguous scene-local action by an absent NPC', () => {
+    const contract = validateNarrativePresenceContract({
+      presenceContract,
+      responseMode: 'in_character',
+      responseText: 'The Dock-Pole Guide enters the room and hands Kerrigan a sealed note.',
+      sceneSegment: { status: 'completed', who: ['Kerrigan Brynn', 'Old Vesper'] },
+    });
+
+    expect(contract.valid).toBe(false);
+    expect(contract.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'ABSENT_NPC_LOCAL_ROLE', name: 'Dock-Pole Guide', field: 'responseText' }),
+    ]));
+  });
+
+  it('does not apply scene presence to OOC preparation text', () => {
+    const contract = validateNarrativePresenceContract({
+      presenceContract,
+      responseMode: 'ooc',
+      responseText: 'Confirm whether Captain Thorne authorized the modification.',
+      sceneSegment: null,
+    });
+
+    expect(contract.valid).toBe(true);
+    expect(contract.references).toEqual([]);
+  });
+});
 
 describe('resolveMemoryReferences', () => {
   const bentNail = { _id: 'bent-nail', type: 'location', canonical_name: 'The Bent Nail', tags: ['player-known', 'shop'], details: { type: 'Dock Ward shop', description: 'Mundane trade goods in front and arms, armor, and supplies in the back.' } };

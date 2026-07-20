@@ -33,6 +33,7 @@ GET /api/gmc/v1/campaigns/{campaignId}/dashboard
 GET /api/gmc/v1/campaigns/{campaignId}/scenes/current
 POST /api/gmc/v1/campaigns/{campaignId}/scenes/presence/preview
 POST /api/gmc/v1/campaigns/{campaignId}/scenes/transition/resolve
+POST /api/gmc/v1/campaigns/{campaignId}/scenes/narrative/validate
 POST /api/gmc/v1/campaigns/{campaignId}/scenes
 PATCH /api/gmc/v1/scenes/{sceneId}
 ```
@@ -42,6 +43,10 @@ The dashboard aggregates current scene/location, present NPCs, scene-relevant me
 `scenePresenceContract` is the revision-bound narration authority. It includes `exactPresentNpcIds`, resolved `presentNpcs`, `knownNonPresentNpcs`, `unresolvedPresentNpcIds`, and `valid`. Its revision covers the scene identity/update, exact roster, and canonical NPC names/aliases. Consumers must fail closed when the contract is invalid or stale; a known non-present NPC cannot act, speak, observe, carry evidence, guard, or receive an assignment. Commit arrivals/departures through the scene API before narrating from the changed roster.
 
 `scenes/transition/resolve` is the authoritative scene-change resolver. It accepts the current presence revision plus structured `where` and `who` fields, requires the destination field to begin with one exact canonical location name or alias, resolves every NPC by canonical identity, and returns one revision-bound `gmc.sceneTransition` contract. Consumers must use that same destination and roster contract for audit and application; they must not score generic memory references or substitute a different scene projection.
+
+`scenes/narrative/validate` is the deterministic pre-commit presence authority. It accepts the expected current revision, response mode, narration, and optional scene segment; resolves any destination through the same scene-transition contract; and returns `gmc.narrativePresence` version `2026-07-20.1`. It rejects an absent NPC only when the NPC is declared in the exact scene roster or receives an unambiguous scene-local action. Historical, reported, speculative, remote, and OOC references remain valid and are classified in the response instead of being mistaken for physical presence.
+
+A revision-bound `POST .../scenes` current-scene commit must supply both `expectedCurrentRevision` and the exact `expectedPresenceRevision` returned for the proposed destination. GMC rechecks both immediately before writing. This closes the gap between validation and commit; it never substitutes a different destination or roster.
 
 ## Memory model: type and scope
 
