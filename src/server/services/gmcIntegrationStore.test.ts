@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildProposedScenePresenceContract, buildScenePresenceContract, contradictionCandidates, resolveMemoryReferences, resolveSceneTransitionContract, selectMemoryContext, validateMemoryRestorationCandidate, validateNarrativePresenceContract } from './gmcIntegrationStore.js';
+import { buildProposedScenePresenceContract, buildScenePresenceContract, CAMPAIGN_MEMORY_CONTRACT_VERSION, classifyWorldGenerationIntent, contradictionCandidates, resolveMemoryReferences, resolveSceneTransitionContract, selectMemoryContext, validateMemoryRestorationCandidate, validateNarrativePresenceContract } from './gmcIntegrationStore.js';
 
 describe('validateNarrativePresenceContract', () => {
   const presenceContract = buildScenePresenceContract({
@@ -78,6 +78,26 @@ describe('resolveMemoryReferences', () => {
   const bentNail = { _id: 'bent-nail', type: 'location', canonical_name: 'The Bent Nail', tags: ['player-known', 'shop'], details: { type: 'Dock Ward shop', description: 'Mundane trade goods in front and arms, armor, and supplies in the back.' } };
   const saltyTug = { _id: 'salty-tug', type: 'location', canonical_name: 'The Salty Tug', tags: ['player-known', 'tavern'], details: { type: 'Dock Ward tavern' } };
   const mara = { _id: 'mara', type: 'npc', canonical_name: 'Mara Dusk', tags: ['player-known', 'quartermaster'], details: { role: 'Watch-friendly quartermaster and appraiser' } };
+
+  it('authorizes bounded world generation for an open-ended search without inventing a missing canonical reference', () => {
+    const instruction = 'I leave Vesper to his work and go looking for a mark, someone cruel and self-absorbed.';
+    const result = resolveMemoryReferences({ locations: [], npcs: [], items: [], factions: [], facts: [] }, instruction);
+
+    expect(result.status).toBe('resolved');
+    expect(result.references).toEqual([]);
+    expect(result.creationPolicy).toEqual(expect.objectContaining({
+      authority: 'gmc.worldGenerationPolicy',
+      mode: 'world_generation_allowed',
+      allowedEntityTypes: ['location', 'npc'],
+      allowSceneSettingCreation: true,
+    }));
+    expect(classifyWorldGenerationIntent('I go back to the same inn.').mode).toBe('canonical_only');
+    expect(classifyWorldGenerationIntent('I go back to the same inn and look for someone cruel.')).toEqual(expect.objectContaining({
+      mode: 'world_generation_allowed',
+      allowedEntityTypes: ['npc'],
+      allowSceneSettingCreation: false,
+    }));
+  });
 
   it('uses typed activity evidence and campaign time to resolve the last established shop and contact', () => {
     const result = resolveMemoryReferences({
@@ -251,7 +271,7 @@ describe('resolveMemoryReferences', () => {
 
 describe('validateMemoryRestorationCandidate', () => {
   const priorResolution = {
-    authority: 'gmc.campaign-memory', contractVersion: '2026-07-19.1', status: 'clarification_required',
+    authority: 'gmc.campaign-memory', contractVersion: CAMPAIGN_MEMORY_CONTRACT_VERSION, status: 'clarification_required',
     instruction: 'Go back to the inn and speak to the innkeeper.',
     references: [
       { key: 'lodging_location', kind: 'location', activity: 'lodging', label: 'lodging location', status: 'missing' },
@@ -364,6 +384,52 @@ describe('resolveSceneTransitionContract', () => {
     expect(contract.presentNpcIds).toEqual(['vesper']);
     expect(contract.presenceContract.exactPresentNpcIds).toEqual(['vesper']);
     expect(contract.nonNpcActors).toEqual(['Kerrigan Brynn']);
+  });
+
+  it('stages a new search setting and mark under deterministic GMC identities without mutating canon', () => {
+    const contract = resolveSceneTransitionContract({
+      userId: 'player-1',
+      campaignId: 'campaign-1',
+      currentContract,
+      currentScene: { _id: 'bent-nail-scene', locationId: 'bent-nail', presentNpcIds: ['mara'] },
+      locations,
+      npcs,
+      instruction: 'I leave and go looking for a mark, someone cruel and self-absorbed.',
+      where: 'Gullhook Market',
+      who: ['Kerrigan Brynn', 'Darrin Vale'],
+      playerCharacterNames: ['Kerrigan Brynn'],
+      generatedEntities: [
+        { entityType: 'location', mutationId: 'scene-location:gullhook', name: 'Gullhook Market', geographicTier: 'site', payload: { description: 'A crowded Dock Ward market.' } },
+        { entityType: 'npc', mutationId: 'scene-npc:darrin', name: 'Darrin Vale', entityTier: 'contact', payload: { role: 'A cruel, self-important merchant selected as a possible mark.' } },
+      ],
+    });
+
+    expect(contract.status).toBe('resolved');
+    expect(contract.location.name).toBe('Gullhook Market');
+    expect(contract.presentNpcs.map((npc) => npc.name)).toEqual(['Darrin Vale']);
+    expect(contract.generatedEntities).toHaveLength(2);
+    expect(contract.generatedEntities.map((entry) => entry.entityType).sort()).toEqual(['location', 'npc']);
+    expect(contract.generatedEntityRevision).toMatch(/^[a-f0-9]{64}$/);
+    expect(contract.presenceContract.valid).toBe(true);
+    expect((contract.generatedEntities.find((entry) => entry.entityType === 'location') as any)?.input?.details?.description).toBe('A crowded Dock Ward market.');
+    expect((contract.generatedEntities.find((entry) => entry.entityType === 'npc') as any)?.input?.details?.role).toMatch(/cruel, self-important merchant/);
+
+    const replay = resolveSceneTransitionContract({
+      userId: 'player-1',
+      campaignId: 'campaign-1',
+      currentContract,
+      currentScene: { _id: 'bent-nail-scene', locationId: 'bent-nail', presentNpcIds: ['mara'] },
+      locations,
+      npcs,
+      instruction: 'I leave and go looking for a mark, someone cruel and self-absorbed.',
+      where: 'Gullhook Market',
+      who: ['Kerrigan Brynn', 'Darrin Vale'],
+      playerCharacterNames: ['Kerrigan Brynn'],
+      generatedEntities: contract.generatedEntities,
+    });
+    expect(replay.generatedEntityRevision).toBe(contract.generatedEntityRevision);
+    expect(replay.revision).toBe(contract.revision);
+    expect(replay.presenceContract.revision).toBe(contract.presenceContract.revision);
   });
 
   it('deduplicates multiple aliases of one location but rejects multiple distinct primary locations', () => {

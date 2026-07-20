@@ -4,6 +4,7 @@ import { ProjectStatus, ProjectType } from '../../shared/types/index.js';
 import { parseSmartJson } from '../../shared/generation/smartJsonParser.js';
 
 import { ProjectModel, ContentBlockModel } from '../models/index.js';
+import { getCanonEntitiesCollection } from '../config/mongo.js';
 import { integrationAuth, type IntegrationRequest } from '../middleware/integrationAuth.js';
 import {
   buildMemoryContext,
@@ -290,7 +291,12 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/transition/resolve', asyncRoute(
   const where = String(req.body?.where ?? '').trim();
   const who = Array.isArray(req.body?.who) ? req.body.who.map(String) : [];
   const playerCharacterNames = Array.isArray(req.body?.playerCharacterNames) ? req.body.playerCharacterNames.map(String) : [];
-  if (!expectedCurrentRevision || !where || who.length > 100 || playerCharacterNames.length > 10) {
+  const instruction = String(req.body?.instruction ?? '');
+  if (req.body?.generatedEntities !== undefined && !Array.isArray(req.body.generatedEntities)) {
+    fail(req, res, 400, 'VALIDATION_ERROR', 'generatedEntities must be an array when supplied.'); return;
+  }
+  const generatedEntities = Array.isArray(req.body?.generatedEntities) ? req.body.generatedEntities : [];
+  if (!expectedCurrentRevision || !where || instruction.length > 20_000 || who.length > 100 || playerCharacterNames.length > 10 || generatedEntities.length > 20) {
     fail(req, res, 400, 'VALIDATION_ERROR', 'expectedCurrentRevision, where, and bounded who/playerCharacterNames arrays are required.'); return;
   }
   const [state, npcs, locations] = await Promise.all([
@@ -306,7 +312,8 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/transition/resolve', asyncRoute(
     fail(req, res, 409, 'SCENE_PRESENCE_REVISION_CONFLICT', 'The GMC current-scene roster changed before the transition could be resolved.', { currentContract }); return;
   }
   const sceneTransitionContract = resolveSceneTransitionContract({
-    currentContract, currentScene, locations, npcs, where, who, playerCharacterNames,
+    userId: uid, campaignId: id, currentContract, currentScene, locations, npcs, where, who, playerCharacterNames,
+    instruction, generatedEntities,
   });
   res.json({ sceneTransitionContract });
 }));
@@ -321,7 +328,12 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/narrative/validate', asyncRoute(
     ? req.body.sceneSegment
     : null;
   const playerCharacterNames = Array.isArray(req.body?.playerCharacterNames) ? req.body.playerCharacterNames.map(String) : [];
-  if (!expectedCurrentRevision || responseText.length > 200_000 || playerCharacterNames.length > 10) {
+  const instruction = String(req.body?.instruction ?? '');
+  if (req.body?.generatedEntities !== undefined && !Array.isArray(req.body.generatedEntities)) {
+    fail(req, res, 400, 'VALIDATION_ERROR', 'generatedEntities must be an array when supplied.'); return;
+  }
+  const generatedEntities = Array.isArray(req.body?.generatedEntities) ? req.body.generatedEntities : [];
+  if (!expectedCurrentRevision || instruction.length > 20_000 || responseText.length > 200_000 || playerCharacterNames.length > 10 || generatedEntities.length > 20) {
     fail(req, res, 400, 'VALIDATION_ERROR', 'expectedCurrentRevision, bounded responseText, and no more than 10 playerCharacterNames are required.'); return;
   }
   const [state, npcs, locations] = await Promise.all([
@@ -340,6 +352,8 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/narrative/validate', asyncRoute(
   let selectedPresenceContract = currentContract;
   if (responseMode !== 'ooc' && ['active', 'redirected'].includes(String(sceneSegment?.status ?? ''))) {
     sceneTransitionContract = resolveSceneTransitionContract({
+      userId: uid,
+      campaignId: id,
       currentContract,
       currentScene,
       locations,
@@ -347,6 +361,8 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/narrative/validate', asyncRoute(
       where: String(sceneSegment?.where ?? ''),
       who: Array.isArray(sceneSegment?.who) ? sceneSegment.who.map(String) : [],
       playerCharacterNames,
+      instruction,
+      generatedEntities,
     });
     selectedPresenceContract = sceneTransitionContract.presenceContract;
   }
@@ -366,6 +382,20 @@ gmcV1Router.post('/campaigns/:campaignId/scenes', asyncRoute(async (req, res) =>
   const uid = userId(req); const id = req.params.campaignId;
   const expectedCurrentRevision = String(req.body?.expectedCurrentRevision ?? '').trim();
   const expectedPresenceRevision = String(req.body?.expectedPresenceRevision ?? '').trim();
+  const expectedTransitionRevision = String(req.body?.expectedTransitionRevision ?? '').trim();
+  const expectedGeneratedEntityRevision = String(req.body?.expectedGeneratedEntityRevision ?? '').trim();
+  if (req.body?.generatedEntities !== undefined && !Array.isArray(req.body.generatedEntities)) {
+    fail(req, res, 400, 'VALIDATION_ERROR', 'generatedEntities must be an array when supplied.'); return;
+  }
+  const requestedGeneratedEntities = Array.isArray(req.body?.generatedEntities) ? req.body.generatedEntities : [];
+  if (requestedGeneratedEntities.length && (!expectedCurrentRevision || !expectedPresenceRevision || !expectedTransitionRevision || !expectedGeneratedEntityRevision)) {
+    fail(req, res, 400, 'SCENE_GENERATION_CONTRACT_REQUIRED', 'Generated scene entities require current-scene, proposed-presence, transition, and generated-entity revisions.'); return;
+  }
+  if (requestedGeneratedEntities.length && req.body.makeCurrent === false) {
+    fail(req, res, 400, 'SCENE_GENERATION_CURRENT_COMMIT_REQUIRED', 'Generated scene entities may only be materialized as part of a revision-bound current-scene commit.'); return;
+  }
+  let preparedTransition: any = null;
+  let currentContract: any = null;
   if (req.body.makeCurrent !== false && (expectedCurrentRevision || expectedPresenceRevision)) {
     if (!expectedCurrentRevision || !expectedPresenceRevision) {
       fail(req, res, 400, 'VALIDATION_ERROR', 'Both expectedCurrentRevision and expectedPresenceRevision are required for a revision-bound current-scene commit.'); return;
@@ -378,13 +408,94 @@ gmcV1Router.post('/campaigns/:campaignId/scenes', asyncRoute(async (req, res) =>
     const currentScene = state?.currentSceneId
       ? await collections.scenes().findOne({ _id: state.currentSceneId, userId: uid, campaignId: id })
       : null;
-    const currentContract = buildScenePresenceContract(currentScene, npcs);
+    currentContract = buildScenePresenceContract(currentScene, npcs);
     if (!currentContract.valid || currentContract.revision !== expectedCurrentRevision) {
       fail(req, res, 409, 'SCENE_PRESENCE_REVISION_CONFLICT', 'The GMC current scene changed before the prepared transition could commit.', { currentContract }); return;
     }
     const locationId = String(req.body?.locationId ?? '').trim();
-    const location = locations.find((candidate: any) => String(candidate?._id) === locationId);
     const presentNpcIds = Array.isArray(req.body?.presentNpcIds) ? req.body.presentNpcIds.map(String) : [];
+    if (requestedGeneratedEntities.length) {
+      preparedTransition = resolveSceneTransitionContract({
+        userId: uid,
+        campaignId: id,
+        currentContract,
+        currentScene,
+        locations,
+        npcs,
+        where: String(req.body?.where ?? ''),
+        who: Array.isArray(req.body?.who) ? req.body.who.map(String) : [],
+        playerCharacterNames: Array.isArray(req.body?.playerCharacterNames) ? req.body.playerCharacterNames.map(String) : [],
+        instruction: String(req.body?.instruction ?? ''),
+        generatedEntities: requestedGeneratedEntities,
+      });
+      if (
+        !expectedTransitionRevision
+        || preparedTransition.revision !== expectedTransitionRevision
+        || preparedTransition.generatedEntityRevision !== expectedGeneratedEntityRevision
+        || preparedTransition.location?.id !== locationId
+        || JSON.stringify(preparedTransition.presentNpcIds) !== JSON.stringify([...presentNpcIds].sort())
+        || preparedTransition.presenceContract?.revision !== expectedPresenceRevision
+      ) {
+        fail(req, res, 409, 'SCENE_GENERATION_CONTRACT_CONFLICT', 'The generated destination no longer matches the internally reconciled scene-generation contract.', { preparedTransition }); return;
+      }
+    }
+    const location = locations.find((candidate: any) => String(candidate?._id) === locationId);
+    if (requestedGeneratedEntities.length) return void await (async () => {
+      const materializedEntities: any[] = [];
+      let sceneResult: any = null;
+      try {
+        for (const generated of preparedTransition.generatedEntities) {
+          const result = await createEntityMutation(uid, id, generated.entityType, generated.input);
+          if (String(result.record?._id ?? '') !== String(generated.id)) {
+            throw Object.assign(new Error('GMC materialized a generated scene entity under a different canonical identity.'), {
+              status: 409, code: 'SCENE_GENERATED_ENTITY_IDENTITY_CONFLICT', details: { generated, recordId: result.record?._id ?? null },
+            });
+          }
+          materializedEntities.push({ ...generated, record: result.record, duplicate: result.duplicate });
+        }
+        const [confirmedNpcs, confirmedLocations] = await Promise.all([listEntities(uid, id, 'npc'), listEntities(uid, id, 'location')]);
+        const confirmedLocation = confirmedLocations.find((candidate: any) => String(candidate?._id) === locationId);
+        const confirmedPresence = buildProposedScenePresenceContract({ currentContract, location: confirmedLocation, presentNpcIds, npcs: confirmedNpcs });
+        if (!confirmedLocation || !confirmedPresence.valid || confirmedPresence.revision !== expectedPresenceRevision) {
+          throw Object.assign(new Error('Generated entities were materialized, but the exact destination roster did not reproduce its prepared GMC revision.'), {
+            status: 409, code: 'SCENE_GENERATED_PRESENCE_CONFLICT', details: { confirmedPresence },
+          });
+        }
+        sceneResult = await createSceneMutation(uid, id, req.body);
+        await collections.state().updateOne(
+          { userId: uid, campaignId: id },
+          { $set: { currentSceneId: sceneResult.record._id, updatedAt: new Date() } },
+          { upsert: true },
+        );
+        res.status(sceneResult.duplicate ? 200 : 201).json({
+          scene: sceneResult.record,
+          mutationId: sceneResult.mutationId,
+          duplicate: sceneResult.duplicate,
+          duplicateReason: sceneResult.duplicateReason,
+          materializedEntities: materializedEntities.map(({ record, entityType, mutationId, duplicate }) => ({ record, entityType, mutationId, duplicate })),
+          generatedEntityRevision: expectedGeneratedEntityRevision,
+        });
+      } catch (error: any) {
+        const cleanup: any[] = [];
+        if (sceneResult && !sceneResult.duplicate) {
+          const deleted = await collections.scenes().deleteOne({ _id: sceneResult.record._id, userId: uid, campaignId: id });
+          cleanup.push({ kind: 'scene', id: sceneResult.record._id, removed: deleted.deletedCount === 1 });
+        }
+        for (const generated of [...materializedEntities].reverse()) {
+          if (generated.duplicate) continue;
+          const deleted = await getCanonEntitiesCollection().deleteOne({ _id: generated.record._id, userId: uid, project_id: id, 'creationMutation.mutationId': generated.mutationId });
+          cleanup.push({ kind: generated.entityType, id: generated.record._id, removed: deleted.deletedCount === 1 });
+        }
+        const incomplete = cleanup.filter((entry) => !entry.removed);
+        throw Object.assign(new Error(incomplete.length
+          ? `Generated-scene commit failed and GMC could not fully compensate its staged records: ${error?.message ?? String(error)}`
+          : `Generated-scene commit failed; GMC removed every newly staged scene record: ${error?.message ?? String(error)}`), {
+          status: Number(error?.status ?? 502),
+          code: incomplete.length ? 'SCENE_GENERATION_COMPENSATION_FAILED' : 'SCENE_GENERATION_COMMIT_FAILED',
+          details: { cause: { code: error?.code ?? null, message: error?.message ?? String(error) }, cleanup },
+        });
+      }
+    })();
     if (!location) { fail(req, res, 404, 'LOCATION_NOT_FOUND', 'The prepared scene location is no longer canonical GMC data.'); return; }
     const proposedPresence = buildProposedScenePresenceContract({ currentContract, location, presentNpcIds, npcs });
     if (!proposedPresence.valid || proposedPresence.revision !== expectedPresenceRevision) {

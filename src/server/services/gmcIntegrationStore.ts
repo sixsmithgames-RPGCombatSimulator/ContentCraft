@@ -15,6 +15,9 @@ export const MEMORY_RECORD_TYPES = ['FACT', 'ITEM', 'EVENT'] as const;
 export const GEOGRAPHIC_SCOPE_TIERS = ['world', 'city', 'district', 'site', 'room'] as const;
 export const ENTITY_SCOPE_TIERS = ['bbeg', 'lieutenant', 'henchman', 'contact'] as const;
 export const ITEM_TIERS = ['plot', 'mundane', 'currency', 'furniture'] as const;
+export const CAMPAIGN_MEMORY_CONTRACT_VERSION = '2026-07-21.1';
+export const WORLD_GENERATION_POLICY_VERSION = '2026-07-21.1';
+export const SCENE_TRANSITION_CONTRACT_VERSION = '2026-07-21.1';
 
 function includes<T extends readonly string[]>(values: T, value: unknown): value is T[number] {
   return values.includes(String(value) as T[number]);
@@ -407,17 +410,58 @@ function implicitReferenceKind(phrase: string): MemoryReferenceKind | null {
   return null;
 }
 
+/**
+ * Distinguishes an instruction that points back to established canon from one
+ * that deliberately asks the GM to introduce a new person, place, thing, or
+ * organization. This permission is narrow and instruction-bound: it never
+ * authorizes replacing an unresolved "back/same/usual/last" reference.
+ */
+export function classifyWorldGenerationIntent(instruction: string) {
+  const text = String(instruction ?? '').trim();
+  const generativeAction = /\b(?:find|look(?:ing)?\s+for|search(?:ing)?\s+for|seek(?:ing)?|hunt(?:ing)?\s+for|scout(?:ing)?\s+for|explore|wander|pick(?:ing)?\s+out|choose|locate)\b/i.test(text);
+  const indefiniteTarget = /\b(?:a|an|some|someone|somebody|somewhere|new|another|any)\b/i.test(text);
+  const canonicalLocationCue = /\b(?:back\s+to|return(?:ing|ed)?\s+to|same|usual|last|previous(?:ly)?|again|where\s+\w+\s+(?:stayed|slept|lodged))\b/i.test(text);
+  const departure = /\b(?:leave|depart|head\s+out|go|walk|travel|ride|sail|move\s+on)\b/i.test(text);
+  const openEnded = generativeAction && indefiniteTarget;
+  const allowedEntityTypes: MemoryReferenceKind[] = [];
+  if (openEnded && /\b(?:someone|somebody|person|people|mark|target|contact|patron|customer|merchant|guide|hire|recruit|witness|victim|opponent|ally|companion)\b/i.test(text)) allowedEntityTypes.push('npc');
+  if (openEnded && !canonicalLocationCue && (departure || /\b(?:somewhere|place|area|location|destination|district|ward|street|lane|alley|market|inn|tavern|shop|store|workshop|room|building|route|neighbou?rhood)\b/i.test(text))) allowedEntityTypes.push('location');
+  if (openEnded && /\b(?:thing|item|object|weapon|armor|key|book|letter|device|tool|potion|ring|amulet|component|reagent|clue|evidence)\b/i.test(text)) allowedEntityTypes.push('item');
+  if (openEnded && /\b(?:faction|guild|watch|order|cult|church|company|gang|crew|family|house|clan|organization|group)\b/i.test(text)) allowedEntityTypes.push('faction');
+  const uniqueTypes = [...new Set(allowedEntityTypes)].sort();
+  const source = {
+    authority: 'gmc.worldGenerationPolicy',
+    contractVersion: WORLD_GENERATION_POLICY_VERSION,
+    instruction: normalizedReferenceIdentity(text),
+    mode: uniqueTypes.length ? 'world_generation_allowed' : 'canonical_only',
+    allowedEntityTypes: uniqueTypes,
+  };
+  return {
+    ...source,
+    revision: createHash('sha256').update(stablePresenceJson(source)).digest('hex'),
+    allowSceneSettingCreation: uniqueTypes.includes('location'),
+    rules: uniqueTypes.length ? [
+      'Creation is allowed only for the listed entity types and only to fulfill this instruction.',
+      'Any established canonical reference selected by memory resolution remains binding.',
+      'New scene-local people and places must be returned as matching ENTITY create proposals.',
+    ] : [
+      'Do not create a substitute for an unresolved or established canonical reference.',
+    ],
+  };
+}
+
 function referenceSpecs(instruction: string): MemoryReferenceSpec[] {
   const text = String(instruction ?? '');
   const mostRecent = /\b(?:back to|return(?:ing|ed)? to|same|usual|last|previous(?:ly)?|again|where\s+\w+\s+(?:stayed|slept|lodged))\b/i.test(text);
+  const generationPolicy = classifyWorldGenerationIntent(text);
   const specs: MemoryReferenceSpec[] = [];
   if (/\b(?:inn|tavern|lodg(?:e|ed|ing)?|room for the night|sleep|slept|stayed|staying|night's? rest)\b/i.test(text)) {
-    specs.push({ key: 'lodging_location', kind: 'location', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'lodging', label: 'lodging location', recordTerms: /\b(?:inn|tavern|lodg|hostel|boarding)\b/i, evidenceTerms: /\b(?:stay(?:ed|ing)?|slept|lodg|room key|night's? rest|paid for (?:the )?night)\b/i });
-    specs.push({ key: 'lodging_proprietor', kind: 'npc', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'lodging', label: 'innkeeper or lodging proprietor', recordTerms: /\b(?:innkeeper|barkeep|bartender|proprietor|landlord|landlady|lodging host)\b/i, evidenceTerms: /\b(?:innkeeper|barkeep|bartender|proprietor|room key|paid for (?:the )?night|lodging)\b/i });
+    if (!generationPolicy.allowedEntityTypes.includes('location')) specs.push({ key: 'lodging_location', kind: 'location', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'lodging', label: 'lodging location', recordTerms: /\b(?:inn|tavern|lodg|hostel|boarding)\b/i, evidenceTerms: /\b(?:stay(?:ed|ing)?|slept|lodg|room key|night's? rest|paid for (?:the )?night)\b/i });
+    if (!generationPolicy.allowedEntityTypes.includes('npc')) specs.push({ key: 'lodging_proprietor', kind: 'npc', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'lodging', label: 'innkeeper or lodging proprietor', recordTerms: /\b(?:innkeeper|barkeep|bartender|proprietor|landlord|landlady|lodging host)\b/i, evidenceTerms: /\b(?:innkeeper|barkeep|bartender|proprietor|room key|paid for (?:the )?night|lodging)\b/i });
   }
   if (/\b(?:sell|sold|selling|buy|bought|shop|store|merchant|dealer|quartermaster|outfitter|trade|hagg(?:le|led|ling)|gear|supplies|arms|armor)\b/i.test(text)) {
-    specs.push({ key: 'commerce_location', kind: 'location', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'commerce', label: 'shop or trade location', recordTerms: /\b(?:shop|store|market|merchant|quartermaster|outfitter|trade|goods|arms|armor|supplies)\b/i, evidenceTerms: /\b(?:sell|sold|buy|bought|trade|traded|haggl|apprais|offer|store credit|quartermaster)\b/i });
-    specs.push({ key: 'commerce_contact', kind: 'npc', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'commerce', label: 'merchant or trade contact', recordTerms: /\b(?:merchant|dealer|quartermaster|outfitter|shopkeeper|trader|appraiser|sells?)\b/i, evidenceTerms: /\b(?:sell|sold|buy|bought|trade|traded|haggl|apprais|offer|store credit|quartermaster)\b/i });
+    if (!generationPolicy.allowedEntityTypes.includes('location')) specs.push({ key: 'commerce_location', kind: 'location', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'commerce', label: 'shop or trade location', recordTerms: /\b(?:shop|store|market|merchant|quartermaster|outfitter|trade|goods|arms|armor|supplies)\b/i, evidenceTerms: /\b(?:sell|sold|buy|bought|trade|traded|haggl|apprais|offer|store credit|quartermaster)\b/i });
+    if (!generationPolicy.allowedEntityTypes.includes('npc')) specs.push({ key: 'commerce_contact', kind: 'npc', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'commerce', label: 'merchant or trade contact', recordTerms: /\b(?:merchant|dealer|quartermaster|outfitter|shopkeeper|trader|appraiser|sells?)\b/i, evidenceTerms: /\b(?:sell|sold|buy|bought|trade|traded|haggl|apprais|offer|store credit|quartermaster)\b/i });
   }
   const implicitMentions = [...text.matchAll(/\b(back to|return(?:ing|ed)? to|same|usual|last|previous(?:ly visited)?|my|our)\s+(?:the\s+)?([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,2})/gi)];
   for (const match of implicitMentions) {
@@ -576,14 +620,16 @@ export function resolveMemoryReferences(
     };
   });
   const unresolved = references.filter((reference) => reference.status !== 'resolved');
+  const creationPolicy = classifyWorldGenerationIntent(instruction);
   const options = [...new Map(unresolved.flatMap((reference) => reference.candidates)
     .map((candidate: any) => [candidate.id, { id: candidate.id, name: candidate.name, kind: candidate.kind }])).values()];
   return {
     authority: 'gmc.campaign-memory',
-    contractVersion: '2026-07-19.1',
+    contractVersion: CAMPAIGN_MEMORY_CONTRACT_VERSION,
     instruction,
     status: unresolved.length ? 'clarification_required' : 'resolved',
     references,
+    creationPolicy,
     clarification: unresolved.length ? {
       question: options.length
         ? `Which established ${unresolved.map((entry) => entry.label).join(' and ')} did you mean?`
@@ -684,7 +730,7 @@ export function validateMemoryRestorationCandidate(input: Record<string, any>) {
   const answer = String(input?.clarificationAnswer ?? '').trim();
   const prior = input?.priorResolution;
   if (!answer) throw Object.assign(new Error('clarificationAnswer is required.'), { status: 400, code: 'VALIDATION_ERROR' });
-  if (prior?.authority !== 'gmc.campaign-memory' || prior?.contractVersion !== '2026-07-19.1' || prior?.status !== 'clarification_required') {
+  if (prior?.authority !== 'gmc.campaign-memory' || prior?.contractVersion !== CAMPAIGN_MEMORY_CONTRACT_VERSION || prior?.status !== 'clarification_required') {
     throw Object.assign(new Error('A current GMC clarification contract is required.'), { status: 409, code: 'MEMORY_CLARIFICATION_CONTRACT_REQUIRED' });
   }
   const unresolved = (Array.isArray(prior.references) ? prior.references : []).filter((reference: any) => reference?.status !== 'resolved');
@@ -1239,7 +1285,105 @@ function locationDeclarationMatches(where: string, locations: any[]) {
   return [...byId.values()];
 }
 
+type GeneratedSceneEntityKind = Extract<GmcEntityKind, 'npc' | 'location'>;
+
+function normalizeGeneratedSceneEntityPlan(
+  userId: string,
+  campaignId: string,
+  raw: any,
+  generationPolicy: ReturnType<typeof classifyWorldGenerationIntent>,
+) {
+  const entityType = String(raw?.entityType ?? '').trim().toLowerCase() as GeneratedSceneEntityKind;
+  const mutationId = String(raw?.mutationId ?? '').trim();
+  const name = String(raw?.name ?? raw?.payload?.name ?? '').trim();
+  if (!['npc', 'location'].includes(entityType) || !mutationId || mutationId.length > 240 || !name || name.length > 200) {
+    throw Object.assign(new Error('Generated scene entities require entityType npc|location, mutationId, and a bounded canonical name.'), {
+      status: 409, code: 'SCENE_GENERATED_ENTITY_INVALID', details: { entityType, mutationId: mutationId || null, name: name || null },
+    });
+  }
+  if (generationPolicy.mode !== 'world_generation_allowed' || !generationPolicy.allowedEntityTypes.includes(entityType)) {
+    throw Object.assign(new Error(`This instruction does not authorize creation of a new ${entityType}.`), {
+      status: 409, code: 'SCENE_GENERATION_NOT_AUTHORIZED', details: { entityType, generationPolicy },
+    });
+  }
+  // A normalized preview is intentionally valid input to the commit-time
+  // resolver. This makes the preview/commit boundary replayable instead of
+  // asking either GMA or GMC to reinterpret the model's original proposal.
+  const payload = objectRecord(raw?.payload ?? raw?.input);
+  const aliases = (Array.isArray(payload.aliases ?? raw?.aliases) ? (payload.aliases ?? raw.aliases) : [])
+    .map(String).map((value: string) => value.trim()).filter(Boolean).slice(0, 20);
+  const tags = (Array.isArray(payload.tags ?? raw?.tags) ? (payload.tags ?? raw.tags) : [])
+    .map(String).map((value: string) => value.trim()).filter(Boolean).slice(0, 30);
+  const relationships = (Array.isArray(payload.relationships ?? raw?.relationships) ? (payload.relationships ?? raw.relationships) : []).slice(0, 30);
+  const claims = (Array.isArray(payload.claims ?? raw?.claims) ? (payload.claims ?? raw.claims) : []).slice(0, 30);
+  const entityTier = includes(ENTITY_SCOPE_TIERS, raw?.entityTier ?? payload.entityTier) ? String(raw?.entityTier ?? payload.entityTier) : 'contact';
+  const geographicTier = includes(GEOGRAPHIC_SCOPE_TIERS, raw?.geographicTier ?? payload.geographicTier) ? String(raw?.geographicTier ?? payload.geographicTier) : 'site';
+  const parentLocationId = raw?.parentLocationId ?? payload.parentLocationId ?? null;
+  const descriptiveDetails = Object.fromEntries(['description', 'role', 'appearance', 'personality', 'occupation', 'address', 'notes']
+    .flatMap((key) => {
+      const value = payload[key];
+      if (typeof value !== 'string' || !value.trim()) return [];
+      return [[key, value.trim().slice(0, 4_000)]];
+    }));
+  const details = {
+    ...objectRecord(payload.details ?? raw?.details),
+    ...descriptiveDetails,
+    name,
+    ...(entityType === 'npc' ? {
+      entityTier,
+    } : {
+      geographicTier,
+      parentLocationId,
+    }),
+  };
+  const entityInput = {
+    name,
+    aliases,
+    tags: [...new Set([...tags, 'generated-in-play', `scene-generated:${entityType}`])],
+    relationships,
+    claims,
+    details,
+    ...(entityType === 'npc' ? { entityTier } : { geographicTier, parentLocationId }),
+    status: 'active',
+    draft: false,
+    source: { system: 'gamemaster-assistant', kind: 'internally-reconciled-scene-generation' },
+    mutationId,
+  };
+  const baseId = generateProjectEntityId(campaignId, entityType as EntityType, name);
+  const id = canonicalMutationDocumentId({ userId, campaignId, recordKind: `ENTITY:${entityType}`, mutationId, prefix: baseId });
+  return {
+    id,
+    entityType,
+    mutationId,
+    name,
+    input: entityInput,
+    previewRecord: {
+      _id: id,
+      type: entityType,
+      canonical_name: name,
+      aliases,
+      tags: entityInput.tags,
+      details,
+      status: 'active',
+      draft: false,
+    },
+  };
+}
+
+export function generatedSceneEntitiesRevision(entities: any[]) {
+  const source = (Array.isArray(entities) ? entities : []).map((entity) => ({
+    id: entity?.id,
+    entityType: entity?.entityType,
+    mutationId: entity?.mutationId,
+    name: entity?.name,
+    input: entity?.input,
+  }));
+  return createHash('sha256').update(stablePresenceJson(source)).digest('hex');
+}
+
 export function resolveSceneTransitionContract(input: {
+  userId?: string;
+  campaignId?: string;
   currentContract: any;
   currentScene: any;
   locations: any[];
@@ -1247,6 +1391,8 @@ export function resolveSceneTransitionContract(input: {
   where: string;
   who: string[];
   playerCharacterNames?: string[];
+  instruction?: string;
+  generatedEntities?: any[];
 }) {
   const currentContract = input?.currentContract;
   if (currentContract?.valid !== true || !currentContract?.revision) {
@@ -1254,7 +1400,28 @@ export function resolveSceneTransitionContract(input: {
   }
   const where = String(input?.where ?? '').trim();
   if (!where) throw Object.assign(new Error('The proposed scene must declare where it occurs.'), { status: 409, code: 'SCENE_DESTINATION_LOCATION_REQUIRED' });
-  const locationMatches = locationDeclarationMatches(where, input?.locations ?? []);
+  const generationPolicy = classifyWorldGenerationIntent(input?.instruction ?? '');
+  const rawGeneratedEntities = Array.isArray(input?.generatedEntities) ? input.generatedEntities : [];
+  if (rawGeneratedEntities.length > 20) throw Object.assign(new Error('No more than 20 generated scene entities may be staged.'), { status: 409, code: 'SCENE_GENERATED_ENTITY_LIMIT' });
+  if (rawGeneratedEntities.length && (!input?.userId || !input?.campaignId)) {
+    throw Object.assign(new Error('userId and campaignId are required to stage generated scene entities.'), { status: 409, code: 'SCENE_GENERATION_AUTHORITY_REQUIRED' });
+  }
+  const stagedEntities = rawGeneratedEntities.map((entity) => normalizeGeneratedSceneEntityPlan(
+    String(input.userId), String(input.campaignId), entity, generationPolicy,
+  ));
+  for (const staged of stagedEntities) {
+    const existing = exactEntityIdentityMatches(staged.name, staged.entityType === 'npc' ? (input?.npcs ?? []) : (input?.locations ?? []));
+    if (existing.length) {
+      throw Object.assign(new Error(`The proposed new ${staged.entityType} “${staged.name}” already matches canonical GMC data. Use the existing record instead of creating a duplicate.`), {
+        status: 409, code: 'SCENE_GENERATED_ENTITY_ALREADY_EXISTS', details: { entityType: staged.entityType, name: staged.name, existingIds: existing.map((entry: any) => String(entry?._id ?? entry?.id)) },
+      });
+    }
+  }
+  const stagedLocations = stagedEntities.filter((entity) => entity.entityType === 'location').map((entity) => entity.previewRecord);
+  const stagedNpcs = stagedEntities.filter((entity) => entity.entityType === 'npc').map((entity) => entity.previewRecord);
+  const allLocations = [...(input?.locations ?? []), ...stagedLocations];
+  const allNpcs = [...(input?.npcs ?? []), ...stagedNpcs];
+  const locationMatches = locationDeclarationMatches(where, allLocations);
   if (locationMatches.length !== 1) {
     const options = locationMatches.map((match) => ({
       id: String(match.location?._id ?? match.location?.id),
@@ -1278,7 +1445,7 @@ export function resolveSceneTransitionContract(input: {
   const ambiguousActors: Array<{ name: string; options: Array<{ id: string; name: string }> }> = [];
   for (const actorName of declaredWho) {
     if (playerNames.has(normalizedReferenceIdentity(actorName))) { nonNpcActors.push(actorName); continue; }
-    const matches = exactEntityIdentityMatches(actorName, input?.npcs ?? []);
+    const matches = exactEntityIdentityMatches(actorName, allNpcs);
     if (matches.length === 1) {
       const id = String(matches[0]?._id ?? matches[0]?.id);
       if (!presentNpcIds.includes(id)) {
@@ -1296,7 +1463,7 @@ export function resolveSceneTransitionContract(input: {
   const selected = locationMatches[0];
   const locationId = String(selected.location?._id ?? selected.location?.id);
   const presenceContract = buildProposedScenePresenceContract({
-    currentContract, location: selected.location, presentNpcIds, npcs: input?.npcs ?? [],
+    currentContract, location: selected.location, presentNpcIds, npcs: allNpcs,
   });
   if (!presenceContract.valid) {
     throw Object.assign(new Error('GMC could not build an exact proposed-scene presence contract.'), {
@@ -1305,12 +1472,17 @@ export function resolveSceneTransitionContract(input: {
   }
   const currentNpcIds = (Array.isArray(currentContract?.exactPresentNpcIds) ? currentContract.exactPresentNpcIds : []).map(String).sort();
   const proposedNpcIds = [...presentNpcIds].sort();
+  const usedGeneratedIds = new Set([locationId, ...proposedNpcIds]);
+  const generatedEntities = stagedEntities
+    .filter((entity) => usedGeneratedIds.has(entity.id))
+    .map(({ previewRecord: _previewRecord, ...entity }) => entity);
+  const generatedEntityRevision = generatedSceneEntitiesRevision(generatedEntities);
   const transitionRequired = String(input?.currentScene?.locationId ?? '') !== locationId
     || JSON.stringify(currentNpcIds) !== JSON.stringify(proposedNpcIds);
   const contractSource = {
-    authority: 'gmc.sceneTransition', contractVersion: '2026-07-19.1',
+    authority: 'gmc.sceneTransition', contractVersion: SCENE_TRANSITION_CONTRACT_VERSION,
     baseRevision: currentContract.revision, locationId, presentNpcIds: proposedNpcIds,
-    where, who: declaredWho, nonNpcActors,
+    where, who: declaredWho, nonNpcActors, generatedEntityRevision,
   };
   return {
     ...contractSource,
@@ -1327,6 +1499,9 @@ export function resolveSceneTransitionContract(input: {
     presentNpcIds: proposedNpcIds,
     presentNpcs,
     nonNpcActors,
+    generationPolicy,
+    generatedEntities,
+    generatedEntityRevision,
     presenceContract: transitionRequired ? presenceContract : currentContract,
   };
 }
