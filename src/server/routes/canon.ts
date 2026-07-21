@@ -20,6 +20,7 @@ import { logger } from '../utils/logger.js';
 import { LibraryCollection, generateCollectionId } from '../models/LibraryCollection.js';
 import { clerkAuthFixedMiddleware, AuthRequest } from '../middleware/clerkAuthFixed.js';
 import { createProjectContentLibraryDraft, type ProjectContentLibraryDraft } from '../services/projectContentLibraryMapper.js';
+import { createLibraryBundle, createLibraryImportPlan } from '../services/libraryBundle.js';
 
 export const canonRouter = Router();
 
@@ -362,6 +363,7 @@ canonRouter.post('/entities', async (req: Request, res: Response) => {
 
     const entity: CanonEntity = {
       _id: entityId,
+      userId: authReq.userId,
       scope: entityData.scope,
       type: entityData.type,
       canonical_name: entityData.canonical_name,
@@ -443,20 +445,21 @@ canonRouter.put('/entities/:id', async (req: Request, res: Response) => {
  */
 canonRouter.delete('/entities/:id', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { id } = req.params;
 
     const entitiesCollection = getCanonEntitiesCollection();
     const chunksCollection = getCanonChunksCollection();
 
     // Delete the entity
-    const result = await entitiesCollection.deleteOne({ _id: id });
+    const result = await entitiesCollection.deleteOne({ _id: id, userId: authReq.userId });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Entity not found' });
     }
 
     // Delete all chunks for this entity
-    await chunksCollection.deleteMany({ entity_id: id });
+    await chunksCollection.deleteMany({ entity_id: id, userId: authReq.userId });
 
     logger.info(`Deleted canon entity and chunks: ${id}`);
     res.json({ success: true, deletedEntityId: id });
@@ -477,6 +480,7 @@ canonRouter.delete('/entities/:id', async (req: Request, res: Response) => {
  */
 canonRouter.get('/chunks', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { entity_id, limit = '1000', offset = '0' } = req.query;
 
     if (!entity_id || typeof entity_id !== 'string') {
@@ -486,7 +490,7 @@ canonRouter.get('/chunks', async (req: Request, res: Response) => {
     const collection = getCanonChunksCollection();
 
     const chunks = await collection
-      .find({ entity_id })
+      .find({ entity_id, userId: authReq.userId })
       .sort({ _id: 1 })
       .limit(parseInt(limit as string))
       .skip(parseInt(offset as string))
@@ -506,6 +510,7 @@ canonRouter.get('/chunks', async (req: Request, res: Response) => {
  */
 canonRouter.post('/chunks', async (req: Request, res: Response) => {
   try {
+    const authReq = req as unknown as AuthRequest;
     const { entity_id, chunks, generate_embeddings = false } = req.body;
 
     if (!entity_id || !chunks || !Array.isArray(chunks)) {
@@ -515,7 +520,10 @@ canonRouter.post('/chunks', async (req: Request, res: Response) => {
     const collection = getCanonChunksCollection();
 
     // Get existing chunk count for this entity
-    const existingCount = await collection.countDocuments({ entity_id });
+    const entity = await getCanonEntitiesCollection().findOne({ _id: entity_id, userId: authReq.userId });
+    if (!entity) return res.status(404).json({ error: 'Entity not found' });
+
+    const existingCount = await collection.countDocuments({ entity_id, userId: authReq.userId });
 
     const canonChunks: CanonChunk[] = [];
 
@@ -538,6 +546,7 @@ canonRouter.post('/chunks', async (req: Request, res: Response) => {
 
       const canonChunk: CanonChunk = {
         _id: chunkId,
+        userId: authReq.userId,
         entity_id,
         text: chunk.text,
         metadata: chunk.metadata || {},
@@ -1319,6 +1328,7 @@ canonRouter.post('/entities/batch', async (req: Request, res: Response) => {
 
         const entity: CanonEntity = {
           _id: entityId,
+          userId: authReq.userId,
           scope: entityData.scope,
           type: entityData.type,
           canonical_name: entityData.canonical_name,
@@ -1389,6 +1399,186 @@ canonRouter.get('/collections', async (req: Request, res: Response) => {
   }
 });
 
+async function loadLibraryEntityClosure(memberIds: string[], userId: string): Promise<CanonEntity[]> {
+  const entitiesCollection = getCanonEntitiesCollection();
+  const entitiesById = new Map<string, CanonEntity>();
+  let pending = Array.from(new Set(memberIds));
+
+  while (pending.length > 0) {
+    const batch = pending.slice(0, 500);
+    pending = pending.slice(500);
+    const entities = await entitiesCollection.find({
+      _id: { $in: batch },
+      scope: 'lib',
+      userId,
+    }).toArray();
+
+    for (const entity of entities) {
+      if (entitiesById.has(entity._id)) continue;
+      entitiesById.set(entity._id, entity);
+      for (const relationship of entity.relationships ?? []) {
+        if (!entitiesById.has(relationship.target_id) && !pending.includes(relationship.target_id)) {
+          pending.push(relationship.target_id);
+        }
+      }
+    }
+
+    if (entitiesById.size + pending.length > 2_000) {
+      throw new Error('Library dependency closure exceeds the 2,000 entity bundle limit.');
+    }
+  }
+
+  return Array.from(entitiesById.values());
+}
+
+canonRouter.get('/collections/:id/export', async (req: Request, res: Response) => {
+  try {
+    const authReq = req as unknown as AuthRequest;
+    const collection = await getLibraryCollectionsCollection().findOne({
+      _id: req.params.id,
+      userId: authReq.userId,
+    });
+    if (!collection) return res.status(404).json({ error: 'Collection not found' });
+
+    const entities = await loadLibraryEntityClosure(collection.entity_ids, authReq.userId);
+    const exportedMemberIds = new Set(entities.map((entity) => entity._id));
+    const missingMemberIds = collection.entity_ids.filter((id) => !exportedMemberIds.has(id));
+    if (missingMemberIds.length > 0) {
+      return res.status(409).json({
+        error: 'Collection contains missing or inaccessible entities',
+        missing_entity_ids: missingMemberIds,
+      });
+    }
+
+    const chunks = entities.length > 0
+      ? await getCanonChunksCollection().find({
+          entity_id: { $in: entities.map((entity) => entity._id) },
+          userId: authReq.userId,
+        }).sort({ entity_id: 1, _id: 1 }).toArray()
+      : [];
+    const bundle = createLibraryBundle(collection, entities, chunks);
+    const filename = `${collection.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'gmc-library'}.gmc-library.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.json(bundle);
+  } catch (error) {
+    logger.error('Error exporting library collection:', error);
+    return res.status(500).json({ error: 'Failed to export library collection' });
+  }
+});
+
+canonRouter.post('/collections/import', async (req: Request, res: Response) => {
+  try {
+    const authReq = req as unknown as AuthRequest;
+    let plan;
+    try {
+      plan = createLibraryImportPlan(req.body);
+    } catch (error) {
+      return res.status(400).json({
+        error: 'Invalid GMC library bundle',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const entitiesCollection = getCanonEntitiesCollection();
+    const chunksCollection = getCanonChunksCollection();
+    const collectionsCollection = getLibraryCollectionsCollection();
+    const entityIds = plan.entities.map((entity) => entity._id);
+    const existingEntities = await entitiesCollection.find({ _id: { $in: entityIds } }).toArray();
+    const ownershipConflict = existingEntities.find((entity) => entity.userId !== authReq.userId);
+    if (ownershipConflict) {
+      return res.status(409).json({
+        error: 'Library entity belongs to another tenant',
+        entity_id: ownershipConflict._id,
+      });
+    }
+
+    const existingCollection = await collectionsCollection.findOne({ _id: plan.collection._id });
+    if (existingCollection && existingCollection.userId !== authReq.userId) {
+      return res.status(409).json({
+        error: 'Library collection belongs to another tenant',
+        collection_id: plan.collection._id,
+      });
+    }
+
+    const importedIdSet = new Set(entityIds);
+    const externalRelationshipIds: string[] = Array.from(new Set<string>(plan.entities
+      .flatMap((entity) => entity.relationships ?? [])
+      .map((relationship) => relationship.target_id)
+      .filter((id): id is string => typeof id === 'string' && !importedIdSet.has(id))));
+    if (externalRelationshipIds.length > 0) {
+      const ownedExternal = await entitiesCollection.find({
+        _id: { $in: externalRelationshipIds },
+        userId: authReq.userId,
+      }).project({ _id: 1 }).toArray();
+      const ownedIds = new Set(ownedExternal.map((entity) => entity._id));
+      const missing = externalRelationshipIds.filter((id) => !ownedIds.has(id));
+      if (missing.length > 0) {
+        return res.status(400).json({
+          error: 'Bundle has unresolved entity relationships',
+          missing_entity_ids: missing,
+        });
+      }
+    }
+
+    const existingIdSet = new Set(existingEntities.map((entity) => entity._id));
+    const now = new Date();
+    if (plan.entities.length > 0) {
+      await entitiesCollection.bulkWrite(plan.entities.map((entity) => {
+        const { _id, created_at: _createdAt, updated_at: _updatedAt, userId: _userId, ...mutable } = entity;
+        return {
+          updateOne: {
+            filter: { _id, userId: authReq.userId },
+            update: {
+              $set: { ...mutable, userId: authReq.userId, updated_at: now },
+              $setOnInsert: { _id, created_at: now },
+            },
+            upsert: true,
+          },
+        };
+      }));
+    }
+
+    await chunksCollection.deleteMany({
+      entity_id: { $in: entityIds },
+      userId: authReq.userId,
+    });
+    if (plan.chunks.length > 0) {
+      await chunksCollection.insertMany(plan.chunks.map((chunk) => ({
+        ...chunk,
+        userId: authReq.userId,
+        created_at: now,
+        updated_at: now,
+      })));
+    }
+
+    const { _id: collectionId, ...collectionFields } = plan.collection;
+    await collectionsCollection.updateOne(
+      { _id: collectionId, userId: authReq.userId },
+      {
+        $set: { ...collectionFields, userId: authReq.userId, updated_at: now },
+        $setOnInsert: { _id: collectionId, created_at: now },
+      },
+      { upsert: true },
+    );
+
+    const savedCollection = await collectionsCollection.findOne({ _id: collectionId, userId: authReq.userId });
+    return res.status(existingCollection ? 200 : 201).json({
+      collection: savedCollection,
+      imported: {
+        entities_created: entityIds.filter((id) => !existingIdSet.has(id)).length,
+        entities_updated: entityIds.filter((id) => existingIdSet.has(id)).length,
+        chunks_replaced: plan.chunks.length,
+        collection_created: !existingCollection,
+        dependency_entities: plan.dependencyEntityIds.length,
+      },
+    });
+  } catch (error) {
+    logger.error('Error importing library collection:', error);
+    return res.status(500).json({ error: 'Failed to import library collection' });
+  }
+});
+
 canonRouter.post('/collections', async (req: Request, res: Response) => {
   try {
     const authReq = req as unknown as AuthRequest;
@@ -1425,6 +1615,7 @@ canonRouter.post('/collections', async (req: Request, res: Response) => {
 
     const newCollection: LibraryCollection = {
       _id: collectionId,
+      userId: authReq.userId,
       name: name.trim(),
       description: description.trim(),
       category: typeof category === 'string' && category.trim().length > 0 ? category.trim() : undefined,

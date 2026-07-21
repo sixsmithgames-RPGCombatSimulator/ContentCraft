@@ -3,8 +3,8 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { X, Package, Check, ChevronRight, Plus, Edit, Search } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { X, Package, Check, ChevronRight, Plus, Edit, Search, Download, Upload } from 'lucide-react';
 import { API_BASE_URL, apiFetch } from '../../services/api';
 
 interface Collection {
@@ -69,6 +69,9 @@ export default function CollectionsModal({
   const [hideSelected, setHideSelected] = useState(false);
   const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -95,6 +98,81 @@ export default function CollectionsModal({
       console.error('Error loading collections:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const responseError = async (response: Response, fallback: string): Promise<string> => {
+    try {
+      const body = await response.json();
+      return body.message || body.error || fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const handleExportCollection = async (collection: Collection) => {
+    setExporting(true);
+    setError(null);
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/canon/collections/${collection._id}/export`);
+      if (!response.ok) throw new Error(await responseError(response, 'Failed to export collection'));
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${collection.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'gmc-library'}.gmc-library.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to export collection';
+      setError(message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Library bundles must be 10 MB or smaller.');
+      return;
+    }
+
+    setImporting(true);
+    setError(null);
+    try {
+      let bundle: unknown;
+      try {
+        bundle = JSON.parse(await file.text());
+      } catch {
+        throw new Error('The selected file is not valid JSON.');
+      }
+
+      const response = await apiFetch(`${API_BASE_URL}/canon/collections/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bundle),
+      });
+      if (!response.ok) throw new Error(await responseError(response, 'Failed to import collection'));
+
+      const result = await response.json();
+      await loadCollections();
+      if (result.collection) setSelectedCollection(result.collection);
+      const imported = result.imported ?? {};
+      alert(
+        `✅ Library imported\n\n${imported.entities_created ?? 0} entities created\n` +
+        `${imported.entities_updated ?? 0} entities updated\n${imported.chunks_replaced ?? 0} retrieval chunks installed`,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to import collection';
+      setError(message);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -380,13 +458,30 @@ export default function CollectionsModal({
           </div>
           <div className="flex items-center gap-3">
             {!selectedCollection && !showCreateForm && (
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                Create Collection
-              </button>
+              <>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json,.gmc-library.json"
+                  onChange={handleImportFile}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => importInputRef.current?.click()}
+                  disabled={importing}
+                  className="flex items-center gap-2 px-4 py-2 border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 disabled:bg-gray-100 disabled:text-gray-400 text-sm font-medium"
+                >
+                  <Upload className="w-4 h-4" />
+                  {importing ? 'Importing...' : 'Import Library'}
+                </button>
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Collection
+                </button>
+              </>
             )}
             <button
               onClick={onClose}
@@ -766,6 +861,14 @@ export default function CollectionsModal({
                     >
                       <Edit className="w-4 h-4" />
                       Change Entities in Collection
+                    </button>
+                    <button
+                      onClick={() => handleExportCollection(selectedCollection)}
+                      disabled={exporting}
+                      className="px-4 py-3 border border-blue-300 text-blue-700 rounded-md hover:bg-blue-50 disabled:bg-gray-100 disabled:text-gray-400 flex items-center gap-2 whitespace-nowrap"
+                    >
+                      <Download className="w-4 h-4" />
+                      {exporting ? 'Exporting...' : 'Export Library'}
                     </button>
                     <button
                       onClick={() => handleLinkCollection(selectedCollection)}

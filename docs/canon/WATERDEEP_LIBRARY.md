@@ -24,6 +24,16 @@ npm run canon:waterdeep -- --user-id <clerk-user-id> --project-id <project-id>
 The importer is idempotent. It owns and replaces the retrieval chunks for its
 curated entities while preserving their original creation timestamps.
 
+The same collections can be transported through GMC's authenticated library
+bundle API. Exported artifacts are named:
+
+- `waterdeep-late-15th-century-dr.gmc-library.json`
+- `waterdeep-civic-systems-and-landmarks.gmc-library.json`
+
+Import the foundation first, followed by the civic bundle. The civic bundle
+also carries its relationship dependencies, so it remains valid if imported
+on its own.
+
 ## Detail layers to add next
 
 1. Ward gazetteers: major streets, gates, squares, temples, markets, civic
