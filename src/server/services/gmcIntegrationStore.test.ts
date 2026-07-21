@@ -364,6 +364,38 @@ describe('buildScenePresenceContract', () => {
     expect(proposed.presentNpcs.map((npc) => npc.name)).toEqual(['Old Vesper']);
     expect(proposed.knownNonPresentNpcs.map((npc) => npc.name)).toEqual(['Captain Thorne']);
   });
+
+  it('keeps a proposed roster revision stable when a staged NPC is materialized into sorted canon order', () => {
+    const currentContract = buildScenePresenceContract({ _id: 'scene-yard', presentNpcIds: ['dessa', 'factor'] }, [
+      { _id: 'dessa', canonical_name: 'Dessa Krail' },
+      { _id: 'factor', canonical_name: 'Factor Odran Vale' },
+    ]);
+    const location = { _id: 'flintwake-yard', canonical_name: 'Flintwake Wage Yard' };
+    const stagedDorrik = { _id: 'dorrik', canonical_name: 'Dorrik Siltvein', aliases: ['Silt'] };
+    const preview = buildProposedScenePresenceContract({
+      currentContract,
+      location,
+      presentNpcIds: ['dessa', 'dorrik', 'factor'],
+      npcs: [
+        { _id: 'dessa', canonical_name: 'Dessa Krail' },
+        { _id: 'factor', canonical_name: 'Factor Odran Vale' },
+        stagedDorrik,
+      ],
+    });
+    const materialized = buildProposedScenePresenceContract({
+      currentContract,
+      location,
+      presentNpcIds: ['dessa', 'dorrik', 'factor'],
+      npcs: [
+        { _id: 'dessa', canonical_name: 'Dessa Krail' },
+        stagedDorrik,
+        { _id: 'factor', canonical_name: 'Factor Odran Vale' },
+      ],
+    });
+
+    expect(materialized.revision).toBe(preview.revision);
+    expect(materialized.presentNpcs.map((npc) => npc.id)).toEqual(['dessa', 'dorrik', 'factor']);
+  });
 });
 
 describe('resolveSceneTransitionContract', () => {

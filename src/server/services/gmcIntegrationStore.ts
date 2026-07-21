@@ -1095,16 +1095,19 @@ export function buildProposedScenePresenceContract(input: {
     && Boolean(locationId)
     && Boolean(locationName)
     && projected.unresolvedPresentNpcIds.length === 0;
+  const presentNpcs = [...projected.presentNpcs]
+    .sort((left, right) => String(left?.id ?? '').localeCompare(String(right?.id ?? '')));
   const revisionSource = {
     authority: 'gmc.proposedScene.presentNpcIds',
     baseRevision: currentContract?.revision ?? null,
     currentSceneId: currentContract?.sceneId ?? null,
     locationId,
     presentNpcIds,
-    identities: projected.presentNpcs,
+    identities: presentNpcs,
   };
   return {
     ...projected,
+    presentNpcs,
     authority: 'gmc.proposedScene.presentNpcIds',
     sceneId: null,
     baseRevision: currentContract?.revision ?? null,
