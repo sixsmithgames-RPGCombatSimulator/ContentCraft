@@ -20,6 +20,7 @@
     "start": "node dist/server/index.js",
     "generate:types": "tsx scripts/generateTypes.ts",
     "generate:encounter-types": "tsx scripts/generate-encounter-types.ts",
+    "canon:waterdeep": "tsx src/server/scripts/importWaterdeepLibrary.ts",
     "test": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit"

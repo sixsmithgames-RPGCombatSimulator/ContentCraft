@@ -5,6 +5,7 @@
 
 export interface LibraryCollection {
   _id: string; // e.g., "collection.core_combat_spells"
+  userId?: string; // Owner in multi-tenant deployments
   name: string; // Display name
   description: string; // What this collection contains
   entity_ids: string[]; // Array of library entity IDs

@@ -24,6 +24,9 @@ yarn-error.log*
 
 # Database files
 data/
+!src/server/data/
+!src/server/data/waterdeepCanon.ts
+!src/server/data/waterdeepCanon.test.ts
 mongodb-data/
 *.db
 *.sqlite
