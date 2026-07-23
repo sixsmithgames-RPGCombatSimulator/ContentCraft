@@ -8,6 +8,7 @@ import { getCanonEntitiesCollection } from '../config/mongo.js';
 import { integrationAuth, type IntegrationRequest } from '../middleware/integrationAuth.js';
 import {
   buildMemoryContext,
+  buildNarrationEvidenceBundle,
   buildProposedScenePresenceContract,
   buildScenePresenceContract,
   collections,
@@ -51,6 +52,10 @@ import {
 export const gmcV1Router = Router();
 gmcV1Router.use(integrationAuth);
 
+export function shouldResolveNarrativeTransition(responseMode: string, sceneSegment: Record<string, unknown> | null) {
+  return responseMode !== 'ooc' && sceneSegment !== null;
+}
+
 const userId = (req: Request) => (req as IntegrationRequest).userId;
 const correlationId = (req: Request) => req.header('X-Sixsmith-Correlation-Id') || randomUUID();
 
@@ -62,22 +67,24 @@ function parseGameClockText(value: unknown) {
   const text = String(value ?? '').trim();
   if (!text) return null;
   const dayMatch = text.match(/\bday\s*(\d{1,5})\b/i);
-  const meridiemMatch = text.match(/\b(\d{1,2})(?::([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)\b/i);
-  const twentyFourHourMatch = meridiemMatch ? null : text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  const meridiemMatch = text.match(/\b(\d{1,2})(?::([0-5]\d))?(?::([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)\b/i);
+  const twentyFourHourMatch = meridiemMatch ? null : text.match(/\b([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\b/);
   const day = dayMatch ? Math.max(1, Number(dayMatch[1])) : null;
   let hour: number | null = null;
   let minute: number | null = null;
-  const second = 0;
+  let second = 0;
   if (meridiemMatch) {
     const rawHour = Number(meridiemMatch[1]);
-    const period = meridiemMatch[3].toLowerCase().replace(/\./g, '');
+    const period = meridiemMatch[4].toLowerCase().replace(/\./g, '');
     if (rawHour >= 1 && rawHour <= 12) {
       hour = rawHour % 12 + (period === 'pm' ? 12 : 0);
       minute = Number(meridiemMatch[2] ?? 0);
+      second = Number(meridiemMatch[3] ?? 0);
     }
   } else if (twentyFourHourMatch) {
     hour = Number(twentyFourHourMatch[1]);
     minute = Number(twentyFourHourMatch[2]);
+    second = Number(twentyFourHourMatch[3] ?? 0);
   }
   const timeOfDayMatch = text.match(/\b(dawn|morning|noon|afternoon|evening|dusk|night|midnight)\b/i);
   const timeOfDay = hour === null && timeOfDayMatch ? timeOfDayMatch[1].toLowerCase() : null;
@@ -350,7 +357,7 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/narrative/validate', asyncRoute(
   }
   let sceneTransitionContract = null;
   let selectedPresenceContract = currentContract;
-  if (responseMode !== 'ooc' && ['active', 'redirected'].includes(String(sceneSegment?.status ?? ''))) {
+  if (shouldResolveNarrativeTransition(responseMode, sceneSegment)) {
     sceneTransitionContract = resolveSceneTransitionContract({
       userId: uid,
       campaignId: id,
@@ -548,6 +555,49 @@ gmcV1Router.post('/campaigns/:campaignId/canon/relevant', asyncRoute(async (req,
     memoryContext,
     warnings: [],
   });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/narration/evidence', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req);
+  const id = req.params.campaignId;
+  const instruction = String(req.body?.instruction ?? '').trim();
+  if (!instruction) { fail(req, res, 400, 'VALIDATION_ERROR', 'instruction is required.'); return; }
+
+  // Canonical repairs complete before the snapshot is read. The resulting
+  // evidence and validation contracts are hashed together by one builder.
+  const prepared = await prepareMemoryReferences(uid, id, instruction);
+  const state = await collections.state().findOne({ userId: uid, campaignId: id });
+  const currentScene = state?.currentSceneId
+    ? await collections.scenes().findOne({ _id: state.currentSceneId, userId: uid, campaignId: id })
+    : null;
+  const [facts, items, threads, npcs, locations, factions] = await Promise.all([
+    listFacts(uid, id),
+    listEntities(uid, id, 'item'),
+    listThreads(uid, id),
+    listEntities(uid, id, 'npc'),
+    listEntities(uid, id, 'location'),
+    listEntities(uid, id, 'faction'),
+  ]);
+  const currentLocation = currentScene?.locationId
+    ? locations.find((location: any) => String(location?._id) === String(currentScene.locationId)) ?? null
+    : null;
+  res.json(buildNarrationEvidenceBundle({
+    campaignId: id,
+    instruction,
+    intentTags: Array.isArray(req.body?.intentTags) ? req.body.intentTags : [],
+    currentScene,
+    currentLocation,
+    gameClock: state?.gameClock ?? null,
+    facts,
+    items,
+    threads,
+    npcs,
+    locations,
+    factions,
+    resolution: prepared.resolution,
+    limits: req.body?.limits,
+  }));
 }));
 
 gmcV1Router.post('/campaigns/:campaignId/memory/context', asyncRoute(async (req, res) => {
@@ -792,9 +842,125 @@ gmcV1Router.patch('/sessions/:sessionId/summary', asyncRoute(async (req, res) =>
   res.json({ session });
 }));
 
+const COMPACT_ENVELOPE_AI_PATHS = new Set([
+  '/generate-narration',
+  '/adjudicate-skill-check',
+  '/respond-ooc',
+  '/retcon-narration',
+]);
+const COMPACT_AUXILIARY_AI_PATHS = new Set([
+  '/evaluate-experience-award',
+  '/plan-character-sheet-mutation',
+]);
+
+export const NARRATION_ENVELOPE_INSTRUCTION = `Execute only the supplied interactionEnvelope.
+GMA owns intent classification, allowed controls, continuity slicing, and mutation gates. GMC canon appears only in canonEvidence; VCS mechanics appear only in mechanics. Do not reconstruct omitted campaign state or add a competing interpretation of intent.
+Apply every envelope rule. Narrate only the newly authorized action. Preserve unaffected continuity, use only the exclusive present-NPC roster, and never invent mechanics, player actions, inventory changes, elapsed time, or canon.
+If task is repair_narration, remove every deterministicIssues entry from rejectedCandidate without replacing it with another unsupported detail.
+Return exactly one JSON object matching responseContract. For narration return {narration,npcDialogue,requiresVcsResolution,proposedCanonChanges,proposedVcsExports,proposedTimeAdvance,sceneSegmentUpdate,riskLevel,syncNotes,gmPrivateNotes}.`;
+
+export const SKILL_ENVELOPE_INSTRUCTION = `Adjudicate only the supplied interactionEnvelope.
+GMA has already determined this action is a genuine check candidate. Apply its rules and capability slice; do not request omitted character or campaign data.
+Choose no_roll unless meaningful uncertainty, a real consequence, and a plausible attempt all exist. Prefer passive resolution for routine or secret opportunities. Use hidden_roll only when revealing the check leaks hidden state. Use player_roll only for a knowingly attempted consequential task, with DC and five outcome bands. One check covers the declared method until circumstances materially change.
+Return {resolutionMode,skill,ability,dc,rollMode,passiveEligible,reason,preRollNarration,stakes,estimatedTimeCost,confidence}, plus requiredChecks only when distinct checks are all necessary.`;
+
+export const OOC_ENVELOPE_INSTRUCTION = `Answer only the out-of-character task in interactionEnvelope. Use its compact canon evidence and continuity, do not narrate the player character acting, and distinguish rules discussion from in-world facts. Never claim an authoritative write occurred. Return {response,continuityNotes,proposedCanonChanges}.`;
+
+export const RETCON_ENVELOPE_INSTRUCTION = `Apply only the retcon authorized by interactionEnvelope. Replace conflicting recent continuity, preserve unaffected state, and do not change GMC canon or VCS mechanics beyond explicit proposals. Do not replay corrected actions. Return {narration,correctionSummary,proposedCanonChanges,proposedTimeAdvance,continuityNotes}.`;
+
+export const ENCOUNTER_ENVELOPE_INSTRUCTION = `Decide only whether the compact GMA interaction has triggered an immediate encounter requiring turn order now.
+Default to continued narrative play. Conditional, hypothetical, contemplated, preparatory, or future violence is not a trigger. Do not invent an opponent absent from canonEvidence. A bounded likely-decisive single exchange may use standalone VCS mechanics instead of a BattleRoom; significant or persistent tactical state requires a BattleRoom.
+Return {shouldCreateBattleRoom,requiresTurnOrder,triggeredNow,transitionType,confidence,reason,encounterBrief}.`;
+
+export function validateCompactAiInput(req: Request) {
+  const size = Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8');
+  const target = req.path === '/detect-encounter-transition'
+    ? 24_000
+    : (COMPACT_AUXILIARY_AI_PATHS.has(req.path) ? 32_000 : 48_000);
+  if (COMPACT_ENVELOPE_AI_PATHS.has(req.path)) {
+    const envelope = req.body?.interactionEnvelope;
+    if (
+      envelope?.authority !== 'gma.narration-envelope'
+      || !envelope?.contractVersion
+      || envelope?.interaction?.authority !== 'gma.interaction-plan'
+      || envelope?.canonEvidence?.authority !== 'gmc.narration-evidence'
+      || !envelope?.canonEvidence?.evidenceRevision
+      || !envelope?.responseContract
+    ) {
+      throw Object.assign(new Error('A complete GMA interaction envelope with revision-bound GMC evidence is required.'), {
+        status: 400,
+        code: 'GMA_INTERACTION_ENVELOPE_REQUIRED',
+      });
+    }
+  }
+  if (req.path === '/detect-encounter-transition') {
+    if (
+      req.body?.task !== 'detect_immediate_encounter'
+      || req.body?.interaction?.authority !== 'gma.interaction-plan'
+      || req.body?.canonEvidence?.authority !== 'gmc.narration-evidence'
+      || !req.body?.canonEvidence?.evidenceRevision
+    ) {
+      throw Object.assign(new Error('Encounter detection requires the compact GMA interaction plan and GMC evidence revision.'), {
+        status: 400,
+        code: 'GMA_ENCOUNTER_ENVELOPE_REQUIRED',
+      });
+    }
+  }
+  if (req.path === '/evaluate-experience-award') {
+    if (
+      req.body?.task !== 'evaluate_experience_award'
+      || req.body?.interaction?.authority !== 'gma.interaction-plan'
+      || req.body?.character?.authority !== 'vcs.character-summary'
+      || req.body?.policy?.authority !== 'gma.experience-award-policy'
+    ) {
+      throw Object.assign(new Error('XP evaluation requires a compact GMA achievement contract and VCS character summary.'), {
+        status: 400,
+        code: 'GMA_XP_EVALUATION_CONTRACT_REQUIRED',
+      });
+    }
+  }
+  if (req.path === '/plan-character-sheet-mutation') {
+    if (
+      req.body?.task !== 'plan_character_sheet_mutation'
+      || req.body?.interaction?.authority !== 'gma.interaction-plan'
+      || req.body?.currentSheet?.authority !== 'vcs.character-sheet-slice'
+      || !req.body?.currentSheet?.revision
+      || req.body?.policy?.authority !== 'gma.character-sheet-mutation-policy'
+    ) {
+      throw Object.assign(new Error('Sheet planning requires a compact GMA mutation contract and revision-bound VCS resource slice.'), {
+        status: 400,
+        code: 'GMA_SHEET_MUTATION_CONTRACT_REQUIRED',
+      });
+    }
+  }
+  return { size, target, targetExceeded: size > target };
+}
+
+export function validateStructuredAiOutput(output: any, requiredKeys: string[]) {
+  if (!output || typeof output !== 'object' || Array.isArray(output) || requiredKeys.some((key) => output[key] === undefined)) return false;
+  for (const key of ['narration', 'response', 'reason', 'correctionSummary']) {
+    if (output[key] !== undefined && typeof output[key] !== 'string') return false;
+  }
+  for (const key of ['proposedCanonChanges', 'proposedVcsExports', 'continuityNotes', 'issues', 'syncNotes', 'requiredChecks']) {
+    if (output[key] !== undefined && !Array.isArray(output[key]) && !(key === 'syncNotes' && typeof output[key] === 'string')) return false;
+  }
+  for (const key of ['valid', 'shouldCreateBattleRoom', 'requiresTurnOrder', 'triggeredNow', 'shouldAward']) {
+    if (output[key] !== undefined && typeof output[key] !== 'boolean') return false;
+  }
+  if (output.riskLevel !== undefined && !['low', 'medium', 'high'].includes(String(output.riskLevel))) return false;
+  if (output.confidence !== undefined && (!Number.isFinite(Number(output.confidence)) || Number(output.confidence) < 0 || Number(output.confidence) > 1)) return false;
+  return true;
+}
+
 async function ai(req: Request, res: Response, instruction: string, requiredKeys: string[]) {
+  if (COMPACT_ENVELOPE_AI_PATHS.has(req.path) || COMPACT_AUXILIARY_AI_PATHS.has(req.path) || req.path === '/detect-encounter-transition') {
+    const metrics = validateCompactAiInput(req);
+    res.setHeader('X-GMC-AI-Context-Bytes', String(metrics.size));
+    res.setHeader('X-GMC-AI-Context-Target', String(metrics.target));
+    res.setHeader('X-GMC-AI-Context-Target-Exceeded', String(metrics.targetExceeded));
+  }
   const output = await generateStructuredJson(instruction, req.body, { operation: req.path, correlationId: correlationId(req) });
-  if (!output || typeof output !== 'object' || requiredKeys.some((key) => output[key] === undefined)) {
+  if (!validateStructuredAiOutput(output, requiredKeys)) {
     throw Object.assign(new Error(`Structured AI response is missing required fields: ${requiredKeys.join(', ')}.`), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
   }
   res.json(output);
@@ -823,20 +989,12 @@ gmcV1Router.post('/tools/parse-json', asyncRoute(async (req, res) => {
 }));
 
 gmcV1Router.post('/ai/classify-intent', asyncRoute((req, res) => ai(req, res, 'Classify the input. Return {intentType, confidence, structuredIntent, requiresVcs, requiresGameMasterCraft}. Allowed intentType values: narrative_action, mechanical_action, mixed_action, canon_query, rules_query, generation_request, prep_request, sync_request, correction, retcon, ooc_question, system_command.', ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'])));
-gmcV1Router.post('/ai/generate-narration', asyncRoute((req, res) => ai(req, res, `Continue directly from the established current state in conversationHistory. The supplied continuityContract is binding.
-PLAYER-FACING FICTION CONTRACT: narration is prose the player can read directly as the scene. Dramatize concrete motion, sensory detail, choices, dialogue, and consequences. Vary sentence openings and use natural short references after introducing a full name; do not repeat a database display name at the start of consecutive sentences. Characters speak only in-world language, never rules, interface, planning-schema, or diagnostic terminology.
-Never expose internal preparation or authority language in narration: no “current records,” “fixed carried inventory,” “authoritative manifest,” “canon data,” “structured output,” “without inventing,” field names such as responseText/sceneSegmentUpdate/proposedCanonChanges, underscore-delimited state codes, or standalone equipment-state labels such as Drawn, Sheathed, Readied, or Secured. Put private diagnostics in gmPrivateNotes. If a missing manifest or required canonical input prevents an exact result, do not disguise the failure as fiction: return a concise actionable diagnostic in gmPrivateNotes and keep narration to established visible action without claiming the unresolved result.
-First determine the player's NEW intent in the current instruction relative to the final assistant turn. Repeated wording may describe a multi-step method or refer to completed work; it is not permission to perform completed steps again. Deictic words such as "other", "next", "then", "after", "already", "again", and "continue" must advance their referent. Preserve all established positions, injuries, deaths, possessions, discoveries, searches, dialogue, and consequences, with the latest retcon taking precedence. Never re-award loot, re-search the same target, re-enter a location, or replay movement already completed. Resolve or materially advance each distinct new action in order. Do not merely paraphrase the instruction. Stop only at a genuine player decision or a check that the binding dmCheckPolicy actually requires.
-The supplied narrativeMomentumPolicy is binding. Treat a compound instruction as one authorization chain: a required roll may pause it, but after the roll resolves complete every remaining authorized step unless the result makes it impossible or creates a significant interruption. Carry established operating methods such as familiar scouting, shield formation, avoiding obvious alarms, following the strongest known lead, and continuing until contact through routine traversal until circumstances materially invalidate them.
-Before stopping, apply all parts of narrativeMomentumPolicy.significantStopAudit. Fresh player input must actually be required; reasonable options must have materially different consequences; and the unresolved choice must not already be answered by the instruction or established method. A junction, warning cord, unattended lamp, door, bend, route marker, suspicious but inert prop, or empty stretch is not independently a decision point merely because it can be described. Re-audit inherited active segments and importantBeats: a prior response naming a micro-beat does not make it significant, so redirect or fold it forward when it lacks material stakes. Apply successful-check benefits and continue toward a valid prepared importantBeat, active opposition, material discovery, costly commitment, irreversible choice, or terminal scene outcome. Do not invent a breadcrumb ladder of micro-obstacles to manufacture prompts.
-Planning is not execution. If the player says they start to plan, formulate or devise a plan, consider options, think about acting, watch, wait, or observe, keep them in that mental or observational state. Do not choose a plan for them, move them, manipulate an object, spend a resource, trigger a hazard, advance time pressure, or infer that a contemplated future action has begun. "Formulate a plan to sabotage it" does not authorize sabotage. Offer only information already available for deliberation and stop for the player's concrete decision.
-Use the supplied authoritative VCS result and campaign memory. Never invent, change, or recompute mechanical numbers. Do not contradict locked facts. Use playerCharacter capabilities and passive scores; never surface hidden reads. Passive resolution includes passive Perception, Insight, Investigation, or 10 + another applicable modifier when the DM chooses a passive repeated/secret task. If skillCheckDecision.resolutionMode is passive, use its passiveValue and passiveSuccess without mentioning a check, DC, success, or failure. Before requesting an eligible visible roll, state its DC and every scene-specific outcome band. Canon proposals must use recordType FACT, ITEM, or EVENT; FACT includes scope, ITEM includes itemTier/location/ownership, and EVENT includes a deadline plus the consequence of inaction.
-Use the supplied treasureRewardPolicy when the interaction establishes loot, coin, valuables, gear, or magic. This is a high-magic solo campaign; reward pacing should be more favorable than standard party play while remaining plausible in the scene and avoiding duplicate awards.
-Treat campaignDashboard.scenePresenceContract as binding and exclusive. Only presentNpcs may act, speak, observe, carry evidence, guard, or receive current assignments. A knownNonPresentNpcs entry remains absent; never silently repopulate the scene from memory, prior narration, or an uncommitted arrival/departure. Update GMC scene presence first, then narrate from the new revision.
-Use the supplied sceneSegmentPolicy and sceneImportancePolicy as binding scene scaffolding. Maintain the current playable segment as a known where/when/who/why/objective/doneWhen frame with importantBeats, knownDetails, and evidenceLedger. If the active segment is missing, stale, or underspecified, return sceneSegmentUpdate.status "active" with that scaffold. If the segment reaches an endpoint, return a terminal sceneSegmentUpdate with outcome, rewards, and arc impacts before framing the next decision.
-Use sceneImportanceContext before treating any detail as substantial, damning, newly collectible evidence, XP-worthy progress, or canon. A repeated known hazard or motif may orient or warn the player, but it is not new evidence unless this turn establishes a new source, pattern, quantity, condition, actor link, timing, route information, or safe collection method. Violet residue or violet leakage that has already been seen and warned against is normally a known hazardous trace, not a fresh proof packet to collect.
-The supplied gameTimePolicy and gameTimeContext are binding. Keep in-world time consistent. As a courtesy, mention current time of day/night and realistic travel or activity durations when the player is choosing where to go or what to spend time doing. If an action, rest, ritual, search, travel, wait, conversation, or other activity consumes meaningful time, state the duration in narration and return proposedTimeAdvance. Combat uses VCS scale: one round is about 6 seconds; do not turn every individual turn into a separate large time jump. Do not advance time for pure planning or observation unless the player actually waits or spends time. If the exact clock is unknown, say so briefly and use relative durations until a clock anchor is established.
-Return {narration, npcDialogue, requiresVcsResolution, proposedCanonChanges, proposedVcsExports, proposedTimeAdvance, sceneSegmentUpdate, riskLevel, syncNotes, gmPrivateNotes}. proposedTimeAdvance is null or {shouldAdvance,seconds,minutes,reason,activity,clockAfter}. sceneSegmentUpdate is null or {status,title,where,when,who,whyPresent,objective,doneWhen,importantBeats,knownDetails,evidenceLedger,stakes,availableRewards,rewardsRealized,rewardsMissed,outcome,arcImpacts,nextSceneSeed}.`, ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'])));
+gmcV1Router.post('/ai/generate-narration', asyncRoute((req, res) => ai(
+  req,
+  res,
+  NARRATION_ENVELOPE_INSTRUCTION,
+  ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'],
+)));
 gmcV1Router.post('/ai/validate-narration-continuity', asyncRoute((req, res) => ai(req, res, `Act as a strict continuity editor, not a storyteller. Compare candidateNarration with the ordered conversationHistory, current instruction, continuityContract, authoritative VCS state, and campaign dashboard.
 Mark the candidate invalid if it repeats an action already completed; awards the same item, money, information, damage, movement, or search result twice; contradicts the latest retcon or established state; ignores referents such as "other" or "next"; converts planning, considering, thinking, watching, or waiting into execution of a contemplated action; fails to resolve or materially advance an explicit new action; substitutes a recap for progress; or narrates a roll-dependent outcome without an authoritative result. A short orientation phrase is allowed, but the response must move forward without exceeding the player's stated intent.
 When resolvedMechanicsContract is supplied, audit at event-level fidelity. authoritativeMechanicalResult, authoritativeOutcome, and rollRequest are complete and immutable. Mark the candidate invalid if it adds any follow-up action, target response after the immediate result, changed position, movement, forced movement, lost balance, condition, injury from zero damage, dialogue, material or construction detail, equipment property, terrain dimension, discovery, loot, reinforcement, or encounter transition that is absent from the supplied state. Atmospheric description may elaborate sound, light, and motion already inherent in the declared action, but may not establish a new durable fact. A zero-damage result is harmless and cannot make the target stumble, stagger, lose balance, slow, drop something, or suffer delayed impairment. Never invent words, movement, choices, or another action for the player character. Correct only the prose; never ask for or replay the mechanic.
@@ -847,45 +1005,22 @@ Treat campaignDashboard.scenePresenceContract as binding. Mark the candidate inv
 Use narrativeMomentumPolicy to mark the candidate invalid when it stops at routine follow-through, asks the player to repeat an already stated method, fails to finish actions after a resolved roll, or presents a cosmetic/procedural option menu whose choices lack materially different consequences. Minimally extend the correction through those micro-beats to the next significant interruption.
 If valid, preserve candidateNarration exactly as correctedNarration. If invalid, write a minimally changed replacement that repairs every listed issue, honors the player's actual intent, preserves authoritative mechanics and established facts, and stops at the next genuine decision or properly framed roll. Do not add new mechanics merely to make the prose interesting.
 Return {valid, issues:[{code,explanation}], correctedNarration, understoodPlayerIntent, stateAdvanced}.`, ['valid', 'issues', 'correctedNarration', 'understoodPlayerIntent', 'stateAdvanced'])));
-gmcV1Router.post('/ai/evaluate-experience-award', asyncRoute((req, res) => ai(req, res, `Evaluate only the newly completed achievement in this interaction for a fair individual XP award. Use the supplied xpAwardPolicy as binding limits and consider character level, actual danger, difficulty, consequences, ingenuity, discovery, roleplay impact, and authoritative VCS mechanics.
-
-Award XP for meaningful progress, including combat victories, surviving serious danger, resolving or circumventing puzzles and obstacles, significant discoveries, strong consequential social play, objectives, and clever nonviolent solutions. Circumventing a challenge earns comparable XP to defeating it when it resolves the same obstacle. A small but meaningful dialogue beat may earn 5 XP. Routine conversation, repeated actions, bookkeeping, unconfirmed plans, mere attempts, or narration that makes no progress earn 0.
-
-Do not award per attack, per line of dialogue, or repeatedly for the same challenge. A combat encounter is awarded when its outcome is resolved, not for each combat turn. Do not stack "defeated", "survived", and "circumvented" rewards for one obstacle. Use prior conversation and authoritative state to identify already-rewarded or unresolved challenges. Prefer the low end when risk or impact is modest and the high end only for genuinely severe or campaign-shaping achievements. Use monster XP from authoritative data when available, adjusted for the character's share, but never invent a monster XP value.
-Use sceneImportancePolicy and sceneImportanceContext when judging discovery XP. Repeatedly noticing or mentioning the same known clue, residue, warning, or hazard earns 0 unless the new interaction establishes a material differentiator, resolves a scene objective, safely recovers something that could not previously be recovered, or changes the campaign state.
-
-Return {shouldAward,amount,category:'dialogue|roleplay|social|exploration|discovery|puzzle|combat|survival|objective|creative_solution|none',difficulty:'trivial|minor|meaningful|major|deadly|campaign',rationale,relatedChallengeId,alreadyRewarded,confidence,evidence}. amount must be a non-negative integer multiple of 5 and must remain inside the policy range for the selected difficulty.`, ['shouldAward', 'amount', 'category', 'difficulty', 'rationale', 'relatedChallengeId', 'alreadyRewarded', 'confidence', 'evidence'])));
-gmcV1Router.post('/ai/adjudicate-skill-check', asyncRoute((req, res) => ai(req, res, `Adjudicate whether the current player instruction requires a D&D ability or skill check before any outcome is narrated. The supplied dmCheckPolicy is binding.
-
-Choose exactly one resolutionMode:
-- no_roll: there is no meaningful uncertainty, no consequential failure, the attempt is impossible, or it is routine. Routine success may be narrated normally.
-- passive: passive Perception or passive Insight meets the DC, so the character notices or understands automatically without revealing a check.
-- player_roll: the character is consciously attempting something uncertain and the player may know a check is occurring.
-- hidden_roll: knowing a roll occurred or seeing its result would reveal hidden information, including whether someone is following, watching, lying, concealed, or absent. The server will roll privately and narration must never mention the check.
-
-Apply passive and visibility adjudication in this order:
-1. First decide whether the task has meaningful uncertainty, a real failure consequence, and an actual opportunity the method could affect. A player saying "I roll", asking for a check, or volunteering a die result is only an adjudication request; it does not create a check and the volunteered number is not authoritative. Choose no_roll when there is nothing meaningful to resolve.
-2. For standing vigilance, repeated searching/scouting, routine examination, and unknown opportunities, compare passive Perception, Insight, Investigation, or 10 + the applicable modifier. Choose passive and return passiveEligible:true when passive resolution is appropriate; do not reveal the DC or that an opportunity was checked.
-3. Choose hidden_roll only when meaningful variability beyond passive resolution is warranted and merely knowing a check occurred would leak a creature, clue, lie, trap, observer, or missed opportunity. Return passiveEligible:false when the hidden roll must remain variable even if the passive score meets the DC.
-4. Choose player_roll only when the character knowingly undertakes a consequential uncertain task and awareness of the check does not reveal hidden state.
-
-Review recent conversationHistory rollRequest entries. Do not offer or accept a reroll for the same unchanged task after a low result. Require a material change in method, circumstances, information, tools, help, time investment, or consequence. A declared ongoing scouting/search method is not a request for another roll at every opportunity.
-
-Use dmCheckPolicy.sequenceResolution and narrativeMomentumPolicy. One check resolves the declared method across its immediate action sequence until the circumstances, threat, stakes, opposition, or method materially change. Do not request another scouting, searching, trap-checking, or route-reading roll merely because the group reaches the next short corridor, branch, bend, object, or movement interval. A compound instruction such as "disable the alarm, then proceed" keeps the second action authorized after the first action's check resolves.
-
-Planning, considering, thinking through options, watching, waiting, and beginning to formulate a future plan do not call for a roll and do not authorize the contemplated action. Choose no_roll without resolving or advancing that future action. "I start to formulate a plan to sabotage it" means only that deliberation begins; the character has not touched, approached, sabotaged, or manipulated anything.
-
-Choose Perception versus Investigation by the purpose of the action, not by whether the player used words such as look, search, inspect, examine, or investigate:
-- Wisdom (Perception) detects or locates what can be noticed through the senses. Use it for looking around, watching, scanning, listening, smelling, spotting movement or hidden creatures, noticing visible details, and ordinary searches of a room, body, container, or area. Active searching does not make the check Investigation.
-- Intelligence (Investigation) interprets evidence and reasons toward a conclusion. Use it for connecting clues, deciding what evidence matters, reconstructing events, deciphering information, solving puzzles, finding patterns, and determining how or why a mechanism works, broke, or was altered.
-- Ask what success answers. If it answers "What do I notice?" or "Where is it?", prefer Perception. If it answers "What does this mean?", "How does this work?", or "What can I deduce?", prefer Investigation.
-- A methodical search may use Investigation only when organization, inference, or understanding is the obstacle. Do not select Investigation merely because the search is deliberate or targets a physical clue.
-
-Do not narrate evidence, clues, observers, success, failure, or ambiguity before a required roll. For player_roll, provide brief preRollNarration that positions the attempt without resolving it, and five concrete scene-specific stake bands keyed criticalFailure, partial, success, greatSuccess, criticalSuccess. Each band must tell the player what changes at that outcome; do not use generic boilerplate. Use only these skills when applicable: acrobatics, animal_handling, arcana, athletics, deception, history, insight, intimidation, investigation, medicine, nature, perception, performance, persuasion, religion, sleight_of_hand, stealth, survival. Use a DC from 5 to 30 and rollMode normal|advantage|disadvantage. Consult playerCharacter passives and modifiers. If a passive floor resolves the information, choose passive rather than player_roll.
-
-The supplied gameTimePolicy is binding. If the check itself would consume meaningful time, include that in the lite stakes and full stakes as a concrete cost or pressure. If two approaches differ primarily by time, make that clear.
-Use sceneImportancePolicy and sceneImportanceContext when deciding whether the check discovers something new. Rechecking a known hazard can confirm, avoid, bypass, identify a new differentiator, or establish safe handling, but the stakes must not promise decisive new evidence from a repeated known detail unless the scene scaffold or current method supports it.
-Return {resolutionMode,skill,ability,dc,rollMode,passiveEligible,reason,preRollNarration,stakes:{criticalFailure,partial,success,greatSuccess,criticalSuccess},estimatedTimeCost,confidence}.`, ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'])));
+export const EXPERIENCE_AWARD_INSTRUCTION = `Evaluate only the compact achievement contract supplied by GMA.
+Use achievement, priorAwards, the VCS character summary, and policy.effectiveRanges. Authoritative mechanics are immutable; never reconstruct omitted campaign state or invent monster XP.
+Award completed meaningful progress, not attempts, preparation, bookkeeping, routine travel, individual attacks, or repeated clues. One challenge receives one award; combat is awarded only when its outcome resolves. A repeated discovery earns 0 without a material new differentiator or completed objective.
+Return {shouldAward,amount,category:'dialogue|roleplay|social|exploration|discovery|puzzle|combat|survival|objective|creative_solution|none',difficulty:'trivial|minor|meaningful|major|deadly|campaign',rationale,relatedChallengeId,alreadyRewarded,confidence,evidence}. amount is a non-negative multiple of 5 inside the selected effective range.`;
+gmcV1Router.post('/ai/evaluate-experience-award', asyncRoute((req, res) => ai(
+  req,
+  res,
+  EXPERIENCE_AWARD_INSTRUCTION,
+  ['shouldAward', 'amount', 'category', 'difficulty', 'rationale', 'relatedChallengeId', 'alreadyRewarded', 'confidence', 'evidence'],
+)));
+gmcV1Router.post('/ai/adjudicate-skill-check', asyncRoute((req, res) => ai(
+  req,
+  res,
+  SKILL_ENVELOPE_INSTRUCTION,
+  ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'],
+)));
 gmcV1Router.post('/ai/narrate-skill-check-result', asyncRoute((req, res) => ai(req, res, `Narrate the authoritative VCS skill-check result and continue directly from the player's original action. Use authoritativeCheckOutcome and the matching scene-specific stake in rollRequest.stakes. Never change the d20, modifier, total, DC, margin, or outcome band. Do not replay actions completed before this check. If rollRequest.visibility is hidden, never mention a roll, DC, failure, success, modifier, or that hidden information was tested; simply narrate what the character perceives from the authoritative outcome. For a visible player roll, natural prose may reflect the quality of the result but should not read like a rules log. Resolve the attempted action and preserve uncertainty that the outcome band does not reveal.
 Write one to three connected paragraphs of vivid player-facing fiction grounded in concrete motion, sensory evidence, environment, pressure, and consequence. Begin at the checked moment instead of recapping the scene. Vary sentence rhythm and references; never produce a dry report such as “the check succeeds,” “the result is recorded,” or “the character follows through.” Do not expose dice, totals, modifiers, DCs, outcome labels, VCS/GMA/GMC, schemas, IDs, or validation language. Do not invent player-character dialogue or a new decision. Do not invent discoveries, possessions, injuries, movement, NPC knowledge, or follow-up actions beyond the exact outcome band and remaining action already authorized by the instruction.
 The supplied narrativeMomentumPolicy is binding. The roll paused the player's compound instruction; it did not cancel actions that followed the checked step. Finish every remaining authorized action unless the result makes it impossible or creates a significant interruption. Carry established operating methods through routine follow-through, apply the benefit earned by the roll, and stop only after every part of significantStopAudit passes. Do not stop at a junction, alarm, unattended object, route marker, door, bend, or empty stretch merely to offer inspect/scout/bypass choices. Continue to active opposition, a material discovery or tradeoff, a costly or irreversible commitment, a prepared importantBeat, or a terminal scene outcome that genuinely requires fresh input.
@@ -905,50 +1040,24 @@ gmcV1Router.post('/ai/audit-resolved-mechanics-narration', asyncRoute((req, res)
   AUDIT_RESOLVED_MECHANICS_NARRATION_INSTRUCTION,
   [...AUDIT_RESOLVED_MECHANICS_NARRATION_REQUIRED_KEYS],
 )));
-gmcV1Router.post('/ai/respond-ooc', asyncRoute((req, res) => ai(req, res, 'Respond out of character as the DM to the player, using conversationHistory and campaign context. Answer every direct player question before offering next steps. Do not narrate the player character taking actions. Clearly distinguish rules/table discussion from in-world facts. If the player identifies a continuity or plausibility problem, do not defend the narration by inventing an unsupported explanation: acknowledge the concrete inconsistency, state the corrected interpretation, and say whether a retcon is needed. When initiative or a check is challenged, compare it to the player\'s actual wording rather than actions invented by prior narration. Planning, considering, thinking, watching, and waiting are not execution; acknowledge an erroneous initiative transition when no concrete tactical action occurred. If the player asks whether a check is appropriate, apply dmCheckPolicy and explain the decision and stakes directly. If the player asks about time, answer from gameTimeContext and gameTimePolicy, distinguishing exact clock time from estimates. Never claim that a VCS character sheet, inventory, currency balance, hit points, hit dice, XP, or the campaign clock was updated; the caller performs and confirms authoritative writes separately. Return {response,continuityNotes,proposedCanonChanges}.', ['response', 'continuityNotes', 'proposedCanonChanges'])));
-export const PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION = `Decide whether this interaction establishes or explicitly requests an authoritative VCS character-sheet change. Use currentSheet as the starting authority and the ordered conversationHistory to distinguish newly established changes from possessions or costs already synchronized. The candidateResponse is prose only and is not proof that a write occurred.
-
-Return a mutation only for confirmed acquisitions, losses, expenditures, healing, damage, rests, or explicit bookkeeping corrections. Do not mutate for plans, attempts, hypothetical rewards, disputed outcomes, or merely mentioning an existing possession. When the player asks to backfill an established but unsynchronized reward, include it once. A prior conversation entry whose sheetMutation status is applied is already synchronized and must never be applied again.
-
-The supplied treasureRewardPolicy is binding when interpreting newly established coin, valuables, gear, and magic. This is a high-magic solo campaign, so plausible rewards should be more favorable than standard party play. Use the policy baseline as calibration while preserving the fiction and never duplicating already synchronized loot.
-
-Currency rules:
-- Use mode delta for coin gained or spent so existing recorded wealth is preserved. Values may be positive or negative integers.
-- Use mode set only when the player explicitly gives an authoritative replacement balance for the whole denomination or requests a correction to that exact total.
-- Never reinterpret a newly gained amount as the character's whole balance.
-
-Inventory rules:
-- add contains only items newly owned by the character; use a stable concise name and quantity.
-- remove contains items actually lost, consumed, sold, or transferred, with quantity when known.
-- All newly acquired weapons and all ammunition go through items.add and remain general inventory. Weapon type, name, damage, attack data, and simulator usability never imply that a weapon is equipped.
-- Do not put currency in inventory items.
-- Never create placeholder or provisional possessions such as “recovered coin pouch,” “unknown loot,” “contents pending,” “exact denominations pending,” or “awaiting authoritative tally.” If the item identity, amount, denomination, quantity, ownership, or manifest is unresolved, return shouldMutate:false and explain the missing authority in reason. Do not convert uncertainty into an inventory label.
-
-Equipped-weapon rules:
-- equippedWeapons means weapons carried ready for immediate use, such as in hand, a holster, scabbard, sling, or another explicitly established ready-access position.
-- Use equippedWeapons.equip or equippedWeapons.unequip only when the player explicitly readies, draws, holsters, stows, equips, or unequips a weapon. These operations move an already-owned quantity atomically between general inventory and Equipped Weapons.
-- Never infer an equip operation from acquisition, item classification, combat statistics, or the fact that VCS could make an attack from the weapon.
-- Ammunition can never be placed in Equipped Weapons; it always remains general inventory.
-
-HP, hit-dice, and XP rules:
-- Use delta for newly established damage, healing, spent/recovered dice, or manual XP adjustments.
-- Use set only for an explicit authoritative correction.
-- Ordinary GMA milestone/challenge XP awards are handled by a separate audited path, so leave XP unchanged unless the player explicitly requests a manual correction.
-
-Return {
-  shouldMutate,
-  confidence,
-  reason,
-  currency:{mode:'none|delta|set',cp,sp,ep,gp,pp},
-  items:{add:[{name,quantity,type?}],remove:[{name,quantity}]},
-  equippedWeapons:{equip:[{name,quantity}],unequip:[{name,quantity}]},
-  hitPoints:{mode:'none|delta|set',current,maximum,temporary},
-  hitDice:{mode:'none|delta|set',total,spent},
-  experiencePoints:{mode:'none|delta|set',value}
-}. Use zero for unused numeric values, empty arrays for unused item and equipped-weapon operations, and confidence from 0 to 1.`;
+gmcV1Router.post('/ai/respond-ooc', asyncRoute((req, res) => ai(
+  req,
+  res,
+  OOC_ENVELOPE_INSTRUCTION,
+  ['response', 'continuityNotes', 'proposedCanonChanges'],
+)));
+export const PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION = `Plan only from the compact, revision-bound VCS resource slice and evidence selected by GMA.
+Return a mutation only for a newly established acquisition, loss, expenditure, healing, damage, rest, explicit equip/unequip, or bookkeeping correction. Plans, attempts, hypotheses, prose alone, and prior applied/duplicate mutations make no change. Never infer omitted inventory or campaign state.
+Currency gains/costs use delta; set requires an explicit replacement total. All newly acquired weapons and all ammunition go through items.add; weapon type and acquisition never imply that a weapon is equipped. Equip/unequip only when explicitly established and move an already-owned quantity atomically. Ammunition can never be placed in Equipped Weapons. Unresolved identity, quantity, denomination, ownership, or provisional loot makes shouldMutate false. Ordinary audited challenge XP is handled separately.
+Return {shouldMutate,confidence,reason,currency:{mode:'none|delta|set',cp,sp,ep,gp,pp},items:{add:[{name,quantity,type?}],remove:[{name,quantity}]},equippedWeapons:{equip:[{name,quantity}],unequip:[{name,quantity}]},hitPoints:{mode:'none|delta|set',current,maximum,temporary},hitDice:{mode:'none|delta|set',total,spent},experiencePoints:{mode:'none|delta|set',value}}. Use zero and empty arrays for unused fields.`;
 export const PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS = ['shouldMutate', 'confidence', 'reason', 'currency', 'items', 'equippedWeapons', 'hitPoints', 'hitDice', 'experiencePoints'];
 gmcV1Router.post('/ai/plan-character-sheet-mutation', asyncRoute((req, res) => ai(req, res, PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION, PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS)));
-gmcV1Router.post('/ai/retcon-narration', asyncRoute((req, res) => ai(req, res, 'Apply the player retcon instruction as an authoritative correction to recent conversationHistory. Discard contradicted narration and preserve everything not affected. The corrected narration becomes established current state: concrete possessions, discoveries, injuries, deaths, positions, completed searches, and elapsed in-world time it states must not be awarded or performed again in later turns. Continue from the corrected state without replaying earlier beats. Do not alter VCS mechanics or campaign time unless an authoritative restored snapshot or explicit retcon instruction is supplied. If the corrected continuation reaches a check, the supplied dmCheckPolicy is binding and all stakes must be disclosed before requesting the roll. Use gameTimePolicy for any corrected time handling. Return {narration,correctionSummary,proposedCanonChanges,proposedTimeAdvance,continuityNotes}.', ['narration', 'correctionSummary', 'proposedCanonChanges', 'continuityNotes'])));
+gmcV1Router.post('/ai/retcon-narration', asyncRoute((req, res) => ai(
+  req,
+  res,
+  RETCON_ENVELOPE_INSTRUCTION,
+  ['narration', 'correctionSummary', 'proposedCanonChanges', 'continuityNotes'],
+)));
 gmcV1Router.post('/ai/generate-npc-dialogue', asyncRoute((req, res) => ai(req, res, 'Generate canon-aware NPC dialogue. Preserve secrets and motivations. Return {dialogue, narration, proposedCanonChanges}.', ['dialogue', 'narration', 'proposedCanonChanges'])));
 gmcV1Router.post('/ai/extract-canon-changes', asyncRoute((req, res) => ai(req, res, `Extract only durable, newly established story memory from the ordered transcript. Use campaignDashboard to avoid duplicating existing entities or records. The latest retcon supersedes contradicted text. Player plans, questions, speculation, failed narration, and unconfirmed possibilities are not canon. Raw mechanics become memory only when they create a durable story consequence.
 Use sceneImportancePolicy and sceneImportanceContext. Do not propose canon for a repeated known hazard, residue, clue, warning, or motif unless the latest interaction establishes a new material fact about source, pattern, quantity, condition, actor connection, timing, route information, safe recovery, ownership, or scene outcome. Violet residue/leakage already seen and warned against remains an existing hazard/reminder unless this transcript adds one of those differentiators.
@@ -995,22 +1104,16 @@ Return {
   openingScene:{name,description,where,when,objective,doneWhen,importantBeats,knownDetails,evidenceLedger,rewards,arcImpacts,playerExits,gmPrivateNotes,presentNpcNames},
   initialFactions:[{name,role,status,publicFace,secret,goal,methods,resources,relationshipToProtagonist,tags}],
   initialFacts:[{text,category,scope:{kind,tier,locationId,locationName,entityId,entityName},locked,secret}],
-  initialNpcs:[{name,role,entityTier,presentInOpeningScene,motivation,secret,voice,relationshipToProtagonist,tags}],
+  initialNpcs:[{name,role,entityTier,presentInOpeningScene,motivation,personality_traits:[...],ideals:[...],bonds:[...],flaws:[...],secret,voice,relationshipToProtagonist,tags}],
   openThreads:[{title,description,deadlineDescription,consequence,scope:{kind,tier,locationId,locationName,entityId,entityName}}],
   sessionZeroSummary:{summary,keyDecisions,safetyNotes,playStyleNotes}
-}. FACT scope tier must be geographic (world, city, district, site, room) or entity (bbeg, lieutenant, henchman, contact). NPC entityTier uses bbeg, lieutenant, henchman, or contact. Location geographicTier uses world, city, district, site, or room. Every open thread is an EVENT: give it a meaningful trigger/deadline and a concrete consequence if it goes unaddressed. Generate at least 10 durable initial facts, 6-12 NPCs, 3-6 factions, 4-8 keyed locations, and 8-16 open threads unless Session 0 explicitly calls for a tiny campaign.`, ['campaign', 'campaignStructure', 'progressionPlan', 'rewardPlan', 'startingLocation', 'keyLocations', 'openingScene', 'initialFactions', 'initialFacts', 'initialNpcs', 'openThreads', 'sessionZeroSummary'])));
-gmcV1Router.post('/ai/detect-encounter-transition', asyncRoute((req, res) => ai(req, res, `Decide whether the supplied player instruction and established current scene have crossed into an encounter that needs a VCS BattleRoom right now. Default to continued narrative play.
-
-A BattleRoom is appropriate only when all are true:
-- A concrete attack, hostile confrontation, chase, or immediate tactical hazard has actually begun in the current moment.
-- The order and position of multiple actors now matter before the next outcome can be resolved fairly.
-- The scene cannot be resolved cleanly with narration, one ability check, or a short sequence of checks.
-
-Do not create a BattleRoom for following or watching someone, scouting, sneaking, pickpocketing, lifting a purse, preparing a distraction, creating or waiting for an opportunity, setting a trap that has not triggered, stating a hoped-for knockout, or describing a plan that might lead to violence later. A desired future result such as knocking someone down or out is not an immediate attack when the current action is still arranging the opportunity. Heists, cons, escapes, and social maneuvers remain narrative unless active opposition makes turn order necessary. Do not add extra opponents merely to justify combat.
-
-Planning language is never a present tactical trigger. "I start to formulate a plan", "I think about sabotaging it", "I consider my options", and similar wording mean the character is only deliberating. Do not convert the object of the plan into an action, invent urgency to force a transition, or claim the player manipulated anything. Existing danger or a possible future consequence is not enough by itself; turn order must be required by something actually happening now.
-
-Return {shouldCreateBattleRoom,requiresTurnOrder,triggeredNow,transitionType,confidence,reason,encounterBrief}. requiresTurnOrder and triggeredNow must be booleans. transitionType must be one of none|combat|chase|tactical_hazard. encounterBrief is null unless shouldCreateBattleRoom is true. confidence must be 0-1.`, ['shouldCreateBattleRoom', 'requiresTurnOrder', 'triggeredNow', 'transitionType', 'confidence', 'reason', 'encounterBrief'])));
+}. FACT scope tier must be geographic (world, city, district, site, room) or entity (bbeg, lieutenant, henchman, contact). NPC entityTier uses bbeg, lieutenant, henchman, or contact. Every initial NPC must have non-empty personality_traits, ideals, bonds, and flaws arrays; these are required character-defining material, not optional decoration. Every open thread is an EVENT: give it a meaningful trigger/deadline and a concrete consequence if it goes unaddressed. Generate at least 10 durable initial facts, 6-12 NPCs, 3-6 factions, 4-8 keyed locations, and 8-16 open threads unless Session 0 explicitly calls for a tiny campaign.`, ['campaign', 'campaignStructure', 'progressionPlan', 'rewardPlan', 'startingLocation', 'keyLocations', 'openingScene', 'initialFactions', 'initialFacts', 'initialNpcs', 'openThreads', 'sessionZeroSummary'])));
+gmcV1Router.post('/ai/detect-encounter-transition', asyncRoute((req, res) => ai(
+  req,
+  res,
+  ENCOUNTER_ENVELOPE_INSTRUCTION,
+  ['shouldCreateBattleRoom', 'requiresTurnOrder', 'triggeredNow', 'transitionType', 'confidence', 'reason', 'encounterBrief'],
+)));
 gmcV1Router.post('/ai/plan-encounter', asyncRoute((req, res) => ai(
   req,
   res,

@@ -67,6 +67,7 @@ ITEM narrative tier is one of `plot`, `mundane`, `currency`, or `furniture`. Loc
 POST /api/gmc/v1/campaigns/{campaignId}/memory/context
 POST /api/gmc/v1/campaigns/{campaignId}/memory/resolve-references
 POST /api/gmc/v1/campaigns/{campaignId}/memory/prepare-references
+POST /api/gmc/v1/campaigns/{campaignId}/narration/evidence
 Content-Type: application/json
 
 {
@@ -77,7 +78,15 @@ Content-Type: application/json
 
 The returned `memoryContext` always includes world FACTs, plot ITEMs, and BBEG/lieutenant entity memory. It adds geographic FACTs/EVENTs whose location is in the current ancestry, minor entity memory only when that entity is present, and mundane/currency/furniture ITEMs only when their location or owner is in the scene. `retrieval.included` and `retrieval.excluded` make the selection auditable.
 
-`memory/resolve-references` is read-only. Its result includes a revision-bound `gmc.worldGenerationPolicy`. Canonical cues such as “back,” “same,” “usual,” or “last” remain binding and are never replaced by generated canon. Open-ended intent such as looking for a new mark may authorize only the necessary entity types; a mixed instruction can therefore bind a known location while allowing a new NPC there. `memory/prepare-references` is the pre-narration synchronization gate: it performs only deterministic canonical normalization, then returns the same reference-resolution contract. For example, when a player exactly names an NPC-associated place already stored in that NPC's `details.location`, GMC materializes the missing typed Location with provenance and a reciprocal relationship. It does not invent an address, layout, business type, or other setting detail. GMA must run this gate before any narration-related model call and stop for clarification when an actual requested canonical reference is not resolved.
+`memory/resolve-references` is read-only. Its result includes a revision-bound `gmc.worldGenerationPolicy`. Canonical cues such as “back,” “same,” “usual,” or “last” remain binding and are never replaced by generated canon. Open-ended intent such as looking for a new mark may authorize only the necessary entity types; a mixed instruction can therefore bind a known location while allowing a new NPC there. `memory/prepare-references` performs deterministic canonical normalization, then returns the same reference-resolution contract. For example, when a player exactly names an NPC-associated place already stored in that NPC's `details.location`, GMC materializes the missing typed Location with provenance and a reciprocal relationship. It does not invent an address, layout, business type, or other setting detail.
+
+`narration/evidence` is the narration synchronization gate. It completes the same canonical preparation, then produces one hash-bound snapshot with:
+
+- `evidence`: query-ranked facts, items, threads, locations, selected references, the current location, and compact role/motivation profiles for present NPCs plus only specifically referenced absent NPCs. This is the only GMC data intended for the model prompt.
+- `validation`: the complete exclusive scene-presence roster and the same `evidenceRevision`. GMA keeps this outside the model prompt and uses it for deterministic output validation.
+
+GMA must reject a mismatched evidence/validation revision, an instruction-fingerprint mismatch, or a scene-presence revision that changes before narration. This prevents prompt selection and output validation from using different views of canon.
+Compact AI routes report context bytes and their tuning target in response headers. The target is observability and adaptive-packing guidance, not a request rejection limit.
 
 New records should use these shapes:
 

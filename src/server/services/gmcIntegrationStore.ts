@@ -18,6 +18,7 @@ export const ITEM_TIERS = ['plot', 'mundane', 'currency', 'furniture'] as const;
 export const CAMPAIGN_MEMORY_CONTRACT_VERSION = '2026-07-21.1';
 export const WORLD_GENERATION_POLICY_VERSION = '2026-07-21.1';
 export const SCENE_TRANSITION_CONTRACT_VERSION = '2026-07-21.1';
+export const NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-07-23.1';
 
 function includes<T extends readonly string[]>(values: T, value: unknown): value is T[number] {
   return values.includes(String(value) as T[number]);
@@ -1038,7 +1039,9 @@ function presenceIdentity(npc: any) {
  * date_of_change: 2026-07-19
  */
 export function buildScenePresenceContract(scene: any, npcs: any[]) {
-  const exactPresentNpcIds: string[] = (Array.isArray(scene?.presentNpcIds) ? scene.presentNpcIds : []).map(String);
+  const exactPresentNpcIds: string[] = [...new Set<string>(
+    (Array.isArray(scene?.presentNpcIds) ? scene.presentNpcIds : []).map((value: any) => String(value)).filter(Boolean),
+  )];
   const present = new Set(exactPresentNpcIds);
   const identities = (Array.isArray(npcs) ? npcs : []).map(presenceIdentity).filter((npc) => npc.id);
   const presentNpcs = identities.filter((npc) => present.has(npc.id));
@@ -1047,8 +1050,8 @@ export function buildScenePresenceContract(scene: any, npcs: any[]) {
   const revisionSource = {
     sceneId: String(scene?._id ?? scene?.id ?? ''),
     sceneUpdatedAt: scene?.updatedAt ?? null,
-    exactPresentNpcIds,
-    identities,
+    exactPresentNpcIds: [...exactPresentNpcIds].sort(),
+    identities: [...identities].sort((left, right) => left.id.localeCompare(right.id)),
   };
   return {
     authority: 'gmc.currentScene.presentNpcIds',
@@ -1065,6 +1068,281 @@ export function buildScenePresenceContract(scene: any, npcs: any[]) {
       'A known non-present NPC cannot act, speak, observe, carry, guard, or receive an assignment in current narration.',
       'An arrival or departure requires an explicit scene-presence mutation before later narration may rely on the changed roster.',
     ],
+  };
+}
+
+const NARRATION_EVIDENCE_STOP_WORDS = new Set([
+  'about', 'after', 'again', 'also', 'and', 'are', 'been', 'before', 'being', 'but',
+  'can', 'could', 'does', 'for', 'from', 'have', 'into', 'just', 'like', 'more',
+  'not', 'now', 'our', 'out', 'over', 'should', 'that', 'the', 'their', 'then',
+  'there', 'they', 'this', 'through', 'under', 'want', 'was', 'were', 'what',
+  'when', 'where', 'which', 'while', 'with', 'would', 'you', 'your',
+]);
+
+function narrationEvidenceTokens(value: unknown) {
+  return [...new Set(
+    String(value ?? '')
+      .normalize('NFKC')
+      .toLocaleLowerCase()
+      .match(/[a-z0-9']{3,}/g)
+      ?.filter((token) => !NARRATION_EVIDENCE_STOP_WORDS.has(token)) ?? [],
+  )];
+}
+
+function narrationEvidenceText(record: any) {
+  return [
+    record?._id, record?.id, record?.canonical_name, record?.name, record?.title,
+    record?.text, record?.summary, record?.description, record?.deadlineDescription,
+    ...(Array.isArray(record?.aliases) ? record.aliases : []),
+    ...(Array.isArray(record?.tags) ? record.tags : []),
+    ...Object.values(objectRecord(record?.details)).filter((value) => typeof value === 'string'),
+  ].map((value) => String(value ?? '')).join(' ').toLocaleLowerCase();
+}
+
+function narrationEvidenceScore(
+  record: any,
+  tokens: string[],
+  context: { currentLocationId: string | null; presentNpcIds: Set<string>; referencedIds: Set<string> },
+) {
+  const id = String(record?._id ?? record?.id ?? '');
+  const corpus = narrationEvidenceText(record);
+  const relatedIds = [
+    ...(record?.relatedEntityIds ?? []),
+    ...(record?.relatedNpcIds ?? []),
+    ...(record?.relatedLocationIds ?? []),
+    record?.scope?.entityId,
+    record?.scope?.locationId,
+    record?.details?.memory?.currentLocationId,
+    record?.details?.memory?.ownerEntityId,
+  ].filter(Boolean).map(String);
+  let score = tokens.reduce((total, token) => total + (corpus.includes(token) ? 4 : 0), 0);
+  if (id && context.referencedIds.has(id)) score += 80;
+  if (id && context.presentNpcIds.has(id)) score += 50;
+  if (context.currentLocationId && (id === context.currentLocationId || relatedIds.includes(context.currentLocationId))) score += 35;
+  if (relatedIds.some((relatedId) => context.presentNpcIds.has(relatedId) || context.referencedIds.has(relatedId))) score += 25;
+  if (record?.locked === true) score += 5;
+  if (record?.secret === true && score === 0) score -= 5;
+  return score;
+}
+
+function compactEvidenceIdentity(record: any) {
+  return {
+    id: String(record?._id ?? record?.id ?? '') || null,
+    name: String(record?.canonical_name ?? record?.name ?? record?.title ?? '').trim() || null,
+  };
+}
+
+function compactEvidenceReference(reference: any) {
+  const compactCandidate = (candidate: any) => ({
+    id: String(candidate?.id ?? '') || null,
+    name: String(candidate?.name ?? '').trim() || null,
+    kind: candidate?.kind ?? null,
+    explicitlyNamed: candidate?.explicitlyNamed === true,
+    evidence: (Array.isArray(candidate?.evidence) ? candidate.evidence : []).slice(0, 3).map((entry: any) => ({
+      id: String(entry?.id ?? '') || null,
+      text: String(entry?.text ?? '').slice(0, 500),
+      campaignMinute: entry?.campaignMinute ?? null,
+    })),
+  });
+  return {
+    key: reference?.key ?? null,
+    label: reference?.label ?? null,
+    kind: reference?.kind ?? null,
+    relationship: reference?.relationship ?? null,
+    activity: reference?.activity ?? null,
+    status: reference?.status ?? null,
+    selected: reference?.selected ? compactCandidate(reference.selected) : null,
+    candidates: (Array.isArray(reference?.candidates) ? reference.candidates : []).slice(0, 3).map(compactCandidate),
+    integrityReason: reference?.integrityReason ?? null,
+  };
+}
+
+/**
+ * Produces one revision-bound narration snapshot. `evidence` is deliberately
+ * small enough for a model prompt; `validation` retains GMC's complete
+ * exclusive presence roster for deterministic checks in GMA.
+ * date_of_change: 2026-07-23
+ */
+export function buildNarrationEvidenceBundle(input: {
+  campaignId: string;
+  instruction: string;
+  intentTags?: string[];
+  currentScene?: any;
+  currentLocation?: any;
+  gameClock?: any;
+  facts?: any[];
+  items?: any[];
+  threads?: any[];
+  npcs?: any[];
+  locations?: any[];
+  factions?: any[];
+  resolution?: any;
+  limits?: { facts?: number; items?: number; threads?: number; locations?: number };
+}) {
+  const instruction = String(input?.instruction ?? '').trim();
+  const facts = Array.isArray(input?.facts) ? input.facts : [];
+  const items = Array.isArray(input?.items) ? input.items : [];
+  const threads = Array.isArray(input?.threads) ? input.threads : [];
+  const npcs = Array.isArray(input?.npcs) ? input.npcs : [];
+  const locations = Array.isArray(input?.locations) ? input.locations : [];
+  const resolution = input?.resolution ?? resolveMemoryReferences({
+    facts: [...facts, ...threads],
+    items,
+    npcs,
+    locations,
+    factions: input?.factions ?? [],
+  }, instruction);
+  const presenceContract = buildScenePresenceContract(input?.currentScene ?? null, npcs);
+  const references = (Array.isArray(resolution?.references) ? resolution.references : []).map(compactEvidenceReference);
+  const referencedIds = new Set<string>(references.flatMap((reference: any) => [
+    reference?.selected?.id,
+    ...(reference?.candidates ?? []).map((candidate: any) => candidate?.id),
+  ]).filter(Boolean).map(String));
+  const presentNpcIds = new Set<string>(presenceContract.exactPresentNpcIds.map(String));
+  const currentLocationId = String(input?.currentScene?.locationId ?? input?.currentLocation?._id ?? input?.currentLocation?.id ?? '') || null;
+  const scoreContext = { currentLocationId, presentNpcIds, referencedIds };
+  const tokens = narrationEvidenceTokens(instruction);
+  const ranked = (records: any[], limit: number) => records
+    .map((record) => ({ record, score: narrationEvidenceScore(record, tokens, scoreContext) }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score || narrationEvidenceText(left.record).localeCompare(narrationEvidenceText(right.record)))
+    .slice(0, limit)
+    .map((entry) => entry.record);
+  const limits = {
+    facts: Math.max(1, Math.min(12, Number(input?.limits?.facts ?? 8))),
+    items: Math.max(1, Math.min(8, Number(input?.limits?.items ?? 5))),
+    threads: Math.max(1, Math.min(8, Number(input?.limits?.threads ?? 5))),
+    locations: Math.max(1, Math.min(6, Number(input?.limits?.locations ?? 3))),
+  };
+  const selectedFacts = ranked(facts, limits.facts);
+  const selectedItems = ranked(items, limits.items);
+  const selectedThreads = ranked(threads, limits.threads);
+  const selectedLocations = ranked(locations, limits.locations);
+  const instructionTokenSet = new Set(tokens);
+  const referencedNonPresentNpcs = presenceContract.knownNonPresentNpcs
+    .filter((npc: any) => referencedIds.has(String(npc.id)) || containsNormalizedIdentity(instruction, npc.name)
+      || npc.aliases.some((alias: string) => containsNormalizedIdentity(instruction, alias))
+      || narrationEvidenceTokens([npc.name, ...npc.aliases].join(' ')).some((token) => instructionTokenSet.has(token)))
+    .slice(0, 8);
+  const selectedNpcIds = new Set([
+    ...presenceContract.exactPresentNpcIds,
+    ...referencedNonPresentNpcs.map((npc: any) => String(npc.id)),
+  ]);
+  const selectedNpcs = npcs
+    .filter((npc: any) => selectedNpcIds.has(String(npc?._id ?? npc?.id ?? '')))
+    .slice(0, 16);
+  const compactResolution = {
+    authority: resolution?.authority ?? 'gmc.campaign-memory',
+    contractVersion: resolution?.contractVersion ?? CAMPAIGN_MEMORY_CONTRACT_VERSION,
+    status: resolution?.status ?? 'resolved',
+    references,
+    creationPolicy: resolution?.creationPolicy ?? classifyWorldGenerationIntent(instruction),
+    clarification: resolution?.clarification ? {
+      question: resolution.clarification.question ?? null,
+      options: (Array.isArray(resolution.clarification.options) ? resolution.clarification.options : []).slice(0, 8),
+      unresolvedKeys: resolution.clarification.unresolvedKeys ?? [],
+    } : null,
+    canonicalRepairs: (Array.isArray(resolution?.canonicalRepairs) ? resolution.canonicalRepairs : []).map((repair: any) => ({
+      kind: repair?.kind ?? null,
+      id: repair?.id ?? null,
+      name: repair?.name ?? null,
+      materialized: repair?.materialized === true,
+    })),
+  };
+  const evidenceCore = {
+    authority: 'gmc.narration-evidence',
+    contractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+    campaignId: String(input?.campaignId ?? ''),
+    instructionFingerprint: createHash('sha256').update(instruction).digest('hex'),
+    intentTags: [...new Set((input?.intentTags ?? []).map(String).filter(Boolean))].sort(),
+    scene: {
+      id: String(input?.currentScene?._id ?? input?.currentScene?.id ?? '') || null,
+      title: String(input?.currentScene?.name ?? input?.currentScene?.title ?? '').trim() || null,
+      description: String(input?.currentScene?.description ?? '').slice(0, 1_200) || null,
+      location: input?.currentLocation ? {
+        ...compactEvidenceIdentity(input.currentLocation),
+        description: String(input.currentLocation?.details?.description ?? input.currentLocation?.description ?? '').slice(0, 900) || null,
+      } : null,
+      gameClock: input?.gameClock ?? null,
+      presence: {
+        authority: presenceContract.authority,
+        revision: presenceContract.revision,
+        exactPresentNpcIds: presenceContract.exactPresentNpcIds,
+        presentNpcs: presenceContract.presentNpcs,
+        referencedNonPresentNpcs,
+        valid: presenceContract.valid,
+      },
+    },
+    references: compactResolution,
+    canon: {
+      npcs: selectedNpcs.map((npc: any) => ({
+        ...compactEvidenceIdentity(npc),
+        aliases: [
+          ...(Array.isArray(npc?.aliases) ? npc.aliases : []),
+          ...(Array.isArray(npc?.details?.aliases) ? npc.details.aliases : []),
+        ].map(String).slice(0, 8),
+        role: String(npc?.details?.role ?? npc?.role ?? '').slice(0, 500) || null,
+        description: String(npc?.details?.description ?? npc?.description ?? '').slice(0, 700) || null,
+        motivation: String(npc?.details?.motivation ?? npc?.details?.currentGoal ?? npc?.motivation ?? '').slice(0, 500) || null,
+        status: npc?.status ?? null,
+        present: presentNpcIds.has(String(npc?._id ?? npc?.id ?? '')),
+      })),
+      facts: selectedFacts.map((fact: any) => ({
+        id: String(fact?._id ?? fact?.id ?? '') || null,
+        text: String(fact?.text ?? '').slice(0, 700),
+        locked: fact?.locked === true,
+        secret: fact?.secret === true,
+        relatedEntityIds: (fact?.relatedEntityIds ?? fact?.relatedNpcIds ?? []).map(String).slice(0, 8),
+        relatedLocationIds: (fact?.relatedLocationIds ?? []).map(String).slice(0, 8),
+      })),
+      items: selectedItems.map((item: any) => ({
+        ...compactEvidenceIdentity(item),
+        description: String(item?.details?.description ?? item?.description ?? '').slice(0, 700) || null,
+        status: item?.status ?? null,
+        ownerEntityId: item?.details?.memory?.ownerEntityId ?? null,
+        currentLocationId: item?.details?.memory?.currentLocationId ?? null,
+      })),
+      threads: selectedThreads.map((thread: any) => ({
+        ...compactEvidenceIdentity(thread),
+        summary: String(thread?.summary ?? thread?.description ?? thread?.text ?? '').slice(0, 700) || null,
+        status: thread?.status ?? null,
+        deadlineAt: thread?.deadlineAt ?? null,
+        deadlineDescription: thread?.deadlineDescription ?? null,
+      })),
+      locations: selectedLocations.map((location: any) => ({
+        ...compactEvidenceIdentity(location),
+        description: String(location?.details?.description ?? location?.description ?? '').slice(0, 700) || null,
+      })),
+    },
+    retrieval: {
+      queryTokens: tokens,
+      included: {
+        facts: selectedFacts.length,
+        items: selectedItems.length,
+        threads: selectedThreads.length,
+        locations: selectedLocations.length,
+        presentNpcs: presenceContract.presentNpcs.length,
+        referencedNonPresentNpcs: referencedNonPresentNpcs.length,
+        npcProfiles: selectedNpcs.length,
+      },
+      available: {
+        facts: facts.length,
+        items: items.length,
+        threads: threads.length,
+        locations: locations.length,
+        npcs: npcs.length,
+      },
+    },
+  };
+  const evidenceRevision = createHash('sha256').update(stablePresenceJson(evidenceCore)).digest('hex');
+  return {
+    evidence: { ...evidenceCore, evidenceRevision },
+    validation: {
+      authority: 'gmc.narration-validation',
+      contractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+      evidenceRevision,
+      scenePresenceContract: presenceContract,
+    },
   };
 }
 

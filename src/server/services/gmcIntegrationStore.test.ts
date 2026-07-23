@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { buildProposedScenePresenceContract, buildScenePresenceContract, CAMPAIGN_MEMORY_CONTRACT_VERSION, classifyWorldGenerationIntent, contradictionCandidates, resolveMemoryReferences, resolveSceneTransitionContract, selectMemoryContext, validateMemoryRestorationCandidate, validateNarrativePresenceContract } from './gmcIntegrationStore.js';
+import {
+  buildNarrationEvidenceBundle,
+  buildProposedScenePresenceContract,
+  buildScenePresenceContract,
+  CAMPAIGN_MEMORY_CONTRACT_VERSION,
+  classifyWorldGenerationIntent,
+  contradictionCandidates,
+  NARRATION_EVIDENCE_CONTRACT_VERSION,
+  resolveMemoryReferences,
+  resolveSceneTransitionContract,
+  selectMemoryContext,
+  validateMemoryRestorationCandidate,
+  validateNarrativePresenceContract,
+} from './gmcIntegrationStore.js';
 
 describe('validateNarrativePresenceContract', () => {
   const presenceContract = buildScenePresenceContract({
@@ -340,6 +353,21 @@ describe('buildScenePresenceContract', () => {
     expect(contract.unresolvedPresentNpcIds).toEqual(['missing']);
   });
 
+  it('keeps the revision stable when equivalent roster inputs arrive in a different order', () => {
+    const scene = { _id: 'scene-1', updatedAt: '2026-07-19T12:00:00.000Z', presentNpcIds: ['thorne', 'rusk'] };
+    const npcs = [
+      { _id: 'thorne', canonical_name: 'Captain Thorne' },
+      { _id: 'rusk', canonical_name: 'Ward-Reader Rusk' },
+      { _id: 'hale', canonical_name: 'Constable Hale' },
+    ];
+    const reordered = buildScenePresenceContract(
+      { ...scene, presentNpcIds: [...scene.presentNpcIds].reverse() },
+      [...npcs].reverse(),
+    );
+
+    expect(reordered.revision).toBe(buildScenePresenceContract(scene, npcs).revision);
+  });
+
   it('previews an exact destination roster without replacing current-scene authority', () => {
     const currentContract = buildScenePresenceContract({ _id: 'scene-docks', presentNpcIds: ['thorne'] }, [
       { _id: 'thorne', canonical_name: 'Captain Thorne' },
@@ -522,6 +550,95 @@ describe('contradictionCandidates', () => {
       { _id: 'fact-1', text: 'Lady Erliza secretly serves the vampire lord.' },
     ]);
     expect(result).toEqual([]);
+  });
+});
+
+describe('buildNarrationEvidenceBundle', () => {
+  it('returns compact query-specific evidence bound to the complete validation roster', () => {
+    const npcs = [
+      { _id: 'vesper', canonical_name: 'Old Vesper', aliases: ['Vesper'], details: { role: 'Watchmaker and covert route contact' } },
+      { _id: 'mara', canonical_name: 'Mara Thorne', details: { role: 'Watch captain', motivation: 'Keep the courier route contained' } },
+      ...Array.from({ length: 50 }, (_, index) => ({
+        _id: `unrelated-${index}`,
+        canonical_name: `Unrelated Canon NPC ${index}`,
+      })),
+    ];
+    const instruction = 'Retcon that: stay invisible, send my familiar back to Mara, then follow Vesper. If enemies appear, fight nonlethally.';
+    const result = buildNarrationEvidenceBundle({
+      campaignId: 'campaign-1',
+      instruction,
+      intentTags: ['retcon', 'familiar', 'invisibility', 'follow', 'conditional_combat'],
+      currentScene: {
+        _id: 'scene-1',
+        name: "Vesper's Workshop",
+        locationId: 'workshop',
+        presentNpcIds: ['vesper'],
+        description: 'A narrow workshop opening onto a rain-dark alley.',
+        updatedAt: '2026-07-23T10:00:00.000Z',
+      },
+      currentLocation: { _id: 'workshop', canonical_name: "Vesper's Workshop" },
+      gameClock: { day: 3, hour: 21, minute: 10 },
+      npcs,
+      locations: [
+        { _id: 'workshop', canonical_name: "Vesper's Workshop" },
+        { _id: 'docks', canonical_name: 'South Docks' },
+      ],
+      facts: [
+        { _id: 'familiar-fact', text: 'Mara recognizes the familiar and can receive a silent message.', relatedEntityIds: ['mara'], locked: true },
+        { _id: 'unrelated-fact', text: 'The northern orchard blooms once each century.', locked: true },
+      ],
+      items: [
+        { _id: 'seal', canonical_name: 'Vesper Seal', details: { description: 'A seal carried by Vesper.' } },
+        ...Array.from({ length: 30 }, (_, index) => ({
+          _id: `chair-${index}`,
+          canonical_name: `Unrelated Chair ${index}`,
+          details: { description: 'Ordinary furniture elsewhere.' },
+        })),
+      ],
+      threads: [{ _id: 'thread-1', title: 'Follow Vesper', summary: 'Vesper may lead the group to the hidden route.', status: 'open' }],
+      factions: [],
+    });
+
+    expect(result.evidence).toEqual(expect.objectContaining({
+      authority: 'gmc.narration-evidence',
+      contractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+      campaignId: 'campaign-1',
+    }));
+    expect(result.evidence.evidenceRevision).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.validation.evidenceRevision).toBe(result.evidence.evidenceRevision);
+    expect(result.evidence.scene.presence.presentNpcs.map((npc: any) => npc.name)).toEqual(['Old Vesper']);
+    expect(result.evidence.scene.presence.referencedNonPresentNpcs.map((npc: any) => npc.name)).toEqual(['Mara Thorne']);
+    expect(result.evidence.canon.npcs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'vesper', role: 'Watchmaker and covert route contact', present: true }),
+      expect.objectContaining({ id: 'mara', role: 'Watch captain', present: false }),
+    ]));
+    expect(result.validation.scenePresenceContract.knownNonPresentNpcs).toHaveLength(51);
+    expect(JSON.stringify(result.evidence)).not.toContain('Unrelated Canon NPC 49');
+    expect(JSON.stringify(result.evidence)).not.toContain('Unrelated Chair 29');
+    expect(Buffer.byteLength(JSON.stringify(result.evidence), 'utf8')).toBeLessThan(16_000);
+  });
+
+  it('changes the evidence revision when canon selected for the interaction changes', () => {
+    const base = {
+      campaignId: 'campaign-1',
+      instruction: 'Follow Vesper.',
+      currentScene: { _id: 'scene-1', presentNpcIds: ['vesper'] },
+      npcs: [{ _id: 'vesper', canonical_name: 'Old Vesper' }],
+      locations: [],
+      items: [],
+      threads: [],
+      factions: [],
+    };
+    const first = buildNarrationEvidenceBundle({
+      ...base,
+      facts: [{ _id: 'route', text: 'Vesper uses the east route.', relatedEntityIds: ['vesper'] }],
+    });
+    const second = buildNarrationEvidenceBundle({
+      ...base,
+      facts: [{ _id: 'route', text: 'Vesper uses the west route.', relatedEntityIds: ['vesper'] }],
+    });
+
+    expect(first.evidence.evidenceRevision).not.toBe(second.evidence.evidenceRevision);
   });
 });
 

@@ -17,12 +17,102 @@ import {
   PLAN_ENCOUNTER_REQUIRED_KEYS,
 } from './gmcV1PlanningContracts.js';
 import {
+  ENCOUNTER_ENVELOPE_INSTRUCTION,
+  EXPERIENCE_AWARD_INSTRUCTION,
+  NARRATION_ENVELOPE_INSTRUCTION,
   PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION,
   PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS,
+  SKILL_ENVELOPE_INSTRUCTION,
+  shouldResolveNarrativeTransition,
+  validateCompactAiInput,
+  validateStructuredAiOutput,
 } from './gmcV1.js';
+
+describe('GMC narrative transition validation contract', () => {
+  it('validates every in-character scene segment against its resolved presence', () => {
+    expect(shouldResolveNarrativeTransition('in_character', { status: 'completed' })).toBe(true);
+    expect(shouldResolveNarrativeTransition('in_character', { status: 'future_terminal_status' })).toBe(true);
+    expect(shouldResolveNarrativeTransition('ooc', { status: 'completed' })).toBe(false);
+    expect(shouldResolveNarrativeTransition('in_character', null)).toBe(false);
+  });
+});
+
+describe('GMC compact interaction envelope contract', () => {
+  const interactionEnvelope = {
+    authority: 'gma.narration-envelope',
+    contractVersion: '2026-07-23.1',
+    interaction: { authority: 'gma.interaction-plan' },
+    canonEvidence: { authority: 'gmc.narration-evidence', evidenceRevision: 'evidence-1' },
+    responseContract: { required: ['narration'] },
+  };
+
+  it('requires revision-bound compact inputs and treats byte targets as telemetry', () => {
+    const normal = validateCompactAiInput({
+      path: '/generate-narration',
+      body: { interactionEnvelope },
+    } as any);
+    expect(normal.targetExceeded).toBe(false);
+    expect(() => validateCompactAiInput({
+      path: '/generate-narration',
+      body: { campaignDashboard: { giant: 'x'.repeat(50_000) } },
+    } as any)).toThrow(/interaction envelope/i);
+    const oversized = validateCompactAiInput({
+      path: '/generate-narration',
+      body: { interactionEnvelope: { ...interactionEnvelope, optionalContext: 'x'.repeat(50_000) } },
+    } as any);
+    expect(oversized.targetExceeded).toBe(true);
+    expect(oversized.size).toBeGreaterThan(oversized.target);
+    expect(() => validateCompactAiInput({
+      path: '/detect-encounter-transition',
+      body: {
+        task: 'detect_immediate_encounter',
+        interaction: { authority: 'gma.interaction-plan' },
+        canonEvidence: { authority: 'gmc.narration-evidence', evidenceRevision: 'evidence-1' },
+      },
+    } as any)).not.toThrow();
+    expect(() => validateCompactAiInput({
+      path: '/evaluate-experience-award',
+      body: {
+        task: 'evaluate_experience_award',
+        interaction: { authority: 'gma.interaction-plan' },
+        character: { authority: 'vcs.character-summary' },
+        policy: { authority: 'gma.experience-award-policy' },
+      },
+    } as any)).not.toThrow();
+    expect(() => validateCompactAiInput({
+      path: '/plan-character-sheet-mutation',
+      body: {
+        task: 'plan_character_sheet_mutation',
+        interaction: { authority: 'gma.interaction-plan' },
+        currentSheet: { authority: 'vcs.character-sheet-slice', revision: 'sheet-1' },
+        policy: { authority: 'gma.character-sheet-mutation-policy' },
+      },
+    } as any)).not.toThrow();
+  });
+
+  it('uses short task-specific provider instructions and validates response types', () => {
+    expect(NARRATION_ENVELOPE_INSTRUCTION.length).toBeLessThan(1_600);
+    expect(SKILL_ENVELOPE_INSTRUCTION.length).toBeLessThan(1_600);
+    expect(ENCOUNTER_ENVELOPE_INSTRUCTION.length).toBeLessThan(1_200);
+    expect(EXPERIENCE_AWARD_INSTRUCTION.length).toBeLessThan(1_200);
+    expect(NARRATION_ENVELOPE_INSTRUCTION).toContain('GMA owns intent classification');
+    expect(validateStructuredAiOutput({
+      narration: 'The scene advances.',
+      proposedCanonChanges: [],
+      proposedVcsExports: [],
+      riskLevel: 'low',
+      syncNotes: [],
+    }, ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'])).toBe(true);
+    expect(validateStructuredAiOutput({
+      narration: ['not prose'],
+      proposedCanonChanges: {},
+    }, ['narration', 'proposedCanonChanges'])).toBe(false);
+  });
+});
 
 describe('GMC character-sheet mutation contract', () => {
   it('separates ownership from explicit ready-access weapon state', () => {
+    expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION.length).toBeLessThan(1_800);
     expect(PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS).toContain('equippedWeapons');
     expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION).toContain('All newly acquired weapons and all ammunition go through items.add');
     expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION).toContain('never imply that a weapon is equipped');
