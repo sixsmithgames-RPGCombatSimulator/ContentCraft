@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { getDb, getCanonEntitiesCollection } from '../config/mongo.js';
 import { generateProjectEntityId, type EntityType } from '../models/CanonEntity.js';
 import {
+  CanonicalMutationError,
+  canonicalSemanticFingerprint,
   canonicalMutationDocumentId,
   insertCanonicalMutation,
 } from './canonicalMutation.js';
@@ -50,7 +52,12 @@ function objectRecord(value: unknown): Record<string, any> {
 }
 
 export async function listEntities(userId: string, campaignId: string, kind: GmcEntityKind, search?: string) {
-  const filter: Record<string, unknown> = { userId, project_id: campaignId, type: kind };
+  const filter: Record<string, unknown> = {
+    userId,
+    project_id: campaignId,
+    type: kind,
+    status: { $ne: 'superseded' },
+  };
   if (search) filter.canonical_name = { $regex: search, $options: 'i' };
   return getCanonEntitiesCollection().find(filter).sort({ canonical_name: 1 }).limit(250).toArray();
 }
@@ -73,6 +80,75 @@ function normalizedReferenceIdentity(value: unknown) {
     .replace(/[^a-z0-9']+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+const UNIQUE_CANONICAL_IDENTITY_KINDS = new Set<GmcEntityKind>(['npc', 'location', 'faction']);
+
+export function canonicalEntityIdentityKey(value: unknown) {
+  return normalizedReferenceIdentity(value);
+}
+
+export function canonicalEntityIdentityConflicts(identities: unknown[], records: any[], excludeId?: string) {
+  const proposed = new Set(identities.map(canonicalEntityIdentityKey).filter(Boolean));
+  if (!proposed.size) return [];
+  return (Array.isArray(records) ? records : []).filter((record: any) => {
+    if (String(record?._id ?? record?.id ?? '') === String(excludeId ?? '')) return false;
+    if (String(record?.status ?? 'active') === 'superseded') return false;
+    return [record?.canonical_name ?? record?.name, ...(Array.isArray(record?.aliases) ? record.aliases : [])]
+      .some((identity) => proposed.has(canonicalEntityIdentityKey(identity)));
+  });
+}
+
+async function assertCanonicalEntityIdentityAvailable({
+  userId,
+  campaignId,
+  kind,
+  identities,
+  excludeId,
+  semanticFingerprint,
+}: {
+  userId: string;
+  campaignId: string;
+  kind: GmcEntityKind;
+  identities: unknown[];
+  excludeId?: string;
+  semanticFingerprint?: string;
+}) {
+  if (!UNIQUE_CANONICAL_IDENTITY_KINDS.has(kind)) return null;
+  const records = await getCanonEntitiesCollection().find({
+    userId,
+    project_id: campaignId,
+    type: kind,
+    status: { $ne: 'superseded' },
+  }).project({
+    _id: 1,
+    canonical_name: 1,
+    aliases: 1,
+    canonicalFingerprint: 1,
+    creationMutation: 1,
+    status: 1,
+  }).toArray();
+  const conflicts = canonicalEntityIdentityConflicts(identities, records, excludeId);
+  if (!conflicts.length) return null;
+  if (
+    semanticFingerprint
+    && conflicts.length === 1
+    && conflicts[0]?.canonicalFingerprint === semanticFingerprint
+  ) return conflicts[0];
+  throw new CanonicalMutationError(
+    409,
+    'CANONICAL_ENTITY_IDENTITY_CONFLICT',
+    `An active canonical ${kind} already owns this name or alias. Update the existing record or choose a distinct canonical identity; no duplicate was created.`,
+    {
+      entityType: kind,
+      proposedIdentities: [...new Set(identities.map(String).map((value) => value.trim()).filter(Boolean))],
+      conflicts: conflicts.map((record: any) => ({
+        id: String(record?._id ?? record?.id),
+        name: String(record?.canonical_name ?? record?.name ?? ''),
+        aliases: Array.isArray(record?.aliases) ? record.aliases : [],
+      })),
+    },
+  );
 }
 
 function identityRegex(value: string) {
@@ -101,6 +177,7 @@ export async function findActorEntity(
       userId,
       project_id: campaignId,
       type: kind,
+      status: { $ne: 'superseded' },
     });
     if (byId) return byId;
   }
@@ -113,6 +190,7 @@ export async function findActorEntity(
     userId,
     project_id: campaignId,
     type: kind,
+    status: { $ne: 'superseded' },
     $or: [
       { canonical_name: { $in: exact } },
       { aliases: { $in: exact } },
@@ -228,57 +306,98 @@ export async function createEntityMutation(userId: string, campaignId: string, k
   const { mutationId, ...inputData } = input;
   const name = String(inputData.name || inputData.canonical_name || '').trim();
   if (!name) throw new Error('name is required');
+  const aliases = Array.isArray(inputData.aliases) ? inputData.aliases : [];
+  const recordKind = `ENTITY:${kind}`;
   const baseId = generateProjectEntityId(campaignId, kind as EntityType, name);
   const documentId = canonicalMutationDocumentId({
     userId,
     campaignId,
-    recordKind: `ENTITY:${kind}`,
+    recordKind,
     mutationId,
     prefix: baseId,
   });
-  return insertCanonicalMutation({
-    collection: getCanonEntitiesCollection(),
+  const semanticFingerprint = canonicalSemanticFingerprint(recordKind, inputData);
+  const semanticDuplicate = await assertCanonicalEntityIdentityAvailable({
     userId,
     campaignId,
-    recordKind: `ENTITY:${kind}`,
-    mutationId,
-    input: inputData,
-    documentId,
-    scopeFilter: { project_id: campaignId, type: kind },
-    buildDocument: ({ documentId: id, timestamp, semanticFingerprint, creationMutation }) => ({
-      _id: id,
-      userId,
-      scope: `proj_${campaignId}`,
-      project_id: campaignId,
-      type: kind,
-      canonical_name: name,
-      aliases: Array.isArray(inputData.aliases) ? inputData.aliases : [],
-      claims: Array.isArray(inputData.claims) ? inputData.claims : [],
-      relationships: Array.isArray(inputData.relationships) ? inputData.relationships : [],
-      tags: Array.isArray(inputData.tags) ? inputData.tags : [],
-      source: inputData.source || 'gamemastercraft',
-      version: '1.0.0',
-      details: kind === 'item' ? {
-        ...(inputData.details ?? inputData),
-        memory: {
-          recordType: 'ITEM',
-          tier: includes(ITEM_TIERS, inputData.itemTier ?? inputData.details?.memory?.tier) ? String(inputData.itemTier ?? inputData.details?.memory?.tier) : 'mundane',
-          currentLocationId: inputData.currentLocationId ?? inputData.details?.memory?.currentLocationId ?? null,
-          ownerEntityId: inputData.ownerEntityId ?? inputData.details?.memory?.ownerEntityId ?? null,
-          ownerType: inputData.ownerType ?? inputData.details?.memory?.ownerType ?? null,
-        },
-      } : {
-        ...(inputData.details ?? inputData),
-        ...(kind === 'npc' ? { entityTier: includes(ENTITY_SCOPE_TIERS, inputData.entityTier ?? inputData.details?.entityTier) ? String(inputData.entityTier ?? inputData.details?.entityTier) : 'contact' } : {}),
-      },
-      status: inputData.status ?? 'active',
-      draft: Boolean(inputData.draft),
-      canonicalFingerprint: semanticFingerprint,
-      creationMutation,
-      created_at: timestamp,
-      updated_at: timestamp,
-    }) as any,
+    kind,
+    identities: [name, ...aliases],
+    excludeId: documentId,
+    semanticFingerprint,
   });
+  if (semanticDuplicate) {
+    return {
+      record: semanticDuplicate,
+      duplicate: true,
+      duplicateReason: 'canonical_identity_duplicate',
+      mutationId,
+    } as const;
+  }
+  try {
+    return await insertCanonicalMutation({
+      collection: getCanonEntitiesCollection(),
+      userId,
+      campaignId,
+      recordKind,
+      mutationId,
+      input: inputData,
+      documentId,
+      scopeFilter: { project_id: campaignId, type: kind },
+      buildDocument: ({ documentId: id, timestamp, semanticFingerprint: fingerprint, creationMutation }) => ({
+        _id: id,
+        userId,
+        scope: `proj_${campaignId}`,
+        project_id: campaignId,
+        type: kind,
+        canonical_name: name,
+        canonicalIdentityKey: UNIQUE_CANONICAL_IDENTITY_KINDS.has(kind) ? canonicalEntityIdentityKey(name) : undefined,
+        aliases,
+        claims: Array.isArray(inputData.claims) ? inputData.claims : [],
+        relationships: Array.isArray(inputData.relationships) ? inputData.relationships : [],
+        tags: Array.isArray(inputData.tags) ? inputData.tags : [],
+        source: inputData.source || 'gamemastercraft',
+        version: '1.0.0',
+        details: kind === 'item' ? {
+          ...(inputData.details ?? inputData),
+          memory: {
+            recordType: 'ITEM',
+            tier: includes(ITEM_TIERS, inputData.itemTier ?? inputData.details?.memory?.tier) ? String(inputData.itemTier ?? inputData.details?.memory?.tier) : 'mundane',
+            currentLocationId: inputData.currentLocationId ?? inputData.details?.memory?.currentLocationId ?? null,
+            ownerEntityId: inputData.ownerEntityId ?? inputData.details?.memory?.ownerEntityId ?? null,
+            ownerType: inputData.ownerType ?? inputData.details?.memory?.ownerType ?? null,
+          },
+        } : {
+          ...(inputData.details ?? inputData),
+          ...(kind === 'npc' ? { entityTier: includes(ENTITY_SCOPE_TIERS, inputData.entityTier ?? inputData.details?.entityTier) ? String(inputData.entityTier ?? inputData.details?.entityTier) : 'contact' } : {}),
+        },
+        status: inputData.status ?? 'active',
+        draft: Boolean(inputData.draft),
+        canonicalFingerprint: fingerprint,
+        creationMutation,
+        created_at: timestamp,
+        updated_at: timestamp,
+      }) as any,
+    });
+  } catch (error: any) {
+    if (error?.code !== 11000 || !UNIQUE_CANONICAL_IDENTITY_KINDS.has(kind)) throw error;
+    const concurrentDuplicate = await assertCanonicalEntityIdentityAvailable({
+      userId,
+      campaignId,
+      kind,
+      identities: [name, ...aliases],
+      excludeId: documentId,
+      semanticFingerprint,
+    });
+    if (concurrentDuplicate) {
+      return {
+        record: concurrentDuplicate,
+        duplicate: true,
+        duplicateReason: 'canonical_identity_duplicate',
+        mutationId,
+      } as const;
+    }
+    throw error;
+  }
 }
 
 export async function createEntity(userId: string, campaignId: string, kind: GmcEntityKind, input: Record<string, any>) {
@@ -287,7 +406,24 @@ export async function createEntity(userId: string, campaignId: string, kind: Gmc
 
 export async function updateEntity(userId: string, id: string, kind: GmcEntityKind, input: Record<string, any>) {
   const allowed: Record<string, unknown> = {};
-  if (input.name !== undefined) allowed.canonical_name = String(input.name);
+  if (
+    UNIQUE_CANONICAL_IDENTITY_KINDS.has(kind)
+    && (input.name !== undefined || input.aliases !== undefined || input.status === 'active')
+  ) {
+    const current = await getEntity(userId, id, kind);
+    if (!current) return null;
+    const name = String(input.name ?? current.canonical_name ?? '').trim();
+    const aliases = Array.isArray(input.aliases) ? input.aliases : (Array.isArray(current.aliases) ? current.aliases : []);
+    await assertCanonicalEntityIdentityAvailable({
+      userId,
+      campaignId: String(current.project_id),
+      kind,
+      identities: [name, ...aliases],
+      excludeId: id,
+    });
+    allowed.canonicalIdentityKey = canonicalEntityIdentityKey(name);
+  }
+  if (input.name !== undefined) allowed.canonical_name = String(input.name).trim();
   for (const key of ['aliases', 'claims', 'relationships', 'tags', 'details', 'status', 'draft', 'source']) {
     if (input[key] !== undefined) allowed[key] = input[key];
   }

@@ -4,6 +4,8 @@ import {
   buildProposedScenePresenceContract,
   buildScenePresenceContract,
   CAMPAIGN_MEMORY_CONTRACT_VERSION,
+  canonicalEntityIdentityConflicts,
+  canonicalEntityIdentityKey,
   classifyWorldGenerationIntent,
   contradictionCandidates,
   NARRATION_EVIDENCE_CONTRACT_VERSION,
@@ -13,6 +15,34 @@ import {
   validateMemoryRestorationCandidate,
   validateNarrativePresenceContract,
 } from './gmcIntegrationStore.js';
+
+describe('canonical entity identity', () => {
+  const records = [
+    {
+      _id: 'yard',
+      canonical_name: 'Flintwake Wage Yard',
+      aliases: ['Flintwake Pay Yard'],
+      status: 'active',
+    },
+    {
+      _id: 'retired-yard',
+      canonical_name: 'Old Flintwake Yard',
+      aliases: ['Flintwake Wage Yard'],
+      status: 'superseded',
+    },
+  ];
+
+  it('normalizes punctuation and case while ignoring superseded records', () => {
+    expect(canonicalEntityIdentityKey('  FLINTWAKE—Wage Yard ')).toBe('flintwake wage yard');
+    expect(canonicalEntityIdentityConflicts(['flintwake wage yard'], records).map((record) => record._id)).toEqual(['yard']);
+    expect(canonicalEntityIdentityConflicts(['Flintwake Pay Yard'], records).map((record) => record._id)).toEqual(['yard']);
+    expect(canonicalEntityIdentityConflicts(['Old Flintwake Yard'], records)).toEqual([]);
+  });
+
+  it('allows an existing record to retain its own canonical identity during update', () => {
+    expect(canonicalEntityIdentityConflicts(['Flintwake Wage Yard'], records, 'yard')).toEqual([]);
+  });
+});
 
 describe('validateNarrativePresenceContract', () => {
   const presenceContract = buildScenePresenceContract({

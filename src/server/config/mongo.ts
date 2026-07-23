@@ -79,6 +79,17 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, project_id: 1, type: 1, canonicalFingerprint: 1 },
     { unique: true, partialFilterExpression: { canonicalFingerprint: { $type: 'string' } } },
   );
+  await database.collection('canon_entities').createIndex(
+    { userId: 1, project_id: 1, type: 1, canonicalIdentityKey: 1 },
+    {
+      name: 'unique_active_canonical_entity_identity',
+      unique: true,
+      partialFilterExpression: {
+        canonicalIdentityKey: { $type: 'string' },
+        status: 'active',
+      },
+    },
+  );
 
   // Canon chunks indexes
   await database.collection('canon_chunks').createIndex({ entity_id: 1 });

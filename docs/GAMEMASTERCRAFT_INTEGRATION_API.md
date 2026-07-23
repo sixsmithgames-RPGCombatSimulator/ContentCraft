@@ -149,6 +149,8 @@ POST /api/gmc/v1/campaigns/{campaignId}/{npcs|locations|items}/generate
 POST /api/gmc/v1/items/{itemId}/supersede
 ```
 
+Active NPC, location, and faction names and aliases are exclusive within a campaign and entity type. A create or rename that collides after case/punctuation normalization returns `409 CANONICAL_ENTITY_IDENTITY_CONFLICT`; callers must update the identified record or choose a distinct identity. Superseded entities remain directly addressable for audit and recovery but are excluded from campaign lists, memory resolution, scene transitions, and narration evidence.
+
 Generated content remains a draft unless `makeCanon: true` is supplied.
 
 ## Threads and sessions
