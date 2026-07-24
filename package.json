@@ -1,6 +1,6 @@
 {
   "name": "contentcraft",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "An iterative content creation app for fiction, non-fiction, D&D adventures, and fact-checked articles",
   "main": "dist/server/index.js",
   "type": "module",

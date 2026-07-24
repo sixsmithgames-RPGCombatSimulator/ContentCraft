@@ -6,6 +6,14 @@ An iterative content creation app for fiction, non-fiction, D&D adventures, and 
 
 **License**: Proprietary & Confidential
 
+## Versioning
+
+GameMasterCraft uses Semantic Versioning from the root `package.json`, with the
+client package kept in sync. Every committed runtime or product behavior change
+increments the product version: patch for compatible fixes, minor for
+compatible features, and major for breaking contracts. The API health endpoint
+reports this canonical version.
+
 ## AI developer trace
 
 Server-side structured generation writes credential-redacted JSONL records to

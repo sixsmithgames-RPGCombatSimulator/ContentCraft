@@ -15,6 +15,7 @@ import factCheckRouter from './factCheck.js';
 import { progressRouter } from './progress.js';
 import { aiRouter } from './ai.js';
 import { gmcV1Router } from './gmcV1.js';
+import { GMC_VERSION } from '../serviceVersion.js';
 
 export const apiRouter = Router();
 
@@ -31,5 +32,11 @@ apiRouter.use('/gmc/v1', gmcV1Router);
 apiRouter.use('/', progressRouter);
 
 apiRouter.get('/health', (_req, res) => {
-  res.json({ success: true, message: 'ContentCraft API is running' });
+  res.json({
+    success: true,
+    status: 'healthy',
+    service: 'gamemastercraft',
+    version: GMC_VERSION,
+    message: 'GameMasterCraft API is running',
+  });
 });

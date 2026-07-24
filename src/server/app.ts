@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { GMC_VERSION } from './serviceVersion.js';
 import cors from 'cors';
 import helmet from 'helmet';
 import { config } from 'dotenv';
@@ -91,7 +92,7 @@ if (isProduction) {
     res.json({
       success: true,
       message: 'ContentCraft API Server',
-      version: '1.0.0',
+      version: GMC_VERSION,
       mode: 'development'
     });
   });
