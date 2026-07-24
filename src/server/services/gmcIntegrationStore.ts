@@ -13,14 +13,17 @@ const now = () => new Date();
 export type GmcEntityKind = 'npc' | 'monster' | 'location' | 'item' | 'faction';
 export type GmcActorKind = Extract<GmcEntityKind, 'npc' | 'monster'>;
 
-export const MEMORY_RECORD_TYPES = ['FACT', 'ITEM', 'EVENT'] as const;
+export const MEMORY_RECORD_TYPES = ['FACT', 'ITEM', 'EVENT', 'QUEST'] as const;
 export const GEOGRAPHIC_SCOPE_TIERS = ['world', 'city', 'district', 'site', 'room'] as const;
 export const ENTITY_SCOPE_TIERS = ['bbeg', 'lieutenant', 'henchman', 'contact'] as const;
 export const ITEM_TIERS = ['plot', 'mundane', 'currency', 'furniture'] as const;
-export const CAMPAIGN_MEMORY_CONTRACT_VERSION = '2026-07-21.1';
+export const QUEST_TYPES = ['main', 'side'] as const;
+export const QUEST_STATUSES = ['active', 'paused', 'completed', 'failed', 'abandoned'] as const;
+export const QUEST_LOG_CONTRACT_VERSION = '2026-07-24.1';
+export const CAMPAIGN_MEMORY_CONTRACT_VERSION = '2026-07-24.1';
 export const WORLD_GENERATION_POLICY_VERSION = '2026-07-21.1';
 export const SCENE_TRANSITION_CONTRACT_VERSION = '2026-07-21.1';
-export const NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-07-23.1';
+export const NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-07-24.1';
 
 function includes<T extends readonly string[]>(values: T, value: unknown): value is T[number] {
   return values.includes(String(value) as T[number]);
@@ -475,7 +478,191 @@ export async function listFacts(userId: string, campaignId: string, query: Recor
   return getDb().collection<any>('gmc_facts').find(filter).sort({ createdAt: -1 }).limit(500).toArray();
 }
 
-type MemoryReferenceKind = 'location' | 'npc' | 'item' | 'faction';
+function campaignClockSeconds(clock: any) {
+  const elapsed = Number(clock?.elapsedSeconds);
+  if (Number.isFinite(elapsed)) return elapsed;
+  const day = Number(clock?.day);
+  const hour = Number(clock?.hour);
+  const minute = Number(clock?.minute ?? 0);
+  const second = Number(clock?.second ?? 0);
+  if (![day, hour, minute, second].every(Number.isFinite)) return null;
+  return Math.max(0, day) * 86_400 + Math.max(0, hour) * 3_600 + Math.max(0, minute) * 60 + Math.max(0, second);
+}
+
+function questDeadlineState(quest: any, gameClock: any) {
+  const deadline = quest?.campaignDeadline;
+  if (deadline && typeof deadline === 'object') {
+    const current = campaignClockSeconds(gameClock);
+    const target = campaignClockSeconds(deadline);
+    if (current !== null && target !== null) {
+      if (current >= target) return 'overdue';
+      if (target - current <= 3_600) return 'due_soon';
+      return 'scheduled';
+    }
+  }
+  if (String(quest?.deadlineDescription ?? '').trim()) return 'trigger_based';
+  return 'none';
+}
+
+function questWithTimeState(quest: any, gameClock: any) {
+  return {
+    ...quest,
+    deadlineState: ['completed', 'failed', 'abandoned'].includes(String(quest?.status))
+      ? 'closed'
+      : questDeadlineState(quest, gameClock),
+  };
+}
+
+export async function listQuests(userId: string, campaignId: string, query: Record<string, any> = {}, gameClock: any = null) {
+  const filter: Record<string, any> = { userId, campaignId };
+  if (query.status) filter.status = query.status;
+  else if (String(query.activeOnly ?? '') === 'true') filter.status = { $in: ['active', 'paused'] };
+  if (query.questType) filter.questType = query.questType;
+  if (query.search) {
+    const search = String(query.search);
+    filter.$or = [
+      { title: { $regex: search, $options: 'i' } },
+      { summary: { $regex: search, $options: 'i' } },
+      { objective: { $regex: search, $options: 'i' } },
+      { aliases: { $regex: search, $options: 'i' } },
+      { leads: { $regex: search, $options: 'i' } },
+    ];
+  }
+  const records = await getDb().collection<any>('gmc_quests')
+    .find(filter)
+    .sort({ status: 1, priority: -1, lastFocusedAt: -1, updatedAt: -1 })
+    .limit(250)
+    .toArray();
+  return records.map((quest: any) => questWithTimeState(quest, gameClock));
+}
+
+export async function createQuestMutation(userId: string, campaignId: string, input: Record<string, any>) {
+  const { mutationId, ...inputData } = input;
+  const title = String(inputData.title ?? inputData.name ?? '').trim();
+  const objective = String(inputData.objective ?? '').trim();
+  if (!title || !objective) throw Object.assign(new Error('QUEST title and objective are required.'), { status: 400, code: 'VALIDATION_ERROR' });
+  const questType = includes(QUEST_TYPES, inputData.questType) ? String(inputData.questType) : 'side';
+  const status = includes(QUEST_STATUSES, inputData.status) ? String(inputData.status) : 'active';
+  return insertCanonicalMutation({
+    collection: getDb().collection<any>('gmc_quests'),
+    userId,
+    campaignId,
+    recordKind: 'QUEST',
+    mutationId,
+    input: inputData,
+    scopeFilter: { campaignId },
+    buildDocument: ({ documentId, timestamp, semanticFingerprint, creationMutation }) => ({
+      _id: documentId,
+      userId,
+      campaignId,
+      recordType: 'QUEST',
+      questType,
+      status,
+      title,
+      aliases: [...new Set((Array.isArray(inputData.aliases) ? inputData.aliases : []).map(String).map((value) => value.trim()).filter(Boolean))],
+      summary: String(inputData.summary ?? '').trim(),
+      objective,
+      details: objectRecord(inputData.details),
+      leads: [...new Set((Array.isArray(inputData.leads) ? inputData.leads : []).map(String).map((value) => value.trim()).filter(Boolean))],
+      destination: objectRecord(inputData.destination),
+      targetEntityIds: [...new Set((Array.isArray(inputData.targetEntityIds) ? inputData.targetEntityIds : []).map(String).filter(Boolean))],
+      relatedNpcIds: [...new Set((Array.isArray(inputData.relatedNpcIds) ? inputData.relatedNpcIds : []).map(String).filter(Boolean))],
+      relatedLocationIds: [...new Set((Array.isArray(inputData.relatedLocationIds) ? inputData.relatedLocationIds : []).map(String).filter(Boolean))],
+      relatedItemIds: [...new Set((Array.isArray(inputData.relatedItemIds) ? inputData.relatedItemIds : []).map(String).filter(Boolean))],
+      relatedFactIds: [...new Set((Array.isArray(inputData.relatedFactIds) ? inputData.relatedFactIds : []).map(String).filter(Boolean))],
+      relatedEventIds: [...new Set((Array.isArray(inputData.relatedEventIds) ? inputData.relatedEventIds : []).map(String).filter(Boolean))],
+      campaignDeadline: inputData.campaignDeadline && typeof inputData.campaignDeadline === 'object' ? inputData.campaignDeadline : null,
+      deadlineDescription: String(inputData.deadlineDescription ?? '').trim() || null,
+      consequence: String(inputData.consequence ?? '').trim() || null,
+      priority: Math.max(0, Math.min(100, Number(inputData.priority ?? (questType === 'main' ? 70 : 40)) || 0)),
+      progressEntries: [],
+      lastFocusedAt: status === 'active' ? timestamp : null,
+      source: inputData.source ?? { system: 'gamemastercraft' },
+      canonicalFingerprint: semanticFingerprint,
+      creationMutation,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }),
+  });
+}
+
+export async function updateQuest(userId: string, questId: string, input: Record<string, any>) {
+  const allowed: Record<string, any> = {};
+  for (const key of [
+    'title', 'aliases', 'summary', 'objective', 'details', 'leads', 'destination',
+    'targetEntityIds', 'relatedNpcIds', 'relatedLocationIds', 'relatedItemIds',
+    'relatedFactIds', 'relatedEventIds', 'campaignDeadline', 'deadlineDescription',
+    'consequence', 'priority',
+  ]) {
+    if (Object.prototype.hasOwnProperty.call(input, key)) allowed[key] = input[key];
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'questType')) {
+    if (!includes(QUEST_TYPES, input.questType)) throw Object.assign(new Error('Invalid questType.'), { status: 400, code: 'VALIDATION_ERROR' });
+    allowed.questType = input.questType;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'status')) {
+    if (!includes(QUEST_STATUSES, input.status)) throw Object.assign(new Error('Invalid quest status.'), { status: 400, code: 'VALIDATION_ERROR' });
+    allowed.status = input.status;
+    allowed.closedAt = ['completed', 'failed', 'abandoned'].includes(String(input.status)) ? now() : null;
+  }
+  if (!Object.keys(allowed).length) throw Object.assign(new Error('No supported quest fields were provided.'), { status: 400, code: 'VALIDATION_ERROR' });
+  allowed.updatedAt = now();
+  const quest = await (getDb().collection<any>('gmc_quests') as any).findOneAndUpdate(
+    { _id: questId, userId },
+    { $set: allowed },
+    { returnDocument: 'after' },
+  );
+  if (!quest) throw Object.assign(new Error('Quest not found.'), { status: 404, code: 'NOT_FOUND' });
+  return quest;
+}
+
+export async function appendQuestProgress(userId: string, questId: string, input: Record<string, any>) {
+  const mutationId = String(input?.mutationId ?? input?.progressEntry?.mutationId ?? '').trim();
+  const rawEntry = objectRecord(input?.progressEntry ?? input);
+  const summary = String(rawEntry.summary ?? rawEntry.description ?? '').trim();
+  if (!mutationId || !summary) throw Object.assign(new Error('Quest progress requires mutationId and summary.'), { status: 400, code: 'VALIDATION_ERROR' });
+  const existing = await getDb().collection<any>('gmc_quests').findOne({ _id: questId, userId });
+  if (!existing) throw Object.assign(new Error('Quest not found.'), { status: 404, code: 'NOT_FOUND' });
+  const duplicateEntry = (Array.isArray(existing.progressEntries) ? existing.progressEntries : [])
+    .find((entry: any) => String(entry?.mutationId) === mutationId);
+  if (duplicateEntry) return { quest: existing, progressEntry: duplicateEntry, duplicate: true };
+  const timestamp = now();
+  const progressEntry = {
+    mutationId,
+    summary,
+    details: objectRecord(rawEntry.details),
+    sceneSegmentId: String(rawEntry.sceneSegmentId ?? '').trim() || null,
+    sceneTitle: String(rawEntry.sceneTitle ?? '').trim() || null,
+    sceneStatus: String(rawEntry.sceneStatus ?? '').trim() || null,
+    locationId: String(rawEntry.locationId ?? '').trim() || null,
+    locationName: String(rawEntry.locationName ?? '').trim() || null,
+    gameClock: rawEntry.gameClock && typeof rawEntry.gameClock === 'object' ? rawEntry.gameClock : null,
+    source: rawEntry.source ?? input?.source ?? { system: 'gamemastercraft' },
+    createdAt: timestamp,
+  };
+  const quest = await (getDb().collection<any>('gmc_quests') as any).findOneAndUpdate(
+    { _id: questId, userId, 'progressEntries.mutationId': { $ne: mutationId } },
+    { $push: { progressEntries: progressEntry }, $set: { lastFocusedAt: timestamp, updatedAt: timestamp } },
+    { returnDocument: 'after' },
+  );
+  if (quest) return { quest, progressEntry, duplicate: false };
+  const raced = await getDb().collection<any>('gmc_quests').findOne({ _id: questId, userId });
+  const racedEntry = (Array.isArray(raced?.progressEntries) ? raced.progressEntries : [])
+    .find((entry: any) => String(entry?.mutationId) === mutationId);
+  return { quest: raced, progressEntry: racedEntry ?? progressEntry, duplicate: Boolean(racedEntry) };
+}
+
+export async function revertQuestProgress(userId: string, questId: string, mutationId: string) {
+  const quest = await (getDb().collection<any>('gmc_quests') as any).findOneAndUpdate(
+    { _id: questId, userId },
+    { $pull: { progressEntries: { mutationId } }, $set: { updatedAt: now() } },
+    { returnDocument: 'after' },
+  );
+  if (!quest) throw Object.assign(new Error('Quest not found.'), { status: 404, code: 'NOT_FOUND' });
+  return quest;
+}
+
+type MemoryReferenceKind = 'location' | 'npc' | 'item' | 'faction' | 'quest';
 
 type MemoryReferenceSpec = {
   key: string;
@@ -518,6 +705,14 @@ function recordCorpus(record: any) {
 }
 
 function recordCorpusForKind(record: any, kind: MemoryReferenceKind) {
+  if (kind === 'quest') return JSON.stringify({
+    title: record?.title,
+    aliases: record?.aliases,
+    summary: record?.summary,
+    objective: record?.objective,
+    leads: record?.leads,
+    destination: record?.destination,
+  });
   if (kind !== 'npc') return recordCorpus(record);
   return JSON.stringify({
     name: record?.canonical_name ?? record?.name,
@@ -526,6 +721,159 @@ function recordCorpusForKind(record: any, kind: MemoryReferenceKind) {
     relationships: record?.relationships,
     role: record?.details?.role ?? record?.details?.actorProfile?.role,
   });
+}
+
+const QUEST_REFERENCE_CUE = /\b(?:continue|carry on|go on|onward|resume|return to|follow up|pursue|finish|complete|handle|deal with|look(?:ing)? for|search(?:ing)? for|seek(?:ing)?|find|locate|track(?:ing)? down|head(?:ing)? to|go(?:ing)? to|travel(?:ing)? to|visit)\b/i;
+const QUEST_QUERY_STOP_WORDS = new Set([
+  'about', 'after', 'again', 'also', 'and', 'are', 'been', 'before', 'being', 'but',
+  'can', 'could', 'does', 'for', 'from', 'have', 'into', 'just', 'like', 'more',
+  'not', 'now', 'our', 'out', 'over', 'should', 'that', 'the', 'their', 'then',
+  'there', 'they', 'this', 'through', 'under', 'want', 'was', 'were', 'what',
+  'when', 'where', 'which', 'while', 'with', 'would', 'you', 'your',
+  'carry', 'complete', 'continue', 'deal', 'find', 'finish', 'follow', 'going',
+  'handle', 'head', 'locate', 'look', 'looking', 'onward', 'pursue', 'resume',
+  'search', 'searching', 'seek', 'seeking', 'track', 'tracking', 'travel', 'visit',
+]);
+
+function questReferenceTokens(value: unknown) {
+  return [...new Set(
+    normalizedReferenceIdentity(value)
+      .match(/[a-z0-9']{3,}/g)
+      ?.filter((token) => !QUEST_QUERY_STOP_WORDS.has(token)) ?? [],
+  )];
+}
+
+function questReferenceIdentity(quest: any) {
+  return [
+    quest?.title,
+    ...(Array.isArray(quest?.aliases) ? quest.aliases : []),
+  ].map((value) => String(value ?? '').trim()).filter(Boolean);
+}
+
+function compactQuestReference(quest: any, score = 0, explicitlyNamed = false) {
+  return {
+    id: String(quest?._id ?? quest?.id ?? ''),
+    name: String(quest?.title ?? quest?.name ?? '').trim(),
+    kind: 'quest',
+    questType: quest?.questType ?? 'side',
+    status: quest?.status ?? 'active',
+    summary: String(quest?.summary ?? '').trim() || null,
+    objective: String(quest?.objective ?? '').trim() || null,
+    aliases: Array.isArray(quest?.aliases) ? quest.aliases : [],
+    leads: Array.isArray(quest?.leads) ? quest.leads : [],
+    destination: objectRecord(quest?.destination),
+    targetEntityIds: Array.isArray(quest?.targetEntityIds) ? quest.targetEntityIds.map(String) : [],
+    relatedNpcIds: Array.isArray(quest?.relatedNpcIds) ? quest.relatedNpcIds.map(String) : [],
+    relatedLocationIds: Array.isArray(quest?.relatedLocationIds) ? quest.relatedLocationIds.map(String) : [],
+    relatedItemIds: Array.isArray(quest?.relatedItemIds) ? quest.relatedItemIds.map(String) : [],
+    deadlineState: quest?.deadlineState ?? 'none',
+    deadlineDescription: quest?.deadlineDescription ?? null,
+    consequence: quest?.consequence ?? null,
+    priority: Number(quest?.priority ?? 0),
+    score,
+    explicitlyNamed,
+  };
+}
+
+export function resolveQuestReference(quests: any[], instruction: string, gameClock: any = null) {
+  const text = String(instruction ?? '').trim();
+  const executionRequested = QUEST_REFERENCE_CUE.test(text);
+  const active = (Array.isArray(quests) ? quests : [])
+    .filter((quest) => ['active', 'paused'].includes(String(quest?.status ?? 'active')))
+    .map((quest) => questWithTimeState(quest, gameClock));
+  if (!executionRequested || !active.length) {
+    return {
+      authority: 'gmc.quest-log',
+      contractVersion: QUEST_LOG_CONTRACT_VERSION,
+      status: 'not_applicable',
+      executionRequested,
+      selected: null,
+      candidates: [],
+      clarification: null,
+    };
+  }
+  const normalizedInstruction = normalizedReferenceIdentity(text);
+  const tokens = questReferenceTokens(text);
+  const scored = active.map((quest) => {
+    const identities = questReferenceIdentity(quest);
+    const explicitlyNamed = identities.some((identity) => containsNormalizedIdentity(normalizedInstruction, identity));
+    const corpus = normalizedReferenceIdentity(recordCorpusForKind(quest, 'quest'));
+    const matchingTokens = tokens.filter((token) => corpus.includes(token));
+    const targetPhrase = matchingTokens.length > 0;
+    const recent = Date.parse(String(quest?.lastFocusedAt ?? quest?.updatedAt ?? ''));
+    const score = (explicitlyNamed ? 200 : 0)
+      + matchingTokens.length * 18
+      + (targetPhrase ? 10 : 0)
+      + Math.min(10, Math.max(0, Number(quest?.priority ?? 0)) / 10)
+      + (Number.isFinite(recent) ? Math.min(5, Math.max(0, (recent / 86_400_000) % 5)) : 0);
+    return { quest, score, explicitlyNamed, matchingTokens };
+  }).sort((left, right) => (
+    right.score - left.score
+    || Number(right.quest?.priority ?? 0) - Number(left.quest?.priority ?? 0)
+    || Date.parse(String(right.quest?.lastFocusedAt ?? right.quest?.updatedAt ?? '')) - Date.parse(String(left.quest?.lastFocusedAt ?? left.quest?.updatedAt ?? ''))
+    || String(left.quest?.title ?? '').localeCompare(String(right.quest?.title ?? ''))
+  ));
+  const lexical = scored.filter((candidate) => candidate.explicitlyNamed || candidate.matchingTokens.length);
+  const candidates = lexical.length ? lexical : scored;
+  const top = candidates[0] ?? null;
+  const runnerUp = candidates[1] ?? null;
+  const selected = top && (
+    top.explicitlyNamed
+    || candidates.length === 1
+    || (lexical.length > 0 && top.score >= Number(runnerUp?.score ?? 0) + 10)
+  ) ? compactQuestReference(top.quest, top.score, top.explicitlyNamed) : null;
+  const compactCandidates = candidates.slice(0, 8).map((candidate) => compactQuestReference(
+    candidate.quest,
+    candidate.score,
+    candidate.explicitlyNamed,
+  ));
+  return {
+    authority: 'gmc.quest-log',
+    contractVersion: QUEST_LOG_CONTRACT_VERSION,
+    status: selected ? 'resolved' : 'clarification_required',
+    executionRequested,
+    selected,
+    candidates: compactCandidates,
+    clarification: selected ? null : {
+      question: 'Which active quest do you want to continue?',
+      options: compactCandidates.map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        kind: 'quest',
+        questType: candidate.questType,
+        objective: candidate.objective,
+      })),
+    },
+  };
+}
+
+function questBoundCreationPolicy(basePolicy: any, questResolution: any) {
+  const selected = questResolution?.status === 'resolved' ? questResolution.selected : null;
+  const allowLocation = selected?.destination?.allowSceneSettingCreation === true
+    || selected?.destination?.mode === 'search_area'
+    || selected?.destination?.mode === 'target_entity_current_location';
+  if (!allowLocation) return basePolicy;
+  const source = {
+    ...basePolicy,
+    mode: 'world_generation_allowed',
+    allowedEntityTypes: [...new Set([...(basePolicy?.allowedEntityTypes ?? []), 'location'])].sort(),
+    questAuthority: {
+      authority: 'gmc.quest-log',
+      questId: selected.id,
+      questTitle: selected.name,
+      destinationMode: selected.destination?.mode ?? 'search_area',
+    },
+    allowSceneSettingCreation: true,
+    rules: [
+      ...(Array.isArray(basePolicy?.rules) ? basePolicy.rules : []),
+      'The selected quest authorizes one bounded scene location needed to pursue its current lead.',
+      'Use the quest destination guidance and linked canon; do not choose a city ward merely because several wards exist.',
+    ],
+  };
+  return {
+    ...source,
+    revision: createHash('sha256').update(stablePresenceJson(source)).digest('hex'),
+  };
 }
 
 const IMPLICIT_REFERENCE_KIND_TERMS: ReadonlyArray<readonly [MemoryReferenceKind, RegExp]> = [
@@ -624,7 +972,7 @@ function referenceSpecs(instruction: string): MemoryReferenceSpec[] {
 }
 
 function explicitCanonicalReferenceSpecs(
-  records: Record<MemoryReferenceKind, any[]>,
+  records: Record<Exclude<MemoryReferenceKind, 'quest'>, any[]>,
   instruction: string,
 ) {
   const text = normalizedReferenceIdentity(instruction);
@@ -684,11 +1032,11 @@ function linkedNpcLocationReferenceSpecs(npcs: any[], instruction: string): Memo
  * date_of_change: 2026-07-19
  */
 export function resolveMemoryReferences(
-  records: { facts: any[]; items: any[]; npcs: any[]; locations: any[]; factions?: any[] },
+  records: { facts: any[]; items: any[]; npcs: any[]; locations: any[]; factions?: any[]; quests?: any[]; gameClock?: any },
   instruction: string,
 ) {
   const facts = Array.isArray(records.facts) ? records.facts : [];
-  const byKind: Record<MemoryReferenceKind, any[]> = {
+  const byKind: Record<Exclude<MemoryReferenceKind, 'quest'>, any[]> = {
     location: records.locations ?? [],
     npc: records.npcs ?? [],
     item: records.items ?? [],
@@ -759,8 +1107,23 @@ export function resolveMemoryReferences(
           : `GMC has no canonical ${spec.kind} matching the requested ${spec.activity} role.`),
     };
   });
-  const unresolved = references.filter((reference) => reference.status !== 'resolved');
-  const creationPolicy = classifyWorldGenerationIntent(instruction);
+  const questResolution = resolveQuestReference(records.quests ?? [], instruction, records.gameClock ?? null);
+  const questReference = questResolution.status === 'not_applicable' ? [] : [{
+    key: 'active_quest',
+    label: 'active quest',
+    kind: 'quest',
+    relationship: questResolution.selected?.explicitlyNamed ? 'explicit' : 'quest_log',
+    activity: 'quest',
+    status: questResolution.status === 'resolved' ? 'resolved' : 'ambiguous',
+    selected: questResolution.selected,
+    candidates: questResolution.candidates,
+    integrityReason: questResolution.status === 'resolved'
+      ? null
+      : 'More than one active quest plausibly matches this instruction.',
+  }];
+  const allReferences = [...references, ...questReference];
+  const unresolved = allReferences.filter((reference) => reference.status !== 'resolved');
+  const creationPolicy = questBoundCreationPolicy(classifyWorldGenerationIntent(instruction), questResolution);
   const options = [...new Map(unresolved.flatMap((reference) => reference.candidates)
     .map((candidate: any) => [candidate.id, { id: candidate.id, name: candidate.name, kind: candidate.kind }])).values()];
   return {
@@ -768,7 +1131,8 @@ export function resolveMemoryReferences(
     contractVersion: CAMPAIGN_MEMORY_CONTRACT_VERSION,
     instruction,
     status: unresolved.length ? 'clarification_required' : 'resolved',
-    references,
+    references: allReferences,
+    questResolution,
     creationPolicy,
     clarification: unresolved.length ? {
       question: options.length
@@ -842,11 +1206,21 @@ export async function prepareMemoryReferences(userId: string, campaignId: string
       locationRelationshipRepaired: !locationLinked, npcRelationshipRepaired: !npcLinked,
     });
   }
-  const [facts, threads, items, refreshedNpcs, refreshedLocations, factions] = await Promise.all([
+  const state = await getDb().collection<any>('gmc_campaign_state').findOne({ userId, campaignId });
+  const [facts, threads, items, refreshedNpcs, refreshedLocations, factions, quests] = await Promise.all([
     listFacts(userId, campaignId), listThreads(userId, campaignId), listEntities(userId, campaignId, 'item'),
     listEntities(userId, campaignId, 'npc'), listEntities(userId, campaignId, 'location'), listEntities(userId, campaignId, 'faction'),
+    listQuests(userId, campaignId, {}, state?.gameClock ?? null),
   ]);
-  const resolution = resolveMemoryReferences({ facts: [...facts, ...threads], items, npcs: refreshedNpcs, locations: refreshedLocations, factions }, instruction);
+  const resolution = resolveMemoryReferences({
+    facts: [...facts, ...threads],
+    items,
+    npcs: refreshedNpcs,
+    locations: refreshedLocations,
+    factions,
+    quests,
+    gameClock: state?.gameClock ?? null,
+  }, instruction);
   return { repairs, resolution: { ...resolution, canonicalRepairs: repairs } };
 }
 
@@ -886,6 +1260,7 @@ export function validateMemoryRestorationCandidate(input: Record<string, any>) {
     if (!reference || seen.has(key)) throw Object.assign(new Error(`Unexpected or duplicate memory key: ${key || '(blank)'}.`), { status: 409, code: 'MEMORY_RESTORATION_KEY_INVALID' });
     seen.add(key);
     const kind = String(record?.kind ?? '') as MemoryReferenceKind;
+    if (kind === 'quest') throw Object.assign(new Error('Quest selection must use the existing quest ID; quests cannot be restored from a clarification answer.'), { status: 409, code: 'QUEST_SELECTION_REQUIRED' });
     if (kind !== reference.kind) throw Object.assign(new Error(`Memory key ${key} must restore a ${reference.kind}.`), { status: 409, code: 'MEMORY_RESTORATION_KIND_INVALID' });
     const name = normalizedQuote(record?.name);
     const evidence = normalizedQuote(record?.nameEvidence);
@@ -1001,12 +1376,21 @@ export async function restoreMemoryReferences(userId: string, campaignId: string
     memory: { gameClock: input?.gameClock ?? null, sourceInstruction: originalInstruction },
     source: { system: 'gamemaster-assistant', kind: 'player-memory-clarification', mutationId },
   });
-  const [facts, threads, items, npcs, locations, factions] = await Promise.all([
+  const [facts, threads, items, npcs, locations, factions, quests] = await Promise.all([
     listFacts(userId, campaignId), listThreads(userId, campaignId),
     listEntities(userId, campaignId, 'item'), listEntities(userId, campaignId, 'npc'),
     listEntities(userId, campaignId, 'location'), listEntities(userId, campaignId, 'faction'),
+    listQuests(userId, campaignId, {}, input?.gameClock ?? null),
   ]);
-  const resolution = resolveMemoryReferences({ facts: [...facts, ...threads], items, npcs, locations, factions }, originalInstruction);
+  const resolution = resolveMemoryReferences({
+    facts: [...facts, ...threads],
+    items,
+    npcs,
+    locations,
+    factions,
+    quests,
+    gameClock: input?.gameClock ?? null,
+  }, originalInstruction);
   if (resolution.status !== 'resolved') {
     throw Object.assign(new Error('Canonical records were restored, but the original references are still not unique. GMA must ask another question.'), {
       status: 409, code: 'MEMORY_RESTORATION_INCOMPLETE', details: { resolution },
@@ -1134,16 +1518,20 @@ export async function createSessionMutation(userId: string, campaignId: string, 
 export async function buildMemoryContext(
   userId: string,
   campaignId: string,
-  context: { currentLocationId?: string | null; presentNpcIds?: string[] } = {}
+  context: { currentLocationId?: string | null; presentNpcIds?: string[]; gameClock?: any } = {}
 ) {
-  const [facts, items, npcs, locations, events] = await Promise.all([
+  const [facts, items, npcs, locations, events, quests] = await Promise.all([
     listFacts(userId, campaignId),
     listEntities(userId, campaignId, 'item'),
     listEntities(userId, campaignId, 'npc'),
     listEntities(userId, campaignId, 'location'),
     listThreads(userId, campaignId, { status: 'open' }),
+    listQuests(userId, campaignId, {}, context.gameClock ?? null),
   ]);
-  return selectMemoryContext({ facts, items, npcs, locations, events }, context);
+  return {
+    ...selectMemoryContext({ facts, items, npcs, locations, events }, context),
+    quests,
+  };
 }
 
 function stablePresenceJson(value: unknown): string {
@@ -1312,6 +1700,7 @@ export function buildNarrationEvidenceBundle(input: {
   npcs?: any[];
   locations?: any[];
   factions?: any[];
+  quests?: any[];
   resolution?: any;
   limits?: { facts?: number; items?: number; threads?: number; locations?: number };
 }) {
@@ -1321,12 +1710,15 @@ export function buildNarrationEvidenceBundle(input: {
   const threads = Array.isArray(input?.threads) ? input.threads : [];
   const npcs = Array.isArray(input?.npcs) ? input.npcs : [];
   const locations = Array.isArray(input?.locations) ? input.locations : [];
+  const quests = Array.isArray(input?.quests) ? input.quests : [];
   const resolution = input?.resolution ?? resolveMemoryReferences({
     facts: [...facts, ...threads],
     items,
     npcs,
     locations,
     factions: input?.factions ?? [],
+    quests,
+    gameClock: input?.gameClock ?? null,
   }, instruction);
   const presenceContract = buildScenePresenceContract(input?.currentScene ?? null, npcs);
   const references = (Array.isArray(resolution?.references) ? resolution.references : []).map(compactEvidenceReference);
@@ -1334,6 +1726,13 @@ export function buildNarrationEvidenceBundle(input: {
     reference?.selected?.id,
     ...(reference?.candidates ?? []).map((candidate: any) => candidate?.id),
   ]).filter(Boolean).map(String));
+  const selectedQuest = resolution?.questResolution?.selected ?? null;
+  for (const id of [
+    ...(selectedQuest?.targetEntityIds ?? []),
+    ...(selectedQuest?.relatedNpcIds ?? []),
+    ...(selectedQuest?.relatedLocationIds ?? []),
+    ...(selectedQuest?.relatedItemIds ?? []),
+  ]) referencedIds.add(String(id));
   const presentNpcIds = new Set<string>(presenceContract.exactPresentNpcIds.map(String));
   const currentLocationId = String(input?.currentScene?.locationId ?? input?.currentLocation?._id ?? input?.currentLocation?.id ?? '') || null;
   const scoreContext = { currentLocationId, presentNpcIds, referencedIds };
@@ -1384,6 +1783,7 @@ export function buildNarrationEvidenceBundle(input: {
       name: repair?.name ?? null,
       materialized: repair?.materialized === true,
     })),
+    questResolution: resolution?.questResolution ?? resolveQuestReference(quests, instruction, input?.gameClock ?? null),
   };
   const evidenceCore = {
     authority: 'gmc.narration-evidence',
@@ -1411,6 +1811,14 @@ export function buildNarrationEvidenceBundle(input: {
     },
     references: compactResolution,
     canon: {
+      quests: (selectedQuest
+        ? quests.filter((quest: any) => String(quest?._id ?? quest?.id ?? '') === String(selectedQuest.id))
+        : quests.filter((quest: any) => ['active', 'paused'].includes(String(quest?.status ?? 'active'))).slice(0, 4)
+      ).map((quest: any) => ({
+        ...compactQuestReference(questWithTimeState(quest, input?.gameClock ?? null)),
+        details: objectRecord(quest?.details),
+        progressEntries: (Array.isArray(quest?.progressEntries) ? quest.progressEntries : []).slice(-5),
+      })),
       npcs: selectedNpcs.map((npc: any) => ({
         ...compactEvidenceIdentity(npc),
         aliases: [
@@ -1460,6 +1868,7 @@ export function buildNarrationEvidenceBundle(input: {
         presentNpcs: presenceContract.presentNpcs.length,
         referencedNonPresentNpcs: referencedNonPresentNpcs.length,
         npcProfiles: selectedNpcs.length,
+        quests: selectedQuest ? 1 : Math.min(quests.length, 4),
       },
       available: {
         facts: facts.length,
@@ -1467,6 +1876,7 @@ export function buildNarrationEvidenceBundle(input: {
         threads: threads.length,
         locations: locations.length,
         npcs: npcs.length,
+        quests: quests.length,
       },
     },
   };
@@ -2025,6 +2435,7 @@ export const collections = {
   state: () => getDb().collection<any>('gmc_campaign_state'),
   facts: () => getDb().collection<any>('gmc_facts'),
   threads: () => getDb().collection<any>('gmc_threads'),
+  quests: () => getDb().collection<any>('gmc_quests'),
   sessions: () => getDb().collection<any>('gmc_sessions'),
   actorWorkflows: () => getDb().collection<any>('gmc_actor_workflows'),
 };

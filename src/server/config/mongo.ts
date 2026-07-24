@@ -139,6 +139,13 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, canonicalFingerprint: 1 },
     { unique: true, partialFilterExpression: { canonicalFingerprint: { $type: 'string' } } },
   );
+  await database.collection('gmc_quests').createIndex({ userId: 1, campaignId: 1, status: 1, questType: 1, priority: -1 });
+  await database.collection('gmc_quests').createIndex({ userId: 1, campaignId: 1, lastFocusedAt: -1, updatedAt: -1 });
+  await database.collection('gmc_quests').createIndex({ userId: 1, campaignId: 1, 'progressEntries.mutationId': 1 });
+  await database.collection('gmc_quests').createIndex(
+    { userId: 1, campaignId: 1, canonicalFingerprint: 1 },
+    { unique: true, partialFilterExpression: { canonicalFingerprint: { $type: 'string' } } },
+  );
   await database.collection('gmc_sessions').createIndex({ userId: 1, campaignId: 1, createdAt: -1 });
   await database.collection('gmc_sessions').createIndex(
     { userId: 1, campaignId: 1, canonicalFingerprint: 1 },

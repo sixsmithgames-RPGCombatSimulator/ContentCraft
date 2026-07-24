@@ -11,6 +11,7 @@ import {
   buildNarrationEvidenceBundle,
   buildProposedScenePresenceContract,
   buildScenePresenceContract,
+  appendQuestProgress,
   collections,
   contradictionCandidates,
   createEntityMutation,
@@ -18,15 +19,19 @@ import {
   createSceneMutation,
   createSessionMutation,
   createThreadMutation,
+  createQuestMutation,
   getEntity,
   listEntities,
   listFacts,
   listThreads,
+  listQuests,
   prepareMemoryReferences,
   resolveMemoryReferences,
   resolveSceneTransitionContract,
   restoreMemoryReferences,
+  revertQuestProgress,
   updateEntity,
+  updateQuest,
   validateNarrativePresenceContract,
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
@@ -201,6 +206,7 @@ gmcV1Router.get('/campaigns/:campaignId/dashboard', asyncRoute(async (req, res) 
   const memoryContext = await buildMemoryContext(uid, id, {
     currentLocationId: currentScene?.locationId ?? null,
     presentNpcIds: currentScene?.presentNpcIds ?? [],
+    gameClock: state?.gameClock ?? null,
   });
   const scenePresenceContract = buildScenePresenceContract(currentScene, npcs);
   res.json({
@@ -208,6 +214,7 @@ gmcV1Router.get('/campaigns/:campaignId/dashboard', asyncRoute(async (req, res) 
     presentNpcs: npcs.filter((npc: any) => present.has(npc._id)),
     scenePresenceContract,
     relevantFacts: memoryContext.facts.slice(0, 50), openThreads: memoryContext.events,
+    questLog: memoryContext.quests,
     campaignState: state ?? null,
     gameClock: state?.gameClock ?? null,
     memoryContext,
@@ -571,13 +578,14 @@ gmcV1Router.post('/campaigns/:campaignId/narration/evidence', asyncRoute(async (
   const currentScene = state?.currentSceneId
     ? await collections.scenes().findOne({ _id: state.currentSceneId, userId: uid, campaignId: id })
     : null;
-  const [facts, items, threads, npcs, locations, factions] = await Promise.all([
+  const [facts, items, threads, npcs, locations, factions, quests] = await Promise.all([
     listFacts(uid, id),
     listEntities(uid, id, 'item'),
     listThreads(uid, id),
     listEntities(uid, id, 'npc'),
     listEntities(uid, id, 'location'),
     listEntities(uid, id, 'faction'),
+    listQuests(uid, id, {}, state?.gameClock ?? null),
   ]);
   const currentLocation = currentScene?.locationId
     ? locations.find((location: any) => String(location?._id) === String(currentScene.locationId)) ?? null
@@ -595,6 +603,7 @@ gmcV1Router.post('/campaigns/:campaignId/narration/evidence', asyncRoute(async (
     npcs,
     locations,
     factions,
+    quests,
     resolution: prepared.resolution,
     limits: req.body?.limits,
   }));
@@ -608,6 +617,7 @@ gmcV1Router.post('/campaigns/:campaignId/memory/context', asyncRoute(async (req,
   const memoryContext = await buildMemoryContext(uid, id, {
     currentLocationId: req.body?.currentLocationId ?? scene?.locationId ?? null,
     presentNpcIds: req.body?.presentNpcIds ?? scene?.presentNpcIds ?? [],
+    gameClock: state?.gameClock ?? null,
   });
   res.json({ memoryContext });
 }));
@@ -617,17 +627,59 @@ gmcV1Router.post('/campaigns/:campaignId/memory/resolve-references', asyncRoute(
   const uid = userId(req); const id = req.params.campaignId;
   const instruction = String(req.body?.instruction ?? '').trim();
   if (!instruction) { fail(req, res, 400, 'VALIDATION_ERROR', 'instruction is required.'); return; }
-  const [facts, threads, items, npcs, locations, factions] = await Promise.all([
+  const state = await collections.state().findOne({ userId: uid, campaignId: id });
+  const [facts, threads, items, npcs, locations, factions, quests] = await Promise.all([
     listFacts(uid, id),
     listThreads(uid, id),
     listEntities(uid, id, 'item'),
     listEntities(uid, id, 'npc'),
     listEntities(uid, id, 'location'),
     listEntities(uid, id, 'faction'),
+    listQuests(uid, id, {}, state?.gameClock ?? null),
   ]);
   res.json({
-    resolution: resolveMemoryReferences({ facts: [...facts, ...threads], items, npcs, locations, factions }, instruction),
+    resolution: resolveMemoryReferences({
+      facts: [...facts, ...threads],
+      items,
+      npcs,
+      locations,
+      factions,
+      quests,
+      gameClock: state?.gameClock ?? null,
+    }, instruction),
   });
+}));
+
+gmcV1Router.get('/campaigns/:campaignId/quests', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req);
+  const id = req.params.campaignId;
+  const state = await collections.state().findOne({ userId: uid, campaignId: id });
+  res.json({ quests: await listQuests(uid, id, req.query as any, state?.gameClock ?? null) });
+}));
+
+gmcV1Router.get('/quests/:questId', asyncRoute(async (req, res) => {
+  const quest = await collections.quests().findOne({ _id: req.params.questId, userId: userId(req) });
+  if (!quest) { fail(req, res, 404, 'NOT_FOUND', 'Quest not found.'); return; }
+  res.json({ quest });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/quests', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const result = await createQuestMutation(userId(req), req.params.campaignId, req.body ?? {});
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+gmcV1Router.patch('/quests/:questId', asyncRoute(async (req, res) => {
+  res.json({ quest: await updateQuest(userId(req), req.params.questId, req.body ?? {}) });
+}));
+
+gmcV1Router.post('/quests/:questId/progress', asyncRoute(async (req, res) => {
+  res.json(await appendQuestProgress(userId(req), req.params.questId, req.body ?? {}));
+}));
+
+gmcV1Router.delete('/quests/:questId/progress/:mutationId', asyncRoute(async (req, res) => {
+  res.json({ quest: await revertQuestProgress(userId(req), req.params.questId, req.params.mutationId) });
 }));
 
 gmcV1Router.post('/campaigns/:campaignId/memory/prepare-references', asyncRoute(async (req, res) => {

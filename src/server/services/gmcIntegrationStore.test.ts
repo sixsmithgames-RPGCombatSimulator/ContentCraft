@@ -156,6 +156,59 @@ describe('resolveMemoryReferences', () => {
     }));
   });
 
+  it('resolves the vague heir request through the quest log and exposes linked canon', () => {
+    const quest = {
+      _id: 'quest-rheel',
+      questType: 'side',
+      status: 'active',
+      title: 'Find Lordling Caspian Rheel',
+      aliases: ['find the heir', 'the heir', 'Mara’s second mark'],
+      objective: 'Find Lordling Caspian Rheel.',
+      leads: ['Try luxury importers, fashionable eating houses, public auctions, merchant offices, and carriage stands.'],
+      destination: { mode: 'search_area', allowSceneSettingCreation: true },
+      targetEntityIds: ['rheel'],
+      relatedNpcIds: ['mara', 'rheel'],
+      priority: 65,
+    };
+    const result = resolveMemoryReferences({
+      locations: [],
+      npcs: [],
+      items: [],
+      factions: [],
+      facts: [],
+      quests: [quest],
+      gameClock: { day: 4, hour: 12, minute: 20 },
+    }, 'I continue onward, to find the heir.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.questResolution).toEqual(expect.objectContaining({
+      status: 'resolved',
+      selected: expect.objectContaining({ id: 'quest-rheel', name: 'Find Lordling Caspian Rheel' }),
+    }));
+    expect(result.creationPolicy).toEqual(expect.objectContaining({
+      mode: 'world_generation_allowed',
+      allowedEntityTypes: ['location'],
+      questAuthority: expect.objectContaining({ questId: 'quest-rheel' }),
+    }));
+  });
+
+  it('asks which quest when a vague continuation matches multiple active quests', () => {
+    const quests = [
+      { _id: 'main', title: 'Uncover the Old One’s Legacy', status: 'active', questType: 'main', objective: 'Trace the hidden network.', priority: 90 },
+      { _id: 'side', title: 'Find Lordling Caspian Rheel', status: 'active', questType: 'side', objective: 'Find the merchant heir.', priority: 65 },
+    ];
+    const result = resolveMemoryReferences({
+      locations: [], npcs: [], items: [], factions: [], facts: [], quests,
+    }, 'I continue with the next thing.');
+
+    expect(result.status).toBe('clarification_required');
+    expect(result.questResolution.status).toBe('clarification_required');
+    expect(result.clarification?.options).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'main', kind: 'quest' }),
+      expect.objectContaining({ id: 'side', kind: 'quest' }),
+    ]));
+  });
+
   it('uses typed activity evidence and campaign time to resolve the last established shop and contact', () => {
     const result = resolveMemoryReferences({
       locations: [bentNail], npcs: [mara], items: [], factions: [],
