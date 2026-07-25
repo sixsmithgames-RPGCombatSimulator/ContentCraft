@@ -2223,6 +2223,8 @@ export function resolveSceneTransitionContract(input: {
   playerCharacterNames?: string[];
   instruction?: string;
   generatedEntities?: any[];
+  quests?: any[];
+  gameClock?: any;
 }) {
   const currentContract = input?.currentContract;
   if (currentContract?.valid !== true || !currentContract?.revision) {
@@ -2230,7 +2232,9 @@ export function resolveSceneTransitionContract(input: {
   }
   const where = String(input?.where ?? '').trim();
   if (!where) throw Object.assign(new Error('The proposed scene must declare where it occurs.'), { status: 409, code: 'SCENE_DESTINATION_LOCATION_REQUIRED' });
-  const generationPolicy = classifyWorldGenerationIntent(input?.instruction ?? '');
+  const instruction = String(input?.instruction ?? '');
+  const questResolution = resolveQuestReference(input?.quests ?? [], instruction, input?.gameClock ?? null);
+  const generationPolicy = questBoundCreationPolicy(classifyWorldGenerationIntent(instruction), questResolution);
   const rawGeneratedEntities = Array.isArray(input?.generatedEntities) ? input.generatedEntities : [];
   if (rawGeneratedEntities.length > 20) throw Object.assign(new Error('No more than 20 generated scene entities may be staged.'), { status: 409, code: 'SCENE_GENERATED_ENTITY_LIMIT' });
   if (rawGeneratedEntities.length && (!input?.userId || !input?.campaignId)) {

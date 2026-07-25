@@ -325,9 +325,10 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/transition/resolve', asyncRoute(
   if (!currentContract.valid || currentContract.revision !== expectedCurrentRevision) {
     fail(req, res, 409, 'SCENE_PRESENCE_REVISION_CONFLICT', 'The GMC current-scene roster changed before the transition could be resolved.', { currentContract }); return;
   }
+  const quests = await listQuests(uid, id, {}, state?.gameClock ?? null);
   const sceneTransitionContract = resolveSceneTransitionContract({
     userId: uid, campaignId: id, currentContract, currentScene, locations, npcs, where, who, playerCharacterNames,
-    instruction, generatedEntities,
+    instruction, generatedEntities, quests, gameClock: state?.gameClock ?? null,
   });
   res.json({ sceneTransitionContract });
 }));
@@ -365,6 +366,7 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/narrative/validate', asyncRoute(
   let sceneTransitionContract = null;
   let selectedPresenceContract = currentContract;
   if (shouldResolveNarrativeTransition(responseMode, sceneSegment)) {
+    const quests = await listQuests(uid, id, {}, state?.gameClock ?? null);
     sceneTransitionContract = resolveSceneTransitionContract({
       userId: uid,
       campaignId: id,
@@ -377,6 +379,8 @@ gmcV1Router.post('/campaigns/:campaignId/scenes/narrative/validate', asyncRoute(
       playerCharacterNames,
       instruction,
       generatedEntities,
+      quests,
+      gameClock: state?.gameClock ?? null,
     });
     selectedPresenceContract = sceneTransitionContract.presenceContract;
   }
@@ -429,6 +433,7 @@ gmcV1Router.post('/campaigns/:campaignId/scenes', asyncRoute(async (req, res) =>
     const locationId = String(req.body?.locationId ?? '').trim();
     const presentNpcIds = Array.isArray(req.body?.presentNpcIds) ? req.body.presentNpcIds.map(String) : [];
     if (requestedGeneratedEntities.length) {
+      const quests = await listQuests(uid, id, {}, state?.gameClock ?? null);
       preparedTransition = resolveSceneTransitionContract({
         userId: uid,
         campaignId: id,
@@ -441,6 +446,8 @@ gmcV1Router.post('/campaigns/:campaignId/scenes', asyncRoute(async (req, res) =>
         playerCharacterNames: Array.isArray(req.body?.playerCharacterNames) ? req.body.playerCharacterNames.map(String) : [],
         instruction: String(req.body?.instruction ?? ''),
         generatedEntities: requestedGeneratedEntities,
+        quests,
+        gameClock: state?.gameClock ?? null,
       });
       if (
         !expectedTransitionRevision

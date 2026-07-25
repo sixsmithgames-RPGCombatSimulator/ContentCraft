@@ -589,6 +589,57 @@ describe('resolveSceneTransitionContract', () => {
     expect(replay.presenceContract.revision).toBe(contract.presenceContract.revision);
   });
 
+  it('uses the same quest-bound generation policy as memory resolution', () => {
+    const instruction = 'I leave and continue onward to find Lordling Caspian Rheel in the better quarters.';
+    const gameClock = { day: 4, hour: 12, minute: 20 };
+    const quests = [{
+      _id: 'quest-rheel',
+      title: 'Find Lordling Caspian Rheel',
+      status: 'active',
+      questType: 'main',
+      objective: 'Find Lordling Caspian Rheel.',
+      destination: { mode: 'search_area', allowSceneSettingCreation: true },
+    }];
+    const memoryResolution = resolveMemoryReferences({
+      locations,
+      npcs,
+      items: [],
+      factions: [],
+      facts: [],
+      quests,
+      gameClock,
+    }, instruction);
+    const transition = resolveSceneTransitionContract({
+      userId: 'player-1',
+      campaignId: 'campaign-1',
+      currentContract,
+      currentScene: { _id: 'bent-nail-scene', locationId: 'bent-nail', presentNpcIds: ['mara'] },
+      locations,
+      npcs,
+      instruction,
+      quests,
+      gameClock,
+      where: 'The Edge of the Better Quarters',
+      who: ['Kerrigan Brynn'],
+      playerCharacterNames: ['Kerrigan Brynn'],
+      generatedEntities: [{
+        entityType: 'location',
+        mutationId: 'scene-location:better-quarters-edge',
+        name: 'The Edge of the Better Quarters',
+        geographicTier: 'site',
+        payload: { description: 'A boundary between wealth and neglect.' },
+      }],
+    });
+
+    expect(memoryResolution.creationPolicy).toEqual(expect.objectContaining({
+      mode: 'world_generation_allowed',
+      allowedEntityTypes: ['location'],
+      questAuthority: expect.objectContaining({ questId: 'quest-rheel' }),
+    }));
+    expect(transition.generationPolicy.revision).toBe(memoryResolution.creationPolicy.revision);
+    expect(transition.generationPolicy).toEqual(memoryResolution.creationPolicy);
+  });
+
   it('deduplicates multiple aliases of one location but rejects multiple distinct primary locations', () => {
     const duplicateAlias = resolveSceneTransitionContract({
       currentContract, currentScene: { locationId: 'bent-nail' }, locations, npcs,
