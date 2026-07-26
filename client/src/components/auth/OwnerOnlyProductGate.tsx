@@ -7,10 +7,12 @@
  */
 
 import { useUser } from '@clerk/clerk-react';
+import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 
 import { getProductConfig } from '../../config/products';
 import { isLocalMode } from '../../utils/localMode';
+import { updateProductSEO } from '../../utils/seo';
 
 const SAGACRAFT_OWNER_EMAIL = 'sexsmith2005@gmail.com';
 
@@ -20,6 +22,19 @@ function isOwnerEmail(email: string | null | undefined): boolean {
 
 function ClerkOwnerGate() {
   const { isLoaded, user } = useUser();
+  const primaryEmail = user?.primaryEmailAddress;
+  const verifiedOwner =
+    primaryEmail?.verification.status === 'verified'
+    && isOwnerEmail(primaryEmail.emailAddress);
+
+  useEffect(() => {
+    /*
+     * SagaCraft metadata starts neutral so an anonymous visitor cannot learn
+     * the private product name. Restore the product title only after Clerk has
+     * proved the owner identity.
+     */
+    updateProductSEO(verifiedOwner);
+  }, [verifiedOwner]);
 
   if (!isLoaded) {
     return (
@@ -28,11 +43,6 @@ function ClerkOwnerGate() {
       </div>
     );
   }
-
-  const primaryEmail = user?.primaryEmailAddress;
-  const verifiedOwner =
-    primaryEmail?.verification.status === 'verified'
-    && isOwnerEmail(primaryEmail.emailAddress);
 
   if (!verifiedOwner) {
     return (

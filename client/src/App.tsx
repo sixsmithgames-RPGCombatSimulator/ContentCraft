@@ -57,8 +57,8 @@ function App() {
         <Route path="/sign-up" element={<SignUp />} />
 
         {/* Protected routes with full app layout */}
-        <Route element={<RequireAuth />}>
-          <Route element={<OwnerOnlyProductGate />}>
+        <Route element={<OwnerOnlyProductGate />}>
+          <Route element={<RequireAuth />}>
             <Route element={<AuthenticatedLayout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/generator" element={<ManualGenerator />} />
