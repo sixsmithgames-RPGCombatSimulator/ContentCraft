@@ -1048,8 +1048,9 @@ export function resolveMemoryReferences(
     ...explicitCanonicalReferenceSpecs(byKind, instruction),
   ];
   const normalizedInstruction = normalizedReferenceIdentity(instruction);
-  const references = specs.map((spec) => {
-    const candidates = (byKind[spec.kind] ?? []).flatMap((record: any) => {
+  const references: any[] = specs.map((spec) => {
+    const recordsForKind = spec.kind === 'quest' ? [] : byKind[spec.kind];
+    const candidates = recordsForKind.flatMap((record: any) => {
       const corpus = recordCorpusForKind(record, spec.kind);
       if (!spec.recordTerms.test(corpus)) return [];
       const id = String(record?._id ?? record?.id ?? '');

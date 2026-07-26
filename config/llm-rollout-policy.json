@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "gma-gmc.llm-rollout-policy/1",
+  "version": "2026-07-26.2",
+  "effectiveFrom": "2026-07-26T00:00:00.000Z",
+  "default": {
+    "mode": "compatibility",
+    "canaryPercent": 100,
+    "rollbackTarget": "compatibility_adapter"
+  },
+  "operations": {
+    "intent.classify": {
+      "mode": "compatibility",
+      "canaryPercent": 100
+    },
+    "narration.generate": {
+      "mode": "compatibility",
+      "canaryPercent": 100
+    },
+    "canon.extract": {
+      "mode": "compatibility",
+      "canaryPercent": 100
+    },
+    "entity.npc.generate": {
+      "mode": "compatibility",
+      "canaryPercent": 100
+    },
+    "campaign.foundation.build": {
+      "mode": "compatibility",
+      "canaryPercent": 100
+    }
+  },
+  "history": [
+    {
+      "at": "2026-07-26T00:00:00.000Z",
+      "change": "Created operation-scoped rollout policy after compatibility adapters were routed through the universal orchestrator."
+    },
+    {
+      "at": "2026-07-26T15:00:00.000Z",
+      "change": "Pinned compatibility prompts as the safe default while enabling operation-scoped primary canaries and deterministic rollback."
+    }
+  ]
+}

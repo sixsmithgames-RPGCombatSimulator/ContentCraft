@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "gma-gmc.llm-fixtures/1",
+  "sanitized": true,
+  "families": [
+    {"family":"deterministic_crud_lookup","modelCalls":0,"request":{"kind":"canon_query","referenceId":"fixture-location"},"response":{"status":"resolved","revision":"fixture-r1"}},
+    {"family":"intent_classification","operation":"intent.classify","request":{"instruction":"sanitized action"},"response":{"intentType":"narrative_action","confidence":0.9}},
+    {"family":"skill_adjudication","operation":"skill.adjudicate","request":{"uncertainty":"material"},"response":{"resolutionMode":"player_roll","dc":12}},
+    {"family":"sheet_mutation_planning","operation":"sheet.mutation.plan","request":{"revision":"sheet-r1"},"response":{"shouldMutate":false}},
+    {"family":"experience_evaluation","operation":"experience.evaluate","request":{"achievement":"fixture"},"response":{"shouldAward":false,"amount":0}},
+    {"family":"canon_extraction","operation":"canon.extract","request":{"transcript":["sanitized"]},"response":{"proposedEntities":[],"proposedCanonChanges":[]}},
+    {"family":"narration","operation":"narration.generate","request":{"sceneVersion":"scene-r1"},"response":{"narration":"Sanitized prose.","proposedCanonChanges":[]}},
+    {"family":"continuity_review","operation":"narration.continuity.validate","request":{"candidateNarration":"Sanitized prose."},"response":{"valid":true,"issues":[]}},
+    {"family":"encounter_transition","operation":"encounter.transition.detect","request":{"triggeredNow":false},"response":{"shouldCreateBattleRoom":false}},
+    {"family":"encounter_planning","operation":"encounter.plan","request":{"objective":"fixture"},"response":{"encounter":{},"combatants":[]}},
+    {"family":"npc_turn_intent","operation":"combat.turn.plan","request":{"actorId":"fixture-actor"},"response":{"actorId":"fixture-actor","intent":"hold","actions":[]}},
+    {"family":"entity_generation","operation":"entity.npc.generate","request":{"prompt":"sanitized"},"response":{"name":"Fixture NPC","draft":true}},
+    {"family":"campaign_foundation","operation":"campaign.foundation.build","request":{"answers":{"title":"Fixture"}},"response":{"campaign":{"title":"Fixture"}}},
+    {"family":"workflow_stage","operation":"workflow.stage.execute","request":{"stageId":"fixture-stage"},"response":{"fixtureStage":{}}},
+    {"family":"manual_mode","operation":"narration.generate","transport":"manual","request":{"sceneVersion":"scene-r1"},"response":{"narration":"Sanitized manual prose."}},
+    {"family":"error","operation":"narration.generate","request":{"sceneVersion":"stale"},"response":{"status":"failed","error":{"code":"STALE_CONTEXT_REVISION","retryable":false}}}
+  ]
+}

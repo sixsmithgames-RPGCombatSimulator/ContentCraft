@@ -154,6 +154,33 @@ async function createIndexes(database: Db): Promise<void> {
   await database.collection('gmc_actor_workflows').createIndex({ userId: 1, campaignId: 1, updatedAt: -1 });
   await database.collection('gmc_actor_workflows').createIndex({ userId: 1, campaignId: 1, kind: 1, normalizedName: 1, status: 1 });
 
+  // Provider-neutral LLM execution ledger and cross-authority outbox.
+  await database.collection('llm_executions').createIndex(
+    { userId: 1, operation: 1, idempotencyKey: 1 },
+    { unique: true, name: 'unique_llm_execution_idempotency' },
+  );
+  await database.collection('llm_executions').createIndex({ userId: 1, taskId: 1, startedAt: -1 });
+  await database.collection('llm_executions').createIndex({ userId: 1, correlationId: 1, startedAt: -1 });
+  await database.collection('llm_executions').createIndex({ userId: 1, operation: 1, cacheKey: 1, status: 1, expiresAt: 1 });
+  await database.collection('llm_executions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await database.collection('llm_generation_workflows').createIndex(
+    { userId: 1, workflowId: 1 },
+    { unique: true, name: 'unique_llm_generation_workflow' },
+  );
+  await database.collection('llm_generation_workflows').createIndex({ userId: 1, kind: 1, updatedAt: -1 });
+  await database.collection('llm_generation_workflows').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await database.collection('authority_outbox').createIndex(
+    { userId: 1, operationId: 1, stepId: 1 },
+    { unique: true, name: 'unique_authority_outbox_step' },
+  );
+  await database.collection('authority_outbox').createIndex({ status: 1, nextAttemptAt: 1 });
+  await database.collection('authority_operations').createIndex(
+    { userId: 1, operationId: 1 },
+    { unique: true, name: 'unique_authority_operation' },
+  );
+  await database.collection('authority_operations').createIndex({ userId: 1, status: 1, updatedAt: 1 });
+  await database.collection('authority_operations').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
   console.log('✓ MongoDB indexes created');
 }
 

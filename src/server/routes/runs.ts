@@ -14,6 +14,21 @@ export const runsRouter = Router();
 
 // Apply Clerk auth middleware to all routes
 runsRouter.use(clerkAuthFixedMiddleware);
+runsRouter.use((_req, res, next) => {
+  if (process.env.ENABLE_LEGACY_RUNS === 'true') {
+    next();
+    return;
+  }
+  res.status(410).json({
+    error: {
+      code: 'LEGACY_ORCHESTRATOR_RETIRED',
+      message: 'The legacy run orchestrator is retired. Use the registered workflow execution API.',
+      retryable: false,
+      replacement: '/api/ai/workflow/execute-stage',
+      removalVersion: '2.0.0',
+    },
+  });
+});
 
 /**
  * POST /api/runs

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "gma-gmc.model-policy/1",
+  "version": "2026-07-26.2",
+  "effectiveFrom": "2026-07-26T00:00:00.000Z",
+  "providers": {
+    "fake": {
+      "enabled": true,
+      "models": {
+        "structured": {
+          "default": "fake-structured",
+          "inputUsdPerMillion": 0,
+          "outputUsdPerMillion": 0,
+          "cachedInputUsdPerMillion": 0
+        },
+        "narrative": {
+          "default": "fake-narrative",
+          "inputUsdPerMillion": 0,
+          "outputUsdPerMillion": 0,
+          "cachedInputUsdPerMillion": 0
+        },
+        "world": {
+          "default": "fake-world",
+          "inputUsdPerMillion": 0,
+          "outputUsdPerMillion": 0,
+          "cachedInputUsdPerMillion": 0
+        },
+        "reasoning": {
+          "default": "fake-reasoning",
+          "inputUsdPerMillion": 0,
+          "outputUsdPerMillion": 0,
+          "cachedInputUsdPerMillion": 0
+        }
+      }
+    },
+    "gemini": {
+      "enabled": true,
+      "models": {
+        "structured": {
+          "env": "GEMINI_STRUCTURED_MODEL",
+          "fallbackEnv": "GEMINI_MODEL",
+          "default": "gemini-3.1-flash-lite-preview",
+          "inputUsdPerMillion": null,
+          "outputUsdPerMillion": null,
+          "cachedInputUsdPerMillion": null
+        },
+        "narrative": {
+          "env": "GEMINI_NARRATIVE_MODEL",
+          "fallbackEnv": "GEMINI_MODEL",
+          "default": "gemini-3.1-flash-lite-preview",
+          "inputUsdPerMillion": null,
+          "outputUsdPerMillion": null,
+          "cachedInputUsdPerMillion": null
+        },
+        "world": {
+          "env": "GEMINI_WORLD_MODEL",
+          "fallbackEnv": "GEMINI_MODEL",
+          "default": "gemini-3.1-flash-lite-preview",
+          "inputUsdPerMillion": null,
+          "outputUsdPerMillion": null,
+          "cachedInputUsdPerMillion": null
+        },
+        "reasoning": {
+          "env": "GEMINI_REASONING_MODEL",
+          "fallbackEnv": "GEMINI_MODEL",
+          "default": "gemini-3.1-flash-lite-preview",
+          "inputUsdPerMillion": null,
+          "outputUsdPerMillion": null,
+          "cachedInputUsdPerMillion": null
+        }
+      }
+    },
+    "openai": {
+      "enabled": false,
+      "models": {
+        "structured": {
+          "env": "OPENAI_STRUCTURED_MODEL",
+          "default": "gpt-5-mini",
+          "inputUsdPerMillion": null,
+          "outputUsdPerMillion": null,
+          "cachedInputUsdPerMillion": null
+        },
+        "narrative": {
+          "env": "OPENAI_NARRATIVE_MODEL",
+          "default": "gpt-5",
+          "inputUsdPerMillion": null,
+          "outputUsdPerMillion": null,
+          "cachedInputUsdPerMillion": null
+        },
+        "world": {
+          "env": "OPENAI_WORLD_MODEL",
+          "default": "gpt-5",
+          "inputUsdPerMillion": null,
+          "outputUsdPerMillion": null,
+          "cachedInputUsdPerMillion": null
+        },
+        "reasoning": {
+          "env": "OPENAI_REASONING_MODEL",
+          "default": "gpt-5",
+          "inputUsdPerMillion": null,
+          "outputUsdPerMillion": null,
+          "cachedInputUsdPerMillion": null
+        }
+      }
+    }
+  }
+}

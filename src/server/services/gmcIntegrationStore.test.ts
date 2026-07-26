@@ -263,7 +263,7 @@ describe('resolveMemoryReferences', () => {
     const lodging = result.references.find((reference) => reference.key === 'lodging_location');
     expect(lodging?.status).toBe('resolved');
     expect(lodging?.selected?.name).toBe('Tidy Tides Inn');
-    expect(lodging?.candidates.find((candidate) => candidate.name === 'The Salty Tug')?.evidence).toEqual([]);
+    expect(lodging?.candidates.find((candidate: any) => candidate.name === 'The Salty Tug')?.evidence).toEqual([]);
   });
 
   it('resolves an explicitly named canonical item with ownership and memory tags intact', () => {

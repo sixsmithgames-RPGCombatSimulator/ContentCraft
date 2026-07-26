@@ -1,0 +1,621 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GameMasterCraft LLM Orchestrator API",
+    "version": "2026-07-26.2"
+  },
+  "paths": {
+    "/api/gmc/v1/llm/contract": {
+      "get": {
+        "operationId": "getLlmOrchestratorContract",
+        "responses": {
+          "200": {
+            "description": "Current registry contract"
+          }
+        }
+      }
+    },
+    "/api/gmc/v1/llm/execute": {
+      "post": {
+        "operationId": "executeLlmOperation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LlmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Universal execution response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gmc/v1/llm/validate-manual": {
+      "post": {
+        "operationId": "validateManualLlmOperation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "request",
+                  "output"
+                ],
+                "properties": {
+                  "request": {
+                    "$ref": "#/components/schemas/LlmRequest"
+                  },
+                  "output": {}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validated manual execution response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gmc/v1/llm/shadow": {
+      "post": {
+        "operationId": "compareShadowLlmOperation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "request",
+                  "baselineOutput"
+                ],
+                "properties": {
+                  "request": {
+                    "$ref": "#/components/schemas/LlmRequest"
+                  },
+                  "baselineOutput": {}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Proposal-only shadow comparison"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LlmRequest": {
+        "$id": "gma-gmc.llm-request/1",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "taskId",
+          "correlationId",
+          "idempotencyKey",
+          "operation",
+          "stage",
+          "operationClass",
+          "authority",
+          "references",
+          "context",
+          "constraints",
+          "outputSchema"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "gma-gmc.llm-request/1"
+          },
+          "taskId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "correlationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "operation": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]+$",
+            "maxLength": 160
+          },
+          "stage": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "operationClass": {
+            "enum": [
+              "deterministic_rule",
+              "deterministic_lookup",
+              "structured_low",
+              "narrative",
+              "world_generation",
+              "reasoning_high"
+            ]
+          },
+          "authority": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "canon",
+              "mechanics",
+              "commit"
+            ],
+            "properties": {
+              "canon": {
+                "enum": [
+                  "GMC",
+                  "none"
+                ]
+              },
+              "mechanics": {
+                "enum": [
+                  "VCS",
+                  "none"
+                ]
+              },
+              "commit": {
+                "enum": [
+                  "proposal_only",
+                  "gmc_commit",
+                  "vcs_commit",
+                  "no_write"
+                ]
+              }
+            }
+          },
+          "references": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "campaignId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sceneId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "actorIds": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "maxItems": 50
+              },
+              "locationIds": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "maxItems": 50
+              },
+              "canonVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sceneVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mechanicsVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "workflowMemoryIds": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "maxItems": 50
+              }
+            }
+          },
+          "context": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "label",
+                "value"
+              ],
+              "properties": {
+                "label": {
+                  "enum": [
+                    "trusted_policy",
+                    "retrieved_authority_data",
+                    "user_text",
+                    "untrusted_external_data"
+                  ]
+                },
+                "value": {},
+                "revision": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "constraints": {
+            "type": "object"
+          },
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "version"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "compatibility": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "adapterVersion"
+            ],
+            "properties": {
+              "sourceRoute": {
+                "type": "string"
+              },
+              "adapterVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "removeAfterVersion": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "LlmResponse": {
+        "$id": "gma-gmc.llm-response/1",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "taskId",
+          "correlationId",
+          "idempotencyKey",
+          "operation",
+          "stage",
+          "status",
+          "output",
+          "validation",
+          "route",
+          "usage",
+          "timing",
+          "cache",
+          "error"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "gma-gmc.llm-response/1"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "succeeded",
+              "failed",
+              "review_required"
+            ]
+          },
+          "output": {},
+          "validation": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "validatorId",
+                "version",
+                "valid",
+                "issues"
+              ],
+              "properties": {
+                "validatorId": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "valid": {
+                  "type": "boolean"
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "code",
+                      "message"
+                    ],
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "route": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "provider",
+              "model",
+              "capabilityTier",
+              "fallbackUsed",
+              "registryVersion",
+              "operationVersion"
+            ],
+            "properties": {
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "capabilityTier": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "fallbackUsed": {
+                "type": "boolean"
+              },
+              "registryVersion": {
+                "type": "string"
+              },
+              "operationVersion": {
+                "type": "string"
+              }
+            }
+          },
+          "usage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "reasoningTokens",
+              "cachedInputTokens",
+              "source",
+              "priceVersion",
+              "costUsd"
+            ],
+            "properties": {
+              "inputTokens": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "outputTokens": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "reasoningTokens": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "cachedInputTokens": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "source": {
+                "enum": [
+                  "provider",
+                  "estimate",
+                  "unavailable"
+                ]
+              },
+              "priceVersion": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "costUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            }
+          },
+          "timing": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "startedAt",
+              "completedAt",
+              "durationMs",
+              "attempts"
+            ],
+            "properties": {
+              "startedAt": {
+                "type": "string"
+              },
+              "completedAt": {
+                "type": "string"
+              },
+              "durationMs": {
+                "type": "number",
+                "minimum": 0
+              },
+              "attempts": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "cache": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "key"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "miss",
+                  "hit",
+                  "joined",
+                  "bypass"
+                ]
+              },
+              "key": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code",
+                  "category",
+                  "message",
+                  "retryable",
+                  "source"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "enum": [
+                      "contract",
+                      "policy",
+                      "context",
+                      "provider",
+                      "validation",
+                      "persistence",
+                      "commit"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "providerStatus": {
+                    "type": "integer"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

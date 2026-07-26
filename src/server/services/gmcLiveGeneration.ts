@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { parseSmartJson } from '../../shared/generation/smartJsonParser.js';
 import { appendGenerationDevLog } from './generationDevLog.js';
+import { requestGeminiRaw } from '../llm-orchestrator/providers/geminiProvider.js';
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
 const USAGE_LOG_LIMIT = 500;
@@ -234,9 +235,10 @@ export async function generateStructuredJson(systemInstruction: string, input: u
     }
     const startedAt = Date.now();
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`, {
-        method: 'POST', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' },
+      const response = await requestGeminiRaw({
+        model: MODEL,
+        apiKey,
+        signal: controller.signal,
         body: serializedPayload,
       });
       const bodyText = await response.text();

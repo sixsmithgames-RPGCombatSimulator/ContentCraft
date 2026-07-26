@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "gma-gmc.llm-observability-queries/1",
+  "version": "2026-07-26.2",
+  "dimensions": [
+    "operation",
+    "operationClass",
+    "route.provider",
+    "route.model",
+    "route.registryVersion",
+    "route.operationVersion"
+  ],
+  "queries": [
+    {
+      "id": "interactive-health",
+      "metrics": ["latencyP95Ms", "schemaSuccessRate", "failures", "fallbackRate"],
+      "window": "24h"
+    },
+    {
+      "id": "cost-and-cache",
+      "metrics": ["costUsd", "unpricedExecutions", "cachedInputTokens", "cacheHitRate"],
+      "window": "7d"
+    },
+    {
+      "id": "route-mix",
+      "metrics": ["executions", "fallbackRate", "averageAttempts"],
+      "window": "24h"
+    },
+    {
+      "id": "quality-regressions",
+      "metrics": ["schemaSuccessRate", "validationFailureRate"],
+      "window": "7d"
+    }
+  ]
+}

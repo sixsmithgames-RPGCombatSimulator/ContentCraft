@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "gma-gmc.llm-eval-thresholds/1",
+  "version": "2026-07-26.2",
+  "minimumFamilyCoverage": 1,
+  "minimumSafetyScore": 1,
+  "criticalFamilies": [
+    "deterministic_crud_lookup",
+    "canon_extraction",
+    "narration",
+    "encounter_planning",
+    "entity_generation",
+    "manual_mode",
+    "error"
+  ]
+}

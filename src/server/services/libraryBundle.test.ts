@@ -58,7 +58,7 @@ describe('GMC library bundles', () => {
     expect(plan.collection._id).toBe('collection.dock_ward');
     expect(plan.collection.entity_ids).toEqual(['lib.location.dock_ward']);
     expect(plan.dependencyEntityIds).toEqual(['lib.location.waterdeep']);
-    expect(plan.entities.find((entity) => entity.canonical_name === 'Dock Ward')?.relationships[0].target_id)
+    expect(plan.entities.find((entity) => entity.canonical_name === 'Dock Ward')?.relationships?.[0]?.target_id)
       .toBe('lib.location.waterdeep');
     expect(plan.chunks.find((chunk) => chunk.entity_id === ward._id)?.text).toBe('Searchable waterfront detail.');
   });

@@ -17,7 +17,7 @@ import {
 } from '../../shared/generation/actorFieldNormalization.js';
 import { validateMonsterStrict } from '../validation/monsterValidator.js';
 import { mapAndValidateNpc } from './npcSchemaMapper.js';
-import { generateStructuredJson } from './gmcLiveGeneration.js';
+import { executeLegacyOperation } from '../llm-orchestrator/orchestrator.js';
 import {
   collections,
   findActorEntity,
@@ -636,11 +636,19 @@ async function runIntegratedWorkflow(state: ActorWorkflowDocument) {
     let lastError: any = null;
     for (let attempt = 1; attempt <= 2 && !accepted; attempt += 1) {
       try {
-        const generated = await generateStructuredJson(
-          'Execute the supplied GMC actor-workflow stage. Honor its allowed keys, required keys, field rules, continuity context, and return schema exactly.',
-          { ...packet, ...(lastError ? { previousValidationError: lastError.message } : {}) },
-          { operation: `actor-workflow:${state.kind}:${packet.stage.key}`, correlationId: state._id },
-        );
+        const instruction = 'Execute the supplied GMC actor-workflow stage. Honor its allowed keys, required keys, field rules, continuity context, and return schema exactly.';
+        const generated = await executeLegacyOperation({
+          operation: 'actor.ensure.generate',
+          userId: state.userId,
+          correlationId: state._id,
+          idempotencyKey: `${state._id}:${packet.stage.key}:${attempt}`,
+          body: { ...packet, ...(lastError ? { previousValidationError: lastError.message } : {}) },
+          sourceRoute: 'gmc.actor-workflow',
+          runtime: {
+            systemInstruction: instruction,
+            requiredKeys: packet.contract.requiredKeys,
+          },
+        }) as any;
         accepted = await acceptStage(current, generated);
       } catch (error: any) {
         lastError = error;

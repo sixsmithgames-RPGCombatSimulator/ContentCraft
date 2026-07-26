@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { ProjectStatus, ProjectType } from '../../shared/types/index.js';
 import { parseSmartJson } from '../../shared/generation/smartJsonParser.js';
@@ -35,10 +35,19 @@ import {
   validateNarrativePresenceContract,
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
-import { generateStructuredJson, generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
+import { generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
 import { ensureCampaignActor } from '../services/actorEnsureWorkflow.js';
 import { applyCampaignClockMutation } from '../services/campaignClockMutation.js';
 import { createCampaignMutation } from '../services/campaignCreateMutation.js';
+import { llmOrchestratorRouter } from '../llm-orchestrator/routes.js';
+import { executeLegacyOperation } from '../llm-orchestrator/orchestrator.js';
+import { getDurableUsageSnapshot, MongoExecutionStore } from '../llm-orchestrator/executionStore.js';
+import { OPERATION_REGISTRY_VERSION } from '../llm-orchestrator/operationRegistry.js';
+import { isMongoAvailable } from '../config/mongo.js';
+import {
+  defaultGenerationStage,
+  executeGenerationWorkflow,
+} from '../llm-orchestrator/generationWorkflow.js';
 import {
   AUDIT_RESOLVED_MECHANICS_NARRATION_INSTRUCTION,
   AUDIT_RESOLVED_MECHANICS_NARRATION_REQUIRED_KEYS,
@@ -56,6 +65,7 @@ import {
 
 export const gmcV1Router = Router();
 gmcV1Router.use(integrationAuth);
+gmcV1Router.use('/llm', llmOrchestratorRouter);
 
 export function shouldResolveNarrativeTransition(responseMode: string, sceneSegment: Record<string, unknown> | null) {
   return responseMode !== 'ooc' && sceneSegment !== null;
@@ -785,22 +795,54 @@ function registerEntityRoutes(kind: GmcEntityKind, plural: string) {
   }));
   if (kind !== 'faction') gmcV1Router.post(`/campaigns/:campaignId/${plural}/generate`, asyncRoute(async (req, res) => {
     if (!await campaign(req, res)) return;
-    const generated = await generateStructuredJson(generationPrompts[kind as 'npc' | 'monster' | 'location' | 'item'], { prompt: req.body?.prompt, campaignId: req.params.campaignId, context: req.body });
+    const operation = `entity.${kind}.generate`;
+    const requestFingerprint = createHash('sha256').update(JSON.stringify(req.body ?? null)).digest('hex');
+    const idempotencyKey = String(req.header('Idempotency-Key') || `${operation}:${req.params.campaignId}:${requestFingerprint}`);
+    const workflowRequest = {
+      kind: `entity.${kind}`,
+      campaignId: req.params.campaignId,
+      name: req.body?.name,
+      prompt: req.body?.prompt,
+      context: req.body,
+    };
+    const generated = await executeGenerationWorkflow({
+      userId: userId(req),
+      workflowId: `creator:${idempotencyKey}`,
+      kind: `entity.${kind}` as 'entity.npc' | 'entity.monster' | 'entity.location' | 'entity.item',
+      request: workflowRequest,
+      runStage: (stageContext) => stageContext.stage === 'retrieve'
+        ? buildMemoryContext(userId(req), req.params.campaignId)
+        : defaultGenerationStage({
+          ...stageContext,
+          expand: () => executeLegacyOperation({
+          operation,
+          userId: userId(req),
+          correlationId: correlationId(req),
+          idempotencyKey: `${idempotencyKey}:expand`,
+          body: {
+            ...workflowRequest,
+            workflow: {
+              plan: stageContext.prior.plan,
+              retrieval: stageContext.prior.retrieve,
+              skeleton: stageContext.prior.skeleton,
+            },
+          },
+          sourceRoute: `/api/gmc/v1/campaigns/:campaignId/${plural}/generate`,
+          runtime: {
+            systemInstruction: generationPrompts[kind as 'npc' | 'monster' | 'location' | 'item'],
+            requiredKeys: ['name'],
+          },
+        }),
+        }),
+    }) as any;
     if (!generated.name) throw Object.assign(new Error('Generated entity has no name.'), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
-    const makeCanon = Boolean(req.body?.makeCanon);
-    const committed = makeCanon
-      ? await createEntityMutation(userId(req), req.params.campaignId, kind, { ...generated, draft: false, mutationId: req.body?.mutationId })
-      : null;
-    const entity = committed?.record ?? { ...generated, draft: true };
-    res.status(committed && !committed.duplicate ? 201 : 200).json({
+    const entity = { ...generated, draft: true };
+    res.status(200).json({
       [kind]: entity,
-      draft: !makeCanon,
+      draft: true,
+      proposalOnly: true,
+      approvalRequired: Boolean(req.body?.makeCanon),
       suggestedFacts: generated.suggestedFacts ?? [],
-      ...(committed ? {
-        mutationId: committed.mutationId,
-        duplicate: committed.duplicate,
-        duplicateReason: committed.duplicateReason,
-      } : {}),
     });
   }));
 }
@@ -1012,21 +1054,106 @@ export function validateStructuredAiOutput(output: any, requiredKeys: string[]) 
 }
 
 async function ai(req: Request, res: Response, instruction: string, requiredKeys: string[]) {
+  const expectedRegistryVersion = req.header('X-GMC-LLM-Registry-Version');
+  if (expectedRegistryVersion && expectedRegistryVersion !== OPERATION_REGISTRY_VERSION) {
+    throw Object.assign(new Error(`GMA expects LLM registry ${expectedRegistryVersion}, but GMC is running ${OPERATION_REGISTRY_VERSION}. Deploy compatible builds before retrying.`), {
+      status: 409,
+      code: 'LLM_REGISTRY_VERSION_MISMATCH',
+    });
+  }
   if (COMPACT_ENVELOPE_AI_PATHS.has(req.path) || COMPACT_AUXILIARY_AI_PATHS.has(req.path) || req.path === '/detect-encounter-transition') {
     const metrics = validateCompactAiInput(req);
     res.setHeader('X-GMC-AI-Context-Bytes', String(metrics.size));
     res.setHeader('X-GMC-AI-Context-Target', String(metrics.target));
     res.setHeader('X-GMC-AI-Context-Target-Exceeded', String(metrics.targetExceeded));
   }
-  const output = await generateStructuredJson(instruction, req.body, { operation: req.path, correlationId: correlationId(req) });
+  const operation = ({
+    '/classify-intent': 'intent.classify',
+    '/generate-narration': 'narration.generate',
+    '/validate-narration-continuity': 'narration.continuity.validate',
+    '/evaluate-experience-award': 'experience.evaluate',
+    '/adjudicate-skill-check': 'skill.adjudicate',
+    '/narrate-skill-check-result': 'skill.narrate',
+    '/narrate-combat-action-result': 'combat.action.narrate',
+    '/audit-resolved-mechanics-narration': 'mechanics.narration.audit',
+    '/respond-ooc': 'ooc.respond',
+    '/plan-character-sheet-mutation': 'sheet.mutation.plan',
+    '/retcon-narration': 'narration.retcon',
+    '/generate-npc-dialogue': 'npc.dialogue.generate',
+    '/extract-canon-changes': 'canon.extract',
+    '/summarize-session': 'session.summarize',
+    '/build-campaign-foundation': 'campaign.foundation.build',
+    '/detect-encounter-transition': 'encounter.transition.detect',
+    '/plan-encounter': 'encounter.plan',
+    '/plan-encounter-challenge': 'encounter.challenge.plan',
+    '/plan-combat-turn': 'combat.turn.plan',
+    '/narrate-combat-turns': 'combat.turns.narrate',
+  } as Record<string, string>)[req.path];
+  if (!operation) {
+    throw Object.assign(new Error(`No registered operation maps to ${req.path}.`), {
+      status: 500,
+      code: 'OPERATION_NOT_REGISTERED',
+    });
+  }
+  const bodyFingerprint = createHash('sha256').update(JSON.stringify(req.body ?? null)).digest('hex');
+  const idempotencyKey = String(req.header('Idempotency-Key') || `${operation}:${bodyFingerprint}`);
+  const expand = () => executeLegacyOperation({
+    operation,
+    userId: userId(req),
+    correlationId: correlationId(req),
+    idempotencyKey: operation === 'campaign.foundation.build' ? `${idempotencyKey}:expand` : idempotencyKey,
+    body: req.body,
+    sourceRoute: `/api/gmc/v1/ai${req.path}`,
+    runtime: { systemInstruction: instruction, requiredKeys },
+  });
+  const output = operation === 'campaign.foundation.build'
+    ? await executeGenerationWorkflow({
+      userId: userId(req),
+      workflowId: `campaign:${idempotencyKey}`,
+      kind: 'campaign.foundation',
+      request: {
+        kind: 'campaign.foundation',
+        campaignId: req.body?.campaignId ?? req.body?.interactionEnvelope?.campaignId ?? null,
+        context: req.body,
+      },
+      runStage: (stageContext) => stageContext.stage === 'retrieve' && (
+        req.body?.campaignId || req.body?.interactionEnvelope?.campaignId
+      )
+        ? buildMemoryContext(
+          userId(req),
+          String(req.body?.campaignId ?? req.body?.interactionEnvelope?.campaignId),
+        )
+        : defaultGenerationStage({
+          ...stageContext,
+          expand: () => executeLegacyOperation({
+          operation,
+          userId: userId(req),
+          correlationId: correlationId(req),
+          idempotencyKey: `${idempotencyKey}:expand`,
+          body: {
+            ...req.body,
+            workflow: {
+              plan: stageContext.prior.plan,
+              retrieval: stageContext.prior.retrieve,
+              skeleton: stageContext.prior.skeleton,
+            },
+          },
+          sourceRoute: `/api/gmc/v1/ai${req.path}`,
+          runtime: { systemInstruction: instruction, requiredKeys },
+        }),
+        }),
+    })
+    : await expand();
   if (!validateStructuredAiOutput(output, requiredKeys)) {
     throw Object.assign(new Error(`Structured AI response is missing required fields: ${requiredKeys.join(', ')}.`), { status: 502, code: 'STRUCTURED_OUTPUT_INVALID' });
   }
   res.json(output);
 }
 
-gmcV1Router.get('/ai/usage', asyncRoute(async (_req, res) => {
-  res.json(getGeminiUsageSnapshot());
+gmcV1Router.get('/ai/usage', asyncRoute(async (req, res) => {
+  res.json(isMongoAvailable()
+    ? await getDurableUsageSnapshot(new MongoExecutionStore(), userId(req))
+    : { ...getGeminiUsageSnapshot(), durable: false, source: 'legacy_process_fallback' });
 }));
 
 gmcV1Router.post('/tools/parse-json', asyncRoute(async (req, res) => {

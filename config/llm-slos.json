@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "gma-gmc.llm-slos/1",
+  "version": "2026-07-26.2",
+  "classes": {
+    "structured_low": {
+      "latencyP95Ms": 12000,
+      "maxModelCalls": 2,
+      "maxRetries": 1,
+      "minimumSchemaSuccessRate": 0.995,
+      "costUsdPerExecution": null
+    },
+    "narrative": {
+      "latencyP95Ms": 30000,
+      "maxModelCalls": 2,
+      "maxRetries": 1,
+      "minimumSchemaSuccessRate": 0.99,
+      "costUsdPerExecution": null
+    },
+    "world_generation": {
+      "latencyP95Ms": 60000,
+      "maxModelCalls": 2,
+      "maxRetries": 1,
+      "minimumSchemaSuccessRate": 0.99,
+      "costUsdPerExecution": null
+    },
+    "reasoning_high": {
+      "latencyP95Ms": 120000,
+      "maxModelCalls": 2,
+      "maxRetries": 1,
+      "minimumSchemaSuccessRate": 0.99,
+      "costUsdPerExecution": null
+    },
+    "deterministic_rule": {
+      "latencyP95Ms": 1000,
+      "maxModelCalls": 0,
+      "maxRetries": 0,
+      "minimumSchemaSuccessRate": 1,
+      "costUsdPerExecution": 0
+    },
+    "deterministic_lookup": {
+      "latencyP95Ms": 2000,
+      "maxModelCalls": 0,
+      "maxRetries": 0,
+      "minimumSchemaSuccessRate": 1,
+      "costUsdPerExecution": 0
+    }
+  }
+}
