@@ -163,6 +163,13 @@ async function createIndexes(database: Db): Promise<void> {
   await database.collection('llm_executions').createIndex({ userId: 1, correlationId: 1, startedAt: -1 });
   await database.collection('llm_executions').createIndex({ userId: 1, operation: 1, cacheKey: 1, status: 1, expiresAt: 1 });
   await database.collection('llm_executions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  // GMA mechanics receipts are campaign recovery data, not short-lived model
+  // telemetry. Keep them until the user invokes orchestrator-data deletion.
+  await database.collection('gma_mechanics_ledger').createIndex(
+    { userId: 1, campaignId: 1, interactionId: 1 },
+    { unique: true, name: 'unique_gma_mechanics_ledger_interaction' },
+  );
+  await database.collection('gma_mechanics_ledger').createIndex({ userId: 1, campaignId: 1, updatedAt: -1 });
   await database.collection('llm_generation_workflows').createIndex(
     { userId: 1, workflowId: 1 },
     { unique: true, name: 'unique_llm_generation_workflow' },

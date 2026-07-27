@@ -7,6 +7,7 @@ const RETAINED_COLLECTIONS = [
   'llm_generation_workflows',
   'authority_operations',
   'authority_outbox',
+  'gma_mechanics_ledger',
 ] as const;
 
 export async function deleteUserOrchestratorData(input: {

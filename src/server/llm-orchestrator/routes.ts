@@ -15,11 +15,26 @@ import {
 import { classifyCanonProposal } from './canonClaimClassifier.js';
 import { queryLlmObservability } from './observability.js';
 import { deleteUserOrchestratorData } from './retention.js';
+import { findMechanicsLedger, upsertMechanicsLedger } from './mechanicsLedger.js';
 
 export const llmOrchestratorRouter = Router();
 
 function userId(req: Request) {
   return (req as IntegrationRequest).userId;
+}
+
+function forwardMechanicsLedgerError(error: unknown, res: any, next: (error?: unknown) => void) {
+  const status = Number((error as any)?.status ?? 0);
+  if (status >= 400 && status < 500) {
+    res.status(status).json({
+      error: {
+        code: (error as any)?.code ?? 'GMA_MECHANICS_LEDGER_ERROR',
+        message: error instanceof Error ? error.message : 'The mechanics ledger request was rejected.',
+      },
+    });
+    return;
+  }
+  next(error);
 }
 
 llmOrchestratorRouter.get('/contract', (_req, res) => {
@@ -112,6 +127,45 @@ llmOrchestratorRouter.get('/executions', async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+/**
+ * GMA's mechanics receipt is stored beside GMC's durable execution records so
+ * a later Vercel instance can rebuild narration from the authoritative VCS
+ * result and the campaign context that GMC supplied to the original request.
+ */
+llmOrchestratorRouter.put('/mechanics-ledger/:campaignId/:interactionId', async (req, res, next) => {
+  try {
+    const result = await upsertMechanicsLedger({
+      userId: userId(req),
+      campaignId: req.params.campaignId,
+      interactionId: req.params.interactionId,
+      kind: req.body?.kind,
+      requestFingerprint: String(req.body?.requestFingerprint ?? ''),
+      request: req.body?.request && typeof req.body.request === 'object' ? req.body.request : {},
+      response: req.body?.response && typeof req.body.response === 'object' ? req.body.response : {},
+    });
+    res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    forwardMechanicsLedgerError(error, res, next);
+  }
+});
+
+llmOrchestratorRouter.get('/mechanics-ledger/:campaignId/:interactionId', async (req, res, next) => {
+  try {
+    const ledger = await findMechanicsLedger({
+      userId: userId(req),
+      campaignId: req.params.campaignId,
+      interactionId: req.params.interactionId,
+    });
+    if (!ledger) {
+      res.status(404).json({ error: { code: 'GMA_MECHANICS_LEDGER_NOT_FOUND', message: 'No durable mechanics receipt exists for this interaction.' } });
+      return;
+    }
+    res.json({ ledger });
+  } catch (error) {
+    forwardMechanicsLedgerError(error, res, next);
   }
 });
 
