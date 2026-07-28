@@ -423,19 +423,105 @@ describe('resolveMemoryReferences', () => {
     expect(reference?.selected?.matchedIdentity).toBe("Old Vesper's place");
   });
 
-  it('marks an explicitly requested NPC-associated place unresolved when its typed Location entity is missing', () => {
+  it('resolves a person-relative destination through canonical NPC relationships without requiring the player to name the place', () => {
+    const result = resolveMemoryReferences({
+      facts: [], items: [], factions: [],
+      npcs: [{
+        _id: 'old-vesper', type: 'npc', canonical_name: 'Old Vesper', aliases: ['magic mentor'],
+        relationships: [{ type: 'associated_location', targetId: 'vesper-workshop', name: "Old Vesper's Workshop" }],
+      }],
+      locations: [{
+        _id: 'vesper-workshop', type: 'location', canonical_name: "Old Vesper's Workshop",
+        aliases: ["Vesper's place"], tags: ['player-known', 'location:workshop'],
+      }],
+    }, 'I return to Old Vesper.');
+
+    const location = result.references.find((entry) => entry.key === 'npc_destination_old_vesper');
+    expect(result.status).toBe('resolved');
+    expect(location?.relationship).toBe('target_entity_location');
+    expect(location?.selected?.id).toBe('vesper-workshop');
+    expect(location?.selected?.associationBasis).toEqual(expect.arrayContaining([
+      expect.stringMatching(/canonical relationship/i),
+    ]));
+    expect(result.creationPolicy.mode).toBe('canonical_only');
+  });
+
+  it('offers the related canonical places when a person-relative destination is genuinely ambiguous', () => {
+    const result = resolveMemoryReferences({
+      facts: [], items: [], factions: [],
+      npcs: [{
+        _id: 'old-vesper', type: 'npc', canonical_name: 'Old Vesper',
+        relationships: [
+          { type: 'associated_location', targetId: 'vesper-workshop', name: "Old Vesper's Workshop" },
+          { type: 'associated_location', targetId: 'vesper-flat', name: "Old Vesper's Rooms" },
+        ],
+      }],
+      locations: [
+        { _id: 'vesper-workshop', type: 'location', canonical_name: "Old Vesper's Workshop" },
+        { _id: 'vesper-flat', type: 'location', canonical_name: "Old Vesper's Rooms" },
+      ],
+    }, 'I return to Old Vesper.');
+
+    const location = result.references.find((entry) => entry.key === 'npc_destination_old_vesper');
+    expect(result.status).toBe('clarification_required');
+    expect(location?.status).toBe('ambiguous');
+    expect(result.clarification?.options.map((option: any) => option.name).sort()).toEqual([
+      "Old Vesper's Rooms",
+      "Old Vesper's Workshop",
+    ]);
+  });
+
+  it('authorizes one bounded person-associated location when canon has a real relationship gap', () => {
     const result = resolveMemoryReferences({
       facts: [], items: [], locations: [], factions: [],
       npcs: [{
         _id: 'old-vesper', type: 'npc', canonical_name: 'Old Vesper', aliases: ['magic mentor'],
         details: { location: "Old Vesper's place" },
       }],
-    }, "I leave the Bent Nail and go to Old Vesper's place.");
+    }, 'I leave the Bent Nail and return to Old Vesper.');
 
-    const location = result.references.find((entry) => entry.key === 'linked_location_old_vesper');
-    expect(result.status).toBe('clarification_required');
-    expect(location?.kind).toBe('location');
-    expect(location?.status).toBe('missing');
+    expect(result.status).toBe('resolved');
+    expect(result.references.find((entry) => entry.kind === 'npc')?.selected?.id).toBe('old-vesper');
+    expect(result.creationPolicy.mode).toBe('world_generation_allowed');
+    expect(result.creationPolicy.allowedEntityTypes).toContain('location');
+    expect(result.creationPolicy.destinationAuthority).toEqual(expect.objectContaining({
+      kind: 'named_entity_location_gap',
+      targets: [{ npcId: 'old-vesper', npcName: 'Old Vesper' }],
+    }));
+  });
+
+  it('carries the resolved person-location relationship into compact narration evidence', () => {
+    const npc = {
+      _id: 'old-vesper', type: 'npc', canonical_name: 'Old Vesper',
+      relationships: [{ type: 'associated_location', targetId: 'vesper-workshop', name: "Old Vesper's Workshop" }],
+      details: { role: 'Kerrigan’s mentor' },
+    };
+    const location = {
+      _id: 'vesper-workshop', type: 'location', canonical_name: "Old Vesper's Workshop",
+      details: { description: 'A narrow workshop crowded with half-finished brass frames.' },
+    };
+    const instruction = 'I return to Old Vesper.';
+    const resolution = resolveMemoryReferences({
+      facts: [], items: [], factions: [], npcs: [npc], locations: [location],
+    }, instruction);
+    const bundle = buildNarrationEvidenceBundle({
+      campaignId: 'campaign-1',
+      instruction,
+      currentScene: { _id: 'street-scene', locationId: 'street', presentNpcIds: [] },
+      currentLocation: { _id: 'street', canonical_name: 'Dock Ward Street' },
+      facts: [],
+      items: [],
+      threads: [],
+      npcs: [npc],
+      locations: [{ _id: 'street', canonical_name: 'Dock Ward Street' }, location],
+      resolution,
+    });
+
+    expect(bundle.evidence.references.references.find((entry: any) => entry.relationship === 'target_entity_location')?.selected?.name)
+      .toBe("Old Vesper's Workshop");
+    expect(bundle.evidence.canon.locations.map((entry: any) => entry.name)).toContain("Old Vesper's Workshop");
+    expect(bundle.evidence.canon.npcs.find((entry: any) => entry.name === 'Old Vesper')?.relationships)
+      .toEqual([expect.objectContaining({ targetId: 'vesper-workshop' })]);
   });
 });
 

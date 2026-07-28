@@ -154,10 +154,6 @@ async function assertCanonicalEntityIdentityAvailable({
   );
 }
 
-function identityRegex(value: string) {
-  return new RegExp(escapeRegex(value).replace(/['’]/g, "['’]"), 'i');
-}
-
 function containsNormalizedIdentity(text: unknown, identity: unknown) {
   const haystack = ` ${normalizedReferenceIdentity(text)} `;
   const needle = normalizedReferenceIdentity(identity);
@@ -667,11 +663,13 @@ type MemoryReferenceKind = 'location' | 'npc' | 'item' | 'faction' | 'quest';
 type MemoryReferenceSpec = {
   key: string;
   kind: MemoryReferenceKind;
-  relationship: 'most_recent' | 'explicit';
+  relationship: 'most_recent' | 'explicit' | 'target_entity_location';
   activity: 'lodging' | 'commerce' | 'meeting' | 'general';
   label: string;
   recordTerms: RegExp;
   evidenceTerms: RegExp;
+  candidateIds?: string[];
+  candidateBasis?: Record<string, string[]>;
 };
 
 function campaignMinuteFromText(value: unknown) {
@@ -1026,28 +1024,146 @@ function explicitCanonicalReferenceSpecs(
   return specs;
 }
 
-function linkedNpcLocationReferenceSpecs(npcs: any[], instruction: string): MemoryReferenceSpec[] {
+const NPC_DESTINATION_CUE = /\b(?:go|head|return|travel|walk|ride|sail|proceed|make\s+(?:my|our|their)\s+way|visit|meet|find|reach|arrive|follow)\b/i;
+const NPC_LOCATION_RELATIONSHIP = /\b(?:associated|current|destination|home|house|location|meeting|office|residence|shop|site|work|workplace|workshop)\b/i;
+
+function isNpcLocationRelationship(value: unknown) {
+  return NPC_LOCATION_RELATIONSHIP.test(String(value ?? '').replace(/[_-]+/g, ' '));
+}
+
+function recordId(value: any) {
+  return String(value?._id ?? value?.id ?? '').trim();
+}
+
+function recordIdentities(value: any) {
+  return [
+    value?.canonical_name ?? value?.name ?? value?.title,
+    ...(Array.isArray(value?.aliases) ? value.aliases : []),
+  ].map((identity) => String(identity ?? '').trim()).filter(Boolean);
+}
+
+function npcDestinationReferences(
+  npcs: any[],
+  locations: any[],
+  facts: any[],
+  instruction: string,
+): { specs: MemoryReferenceSpec[]; gaps: Array<{ npcId: string; npcName: string }> } {
   const text = normalizedReferenceIdentity(instruction);
   const specs = new Map<string, MemoryReferenceSpec>();
+  const gaps: Array<{ npcId: string; npcName: string }> = [];
+  if (!NPC_DESTINATION_CUE.test(text)) return { specs: [], gaps };
   for (const npc of npcs ?? []) {
-    const locationName = String(npc?.details?.location ?? '').trim();
-    if (!locationName || !containsNormalizedIdentity(text, locationName)) continue;
-    const npcIdentities = [npc?.canonical_name ?? npc?.name, ...(Array.isArray(npc?.aliases) ? npc.aliases : [])]
-      .map((value) => String(value ?? '').trim()).filter(Boolean);
+    const npcIdentities = recordIdentities(npc);
     if (!npcIdentities.some((identity) => containsNormalizedIdentity(text, identity))) continue;
-    const npcId = String(npc?._id ?? npc?.id ?? locationName);
-    const key = `linked_location_${npcId.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
+    const npcId = recordId(npc);
+    const npcName = String(npc?.canonical_name ?? npc?.name ?? npcIdentities[0] ?? '').trim();
+    const candidateBasis = new Map<string, Set<string>>();
+    const addCandidate = (location: any, basis: string) => {
+      const id = recordId(location);
+      if (!id) return;
+      if (!candidateBasis.has(id)) candidateBasis.set(id, new Set());
+      candidateBasis.get(id)?.add(basis);
+    };
+    const linkedIds = new Set<string>();
+    const linkedNames = new Set<string>();
+    const details = objectRecord(npc?.details);
+    for (const value of [
+      details.locationId,
+      details.currentLocationId,
+      details.workplaceLocationId,
+      details.homeLocationId,
+      details.destinationLocationId,
+    ]) {
+      const id = String(value ?? '').trim();
+      if (id) linkedIds.add(id);
+    }
+    for (const value of [
+      details.location,
+      details.currentLocation,
+      details.workplace,
+      details.workshop,
+      details.home,
+      details.residence,
+      details.office,
+    ]) {
+      const name = String(value ?? '').trim();
+      if (name) linkedNames.add(normalizedReferenceIdentity(name));
+    }
+    for (const relationship of Array.isArray(npc?.relationships) ? npc.relationships : []) {
+      if (!isNpcLocationRelationship(relationship?.type ?? relationship?.kind)) continue;
+      const id = String(relationship?.targetId ?? relationship?.locationId ?? relationship?.id ?? '').trim();
+      const name = String(relationship?.name ?? relationship?.targetName ?? '').trim();
+      if (id) linkedIds.add(id);
+      if (name) linkedNames.add(normalizedReferenceIdentity(name));
+    }
+    for (const location of locations ?? []) {
+      const locationId = recordId(location);
+      const identityMatch = recordIdentities(location)
+        .some((identity) => linkedNames.has(normalizedReferenceIdentity(identity)));
+      const reverseLink = (Array.isArray(location?.relationships) ? location.relationships : [])
+        .some((relationship: any) => (
+          String(relationship?.targetId ?? relationship?.npcId ?? '') === npcId
+          && isNpcLocationRelationship(relationship?.type ?? relationship?.kind)
+        ));
+      if (linkedIds.has(locationId)) addCandidate(location, `${npcName}'s canonical relationship targets ${String(location?.canonical_name ?? location?.name ?? locationId)}.`);
+      if (identityMatch) addCandidate(location, `${npcName}'s canonical profile names this location.`);
+      if (reverseLink) addCandidate(location, `The canonical location is linked back to ${npcName}.`);
+    }
+    for (const fact of facts ?? []) {
+      const relatedNpcIds = [
+        ...(fact?.relatedNpcIds ?? []),
+        ...(fact?.relatedEntityIds ?? []),
+      ].map(String);
+      if (!relatedNpcIds.includes(npcId)) continue;
+      const relatedLocationIds = (fact?.relatedLocationIds ?? []).map(String);
+      for (const location of locations ?? []) {
+        if (!relatedLocationIds.includes(recordId(location))) continue;
+        addCandidate(location, `Canonical campaign evidence links ${npcName} to this location: ${String(fact?.text ?? '').slice(0, 240)}`);
+      }
+    }
+    const candidates = (locations ?? []).filter((location) => candidateBasis.has(recordId(location)));
+    if (!candidates.length) {
+      gaps.push({ npcId, npcName });
+      continue;
+    }
+    const key = `npc_destination_${npcId.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
+    const names = candidates.flatMap(recordIdentities);
     specs.set(key, {
       key,
       kind: 'location',
-      relationship: 'explicit',
-      activity: 'general',
-      label: `location “${locationName}” associated with ${String(npc?.canonical_name ?? npc?.name ?? 'canonical NPC')}`,
-      recordTerms: identityRegex(locationName),
-      evidenceTerms: identityRegex(locationName),
+      relationship: 'target_entity_location',
+      activity: 'meeting',
+      label: `destination associated with ${npcName || 'the named person'}`,
+      recordTerms: new RegExp(names.map(escapeRegex).join('|'), 'i'),
+      evidenceTerms: /./,
+      candidateIds: candidates.map(recordId),
+      candidateBasis: Object.fromEntries([...candidateBasis].map(([id, basis]) => [id, [...basis]])),
     });
   }
-  return [...specs.values()];
+  return { specs: [...specs.values()], gaps };
+}
+
+function relationshipGapCreationPolicy(basePolicy: any, gaps: Array<{ npcId: string; npcName: string }>) {
+  if (!gaps.length) return basePolicy;
+  const source = {
+    ...basePolicy,
+    mode: 'world_generation_allowed',
+    allowedEntityTypes: [...new Set([...(basePolicy?.allowedEntityTypes ?? []), 'location'])].sort(),
+    allowSceneSettingCreation: true,
+    destinationAuthority: {
+      kind: 'named_entity_location_gap',
+      targets: gaps,
+    },
+    rules: [
+      ...(Array.isArray(basePolicy?.rules) ? basePolicy.rules : []),
+      'The player named an established person as the travel or meeting target, but GMC has no canonical location associated with that person.',
+      'Create at most one bounded location needed to stage that person-relative destination. Anchor it to the named person and current campaign geography; do not substitute an arbitrary existing district or unrelated place.',
+    ],
+  };
+  return {
+    ...source,
+    revision: createHash('sha256').update(stablePresenceJson(source)).digest('hex'),
+  };
 }
 
 /**
@@ -1067,18 +1183,25 @@ export function resolveMemoryReferences(
     item: records.items ?? [],
     faction: records.factions ?? [],
   };
+  const destinationReferences = npcDestinationReferences(
+    byKind.npc,
+    byKind.location,
+    facts,
+    instruction,
+  );
   const specs = [
     ...referenceSpecs(instruction),
-    ...linkedNpcLocationReferenceSpecs(byKind.npc, instruction),
+    ...destinationReferences.specs,
     ...explicitCanonicalReferenceSpecs(byKind, instruction),
   ];
   const normalizedInstruction = normalizedReferenceIdentity(instruction);
   const references: any[] = specs.map((spec) => {
     const recordsForKind = spec.kind === 'quest' ? [] : byKind[spec.kind];
     const candidates = recordsForKind.flatMap((record: any) => {
+      const id = String(record?._id ?? record?.id ?? '');
+      if (spec.candidateIds?.length && !spec.candidateIds.includes(id)) return [];
       const corpus = recordCorpusForKind(record, spec.kind);
       if (!spec.recordTerms.test(corpus)) return [];
-      const id = String(record?._id ?? record?.id ?? '');
       const name = String(record?.canonical_name ?? record?.name ?? record?.title ?? '').trim();
       const identities = [name, ...(Array.isArray(record?.aliases) ? record.aliases : [])]
         .map((value) => String(value ?? '').trim()).filter(Boolean);
@@ -1100,14 +1223,15 @@ export function resolveMemoryReferences(
         createdAt: fact?.createdAt ?? null,
       })).sort((left, right) => Number(right.campaignMinute ?? -1) - Number(left.campaignMinute ?? -1));
       const latestCampaignMinute = evidence.find((entry) => entry.campaignMinute !== null)?.campaignMinute ?? null;
-      const score = 10 + (explicitlyNamed ? 100 : 0) + (evidence.length ? 30 : 0) + Math.min(15, evidence.length * 3) + (record?.tags?.includes?.('player-known') ? 2 : 0);
-      return [{ id, name, kind: spec.kind, score, latestCampaignMinute, explicitlyNamed, matchedIdentity, record, evidence: evidence.slice(0, 5) }];
+      const associationBasis = spec.candidateBasis?.[id] ?? [];
+      const score = 10 + (explicitlyNamed ? 100 : 0) + (associationBasis.length ? 60 : 0) + (evidence.length ? 30 : 0) + Math.min(15, evidence.length * 3) + (record?.tags?.includes?.('player-known') ? 2 : 0);
+      return [{ id, name, kind: spec.kind, score, latestCampaignMinute, explicitlyNamed, matchedIdentity, record, associationBasis, evidence: evidence.slice(0, 5) }];
     }).sort((left: any, right: any) => (
       right.score - left.score
       || Number(right.latestCampaignMinute ?? -1) - Number(left.latestCampaignMinute ?? -1)
       || left.name.localeCompare(right.name)
     ));
-    const established = candidates.filter((candidate: any) => candidate.evidence.length > 0 || candidate.explicitlyNamed);
+    const established = candidates.filter((candidate: any) => candidate.evidence.length > 0 || candidate.associationBasis?.length || candidate.explicitlyNamed);
     const selected = established.length === 1
       || (established.length > 1 && (
         established[0].explicitlyNamed
@@ -1156,7 +1280,10 @@ export function resolveMemoryReferences(
   }];
   const allReferences = [...references, ...questReference];
   const unresolved = allReferences.filter((reference) => reference.status !== 'resolved');
-  const creationPolicy = questBoundCreationPolicy(classifyWorldGenerationIntent(instruction), questResolution);
+  const creationPolicy = relationshipGapCreationPolicy(
+    questBoundCreationPolicy(classifyWorldGenerationIntent(instruction), questResolution),
+    destinationReferences.gaps,
+  );
   const options = [...new Map(unresolved.flatMap((reference) => reference.candidates)
     .map((candidate: any) => {
       const description = String(
@@ -1745,6 +1872,8 @@ function compactEvidenceReference(reference: any) {
     name: String(candidate?.name ?? '').trim() || null,
     kind: candidate?.kind ?? null,
     explicitlyNamed: candidate?.explicitlyNamed === true,
+    associationBasis: (Array.isArray(candidate?.associationBasis) ? candidate.associationBasis : [])
+      .map(String).slice(0, 4),
     evidence: (Array.isArray(candidate?.evidence) ? candidate.evidence : []).slice(0, 3).map((entry: any) => ({
       id: String(entry?.id ?? '') || null,
       text: String(entry?.text ?? '').slice(0, 500),
@@ -1912,6 +2041,15 @@ export function buildNarrationEvidenceBundle(input: {
         role: String(npc?.details?.role ?? npc?.role ?? '').slice(0, 500) || null,
         description: String(npc?.details?.description ?? npc?.description ?? '').slice(0, 700) || null,
         motivation: String(npc?.details?.motivation ?? npc?.details?.currentGoal ?? npc?.motivation ?? '').slice(0, 500) || null,
+        location: String(npc?.details?.location ?? npc?.details?.currentLocation ?? npc?.details?.workplace ?? '').slice(0, 300) || null,
+        relationships: (Array.isArray(npc?.relationships) ? npc.relationships : [])
+          .filter((relationship: any) => isNpcLocationRelationship(relationship?.type ?? relationship?.kind))
+          .slice(0, 8)
+          .map((relationship: any) => ({
+            type: relationship?.type ?? relationship?.kind ?? null,
+            targetId: String(relationship?.targetId ?? relationship?.locationId ?? relationship?.id ?? '') || null,
+            name: String(relationship?.name ?? relationship?.targetName ?? '').trim() || null,
+          })),
         status: npc?.status ?? null,
         present: presentNpcIds.has(String(npc?._id ?? npc?.id ?? '')),
       })),
