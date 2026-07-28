@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-07-28.5';
+export const OPERATION_REGISTRY_VERSION = '2026-07-28.6';
 
 export type CapabilityTier = 'structured' | 'narrative' | 'world' | 'reasoning';
 
