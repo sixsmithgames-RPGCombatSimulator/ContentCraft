@@ -28,7 +28,7 @@ registerSemanticValidator('authority-boundary', ({ output }) => {
 registerSemanticValidator('narrative-fidelity', ({ output }) => {
   const text = outputText(output);
   const issues: Array<{ code: string; message: string }> = [];
-  const forbidden = /\b(?:GMA|GMC|VCS|schema|structured output|authoritative manifest|fixed carried inventory|current records|validation error|developer diagnostic)\b/i;
+  const forbidden = /\b(?:GMA|GMC|VCS|schema|structured output|authoritative manifest|fixed carried inventory|current records|character sheet|validation error|developer diagnostic)\b/i;
   if (text && forbidden.test(text)) {
     issues.push({ code: 'PLAYER_FACING_IMPLEMENTATION_LANGUAGE', message: 'Player-facing prose contains implementation or preparation language.' });
   }
@@ -51,6 +51,16 @@ registerSemanticValidator('inventory', ({ output }) => {
     const entry = exports[index];
     if (entry?.quantity !== undefined && (!Number.isFinite(Number(entry.quantity)) || Number(entry.quantity) < 0)) {
       issues.push({ code: 'INVALID_INVENTORY_QUANTITY', message: 'Inventory quantities must be non-negative numbers.', path: `/proposedVcsExports/${index}/quantity` });
+    }
+  }
+  const itemOperations = [
+    ...(Array.isArray(output?.proposedSheetMutation?.items?.add) ? output.proposedSheetMutation.items.add : []),
+    ...(Array.isArray(output?.proposedSheetMutation?.items?.remove) ? output.proposedSheetMutation.items.remove : []),
+  ];
+  for (let index = 0; index < itemOperations.length; index += 1) {
+    const entry = itemOperations[index];
+    if (!String(entry?.name ?? '').trim() || !Number.isFinite(Number(entry?.quantity)) || Number(entry.quantity) <= 0) {
+      issues.push({ code: 'INVALID_SHEET_ITEM_OPERATION', message: 'Character-sheet item operations require an exact name and positive quantity.', path: `/proposedSheetMutation/items/${index}` });
     }
   }
   return result('inventory', issues);

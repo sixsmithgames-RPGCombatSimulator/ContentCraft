@@ -1,6 +1,6 @@
 {
   "schemaVersion": "gma-gmc.llm-registry-artifact/1",
-  "registryVersion": "2026-07-28.2",
+  "registryVersion": "2026-07-28.3",
   "modelPolicyVersion": "2026-07-26.2",
   "operations": [
     {
@@ -1789,6 +1789,16 @@
             },
             "interactionResolution": {
               "type": "object"
+            },
+            "proposedSheetMutation": {
+              "anyOf": [
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "npcDialogue": {
               "anyOf": [

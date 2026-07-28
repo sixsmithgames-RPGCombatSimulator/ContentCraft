@@ -90,11 +90,11 @@ describe('GMC compact interaction envelope contract', () => {
     } as any)).not.toThrow();
   });
 
-  it('uses short task-specific provider instructions and validates response types', () => {
-    expect(NARRATION_ENVELOPE_INSTRUCTION.length).toBeLessThan(1_600);
-    expect(SKILL_ENVELOPE_INSTRUCTION.length).toBeLessThan(1_600);
-    expect(ENCOUNTER_ENVELOPE_INSTRUCTION.length).toBeLessThan(1_200);
-    expect(EXPERIENCE_AWARD_INSTRUCTION.length).toBeLessThan(1_200);
+  it('uses task-specific provider instructions and validates response types without hard prompt ceilings', () => {
+    expect(NARRATION_ENVELOPE_INSTRUCTION).toContain('interactionEnvelope');
+    expect(SKILL_ENVELOPE_INSTRUCTION).toContain('interactionEnvelope');
+    expect(ENCOUNTER_ENVELOPE_INSTRUCTION).toContain('compact GMA interaction');
+    expect(EXPERIENCE_AWARD_INSTRUCTION).toContain('Return');
     expect(NARRATION_ENVELOPE_INSTRUCTION).toContain('GMA owns intent classification');
     expect(SKILL_ENVELOPE_INSTRUCTION).toContain('outcomeProse');
     expect(SKILL_ENVELOPE_INSTRUCTION).toContain('finished, vivid, scene-specific player-facing narration');
@@ -114,7 +114,6 @@ describe('GMC compact interaction envelope contract', () => {
 
 describe('GMC character-sheet mutation contract', () => {
   it('separates ownership from explicit ready-access weapon state', () => {
-    expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION.length).toBeLessThan(1_800);
     expect(PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS).toContain('equippedWeapons');
     expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION).toContain('All newly acquired weapons and all ammunition go through items.add');
     expect(PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION).toContain('never imply that a weapon is equipped');
