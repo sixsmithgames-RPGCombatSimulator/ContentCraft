@@ -889,7 +889,7 @@ function questBoundCreationPolicy(basePolicy: any, questResolution: any) {
 
 const IMPLICIT_REFERENCE_KIND_TERMS: ReadonlyArray<readonly [MemoryReferenceKind, RegExp]> = [
   ['npc', /\b(?:person|npc|mentor|captain|keeper|proprietor|owner|contact|friend|ally|merchant|dealer|quartermaster|innkeeper|shopkeeper|barkeep|bartender|guard|witness)\b/i],
-  ['item', /\b(?:item|object|weapon|sword|bow|dagger|armor|key|token|book|letter|device|frame|tool|potion|ring|amulet|stone|component|reagent|residue)\b/i],
+  ['item', /\b(?:item|object|weapon|sword|bow|dagger|armou?r|key|token|book|letter|device|frame|tool|potion|ring|amulet|stone|component|reagent|residue|bag|pouch|pack|container)\b/i],
   ['faction', /\b(?:faction|guild|watch|order|cult|church|company|gang|crew|family|house|clan|organization)\b/i],
   ['location', /\b(?:place|location|destination|site|room|inn|tavern|lodging|shop|store|workshop|workroom|home|house|market|office|warehouse|dock|docks|harbor|ward|street|lane|alley|route|sewer|tunnel|cellar|basement|floor|stair|stairs|chamber|hall|corridor|chapel|temple)\b/i],
 ];
@@ -904,6 +904,14 @@ function implicitReferenceKind(phrase: string): MemoryReferenceKind | null {
     if (terms.test(phrase)) return kind;
   }
   return null;
+}
+
+function normalizedImplicitMentionPhrase(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\b(?:where|that|who|which|and|then|before|after|for|with|from)\b[\s\S]*$/i, '')
+    .replace(/\b(?:maintains?|keeps?|remains?|contains?|holds?|conceals?|protects?|provides?|gives?|has|have|had|is|are|was|were|will|can|does?|sits?|rests?|stays?|looks?|appears?)\b[\s\S]*$/i, '')
+    .trim();
 }
 
 /**
@@ -958,17 +966,23 @@ function referenceSpecs(instruction: string): MemoryReferenceSpec[] {
     if (!generationPolicy.allowedEntityTypes.includes('location')) specs.push({ key: 'lodging_location', kind: 'location', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'lodging', label: 'lodging location', recordTerms: /\b(?:inn|tavern|lodg|hostel|boarding)\b/i, evidenceTerms: /\b(?:stay(?:ed|ing)?|slept|lodg|room key|night's? rest|paid for (?:the )?night)\b/i });
     if (!generationPolicy.allowedEntityTypes.includes('npc')) specs.push({ key: 'lodging_proprietor', kind: 'npc', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'lodging', label: 'innkeeper or lodging proprietor', recordTerms: /\b(?:innkeeper|barkeep|bartender|proprietor|landlord|landlady|lodging host)\b/i, evidenceTerms: /\b(?:innkeeper|barkeep|bartender|proprietor|room key|paid for (?:the )?night|lodging)\b/i });
   }
-  if (/\b(?:sell|sold|selling|buy|bought|shop|store|merchant|dealer|quartermaster|outfitter|trade|hagg(?:le|led|ling)|gear|supplies|arms|armor)\b/i.test(text)) {
+  const commerceAction = /\b(?:sell|sold|selling|buy|bought|buying|purchase|purchasing|trade|trading|traded|hagg(?:le|led|ling)|apprais(?:e|ed|ing)|shop(?:ping)?)\b/i.test(text);
+  const commerceDestination = /\b(?:go|going|went|return|returning|head|heading|visit|visiting|enter|entering|stop|stopping|back)\b[\s\S]{0,80}\b(?:shop|store|market|merchant|dealer|quartermaster|outfitter)\b/i.test(text);
+  if (commerceAction || commerceDestination) {
     if (!generationPolicy.allowedEntityTypes.includes('location')) specs.push({ key: 'commerce_location', kind: 'location', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'commerce', label: 'shop or trade location', recordTerms: /\b(?:shop|store|market|merchant|quartermaster|outfitter|trade|goods|arms|armor|supplies)\b/i, evidenceTerms: /\b(?:sell|sold|buy|bought|trade|traded|haggl|apprais|offer|store credit|quartermaster)\b/i });
     if (!generationPolicy.allowedEntityTypes.includes('npc')) specs.push({ key: 'commerce_contact', kind: 'npc', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'commerce', label: 'merchant or trade contact', recordTerms: /\b(?:merchant|dealer|quartermaster|outfitter|shopkeeper|trader|appraiser|sells?)\b/i, evidenceTerms: /\b(?:sell|sold|buy|bought|trade|traded|haggl|apprais|offer|store credit|quartermaster)\b/i });
   }
   const implicitMentions = [...text.matchAll(/\b(back to|return(?:ing|ed)? to|same|usual|last|previous(?:ly visited)?|my|our)\s+(?:the\s+)?([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*){0,2})/gi)];
   for (const match of implicitMentions) {
-    const phrase = String(match[2] ?? '').trim().replace(/\b(?:where|that|who|which|and|then|before|after|for|with|from)\b[\s\S]*$/i, '').trim();
+    const phrase = normalizedImplicitMentionPhrase(match[2]);
     if (!phrase || /^(?:thing|one|way|time|character|campaign|response|name|sell|selling|buy|buying|go|going|see|ask|use|visit|head|return)\b/i.test(phrase)) continue;
     const lower = phrase.toLowerCase();
     const kind = implicitReferenceKind(lower);
     if (!kind) continue;
+    // Possessive character gear ("my armor", "our rope") belongs to VCS and
+    // is supplied separately by GMA. Other possessive campaign relationships,
+    // such as "my mentor", remain GMC memory references.
+    if (/^(?:my|our)$/i.test(String(match[1] ?? '')) && kind === 'item') continue;
     const duplicateDomain = (kind === 'location' && specs.some((spec) => spec.kind === 'location' && spec.recordTerms.test(phrase)))
       || (kind === 'npc' && specs.some((spec) => spec.kind === 'npc' && spec.recordTerms.test(phrase)));
     if (duplicateDomain) continue;

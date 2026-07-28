@@ -214,7 +214,7 @@ describe('resolveMemoryReferences', () => {
       { _id: 'main', title: 'Uncover the Old One’s Legacy', status: 'active', questType: 'main', objective: 'Trace the hidden network.', priority: 90 },
       { _id: 'side', title: 'Find Lordling Caspian Rheel', status: 'active', questType: 'side', objective: 'Find the merchant heir.', priority: 65 },
     ];
-    const captain = { _id: 'thorne', type: 'npc', canonical_name: 'Captain Thorne', tags: ['player-known'], details: { role: 'Watch captain' } };
+    const captain = { _id: 'thorne', type: 'npc', canonical_name: 'Captain Thorne', aliases: ['Thorne'], tags: ['player-known'], details: { role: 'Watch captain' } };
     const result = resolveMemoryReferences({
       locations: [saltyTug], npcs: [captain], items: [], factions: [], facts: [], quests,
     }, 'With my invisibility exhausted, I proceed to the docks where I might find Captain Thorne. We did not settle on an exact spot; my message mentioned The Salty Tug after sunset, so I look around that area for her.');
@@ -232,6 +232,26 @@ describe('resolveMemoryReferences', () => {
       mode: 'world_generation_allowed',
       allowedEntityTypes: ['location'],
     }));
+  });
+
+  it('leaves possessive character gear to VCS while resolving named campaign canon', () => {
+    const captain = { _id: 'thorne', type: 'npc', canonical_name: 'Captain Thorne', aliases: ['Thorne'], tags: ['player-known'], details: { role: 'Watch captain' } };
+    const result = resolveMemoryReferences({
+      locations: [saltyTug],
+      npcs: [captain],
+      items: [],
+      factions: [],
+      facts: [],
+      quests: [],
+    }, 'Right, I proceed to the Salty Tug. I watch for Thorne from the outside. And as usual, I watch for the people who are watching. My glamoured armor maintains the merchant appearance. My coins and valuables are in my bag of holding and that is tucked safely away so it is not a visible target.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.references).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'npc', selected: expect.objectContaining({ name: 'Captain Thorne' }) }),
+      expect.objectContaining({ kind: 'location', selected: expect.objectContaining({ name: 'The Salty Tug' }) }),
+    ]));
+    expect(result.references.some((entry) => entry.label.includes('glamoured armor'))).toBe(false);
+    expect(result.references.some((entry) => entry.label.includes('maintains'))).toBe(false);
   });
 
   it('honors a plain-language player clarification that a search is not a quest', () => {
