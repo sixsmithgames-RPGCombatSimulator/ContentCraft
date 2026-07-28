@@ -834,6 +834,25 @@ describe('buildNarrationEvidenceBundle', () => {
 
     expect(first.evidence.evidenceRevision).not.toBe(second.evidence.evidenceRevision);
   });
+
+  it('includes a uniquely relevant non-present NPC despite a minor transposition typo', () => {
+    const result = buildNarrationEvidenceBundle({
+      campaignId: 'campaign-1',
+      instruction: 'I signal Captain Throne and give her the report.',
+      currentScene: { _id: 'scene-1', locationId: 'salty-tug', presentNpcIds: [] },
+      currentLocation: { _id: 'salty-tug', canonical_name: 'The Salty Tug' },
+      npcs: [
+        { _id: 'thorne', canonical_name: 'Captain Elara Thorne', aliases: ['Captain Thorne', 'Thorne'] },
+        { _id: 'vesper', canonical_name: 'Old Vesper' },
+      ],
+      locations: [{ _id: 'salty-tug', canonical_name: 'The Salty Tug' }],
+    });
+    expect(result.evidence.scene.presence.referencedNonPresentNpcs.map((npc: any) => npc.name))
+      .toContain('Captain Elara Thorne');
+    expect(result.evidence.canon.npcs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'thorne', present: false }),
+    ]));
+  });
 });
 
 describe('selectMemoryContext', () => {

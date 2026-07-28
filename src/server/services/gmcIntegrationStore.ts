@@ -1671,6 +1671,40 @@ function narrationEvidenceText(record: any) {
   ].map((value) => String(value ?? '')).join(' ').toLocaleLowerCase();
 }
 
+function narrationTokenDistance(left: string, right: string) {
+  if (left === right) return 0;
+  if (Math.abs(left.length - right.length) > 2) return 3;
+  const rows = Array.from({ length: left.length + 1 }, () => Array(right.length + 1).fill(0));
+  for (let index = 0; index <= left.length; index += 1) rows[index][0] = index;
+  for (let index = 0; index <= right.length; index += 1) rows[0][index] = index;
+  for (let row = 1; row <= left.length; row += 1) {
+    for (let column = 1; column <= right.length; column += 1) {
+      const cost = left[row - 1] === right[column - 1] ? 0 : 1;
+      rows[row][column] = Math.min(
+        rows[row - 1][column] + 1,
+        rows[row][column - 1] + 1,
+        rows[row - 1][column - 1] + cost,
+      );
+      if (
+        row > 1
+        && column > 1
+        && left[row - 1] === right[column - 2]
+        && left[row - 2] === right[column - 1]
+      ) {
+        rows[row][column] = Math.min(rows[row][column], rows[row - 2][column - 2] + 1);
+      }
+    }
+  }
+  return rows[left.length][right.length];
+}
+
+function narrationFuzzyTokenMatch(leftTokens: string[], rightTokens: string[]) {
+  return leftTokens.some((left) => left.length >= 5 && rightTokens.some((right) => (
+    right.length >= 5
+    && narrationTokenDistance(left, right) <= (Math.max(left.length, right.length) >= 8 ? 2 : 1)
+  )));
+}
+
 function narrationEvidenceScore(
   record: any,
   tokens: string[],
@@ -1688,6 +1722,7 @@ function narrationEvidenceScore(
     record?.details?.memory?.ownerEntityId,
   ].filter(Boolean).map(String);
   let score = tokens.reduce((total, token) => total + (corpus.includes(token) ? 4 : 0), 0);
+  if (score === 0 && narrationFuzzyTokenMatch(tokens, narrationEvidenceTokens(corpus))) score += 2;
   if (id && context.referencedIds.has(id)) score += 80;
   if (id && context.presentNpcIds.has(id)) score += 50;
   if (context.currentLocationId && (id === context.currentLocationId || relatedIds.includes(context.currentLocationId))) score += 35;
@@ -1805,7 +1840,8 @@ export function buildNarrationEvidenceBundle(input: {
   const referencedNonPresentNpcs = presenceContract.knownNonPresentNpcs
     .filter((npc: any) => referencedIds.has(String(npc.id)) || containsNormalizedIdentity(instruction, npc.name)
       || npc.aliases.some((alias: string) => containsNormalizedIdentity(instruction, alias))
-      || narrationEvidenceTokens([npc.name, ...npc.aliases].join(' ')).some((token) => instructionTokenSet.has(token)))
+      || narrationEvidenceTokens([npc.name, ...npc.aliases].join(' ')).some((token) => instructionTokenSet.has(token))
+      || narrationFuzzyTokenMatch(tokens, narrationEvidenceTokens([npc.name, ...npc.aliases].join(' '))))
     .slice(0, 8);
   const selectedNpcIds = new Set([
     ...presenceContract.exactPresentNpcIds,
