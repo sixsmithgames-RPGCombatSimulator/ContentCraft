@@ -49,6 +49,15 @@ import {
   executeGenerationWorkflow,
 } from '../llm-orchestrator/generationWorkflow.js';
 import {
+  bindEncounterBattleRoom,
+  createEncounterPlan,
+  evaluateEncounterReadiness,
+  getEncounterPlan,
+  listEncounterPlans,
+  transitionEncounterPlan,
+  updateEncounterPlan,
+} from '../services/encounterPlan.js';
+import {
   AUDIT_RESOLVED_MECHANICS_NARRATION_INSTRUCTION,
   AUDIT_RESOLVED_MECHANICS_NARRATION_REQUIRED_KEYS,
   NARRATE_COMBAT_ACTION_RESULT_INSTRUCTION,
@@ -230,6 +239,47 @@ gmcV1Router.get('/campaigns/:campaignId/dashboard', asyncRoute(async (req, res) 
     memoryContext,
     recentSummary: session?.summary ?? null, contentSummary: blocks.map((block) => ({ id: block.id, title: block.title, type: block.type, metadata: block.metadata })),
   });
+}));
+
+gmcV1Router.get('/campaigns/:campaignId/encounters', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const encounters = await listEncounterPlans(userId(req), req.params.campaignId, {
+    status: req.query.status ? String(req.query.status) : undefined,
+  });
+  res.json({ encounters });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/encounters', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const result = await createEncounterPlan(userId(req), req.params.campaignId, req.body ?? {});
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+gmcV1Router.get('/encounters/:encounterId', asyncRoute(async (req, res) => {
+  const encounter = await getEncounterPlan(userId(req), req.params.encounterId);
+  if (!encounter) { fail(req, res, 404, 'NOT_FOUND', 'Encounter not found.'); return; }
+  res.json({ encounter });
+}));
+
+gmcV1Router.get('/encounters/:encounterId/readiness', asyncRoute(async (req, res) => {
+  const encounter = await getEncounterPlan(userId(req), req.params.encounterId);
+  if (!encounter) { fail(req, res, 404, 'NOT_FOUND', 'Encounter not found.'); return; }
+  res.json({ encounterId: encounter.id, revision: encounter.revision, readiness: evaluateEncounterReadiness(encounter) });
+}));
+
+gmcV1Router.patch('/encounters/:encounterId', asyncRoute(async (req, res) => {
+  const result = await updateEncounterPlan(userId(req), req.params.encounterId, req.body ?? {});
+  res.json(result);
+}));
+
+gmcV1Router.post('/encounters/:encounterId/battleroom', asyncRoute(async (req, res) => {
+  const result = await bindEncounterBattleRoom(userId(req), req.params.encounterId, req.body ?? {});
+  res.json(result);
+}));
+
+gmcV1Router.post('/encounters/:encounterId/transition', asyncRoute(async (req, res) => {
+  const result = await transitionEncounterPlan(userId(req), req.params.encounterId, req.body ?? {});
+  res.json(result);
 }));
 
 gmcV1Router.get('/campaigns/:campaignId/time', asyncRoute(async (req, res) => {
@@ -793,7 +843,7 @@ function registerEntityRoutes(kind: GmcEntityKind, plural: string) {
     if (!entity) { fail(req, res, 404, 'NOT_FOUND', `${kind} not found.`); return; }
     res.json({ [kind]: entity });
   }));
-  if (kind !== 'faction') gmcV1Router.post(`/campaigns/:campaignId/${plural}/generate`, asyncRoute(async (req, res) => {
+  if (['npc', 'monster', 'location', 'item'].includes(kind)) gmcV1Router.post(`/campaigns/:campaignId/${plural}/generate`, asyncRoute(async (req, res) => {
     if (!await campaign(req, res)) return;
     const operation = `entity.${kind}.generate`;
     const requestFingerprint = createHash('sha256').update(JSON.stringify(req.body ?? null)).digest('hex');
@@ -851,6 +901,8 @@ registerEntityRoutes('npc', 'npcs');
 registerEntityRoutes('monster', 'monsters');
 registerEntityRoutes('location', 'locations');
 registerEntityRoutes('item', 'items');
+registerEntityRoutes('object', 'objects');
+registerEntityRoutes('hazard', 'hazards');
 registerEntityRoutes('faction', 'factions');
 
 gmcV1Router.post('/campaigns/:campaignId/actors/ensure', asyncRoute(async (req, res) => {

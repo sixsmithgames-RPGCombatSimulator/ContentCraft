@@ -3,7 +3,7 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
-export type EntityType = 'npc' | 'monster' | 'item' | 'spell' | 'location' | 'faction' | 'rule' | 'timeline';
+export type EntityType = 'npc' | 'monster' | 'item' | 'object' | 'hazard' | 'spell' | 'location' | 'faction' | 'rule' | 'timeline';
 
 export interface Relationship {
   target_id: string;

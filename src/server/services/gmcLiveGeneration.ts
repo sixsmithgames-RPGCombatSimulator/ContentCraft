@@ -362,4 +362,6 @@ export const generationPrompts = {
   monster: 'Create a campaign monster with a stable identity name, separate description and appearance, creature type, size, alignment, challenge rating, ability scores, defenses, equipment, spells, actions, tactics, ecology, lore, claims, and tags. Reconcile any supplied canonical creature before generating. Every damaging weapon, spell, or attack needs a non-placeholder name, attack/save mechanics, and valid damage dice.',
   location: 'Create a campaign location with name, description, parentLocationId, atmosphere, features, secrets, inhabitants, hooks, claims, and tags.',
   item: 'Create a campaign item with name, description, rarity, lore, properties, suggestedVcsPayload, claims, and tags.',
+  object: 'Create an interactive campaign object with a stable name, description, location, material, state, interaction options, hidden information, durability, tactical mechanics, suggestedVcsPayload, claims, and tags.',
+  hazard: 'Create a campaign hazard with a stable name, description, trigger, detection clues, affected area, save or attack mechanics, damage or conditions, countermeasures, reset behavior, suggestedVcsPayload, claims, and tags.',
 };

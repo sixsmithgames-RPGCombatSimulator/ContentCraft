@@ -153,6 +153,15 @@ async function createIndexes(database: Db): Promise<void> {
   );
   await database.collection('gmc_actor_workflows').createIndex({ userId: 1, campaignId: 1, updatedAt: -1 });
   await database.collection('gmc_actor_workflows').createIndex({ userId: 1, campaignId: 1, kind: 1, normalizedName: 1, status: 1 });
+  await database.collection('gmc_encounters').createIndex({ userId: 1, campaignId: 1, status: 1, scheduledFor: 1, updatedAt: -1 });
+  await database.collection('gmc_encounters').createIndex(
+    { userId: 1, campaignId: 1, 'creationOperation.idempotencyKey': 1 },
+    { unique: true },
+  );
+  await database.collection('gmc_encounters').createIndex(
+    { userId: 1, 'vcsBinding.battleRoomId': 1 },
+    { unique: true, partialFilterExpression: { 'vcsBinding.battleRoomId': { $type: 'string' } } },
+  );
 
   // Provider-neutral LLM execution ledger and cross-authority outbox.
   await database.collection('llm_executions').createIndex(

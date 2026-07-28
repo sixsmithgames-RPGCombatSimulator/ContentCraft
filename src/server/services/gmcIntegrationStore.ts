@@ -10,7 +10,7 @@ import {
 
 const now = () => new Date();
 
-export type GmcEntityKind = 'npc' | 'monster' | 'location' | 'item' | 'faction';
+export type GmcEntityKind = 'npc' | 'monster' | 'location' | 'item' | 'object' | 'hazard' | 'faction';
 export type GmcActorKind = Extract<GmcEntityKind, 'npc' | 'monster'>;
 
 export const MEMORY_RECORD_TYPES = ['FACT', 'ITEM', 'EVENT', 'QUEST'] as const;
