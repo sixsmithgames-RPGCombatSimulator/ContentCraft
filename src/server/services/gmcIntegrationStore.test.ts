@@ -209,6 +209,44 @@ describe('resolveMemoryReferences', () => {
     ]));
   });
 
+  it('does not block a named lead search on an unrelated active-quest choice', () => {
+    const quests = [
+      { _id: 'main', title: 'Uncover the Old One’s Legacy', status: 'active', questType: 'main', objective: 'Trace the hidden network.', priority: 90 },
+      { _id: 'side', title: 'Find Lordling Caspian Rheel', status: 'active', questType: 'side', objective: 'Find the merchant heir.', priority: 65 },
+    ];
+    const captain = { _id: 'thorne', type: 'npc', canonical_name: 'Captain Thorne', tags: ['player-known'], details: { role: 'Watch captain' } };
+    const result = resolveMemoryReferences({
+      locations: [saltyTug], npcs: [captain], items: [], factions: [], facts: [], quests,
+    }, 'With my invisibility exhausted, I proceed to the docks where I might find Captain Thorne. We did not settle on an exact spot; my message mentioned The Salty Tug after sunset, so I look around that area for her.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.questResolution).toEqual(expect.objectContaining({
+      status: 'not_applicable',
+      executionRequested: false,
+    }));
+    expect(result.references).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'npc', selected: expect.objectContaining({ name: 'Captain Thorne' }) }),
+      expect.objectContaining({ kind: 'location', selected: expect.objectContaining({ name: 'The Salty Tug' }) }),
+    ]));
+    expect(result.creationPolicy).toEqual(expect.objectContaining({
+      mode: 'world_generation_allowed',
+      allowedEntityTypes: ['location'],
+    }));
+  });
+
+  it('honors a plain-language player clarification that a search is not a quest', () => {
+    const result = resolveMemoryReferences({
+      locations: [], npcs: [], items: [], factions: [], facts: [],
+      quests: [{ _id: 'main', title: 'Uncover the Old One’s Legacy', status: 'active', questType: 'main', objective: 'Trace the hidden network.' }],
+    }, 'This action is not intended to advance an active quest. I am following a separate lead.');
+
+    expect(result.status).toBe('resolved');
+    expect(result.questResolution).toEqual(expect.objectContaining({
+      status: 'not_applicable',
+      executionRequested: false,
+    }));
+  });
+
   it('uses typed activity evidence and campaign time to resolve the last established shop and contact', () => {
     const result = resolveMemoryReferences({
       locations: [bentNail], npcs: [mara], items: [], factions: [],
@@ -233,7 +271,9 @@ describe('resolveMemoryReferences', () => {
     expect(result.status).toBe('clarification_required');
     expect(result.references.find((entry) => entry.key === 'lodging_location')?.status).toBe('ambiguous');
     expect(result.references.find((entry) => entry.key === 'lodging_proprietor')?.status).toBe('missing');
-    expect(result.clarification?.options).toEqual([{ id: 'salty-tug', name: 'The Salty Tug', kind: 'location' }]);
+    expect(result.clarification?.options).toEqual([expect.objectContaining({
+      id: 'salty-tug', name: 'The Salty Tug', kind: 'location', description: 'Dock Ward tavern',
+    })]);
   });
 
   it('time-ranks multiple established referents instead of choosing alphabetically', () => {

@@ -724,6 +724,7 @@ function recordCorpusForKind(record: any, kind: MemoryReferenceKind) {
 }
 
 const QUEST_REFERENCE_CUE = /\b(?:continue|carry on|go on|onward|resume|return to|follow up|pursue|finish|complete|handle|deal with|look(?:ing)? for|search(?:ing)? for|seek(?:ing)?|find|locate|track(?:ing)? down|head(?:ing)? to|go(?:ing)? to|travel(?:ing)? to|visit)\b/i;
+const QUEST_OPT_OUT_CUE = /\b(?:not|is(?:\s+)?not|isn't|without)\b[^.!?\n]{0,60}\b(?:an?\s+)?(?:active\s+)?(?:quest|mission|objective|job|case)\b/i;
 const QUEST_QUERY_STOP_WORDS = new Set([
   'about', 'after', 'again', 'also', 'and', 'are', 'been', 'before', 'being', 'but',
   'can', 'could', 'does', 'for', 'from', 'have', 'into', 'just', 'like', 'more',
@@ -775,12 +776,23 @@ function compactQuestReference(quest: any, score = 0, explicitlyNamed = false) {
   };
 }
 
-export function resolveQuestReference(quests: any[], instruction: string, gameClock: any = null) {
+export function resolveQuestReference(
+  quests: any[],
+  instruction: string,
+  gameClock: any = null,
+  { hasExplicitNonQuestReference = false }: { hasExplicitNonQuestReference?: boolean } = {},
+) {
   const text = String(instruction ?? '').trim();
-  const executionRequested = QUEST_REFERENCE_CUE.test(text);
   const active = (Array.isArray(quests) ? quests : [])
     .filter((quest) => ['active', 'paused'].includes(String(quest?.status ?? 'active')))
     .map((quest) => questWithTimeState(quest, gameClock));
+  const normalizedInstruction = normalizedReferenceIdentity(text);
+  const explicitlyNamedQuest = active.some((quest) => questReferenceIdentity(quest)
+    .some((identity) => containsNormalizedIdentity(normalizedInstruction, identity)));
+  const executionRequested = !QUEST_OPT_OUT_CUE.test(text) && (
+    explicitlyNamedQuest
+    || (!hasExplicitNonQuestReference && QUEST_REFERENCE_CUE.test(text))
+  );
   if (!executionRequested || !active.length) {
     return {
       authority: 'gmc.quest-log',
@@ -792,7 +804,6 @@ export function resolveQuestReference(quests: any[], instruction: string, gameCl
       clarification: null,
     };
   }
-  const normalizedInstruction = normalizedReferenceIdentity(text);
   const tokens = questReferenceTokens(text);
   const scored = active.map((quest) => {
     const identities = questReferenceIdentity(quest);
@@ -1108,7 +1119,14 @@ export function resolveMemoryReferences(
           : `GMC has no canonical ${spec.kind} matching the requested ${spec.activity} role.`),
     };
   });
-  const questResolution = resolveQuestReference(records.quests ?? [], instruction, records.gameClock ?? null);
+  const hasExplicitNonQuestReference = references.some((reference: any) => (
+    reference?.kind !== 'quest'
+    && reference?.relationship === 'explicit'
+    && reference?.selected?.explicitlyNamed === true
+  ));
+  const questResolution = resolveQuestReference(records.quests ?? [], instruction, records.gameClock ?? null, {
+    hasExplicitNonQuestReference,
+  });
   const questReference = questResolution.status === 'not_applicable' ? [] : [{
     key: 'active_quest',
     label: 'active quest',
@@ -1126,7 +1144,22 @@ export function resolveMemoryReferences(
   const unresolved = allReferences.filter((reference) => reference.status !== 'resolved');
   const creationPolicy = questBoundCreationPolicy(classifyWorldGenerationIntent(instruction), questResolution);
   const options = [...new Map(unresolved.flatMap((reference) => reference.candidates)
-    .map((candidate: any) => [candidate.id, { id: candidate.id, name: candidate.name, kind: candidate.kind }])).values()];
+    .map((candidate: any) => {
+      const description = String(
+        candidate?.objective
+        ?? candidate?.summary
+        ?? candidate?.record?.details?.description
+        ?? candidate?.record?.details?.type
+        ?? '',
+      ).trim();
+      return [candidate.id, {
+        id: candidate.id,
+        name: candidate.name,
+        kind: candidate.kind,
+        description: description || null,
+        questType: candidate?.questType ?? null,
+      }];
+    })).values()];
   return {
     authority: 'gmc.campaign-memory',
     contractVersion: CAMPAIGN_MEMORY_CONTRACT_VERSION,
