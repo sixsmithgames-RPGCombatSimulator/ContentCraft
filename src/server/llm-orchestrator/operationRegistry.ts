@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-07-26.2';
+export const OPERATION_REGISTRY_VERSION = '2026-07-28.1';
 
 export type CapabilityTier = 'structured' | 'narrative' | 'world' | 'reasoning';
 
@@ -162,6 +162,7 @@ const typeByKey: Record<string, Record<string, unknown>> = {
   actorId: { type: 'string' },
   intent: { anyOf: [{ type: 'string' }, { type: 'object' }] },
   stakes: { anyOf: [{ type: 'object' }, { type: 'array' }, { type: 'null' }] },
+  outcomeProse: { type: 'object' },
   preRollNarration: { type: 'string' },
   proposedTimeAdvance: { anyOf: [{ type: 'object' }, { type: 'null' }] },
   sceneSegmentUpdate: { anyOf: [{ type: 'object' }, { type: 'null' }] },
@@ -242,7 +243,7 @@ const seeds: Seed[] = [
   { id: 'narration.generate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['npcDialogue', 'requiresVcsResolution', 'proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'chronology', 'inventory', 'scene-presence'], maxOutputTokens: 6000 },
   { id: 'narration.continuity.validate', operationClass: 'structured_low', tier: 'structured', required: ['valid', 'issues', 'correctedNarration', 'understoodPlayerIntent', 'stateAdvanced'], validators: ['narrative-fidelity', 'chronology'] },
   { id: 'experience.evaluate', operationClass: 'structured_low', tier: 'structured', required: ['shouldAward', 'amount', 'category', 'difficulty', 'rationale', 'relatedChallengeId', 'alreadyRewarded', 'confidence', 'evidence'] },
-  { id: 'skill.adjudicate', operationClass: 'structured_low', tier: 'structured', required: ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'], optional: ['passiveEligible', 'estimatedTimeCost', 'requiredChecks'], validators: ['rules-fidelity'] },
+  { id: 'skill.adjudicate', operationClass: 'structured_low', tier: 'structured', required: ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'], optional: ['passiveEligible', 'estimatedTimeCost', 'requiredChecks', 'outcomeProse'], validators: ['rules-fidelity'] },
   { id: 'skill.narrate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'rules-fidelity', 'inventory', 'chronology'] },
   { id: 'combat.action.narrate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'rules-fidelity'] },
   { id: 'mechanics.narration.audit', operationClass: 'structured_low', tier: 'structured', required: ['valid', 'issues', 'correctedNarration'], validators: ['narrative-fidelity', 'rules-fidelity'] },

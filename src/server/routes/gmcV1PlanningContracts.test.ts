@@ -96,6 +96,8 @@ describe('GMC compact interaction envelope contract', () => {
     expect(ENCOUNTER_ENVELOPE_INSTRUCTION.length).toBeLessThan(1_200);
     expect(EXPERIENCE_AWARD_INSTRUCTION.length).toBeLessThan(1_200);
     expect(NARRATION_ENVELOPE_INSTRUCTION).toContain('GMA owns intent classification');
+    expect(SKILL_ENVELOPE_INSTRUCTION).toContain('outcomeProse');
+    expect(SKILL_ENVELOPE_INSTRUCTION).toContain('finished, vivid, scene-specific player-facing narration');
     expect(validateStructuredAiOutput({
       narration: 'The scene advances.',
       proposedCanonChanges: [],

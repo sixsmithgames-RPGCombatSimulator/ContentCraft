@@ -28,7 +28,7 @@ describe('encounter plan', () => {
     ]);
     expect(roster).toHaveLength(2);
     expect(roster[0].token.x).toBe(4);
-    expect(roster[0].sourceRef.entityType).toBe('character');
+    expect(roster[0].sourceRef?.entityType).toBe('character');
     expect(roster[1].maxHp).toBe(59);
   });
 

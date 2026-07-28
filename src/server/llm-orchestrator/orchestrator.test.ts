@@ -103,6 +103,13 @@ describe('provider-neutral LLM orchestrator', () => {
     }
   });
 
+  it('allows skill adjudication to return prepared outcome prose without opening the schema', () => {
+    const schema = getOperationDefinition('skill.adjudicate').outputSchema.schema as any;
+    expect(schema.additionalProperties).toBe(false);
+    expect(schema.properties.outcomeProse).toEqual({ type: 'object' });
+    expect(schema.required).not.toContain('outcomeProse');
+  });
+
   it('returns the universal response envelope and provider-reported usage', async () => {
     const req = request();
     const provider = new FakeProviderAdapter(() => outputFor(req.operation));
