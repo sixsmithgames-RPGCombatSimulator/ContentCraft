@@ -39,6 +39,11 @@ import { generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGe
 import { ensureCampaignActor } from '../services/actorEnsureWorkflow.js';
 import { applyCampaignClockMutation } from '../services/campaignClockMutation.js';
 import { createCampaignMutation } from '../services/campaignCreateMutation.js';
+import {
+  confirmCharacterSheetAuthorityMutation,
+  observeCharacterSheetReview,
+  resolveCharacterSheetReview,
+} from '../services/characterSheetReviewService.js';
 import { llmOrchestratorRouter } from '../llm-orchestrator/routes.js';
 import { executeLegacyOperation } from '../llm-orchestrator/orchestrator.js';
 import { getDurableUsageSnapshot, MongoExecutionStore } from '../llm-orchestrator/executionStore.js';
@@ -312,6 +317,29 @@ gmcV1Router.patch('/campaigns/:campaignId/time', asyncRoute(async (req, res) => 
     gameClockRevision: result.gameClockRevision,
     campaignState: result.state,
   });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/character-sheet-reviews/observe', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const review = await observeCharacterSheetReview(userId(req), req.params.campaignId, req.body ?? {});
+  res.json({ review });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/character-sheet-reviews/:characterId/resolve', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const review = await resolveCharacterSheetReview(
+    userId(req),
+    req.params.campaignId,
+    req.params.characterId,
+    req.body ?? {},
+  );
+  res.json({ review });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/character-sheet-reviews/confirm-authority-mutation', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const review = await confirmCharacterSheetAuthorityMutation(userId(req), req.params.campaignId, req.body ?? {});
+  res.json({ review });
 }));
 
 gmcV1Router.get('/campaigns/:campaignId/scenes/current', asyncRoute(async (req, res) => {

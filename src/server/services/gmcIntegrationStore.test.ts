@@ -15,6 +15,64 @@ import {
   validateMemoryRestorationCandidate,
   validateNarrativePresenceContract,
 } from './gmcIntegrationStore.js';
+import {
+  CHARACTER_SHEET_REVIEW_CONTRACT_VERSION,
+  describeCharacterSheetChanges,
+  normalizeCharacterSheetReviewSnapshot,
+} from './characterSheetReviewService.js';
+
+describe('character sheet change review contract', () => {
+  it('normalizes every first-class inventory bucket without dropping item state', () => {
+    const snapshot = normalizeCharacterSheetReviewSnapshot({
+      experiencePoints: 9_000,
+      hitPoints: { current: 41, maximum: 48, temporary: 3 },
+      hitDice: { total: '9d8', spent: 2 },
+      currency: { gp: 27, sp: 4 },
+      items: [{
+        id: 'cloak',
+        name: 'Cloak of Protection',
+        magical: true,
+        rarity: 'uncommon',
+        equipped: true,
+        requiresAttunement: true,
+        attuned: true,
+        description: 'A protective cloak.',
+      }],
+      equippedArmor: [{ id: 'armor', name: 'Glamoured Studded Leather', equipped: true }],
+      tools: [{ name: "Thieves' Tools", equipped: true }],
+      otherEquipment: [{ name: 'Bag of Holding', magical: true, equipped: false }],
+    });
+
+    expect(CHARACTER_SHEET_REVIEW_CONTRACT_VERSION).toBe('2026-07-29.1');
+    expect(snapshot.items[0]).toMatchObject({
+      equipped: true,
+      requiresAttunement: true,
+      attuned: true,
+    });
+    expect(snapshot.equippedArmor[0]).toMatchObject({ name: 'Glamoured Studded Leather' });
+    expect(snapshot.tools[0]).toMatchObject({ name: "Thieves' Tools" });
+    expect(snapshot.otherEquipment[0]).toMatchObject({ name: 'Bag of Holding' });
+  });
+
+  it('flags player currency and magic-weapon enhancement edits for human review', () => {
+    const before = {
+      currency: { gp: 20 },
+      items: [{ name: 'Longsword +1', quantity: 1, magical: true, rarity: 'uncommon', equipped: true }],
+    };
+    const after = {
+      currency: { gp: 131 },
+      items: [{ name: 'Longsword +3', quantity: 1, magical: true, rarity: 'very rare', equipped: true }],
+    };
+
+    const changes = describeCharacterSheetChanges(before, after);
+
+    expect(changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'currency.gp', delta: 111 }),
+      expect.objectContaining({ kind: 'item_changed', name: 'Longsword +3' }),
+    ]));
+    expect(changes.find((change) => change.kind === 'item_changed')?.summary).toMatch(/name, rarity/);
+  });
+});
 
 describe('canonical entity identity', () => {
   const records = [

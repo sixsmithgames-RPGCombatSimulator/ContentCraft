@@ -75,6 +75,13 @@ async function createIndexes(database: Db): Promise<void> {
   await database.collection('canon_entities').createIndex({ userId: 1, project_id: 1, type: 1, 'details.memory.tier': 1, 'details.memory.currentLocationId': 1 });
   await database.collection('canon_entities').createIndex({ userId: 1, project_id: 1, type: 1, 'details.memory.ownerEntityId': 1 });
   await database.collection('canon_entities').createIndex({ userId: 1, project_id: 1, type: 1, 'details.profileCompleteness': 1 });
+  await database.collection('gmc_character_sheet_reviews').createIndex(
+    { userId: 1, campaignId: 1, characterId: 1 },
+    { unique: true },
+  );
+  await database.collection('gmc_character_sheet_reviews').createIndex(
+    { userId: 1, campaignId: 1, 'pending.reviewId': 1 },
+  );
   await database.collection('canon_entities').createIndex(
     { userId: 1, project_id: 1, type: 1, canonicalFingerprint: 1 },
     { unique: true, partialFilterExpression: { canonicalFingerprint: { $type: 'string' } } },

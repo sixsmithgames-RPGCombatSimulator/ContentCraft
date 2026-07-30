@@ -48,6 +48,18 @@ The dashboard aggregates current scene/location, present NPCs, scene-relevant me
 
 A revision-bound `POST .../scenes` current-scene commit must supply both `expectedCurrentRevision` and the exact `expectedPresenceRevision` returned for the proposed destination. A generated scene additionally supplies the exact transition revision, generated-entity revision, original instruction, and normalized generated entities. GMC independently recomputes every contract, materializes the scene-bound entities, verifies the final presence revision, and then makes the scene current. If that operation fails, GMC removes every newly created entity/scene record and reports compensation failure explicitly. This closes the gap between validation and commit; it never substitutes a different destination or roster and never leaves a silently partial generated scene.
 
+## Player character-sheet review
+
+```http
+POST /api/gmc/v1/campaigns/{campaignId}/character-sheet-reviews/observe
+POST /api/gmc/v1/campaigns/{campaignId}/character-sheet-reviews/{characterId}/resolve
+POST /api/gmc/v1/campaigns/{campaignId}/character-sheet-reviews/confirm-authority-mutation
+```
+
+GMC persists the last confirmed VCS character-sheet revision and a normalized snapshot of resources, equipment, weapons, armor, tools, and first-class magic-item fields. Observing a different material revision creates a pending review without changing VCS. GMA must pause automated sheet writes while that review is pending.
+
+`resolve` accepts `keep` only with a human reason of at least eight characters and advances canon to the exact reviewed VCS revision. A `revert` is accepted only after VCS confirms a revision-bound restoration whose normalized snapshot exactly matches the prior baseline. `confirm-authority-mutation` advances the baseline after a successful GMA write or compensation and fails closed if the expected baseline is stale or a player review is pending. Resolution and GMA confirmation history is retained for audit and table rulings.
+
 ## Memory model: type and scope
 
 GameMasterCraft stores campaign memory as three explicit record types:
