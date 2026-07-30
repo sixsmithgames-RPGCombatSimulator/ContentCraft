@@ -52,6 +52,29 @@ const goggles = {
   sceneId: 'scene-shop',
 };
 
+const vesperBundle = {
+  seller: { name: 'Old Vesper', entityId: 'npc-vesper' },
+  bundle: {
+    name: 'Goggles of Night + Potion of Healing',
+    aliases: ['the bundle', 'both items'],
+  },
+  items: [{
+    name: 'Goggles of Night',
+    aliases: ['goggles'],
+    quantity: 1,
+    type: 'wondrous item',
+    magical: true,
+  }, {
+    name: 'Potion of Healing',
+    aliases: ['healing potion', 'potion'],
+    quantity: 1,
+    type: 'consumable',
+    magical: true,
+  }],
+  price: { gp: 300 },
+  sceneId: 'scene-vesper-workshop',
+};
+
 async function committedOffer(merchantCollection: ReturnType<typeof fakeMerchantCollection>) {
   const preflight = preflightMerchantOffers({ proposals: [goggles] });
   const result = await commitMerchantOffers({
@@ -158,6 +181,97 @@ describe('merchant offer authority', () => {
     });
     if (result.status !== 'clarification_required') throw new Error('Expected a merchant clarification.');
     expect(result.question).toContain('Goggles of Night from Falia');
+  });
+
+  it('preserves a multi-item bundle and requires confirmation instead of selling one component for the bundle price', async () => {
+    const merchantCollection = fakeMerchantCollection();
+    const preflight = preflightMerchantOffers({ proposals: [vesperBundle] });
+    const committed = await commitMerchantOffers({
+      merchantCollection,
+      userId: 'user-1',
+      campaignId: 'campaign-1',
+      mutationId: 'offer-vesper-bundle',
+      expectedFingerprint: preflight.fingerprint,
+      proposals: [vesperBundle],
+    });
+    expect(committed.contract.committed[0]).toMatchObject({
+      bundle: { name: 'Goggles of Night + Potion of Healing' },
+      items: [
+        { name: 'Goggles of Night', quantity: 1 },
+        { name: 'Potion of Healing', quantity: 1 },
+      ],
+      price: { totalCp: 30_000 },
+    });
+
+    const partial = await resolveMerchantPurchase({
+      merchantCollection,
+      userId: 'user-1',
+      campaignId: 'campaign-1',
+      itemName: 'goggles',
+      quantity: 1,
+      currency: { sp: -50, gp: -245, pp: -5 },
+    });
+    expect(partial).toMatchObject({
+      status: 'clarification_required',
+      code: 'MERCHANT_BUNDLE_CONFIRMATION_REQUIRED',
+      options: [{
+        items: [
+          { name: 'Goggles of Night' },
+          { name: 'Potion of Healing' },
+        ],
+      }],
+    });
+    if (partial.status !== 'clarification_required') throw new Error('Expected bundle confirmation.');
+    expect(partial.question).toContain('buy every item in the bundle');
+  });
+
+  it('resolves and consumes a confirmed bundle as one revisioned offer', async () => {
+    const merchantCollection = fakeMerchantCollection();
+    const offerPreflight = preflightMerchantOffers({ proposals: [vesperBundle] });
+    const committed = await commitMerchantOffers({
+      merchantCollection,
+      userId: 'user-1',
+      campaignId: 'campaign-1',
+      mutationId: 'offer-vesper-bundle',
+      expectedFingerprint: offerPreflight.fingerprint,
+      proposals: [vesperBundle],
+    });
+    const offer = committed.contract.committed[0];
+    const items = [
+      { name: 'Goggles of Night', quantity: 1 },
+      { name: 'Potion of Healing', quantity: 1 },
+    ];
+    const purchase = await resolveMerchantPurchase({
+      merchantCollection,
+      userId: 'user-1',
+      campaignId: 'campaign-1',
+      items,
+      currency: { sp: -50, gp: -245, pp: -5 },
+    });
+    expect(purchase).toMatchObject({
+      status: 'resolved',
+      items,
+      bundle: { name: 'Goggles of Night + Potion of Healing' },
+    });
+    if (purchase.status !== 'resolved') throw new Error('Expected resolved bundle purchase.');
+
+    const consumed = await consumeMerchantOffer({
+      merchantCollection,
+      userId: 'user-1',
+      campaignId: 'campaign-1',
+      offerId: offer.offerId,
+      expectedOfferRevision: offer.revision,
+      expectedPurchaseFingerprint: purchase.fingerprint,
+      mutationId: 'purchase-vesper-bundle',
+      items,
+      currency: { sp: -50, gp: -245, pp: -5 },
+      sheetMutationReceipt: { revision: 'vcs-after-vesper-bundle' },
+    });
+    expect(consumed.purchase).toMatchObject({
+      offer: { status: 'sold' },
+      items,
+      bundle: { name: 'Goggles of Night + Potion of Healing' },
+    });
   });
 
   it('rejects a price mismatch with exact expected and proposed totals', async () => {

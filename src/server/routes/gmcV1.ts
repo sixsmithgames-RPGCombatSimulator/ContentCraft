@@ -258,6 +258,7 @@ gmcV1Router.post('/campaigns/:campaignId/merchant-offers/resolve-purchase', asyn
     campaignId: req.params.campaignId,
     itemName: req.body?.itemName,
     quantity: req.body?.quantity,
+    items: req.body?.items,
     currency: req.body?.currency,
   });
   res.json({ purchase: result });
@@ -274,6 +275,7 @@ gmcV1Router.post('/campaigns/:campaignId/merchant-offers/:offerId/consume', asyn
     mutationId: req.body?.mutationId,
     itemName: req.body?.itemName,
     quantity: req.body?.quantity,
+    items: req.body?.items,
     currency: req.body?.currency,
     sheetMutationReceipt: req.body?.sheetMutationReceipt,
   });

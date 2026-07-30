@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { getDb } from '../config/mongo.js';
 
-export const MERCHANT_OFFER_CONTRACT_VERSION = '2026-07-30.1';
+export const MERCHANT_OFFER_CONTRACT_VERSION = '2026-07-30.2';
 export const MERCHANT_OFFER_AUTHORITY = 'gmc.merchant-offer';
 export const MERCHANT_PURCHASE_AUTHORITY = 'gmc.merchant-purchase';
 
@@ -79,16 +79,70 @@ function normalizePrice(value: unknown) {
   return { ...denominations, totalCp };
 }
 
+function normalizeMerchantItem(value: unknown, fallback: Record<string, any> = {}) {
+  const source = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {};
+  const name = requireText(source.name ?? fallback.name, 'item.name', 200);
+  const aliases = [...new Set([
+    name,
+    ...(Array.isArray(source.aliases) ? source.aliases : []),
+    ...(Array.isArray(fallback.aliases) ? fallback.aliases : []),
+  ].map((entry) => cleanText(entry, 200)).filter(Boolean))];
+  return {
+    name,
+    aliases,
+    quantity: Math.max(1, Math.min(999, integer(source.quantity ?? fallback.quantity) || 1)),
+    canonicalItemId: cleanText(source.canonicalItemId ?? fallback.canonicalItemId, 254) || null,
+    type: cleanText(source.type ?? fallback.type, 80) || null,
+    rarity: cleanText(source.rarity ?? fallback.rarity, 40) || null,
+    magical: source.magical === true || fallback.magical === true,
+    description: cleanText(source.description ?? fallback.description, 1_000) || null,
+  };
+}
+
+function merchantOfferItems(offer: Record<string, any>) {
+  const source = Array.isArray(offer.items) && offer.items.length
+    ? offer.items
+    : (offer.item ? [offer.item] : []);
+  return source.map((item: any) => structuredClone(item));
+}
+
+function merchantOfferLabel(offer: Record<string, any>) {
+  const items = merchantOfferItems(offer);
+  return cleanText(
+    offer.bundle?.name
+    ?? (items.length > 1 ? items.map((item: any) => item.name).join(' + ') : items[0]?.name),
+    500,
+  );
+}
+
 export function normalizeMerchantOfferProposal(value: unknown) {
   const source = value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, any>
     : {};
   const sellerSource = source.seller && typeof source.seller === 'object' ? source.seller : {};
   const itemSource = source.item && typeof source.item === 'object' ? source.item : {};
-  const name = requireText(itemSource.name ?? source.itemName, 'item.name', 200);
-  const aliases = [...new Set([
-    name,
-    ...(Array.isArray(itemSource.aliases) ? itemSource.aliases : []),
+  const itemCandidates = Array.isArray(source.items) && source.items.length
+    ? source.items.slice(0, 20)
+    : [itemSource];
+  const items = itemCandidates.map((item, index) => normalizeMerchantItem(item, index === 0 ? {
+    name: source.itemName,
+    quantity: source.quantity,
+    aliases: source.referenceLabels,
+  } : {}));
+  const bundleSource = source.bundle && typeof source.bundle === 'object' && !Array.isArray(source.bundle)
+    ? source.bundle
+    : {};
+  const bundleName = cleanText(
+    bundleSource.name
+    ?? source.bundleName
+    ?? (items.length > 1 ? items.map((item) => item.name).join(' + ') : ''),
+    500,
+  );
+  const bundleAliases = [...new Set([
+    bundleName,
+    ...(Array.isArray(bundleSource.aliases) ? bundleSource.aliases : []),
     ...(Array.isArray(source.referenceLabels) ? source.referenceLabels : []),
   ].map((entry) => cleanText(entry, 200)).filter(Boolean))];
   return {
@@ -96,16 +150,13 @@ export function normalizeMerchantOfferProposal(value: unknown) {
       name: requireText(sellerSource.name ?? source.sellerName, 'seller.name', 200),
       entityId: cleanText(sellerSource.entityId ?? source.sellerId, 254) || null,
     },
-    item: {
-      name,
-      aliases,
-      quantity: Math.max(1, Math.min(999, integer(itemSource.quantity ?? source.quantity) || 1)),
-      canonicalItemId: cleanText(itemSource.canonicalItemId, 254) || null,
-      type: cleanText(itemSource.type, 80) || null,
-      rarity: cleanText(itemSource.rarity, 40) || null,
-      magical: itemSource.magical === true,
-      description: cleanText(itemSource.description, 1_000) || null,
-    },
+    item: structuredClone(items[0]),
+    // Preserve the original normalized single-item shape so existing
+    // preflight fingerprints and idempotent offer retries remain valid.
+    ...(items.length > 1 ? {
+      items,
+      bundle: { name: bundleName, aliases: bundleAliases },
+    } : {}),
     price: normalizePrice(source.price),
     sceneId: cleanText(source.sceneId, 254) || null,
     locationId: cleanText(source.locationId, 254) || null,
@@ -122,6 +173,8 @@ function publicOffer(offer: Record<string, any>) {
     status: offer.status,
     seller: structuredClone(offer.seller),
     item: structuredClone(offer.item),
+    items: merchantOfferItems(offer),
+    bundle: offer.bundle ? structuredClone(offer.bundle) : null,
     price: structuredClone(offer.price),
     sceneId: offer.sceneId ?? null,
     locationId: offer.locationId ?? null,
@@ -318,62 +371,137 @@ function paymentCp(currency: unknown) {
   return -COINS.reduce((sum, coin) => sum + integer(source[coin]) * COIN_VALUE_CP[coin], 0);
 }
 
-function purchaseClarification(query: string, active: Record<string, any>[]) {
+function purchaseClarification(
+  query: string,
+  active: Record<string, any>[],
+  code = 'MERCHANT_OFFER_NOT_FOUND',
+  question: string | null = null,
+) {
   const options = active.slice(0, 10).map((offer) => ({
     offerId: offer.offerId,
-    label: `${offer.item.name} from ${offer.seller.name}`,
+    label: `${merchantOfferLabel(offer)} from ${offer.seller.name}`,
     price: structuredClone(offer.price),
+    items: merchantOfferItems(offer),
+    bundle: offer.bundle ? structuredClone(offer.bundle) : null,
   }));
   const listed = options.map((option) => option.label).join('; ');
   return {
     authority: MERCHANT_PURCHASE_AUTHORITY,
     contractVersion: MERCHANT_OFFER_CONTRACT_VERSION,
     status: 'clarification_required' as const,
-    code: 'MERCHANT_OFFER_NOT_FOUND',
-    question: active.length
+    code,
+    question: question ?? (active.length
       ? `I could not match “${query || 'that item'}” to an active merchant offer. Which offer did you mean? ${listed}`
-      : `I could not find an active merchant offer for “${query || 'that item'}”. Ask the seller for an exact item and price first.`,
+      : `I could not find an active merchant offer for “${query || 'that item'}”. Ask the seller for an exact item and price first.`),
     options,
   };
+}
+
+function normalizePurchaseItems(input: { itemName?: string; quantity?: number; items?: unknown[] }) {
+  const supplied = Array.isArray(input.items) && input.items.length
+    ? input.items.slice(0, 20)
+    : [{ name: input.itemName, quantity: input.quantity }];
+  return supplied.map((entry) => {
+    const source = entry && typeof entry === 'object' && !Array.isArray(entry)
+      ? entry as Record<string, unknown>
+      : {};
+    return {
+      name: cleanText(source.name, 200),
+      quantity: Math.max(1, Math.min(999, integer(source.quantity) || 1)),
+    };
+  }).filter((item) => item.name);
+}
+
+function offeredItemNameMatches(offered: Record<string, any>, requested: { name: string; quantity: number }) {
+  const query = referenceKey(requested.name);
+  return [offered.name, ...(Array.isArray(offered.aliases) ? offered.aliases : [])]
+    .some((reference) => referenceKey(reference) === query);
+}
+
+function offeredItemMatches(offered: Record<string, any>, requested: { name: string; quantity: number }) {
+  return Number(offered.quantity ?? 1) === requested.quantity
+    && offeredItemNameMatches(offered, requested);
+}
+
+function offerContainsRequestedItem(offer: Record<string, any>, requested: { name: string; quantity: number }) {
+  return merchantOfferItems(offer).some((item: any) => offeredItemNameMatches(item, requested));
+}
+
+function offerExactlyMatchesItems(offer: Record<string, any>, requestedItems: { name: string; quantity: number }[]) {
+  const offeredItems = merchantOfferItems(offer);
+  if (offeredItems.length !== requestedItems.length) return false;
+  const unmatched = [...offeredItems];
+  return requestedItems.every((requested) => {
+    const index = unmatched.findIndex((offered: any) => offeredItemMatches(offered, requested));
+    if (index < 0) return false;
+    unmatched.splice(index, 1);
+    return true;
+  });
 }
 
 export async function resolveMerchantPurchase(input: {
   merchantCollection?: MerchantCollection;
   userId: string;
   campaignId: string;
-  itemName: string;
+  itemName?: string;
   quantity?: number;
+  items?: unknown[];
   currency: unknown;
 }) {
   const offers = input.merchantCollection ?? collection();
   const userId = requireText(input.userId, 'userId');
   const campaignId = requireText(input.campaignId, 'campaignId');
-  const itemName = cleanText(input.itemName, 200);
-  const quantity = Math.max(1, Math.min(999, integer(input.quantity) || 1));
+  const requestedItems = normalizePurchaseItems(input);
+  const itemName = requestedItems.map((item) => item.name).join(' + ');
   const document = await offers.findOne({ userId, campaignId });
   const active = (Array.isArray(document?.offers) ? document.offers : []).filter((offer: any) => offer.status === 'active');
-  const query = referenceKey(itemName);
-  const matches = active.filter((offer: any) => (
-    [offer.item?.name, ...(Array.isArray(offer.item?.aliases) ? offer.item.aliases : [])]
-      .some((reference) => referenceKey(reference) === query)
-  ));
-  if (!query || matches.length !== 1) return purchaseClarification(itemName, matches.length > 1 ? matches : active);
+  const matches = requestedItems.length
+    ? active.filter((offer: any) => offerExactlyMatchesItems(offer, requestedItems))
+    : [];
+  if (matches.length !== 1) {
+    const quantityMismatch = requestedItems.length === 1
+      ? active.find((offer: any) => {
+        const offeredItems = merchantOfferItems(offer);
+        return offeredItems.length === 1
+          && offeredItemNameMatches(offeredItems[0], requestedItems[0])
+          && Number(offeredItems[0].quantity ?? 1) !== requestedItems[0].quantity;
+      })
+      : null;
+    if (quantityMismatch) {
+      const offeredItem = merchantOfferItems(quantityMismatch)[0];
+      throw new MerchantOfferError(
+        409,
+        'MERCHANT_OFFER_QUANTITY_MISMATCH',
+        `${offeredItem.name} is offered in a quantity of ${offeredItem.quantity}. Nothing was purchased.`,
+        {
+          offeredQuantity: offeredItem.quantity,
+          requestedQuantity: requestedItems[0].quantity,
+          offer: publicOffer(quantityMismatch),
+        },
+      );
+    }
+    const partialBundles = requestedItems.length === 1
+      ? active.filter((offer: any) => merchantOfferItems(offer).length > 1 && offerContainsRequestedItem(offer, requestedItems[0]))
+      : [];
+    if (partialBundles.length) {
+      const bundleLabels = partialBundles.map((offer) => merchantOfferLabel(offer)).join('; ');
+      return purchaseClarification(
+        itemName,
+        partialBundles,
+        'MERCHANT_BUNDLE_CONFIRMATION_REQUIRED',
+        `“${requestedItems[0].name}” is part of a bundle offer: ${bundleLabels}. Confirm that you intend to buy every item in the bundle for the quoted total, or decline it. Nothing was purchased.`,
+      );
+    }
+    return purchaseClarification(itemName, matches.length > 1 ? matches : active);
+  }
 
   const offer = matches[0];
-  if (quantity !== Number(offer.item?.quantity ?? 1)) {
-    throw new MerchantOfferError(
-      409,
-      'MERCHANT_OFFER_QUANTITY_MISMATCH',
-      `${offer.item.name} is offered in a quantity of ${offer.item.quantity}. Nothing was purchased.`,
-      { offeredQuantity: offer.item.quantity, requestedQuantity: quantity, offer: publicOffer(offer) },
-    );
-  }
   const proposedPaymentCp = paymentCp(input.currency);
   if (proposedPaymentCp !== Number(offer.price?.totalCp ?? 0)) {
     throw new MerchantOfferError(
       409,
       'MERCHANT_OFFER_PRICE_MISMATCH',
-      `${offer.item.name} costs ${offer.price.totalCp} copper pieces in total, but the proposed payment totals ${proposedPaymentCp}. Nothing was purchased.`,
+      `${merchantOfferLabel(offer)} costs ${offer.price.totalCp} copper pieces in total, but the proposed payment totals ${proposedPaymentCp}. Nothing was purchased.`,
       {
         offeredPrice: structuredClone(offer.price),
         proposedPaymentCp,
@@ -389,6 +517,8 @@ export async function resolveMerchantPurchase(input: {
     offer: publicOffer(offer),
     expectedOfferRevision: offer.revision,
     item: structuredClone(offer.item),
+    items: merchantOfferItems(offer),
+    bundle: offer.bundle ? structuredClone(offer.bundle) : null,
     price: structuredClone(offer.price),
   };
   return { ...contract, fingerprint: fingerprint(contract) };
@@ -402,8 +532,9 @@ export async function consumeMerchantOffer(input: {
   expectedOfferRevision: number;
   expectedPurchaseFingerprint: string;
   mutationId: string;
-  itemName: string;
+  itemName?: string;
   quantity?: number;
+  items?: unknown[];
   currency: unknown;
   sheetMutationReceipt?: unknown;
   now?: () => Date;
@@ -423,6 +554,7 @@ export async function consumeMerchantOffer(input: {
     mutationId,
     itemName: cleanText(input.itemName, 200),
     quantity: Math.max(1, Math.min(999, integer(input.quantity) || 1)),
+    items: normalizePurchaseItems(input),
     currency: normalizedCurrency,
     sheetMutationReceipt: input.sheetMutationReceipt ?? null,
   });
@@ -443,6 +575,8 @@ export async function consumeMerchantOffer(input: {
         offer: publicOffer(sold),
         expectedOfferRevision: input.expectedOfferRevision,
         item: structuredClone(sold.item),
+        items: merchantOfferItems(sold),
+        bundle: sold.bundle ? structuredClone(sold.bundle) : null,
         price: structuredClone(sold.price),
         fingerprint: expectedPurchaseFingerprint,
       },
@@ -455,6 +589,7 @@ export async function consumeMerchantOffer(input: {
     campaignId,
     itemName: input.itemName,
     quantity: input.quantity,
+    items: input.items,
     currency: input.currency,
   });
   if (resolved.status !== 'resolved' || resolved.offer.offerId !== offerId) {
