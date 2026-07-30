@@ -63,6 +63,14 @@ import {
   updateEncounterPlan,
 } from '../services/encounterPlan.js';
 import {
+  commitMerchantOffers,
+  compensateMerchantMutation,
+  consumeMerchantOffer,
+  listMerchantOffers,
+  preflightMerchantOffers,
+  resolveMerchantPurchase,
+} from '../services/merchantOffer.js';
+import {
   AUDIT_RESOLVED_MECHANICS_NARRATION_INSTRUCTION,
   AUDIT_RESOLVED_MECHANICS_NARRATION_REQUIRED_KEYS,
   NARRATE_COMBAT_ACTION_RESULT_INSTRUCTION,
@@ -212,6 +220,75 @@ gmcV1Router.post('/campaigns', asyncRoute(async (req, res) => {
 gmcV1Router.get('/campaigns/:campaignId', asyncRoute(async (req, res) => {
   const project = await campaign(req, res); if (!project) return;
   res.json({ campaign: project });
+}));
+
+// GMC owns the durable offer and sale record. GMA may orchestrate a purchase,
+// while VCS remains the only live character-sheet authority. date_of_change: 2026-07-30
+gmcV1Router.get('/campaigns/:campaignId/merchant-offers', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const contract = await listMerchantOffers({
+    userId: userId(req),
+    campaignId: req.params.campaignId,
+    status: req.query.status ? String(req.query.status) : undefined,
+  });
+  res.json({ contract });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/merchant-offers/preflight', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  res.json({ preflight: preflightMerchantOffers({ proposals: req.body?.proposals }) });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/merchant-offers/commit', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const result = await commitMerchantOffers({
+    userId: userId(req),
+    campaignId: req.params.campaignId,
+    mutationId: req.body?.mutationId,
+    expectedFingerprint: req.body?.expectedFingerprint,
+    proposals: req.body?.proposals,
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/merchant-offers/resolve-purchase', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const result = await resolveMerchantPurchase({
+    userId: userId(req),
+    campaignId: req.params.campaignId,
+    itemName: req.body?.itemName,
+    quantity: req.body?.quantity,
+    currency: req.body?.currency,
+  });
+  res.json({ purchase: result });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/merchant-offers/:offerId/consume', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const result = await consumeMerchantOffer({
+    userId: userId(req),
+    campaignId: req.params.campaignId,
+    offerId: req.params.offerId,
+    expectedOfferRevision: req.body?.expectedOfferRevision,
+    expectedPurchaseFingerprint: req.body?.expectedPurchaseFingerprint,
+    mutationId: req.body?.mutationId,
+    itemName: req.body?.itemName,
+    quantity: req.body?.quantity,
+    currency: req.body?.currency,
+    sheetMutationReceipt: req.body?.sheetMutationReceipt,
+  });
+  res.json(result);
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/merchant-offers/compensate', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const result = await compensateMerchantMutation({
+    userId: userId(req),
+    campaignId: req.params.campaignId,
+    originalMutationId: req.body?.originalMutationId,
+    compensationId: req.body?.compensationId,
+  });
+  res.json(result);
 }));
 
 gmcV1Router.get('/campaigns/:campaignId/dashboard', asyncRoute(async (req, res) => {

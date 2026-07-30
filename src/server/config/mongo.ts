@@ -169,6 +169,13 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, 'vcsBinding.battleRoomId': 1 },
     { unique: true, partialFilterExpression: { 'vcsBinding.battleRoomId': { $type: 'string' } } },
   );
+  await database.collection('gmc_merchant_offers').createIndex(
+    { userId: 1, campaignId: 1 },
+    { unique: true, name: 'unique_campaign_merchant_offers' },
+  );
+  await database.collection('gmc_merchant_offers').createIndex(
+    { userId: 1, campaignId: 1, 'offers.status': 1, updatedAt: -1 },
+  );
 
   // Provider-neutral LLM execution ledger and cross-authority outbox.
   await database.collection('llm_executions').createIndex(
