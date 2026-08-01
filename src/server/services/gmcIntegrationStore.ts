@@ -1235,9 +1235,44 @@ export async function supersedeNpcIdentity(
   input: Record<string, any>,
 ) {
   const targetId = String(input.mergedIntoEntityId ?? '').trim();
+  const splitIntoEntityIds = [...new Set((Array.isArray(input.splitIntoEntityIds) ? input.splitIntoEntityIds : [])
+    .map((value: unknown) => String(value ?? '').trim()).filter(Boolean))];
   let source = await getCanonEntitiesCollection().findOne({ _id: npcId, userId, project_id: campaignId, type: 'npc' });
   if (!source) return null;
   const timestamp = now();
+  if (splitIntoEntityIds.length) {
+    if (targetId || splitIntoEntityIds.length < 2 || splitIntoEntityIds.length > 20 || splitIntoEntityIds.includes(npcId)) {
+      throw Object.assign(new Error('An NPC group split requires two to twenty distinct surviving NPC identities and no merge target.'), { status: 422, code: 'NPC_SPLIT_TARGETS_INVALID' });
+    }
+    const targets = await getCanonEntitiesCollection().find({
+      _id: { $in: splitIntoEntityIds }, userId, project_id: campaignId, type: 'npc', status: { $ne: 'superseded' },
+    }).toArray();
+    if (targets.length !== splitIntoEntityIds.length) {
+      throw Object.assign(new Error('One or more intended surviving NPC identities could not be found.'), { status: 404, code: 'NPC_SPLIT_TARGET_NOT_FOUND' });
+    }
+    if ((source as any).status === 'superseded') {
+      const existingTargets = Array.isArray((source as any).details?.splitIntoEntityIds) ? (source as any).details.splitIntoEntityIds.map(String).sort() : [];
+      if (stablePresenceJson(existingTargets) === stablePresenceJson([...splitIntoEntityIds].sort())) return source;
+      throw Object.assign(new Error('This superseded NPC group is already bound to a different split result.'), { status: 409, code: 'NPC_SPLIT_CONFLICT' });
+    }
+    return getCanonEntitiesCollection().findOneAndUpdate(
+      { _id: npcId, userId, project_id: campaignId, type: 'npc', status: { $ne: 'superseded' } },
+      {
+        $set: {
+          status: 'superseded',
+          'details.mergedIntoEntityId': null,
+          'details.splitIntoEntityIds': splitIntoEntityIds,
+          'details.supersededAt': timestamp,
+          'details.supersedeReason': String(input.reason ?? 'Legacy NPC group split into individual identities').slice(0, 2_000),
+          updated_at: timestamp,
+        },
+        $unset: { canonicalIdentityKey: '' },
+        $inc: { revision: 1 },
+        $push: { audit_trail: { at: timestamp, action: 'identity_split', splitIntoEntityIds, source: String(input.source ?? 'gmc-npc-identity-migration') } } as any,
+      },
+      { returnDocument: 'after' },
+    );
+  }
   if (targetId) {
     const target = await getCanonEntitiesCollection().findOne({ _id: targetId, userId, project_id: campaignId, type: 'npc', status: { $ne: 'superseded' } });
     if (!target) throw Object.assign(new Error('The intended surviving NPC identity could not be found.'), { status: 404, code: 'NPC_MERGE_TARGET_NOT_FOUND' });

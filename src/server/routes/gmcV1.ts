@@ -1051,9 +1051,14 @@ gmcV1Router.post('/campaigns/:campaignId/npcs/resolve-seed', asyncRoute(async (r
   const seed = normalizeNpcIdentitySeed(req.body ?? {}, {
     campaignId: req.params.campaignId,
     mutationId: String(req.body?.mutationId ?? req.header('Idempotency-Key') ?? correlationId(req)),
-    unavailableNames: existing
-      .filter((npc: any) => String(npc?._id ?? '') !== String(existingMatch?._id ?? '') && isCanonicalNpcName(npc?.canonical_name))
-      .map((npc: any) => String(npc.canonical_name)),
+    unavailableNames: [
+      ...existing
+        .filter((npc: any) => String(npc?._id ?? '') !== String(existingMatch?._id ?? '') && isCanonicalNpcName(npc?.canonical_name))
+        .map((npc: any) => String(npc.canonical_name)),
+      ...(Array.isArray(req.body?.unavailableNames)
+        ? req.body.unavailableNames.slice(0, 250).map((name: unknown) => String(name ?? '').trim()).filter(Boolean)
+        : []),
+    ],
     source: 'gmc-npc-seed-resolver',
   });
   res.json({

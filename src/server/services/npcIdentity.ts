@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 
-export const NPC_IDENTITY_CONTRACT_VERSION = '2026-08-01.1';
+export const NPC_IDENTITY_CONTRACT_VERSION = '2026-08-01.2';
 
 export const NPC_NARRATIVE_DEPTHS = ['surface', 'developed', 'major'] as const;
 export const NPC_MECHANICAL_DEPTHS = ['none', 'template', 'combat_ready', 'full'] as const;
 
 export type NpcNarrativeDepth = typeof NPC_NARRATIVE_DEPTHS[number];
 export type NpcMechanicalDepth = typeof NPC_MECHANICAL_DEPTHS[number];
-export type NpcIdentityKind = 'personal_name' | 'mononym' | 'public_alias' | 'role_descriptor' | 'group_label';
+export type NpcIdentityKind = 'personal_name' | 'mononym' | 'public_alias' | 'owned_creature_identity' | 'role_descriptor' | 'group_label';
 
 export interface NpcIdentityAssessment {
   kind: NpcIdentityKind;
@@ -63,6 +63,10 @@ export function assessNpcIdentity(value: unknown): NpcIdentityAssessment {
   if (/\b(?:players|crew|team|pair|group|crowd|workers|guards)\b/i.test(name)) {
     return { kind: 'group_label', confidence: 'high', reasons: ['plural_or_collective_identity'] };
   }
+  if (/\b(?:familiar|animal companion|mount|steed)$/i.test(name)
+    || /['’]s\s+(?:owl|lizard|cat|rat|raven|spider|weasel|bat|frog|toad|snake|crab|octopus|fish|hawk|horse|pony|mastiff)\s+companion$/i.test(name)) {
+    return { kind: 'owned_creature_identity', confidence: 'high', reasons: ['owner_or_form_bound_creature_identity'] };
+  }
   if (/^(?:unidentified|unknown|unnamed|anonymous)\b/i.test(name)) reasons.push('unidentified_prefix');
   if (/\b(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)$/i.test(name)) reasons.push('numbered_role');
   if (/\b(?:with|wearing|holding|carrying|below|above|inside|outside|near|under|at)\b/i.test(name)) reasons.push('descriptive_phrase');
@@ -93,7 +97,7 @@ export function assessNpcIdentity(value: unknown): NpcIdentityAssessment {
 }
 
 export function isCanonicalNpcName(value: unknown) {
-  return ['personal_name', 'mononym', 'public_alias'].includes(assessNpcIdentity(value).kind);
+  return ['personal_name', 'mononym', 'public_alias', 'owned_creature_identity'].includes(assessNpcIdentity(value).kind);
 }
 
 function stableIndex(seed: string, offset: number, size: number) {
@@ -183,12 +187,16 @@ export function normalizeNpcIdentitySeed(input: Record<string, any>, options: {
   const titleBasis = mechanicalTitleBasis({ ...input, details: existingDetails }, title);
   const identity = {
     contractVersion: NPC_IDENTITY_CONTRACT_VERSION,
-    entityKind: 'individual',
+    entityKind: assessment.kind === 'owned_creature_identity' ? 'owned_creature' : 'individual',
     canonicalName,
     displayLabel,
     nameKnownToPlayers: Boolean(input.nameKnownToPlayers ?? existingDetails.identity?.nameKnownToPlayers ?? assessment.kind !== 'role_descriptor'),
     assessment,
-    nameSource: assessment.kind === 'role_descriptor' ? 'gmc_stable_identity_synthesis' : 'supplied_personal_identity',
+    nameSource: assessment.kind === 'role_descriptor'
+      ? 'gmc_stable_identity_synthesis'
+      : assessment.kind === 'owned_creature_identity'
+        ? 'supplied_owner_or_form_identity'
+        : 'supplied_personal_identity',
     sourceLabel: assessment.kind === 'role_descriptor' ? rawName : null,
   };
   const normalizedDetails = {

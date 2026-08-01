@@ -17,6 +17,7 @@ describe('NPC identity policy', () => {
     'Dockside enforcer',
     'The Quartermaster',
     'The imprisoned gnome',
+    "Red-thread dice player's companion",
   ])('classifies %s as a role descriptor', (name) => {
     expect(assessNpcIdentity(name).kind).toBe('role_descriptor');
   });
@@ -27,6 +28,8 @@ describe('NPC identity policy', () => {
     ['Durn', 'mononym'],
     ['The Old One', 'public_alias'],
     ['Old Vesper', 'public_alias'],
+    ['Kerrigan’s Owl Familiar', 'owned_creature_identity'],
+    ["Kerrigan's lizard familiar", 'owned_creature_identity'],
   ])('preserves legitimate identity %s', (name, kind) => {
     expect(assessNpcIdentity(name).kind).toBe(kind);
   });
@@ -58,6 +61,18 @@ describe('NPC identity policy', () => {
       campaignId: 'campaign-1', mutationId: 'captain-1',
     });
     expect(result.details.mechanicalTitleBasis).toBeUndefined();
+  });
+
+  it('preserves an owner-bound familiar identity instead of assigning a humanoid name', () => {
+    const result = normalizeNpcIdentitySeed({ name: 'Kerrigan’s Owl Familiar', details: { type: 'familiar' } }, {
+      campaignId: 'campaign-1', mutationId: 'familiar-1',
+    });
+    expect(result.name).toBe("Kerrigan's Owl Familiar");
+    expect(result.details.identity).toMatchObject({
+      entityKind: 'owned_creature',
+      nameSource: 'supplied_owner_or_form_identity',
+      nameKnownToPlayers: true,
+    });
   });
 
   it('records title mechanics only when the build supplies them', () => {
