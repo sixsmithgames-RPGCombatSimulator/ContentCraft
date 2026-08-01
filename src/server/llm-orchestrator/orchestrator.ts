@@ -246,6 +246,12 @@ async function executeClaimed(
     operation = options.runtimeOverride && rollout.mode === 'compatibility'
       ? applyOperationRuntime(registeredOperation, options.runtimeOverride)
       : registeredOperation;
+    const requestedAttemptBudget = Number(request.constraints.maxProviderAttempts);
+    const maxProviderAttempts = Number.isInteger(requestedAttemptBudget) && requestedAttemptBudget > 0
+      ? Math.min(operation.provider.maxAttempts, requestedAttemptBudget)
+      : operation.provider.maxAttempts;
+    const allowProviderFallback = operation.provider.fallbackAllowed
+      && request.constraints.allowProviderFallback === true;
     response.route.capabilityTier = operation.capabilityTier;
     response.route.operationVersion = operation.version;
     const executionRequest = await hydrateReferenceContext({
@@ -262,7 +268,7 @@ async function executeClaimed(
       userId: options.userId,
       request,
       requestFingerprint,
-      leaseMs: operation.provider.timeoutMs * operation.provider.maxAttempts + 30_000,
+      leaseMs: operation.provider.timeoutMs * maxProviderAttempts + 30_000,
       retentionMs: Number(process.env.LLM_EXECUTION_RETENTION_DAYS ?? 30) * 86_400_000,
     });
     if (claim.kind === 'conflict') {
@@ -278,7 +284,7 @@ async function executeClaimed(
       return { ...claim.record.response, cache: { ...claim.record.response.cache, status: 'hit' } };
     }
     if (claim.kind === 'running') {
-      const joined = await waitForDurableResult(options.store, options.userId, request, operation.provider.timeoutMs * operation.provider.maxAttempts + 30_000);
+      const joined = await waitForDurableResult(options.store, options.userId, request, operation.provider.timeoutMs * maxProviderAttempts + 30_000);
       return { ...joined, cache: { ...joined.cache, status: 'joined' } };
     }
     await options.store.appendEvent(
@@ -292,7 +298,10 @@ async function executeClaimed(
         ),
         totalBytes: resolved.totalBytes,
         inputTargetBytes: operation.context.inputTargetBytes,
+        inputHardLimitBytes: operation.context.inputHardLimitBytes,
         targetExceeded: resolved.targetExceeded,
+        maxProviderAttempts,
+        allowProviderFallback,
       },
     );
     await options.store.appendEvent(
@@ -354,15 +363,16 @@ async function executeClaimed(
         tier: operation.capabilityTier,
         operationClass: operation.operationClass,
         premiumAllowed: operation.provider.premiumAllowed,
-        fallbackAllowed: operation.provider.fallbackAllowed,
+        fallbackAllowed: allowProviderFallback,
       });
       let lastError: unknown;
       let attempts = 0;
+      let stopRouting = false;
       for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
         const route = routes[routeIndex];
         const circuit = circuitState.get(route.adapter.id);
         if (circuit && circuit.openUntil > Date.now()) continue;
-        for (let attempt = 1; attempt <= operation.provider.maxAttempts; attempt += 1) {
+        for (let attempt = 1; attempt <= maxProviderAttempts; attempt += 1) {
           attempts += 1;
           response.timing.attempts = attempts;
           try {
@@ -377,6 +387,7 @@ async function executeClaimed(
               input: resolved.providerInput,
               outputSchema: operation.outputSchema.schema,
               temperature: operation.provider.temperature,
+              thinkingLevel: operation.provider.thinkingLevel,
               maxOutputTokens: operation.provider.maxOutputTokens,
               timeoutMs: operation.provider.timeoutMs,
               signal: options.signal,
@@ -392,7 +403,7 @@ async function executeClaimed(
                 source: 'gmc.output-validator',
                 details: validation,
               });
-              if (attempt < operation.provider.maxAttempts) continue;
+              if (attempt < maxProviderAttempts) continue;
               throw lastError;
             }
             circuitState.delete(route.adapter.id);
@@ -420,10 +431,14 @@ async function executeClaimed(
               if (current.failures >= 5) current.openUntil = Date.now() + 30_000;
               circuitState.set(route.adapter.id, current);
             }
-            if (!normalized.retryable || attempt >= operation.provider.maxAttempts) break;
+            if (!normalized.retryable) {
+              stopRouting = true;
+              break;
+            }
+            if (attempt >= maxProviderAttempts) break;
           }
         }
-        if (response.status === 'succeeded') break;
+        if (response.status === 'succeeded' || stopRouting) break;
       }
       if (response.status !== 'succeeded') throw lastError ?? new Error('No provider route completed the operation.');
     }
@@ -505,7 +520,7 @@ export function createUniversalRequest(input: {
   };
 }
 
-export async function executeLegacyOperation(input: {
+export type LegacyOperationInput = {
   operation: string;
   userId: string;
   correlationId: string;
@@ -515,7 +530,9 @@ export async function executeLegacyOperation(input: {
   store?: ExecutionStore;
   providers?: LlmProviderAdapter[];
   runtime?: LlmOperationRuntimeOverride;
-}) {
+};
+
+export async function executeLegacyOperationResult(input: LegacyOperationInput) {
   const response = await executeLegacyOperationResponse(input);
   if (response.status !== 'succeeded') {
     throw new OrchestratorError({
@@ -523,25 +540,23 @@ export async function executeLegacyOperation(input: {
       category: response.error?.category ?? 'provider',
       message: response.error?.message ?? 'The AI operation failed.',
       retryable: response.error?.retryable,
-      status: response.error?.code === 'PROVIDER_RATE_LIMIT' ? 429 : response.error?.category === 'validation' ? 502 : 503,
+      status: ['PROVIDER_RATE_LIMIT', 'PROVIDER_SPEND_CAP_EXCEEDED'].includes(String(response.error?.code))
+        ? 429
+        : response.error?.code === 'LLM_CONTEXT_HARD_LIMIT_EXCEEDED'
+          ? 413
+          : response.error?.category === 'validation' ? 502 : 503,
       source: response.error?.source,
       providerStatus: response.error?.providerStatus,
     });
   }
-  return response.output;
+  return response;
 }
 
-export async function executeLegacyOperationResponse(input: {
-  operation: string;
-  userId: string;
-  correlationId: string;
-  idempotencyKey: string;
-  body: unknown;
-  sourceRoute: string;
-  store?: ExecutionStore;
-  providers?: LlmProviderAdapter[];
-  runtime?: LlmOperationRuntimeOverride;
-}) {
+export async function executeLegacyOperation(input: LegacyOperationInput) {
+  return (await executeLegacyOperationResult(input)).output;
+}
+
+export async function executeLegacyOperationResponse(input: LegacyOperationInput) {
   const adapterVersion = input.runtime
     ? `1-${createHash('sha256').update(stable(input.runtime)).digest('hex').slice(0, 16)}`
     : '1';

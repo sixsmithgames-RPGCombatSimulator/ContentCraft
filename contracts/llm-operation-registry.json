@@ -1,7 +1,7 @@
 {
   "schemaVersion": "gma-gmc.llm-registry-artifact/1",
-  "registryVersion": "2026-07-28.7",
-  "modelPolicyVersion": "2026-07-26.2",
+  "registryVersion": "2026-08-01.1",
+  "modelPolicyVersion": "2026-08-01.1",
   "operations": [
     {
       "id": "actor.ensure.generate",
@@ -52,10 +52,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "medium",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -115,10 +117,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "low",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -224,10 +228,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "medium",
         "maxOutputTokens": 16000,
         "timeoutMs": 180000,
         "maxAttempts": 2,
@@ -293,10 +299,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 24000,
+        "inputHardLimitBytes": 64000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.2,
+        "thinkingLevel": "minimal",
         "maxOutputTokens": 4000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -420,12 +428,14 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 64000,
+        "inputTargetBytes": 32000,
+        "inputHardLimitBytes": 64000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
-        "maxOutputTokens": 8000,
+        "thinkingLevel": "low",
+        "maxOutputTokens": 3000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
         "fallbackAllowed": true,
@@ -500,12 +510,14 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 24000,
+        "inputTargetBytes": 48000,
+        "inputHardLimitBytes": 96000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.2,
-        "maxOutputTokens": 4000,
+        "thinkingLevel": "low",
+        "maxOutputTokens": 2000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
         "fallbackAllowed": true,
@@ -570,10 +582,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "low",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -663,10 +677,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "medium",
         "maxOutputTokens": 8000,
         "timeoutMs": 180000,
         "maxAttempts": 2,
@@ -746,11 +762,13 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 64000,
+        "inputTargetBytes": 128000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "medium",
         "maxOutputTokens": 10000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -843,14 +861,16 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 24000,
+        "inputTargetBytes": 16000,
+        "inputHardLimitBytes": 32000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.2,
-        "maxOutputTokens": 4000,
+        "thinkingLevel": "minimal",
+        "maxOutputTokens": 1000,
         "timeoutMs": 100000,
-        "maxAttempts": 2,
+        "maxAttempts": 1,
         "fallbackAllowed": true,
         "premiumAllowed": false
       },
@@ -956,10 +976,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "medium",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -1067,10 +1089,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "medium",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -1230,10 +1254,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "medium",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -1370,10 +1396,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "medium",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -1480,14 +1508,16 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 24000,
+        "inputTargetBytes": 12000,
+        "inputHardLimitBytes": 24000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.2,
-        "maxOutputTokens": 4000,
+        "thinkingLevel": "minimal",
+        "maxOutputTokens": 600,
         "timeoutMs": 100000,
-        "maxAttempts": 2,
+        "maxAttempts": 1,
         "fallbackAllowed": true,
         "premiumAllowed": false
       },
@@ -1542,6 +1572,15 @@
             },
             "requiresGameMasterCraft": {
               "type": "boolean"
+            },
+            "actionPlan": {
+              "type": "object"
+            },
+            "ambiguities": {
+              "type": "array"
+            },
+            "dataRequirements": {
+              "type": "array"
             }
           }
         }
@@ -1561,15 +1600,17 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 24000,
+        "inputTargetBytes": 8000,
+        "inputHardLimitBytes": 16000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.2,
-        "maxOutputTokens": 4000,
+        "thinkingLevel": "minimal",
+        "maxOutputTokens": 700,
         "timeoutMs": 100000,
-        "maxAttempts": 2,
-        "fallbackAllowed": true,
+        "maxAttempts": 1,
+        "fallbackAllowed": false,
         "premiumAllowed": false
       },
       "cache": {
@@ -1634,14 +1675,16 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 24000,
+        "inputTargetBytes": 16000,
+        "inputHardLimitBytes": 32000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.2,
-        "maxOutputTokens": 4000,
+        "thinkingLevel": "minimal",
+        "maxOutputTokens": 1000,
         "timeoutMs": 100000,
-        "maxAttempts": 2,
+        "maxAttempts": 1,
         "fallbackAllowed": true,
         "premiumAllowed": false
       },
@@ -1716,13 +1759,15 @@
           "priorResult"
         ],
         "inputTargetBytes": 24000,
+        "inputHardLimitBytes": 48000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.2,
-        "maxOutputTokens": 4000,
+        "thinkingLevel": "minimal",
+        "maxOutputTokens": 1000,
         "timeoutMs": 100000,
-        "maxAttempts": 2,
+        "maxAttempts": 1,
         "fallbackAllowed": true,
         "premiumAllowed": false
       },
@@ -1874,11 +1919,13 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 64000,
+        "inputTargetBytes": 48000,
+        "inputHardLimitBytes": 96000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "low",
         "maxOutputTokens": 6000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -1962,10 +2009,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "low",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -2034,10 +2083,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "low",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -2105,10 +2156,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "low",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -2198,10 +2251,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "low",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -2296,10 +2351,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 24000,
+        "inputHardLimitBytes": 64000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.2,
+        "thinkingLevel": "minimal",
         "maxOutputTokens": 4000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
@@ -2441,11 +2498,13 @@
           "priorResult"
         ],
         "inputTargetBytes": 24000,
+        "inputHardLimitBytes": 48000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.2,
-        "maxOutputTokens": 4000,
+        "thinkingLevel": "low",
+        "maxOutputTokens": 2000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
         "fallbackAllowed": true,
@@ -2570,12 +2629,14 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 64000,
+        "inputTargetBytes": 32000,
+        "inputHardLimitBytes": 64000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
-        "maxOutputTokens": 8000,
+        "thinkingLevel": "low",
+        "maxOutputTokens": 3000,
         "timeoutMs": 100000,
         "maxAttempts": 2,
         "fallbackAllowed": true,
@@ -2628,10 +2689,12 @@
           "priorResult"
         ],
         "inputTargetBytes": 64000,
+        "inputHardLimitBytes": 256000,
         "requiredReferenceRevisions": []
       },
       "provider": {
         "temperature": 0.6,
+        "thinkingLevel": "medium",
         "maxOutputTokens": 8000,
         "timeoutMs": 100000,
         "maxAttempts": 2,

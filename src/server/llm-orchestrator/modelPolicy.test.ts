@@ -24,6 +24,16 @@ describe('effective-dated model pricing and SLO policy', () => {
       },
       priceVersion: 'price-r1',
     }).costUsd).toBeCloseTo(0.0019);
+    expect(priceUsage({ ...usage, reasoningTokens: 100 }, {
+      config: {
+        default: 'fixture',
+        inputUsdPerMillion: 1,
+        outputUsdPerMillion: 2,
+        cachedInputUsdPerMillion: 0.5,
+        reasoningTokensBilledSeparately: true,
+      },
+      priceVersion: 'price-r1',
+    }).costUsd).toBeCloseTo(0.0021);
     expect(priceUsage(usage, {
       config: {
         default: 'fixture',

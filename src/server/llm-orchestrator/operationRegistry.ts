@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-07-28.7';
+export const OPERATION_REGISTRY_VERSION = '2026-08-01.1';
 
 export type CapabilityTier = 'structured' | 'narrative' | 'world' | 'reasoning';
+export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
 export interface SemanticValidatorContext {
   request: LlmRequestEnvelope;
@@ -40,10 +41,12 @@ export interface LlmOperationDefinition {
   context: {
     allowedKeys: string[];
     inputTargetBytes: number;
+    inputHardLimitBytes: number;
     requiredReferenceRevisions: string[];
   };
   provider: {
     temperature: number;
+    thinkingLevel: ThinkingLevel;
     maxOutputTokens: number;
     timeoutMs: number;
     maxAttempts: number;
@@ -142,6 +145,9 @@ const typeByKey: Record<string, Record<string, unknown>> = {
   initialNpcs: { type: 'array' },
   evidence: { anyOf: [{ type: 'array' }, { type: 'object' }, { type: 'string' }] },
   structuredIntent: { type: 'object' },
+  actionPlan: { type: 'object' },
+  ambiguities: { type: 'array' },
+  dataRequirements: { type: 'array' },
   interactionResolution: { type: 'object' },
   proposedSheetMutation: { anyOf: [{ type: 'object' }, { type: 'null' }] },
   currency: { type: 'object' },
@@ -236,19 +242,23 @@ type Seed = {
   temperature?: number;
   maxOutputTokens?: number;
   targetBytes?: number;
+  hardLimitBytes?: number;
+  thinkingLevel?: ThinkingLevel;
+  maxAttempts?: number;
+  fallbackAllowed?: boolean;
   optional?: string[];
   openOutput?: boolean;
 };
 
 const seeds: Seed[] = [
-  { id: 'intent.classify', operationClass: 'structured_low', tier: 'structured', required: ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'] },
-  { id: 'narration.generate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['interactionResolution', 'proposedSheetMutation', 'npcDialogue', 'requiresVcsResolution', 'proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'chronology', 'inventory', 'scene-presence'], maxOutputTokens: 6000 },
-  { id: 'narration.continuity.validate', operationClass: 'structured_low', tier: 'structured', required: ['valid', 'issues', 'correctedNarration', 'understoodPlayerIntent', 'stateAdvanced'], validators: ['narrative-fidelity', 'chronology'] },
-  { id: 'experience.evaluate', operationClass: 'structured_low', tier: 'structured', required: ['shouldAward', 'amount', 'category', 'difficulty', 'rationale', 'relatedChallengeId', 'alreadyRewarded', 'confidence', 'evidence'] },
-  { id: 'skill.adjudicate', operationClass: 'structured_low', tier: 'structured', required: ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'], optional: ['passiveEligible', 'estimatedTimeCost', 'requiredChecks', 'outcomeProse'], validators: ['rules-fidelity'] },
-  { id: 'skill.narrate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'rules-fidelity', 'inventory', 'chronology'] },
-  { id: 'combat.action.narrate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'rules-fidelity'] },
-  { id: 'mechanics.narration.audit', operationClass: 'structured_low', tier: 'structured', required: ['valid', 'issues', 'correctedNarration'], validators: ['narrative-fidelity', 'rules-fidelity'] },
+  { id: 'intent.classify', operationClass: 'structured_low', tier: 'structured', required: ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'], optional: ['actionPlan', 'ambiguities', 'dataRequirements'], targetBytes: 8_000, hardLimitBytes: 16_000, maxOutputTokens: 700, thinkingLevel: 'minimal', maxAttempts: 1, fallbackAllowed: false },
+  { id: 'narration.generate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['interactionResolution', 'proposedSheetMutation', 'npcDialogue', 'requiresVcsResolution', 'proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'chronology', 'inventory', 'scene-presence'], maxOutputTokens: 6000, targetBytes: 48_000, hardLimitBytes: 96_000, thinkingLevel: 'low' },
+  { id: 'narration.continuity.validate', operationClass: 'structured_low', tier: 'structured', required: ['valid', 'issues', 'correctedNarration', 'understoodPlayerIntent', 'stateAdvanced'], validators: ['narrative-fidelity', 'chronology'], targetBytes: 24_000, hardLimitBytes: 48_000, maxOutputTokens: 1_000, thinkingLevel: 'minimal', maxAttempts: 1 },
+  { id: 'experience.evaluate', operationClass: 'structured_low', tier: 'structured', required: ['shouldAward', 'amount', 'category', 'difficulty', 'rationale', 'relatedChallengeId', 'alreadyRewarded', 'confidence', 'evidence'], targetBytes: 12_000, hardLimitBytes: 24_000, maxOutputTokens: 600, thinkingLevel: 'minimal', maxAttempts: 1 },
+  { id: 'skill.adjudicate', operationClass: 'structured_low', tier: 'structured', required: ['resolutionMode', 'skill', 'ability', 'dc', 'rollMode', 'reason', 'preRollNarration', 'stakes', 'confidence'], optional: ['passiveEligible', 'estimatedTimeCost', 'requiredChecks', 'outcomeProse'], validators: ['rules-fidelity'], targetBytes: 24_000, hardLimitBytes: 48_000, maxOutputTokens: 2_000, thinkingLevel: 'low' },
+  { id: 'skill.narrate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'rules-fidelity', 'inventory', 'chronology'], targetBytes: 32_000, hardLimitBytes: 64_000, maxOutputTokens: 3_000, thinkingLevel: 'low' },
+  { id: 'combat.action.narrate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'rules-fidelity'], targetBytes: 32_000, hardLimitBytes: 64_000, maxOutputTokens: 3_000, thinkingLevel: 'low' },
+  { id: 'mechanics.narration.audit', operationClass: 'structured_low', tier: 'structured', required: ['valid', 'issues', 'correctedNarration'], validators: ['narrative-fidelity', 'rules-fidelity'], targetBytes: 16_000, hardLimitBytes: 32_000, maxOutputTokens: 1_000, thinkingLevel: 'minimal', maxAttempts: 1 },
   { id: 'ooc.respond', operationClass: 'narrative', tier: 'narrative', required: ['response', 'continuityNotes', 'proposedCanonChanges'] },
   { id: 'sheet.mutation.plan', operationClass: 'structured_low', tier: 'structured', required: ['shouldMutate', 'confidence', 'reason', 'currency', 'items', 'equippedWeapons', 'hitPoints', 'hitDice', 'experiencePoints'], validators: ['inventory'] },
   { id: 'narration.retcon', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'correctionSummary', 'proposedCanonChanges', 'continuityNotes'], optional: ['proposedTimeAdvance'], validators: ['narrative-fidelity', 'chronology'] },
@@ -256,10 +266,10 @@ const seeds: Seed[] = [
   { id: 'canon.extract', operationClass: 'structured_low', tier: 'structured', required: ['proposedEntities', 'proposedCanonChanges'], validators: ['canon-proposal', 'chronology'] },
   { id: 'session.summarize', operationClass: 'narrative', tier: 'narrative', required: ['summary', 'keyDecisions', 'npcUpdates', 'openThreads', 'resolvedThreads', 'suggestedNextSessionSetup'] },
   { id: 'campaign.foundation.build', operationClass: 'reasoning_high', tier: 'reasoning', required: ['campaign', 'campaignStructure', 'progressionPlan', 'rewardPlan', 'startingLocation', 'keyLocations', 'openingScene', 'initialFactions', 'initialFacts', 'initialNpcs', 'openThreads', 'sessionZeroSummary'], validators: ['canon-proposal', 'scene-presence'], maxOutputTokens: 16000 },
-  { id: 'encounter.transition.detect', operationClass: 'structured_low', tier: 'structured', required: ['shouldCreateBattleRoom', 'requiresTurnOrder', 'triggeredNow', 'transitionType', 'confidence', 'reason', 'encounterBrief'], validators: ['encounter-actors'] },
-  { id: 'encounter.plan', operationClass: 'world_generation', tier: 'world', required: ['encounter', 'combatants', 'map', 'objective'], validators: ['encounter-actors', 'inventory'], maxOutputTokens: 10000 },
+  { id: 'encounter.transition.detect', operationClass: 'structured_low', tier: 'structured', required: ['shouldCreateBattleRoom', 'requiresTurnOrder', 'triggeredNow', 'transitionType', 'confidence', 'reason', 'encounterBrief'], validators: ['encounter-actors'], targetBytes: 16_000, hardLimitBytes: 32_000, maxOutputTokens: 1_000, thinkingLevel: 'minimal', maxAttempts: 1 },
+  { id: 'encounter.plan', operationClass: 'world_generation', tier: 'world', required: ['encounter', 'combatants', 'map', 'objective'], validators: ['encounter-actors', 'inventory'], maxOutputTokens: 10000, targetBytes: 128_000, hardLimitBytes: 256_000, thinkingLevel: 'medium' },
   { id: 'encounter.challenge.plan', operationClass: 'reasoning_high', tier: 'reasoning', required: ['challengeDirection', 'difficultyTarget', 'rationale', 'constraints'], validators: ['encounter-actors'] },
-  { id: 'combat.turn.plan', operationClass: 'structured_low', tier: 'structured', required: ['actorId', 'intent', 'actions'], validators: ['rules-fidelity', 'encounter-actors'] },
+  { id: 'combat.turn.plan', operationClass: 'structured_low', tier: 'structured', required: ['actorId', 'intent', 'actions'], validators: ['rules-fidelity', 'encounter-actors'], targetBytes: 48_000, hardLimitBytes: 96_000, maxOutputTokens: 2_000, thinkingLevel: 'low' },
   { id: 'combat.turns.narrate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'turnSummaries'], validators: ['narrative-fidelity', 'rules-fidelity'] },
   { id: 'entity.npc.generate', operationClass: 'world_generation', tier: 'world', required: ['name'], optional: ['description', 'appearance', 'role', 'motivation', 'secrets', 'relationships', 'voice', 'currentLocationId', 'arcSummary', 'status', 'combatProfile', 'claims', 'tags', 'suggestedFacts'] },
   { id: 'entity.monster.generate', operationClass: 'world_generation', tier: 'world', required: ['name'], optional: ['description', 'appearance', 'creatureType', 'size', 'alignment', 'challengeRating', 'abilityScores', 'defenses', 'equipment', 'spells', 'actions', 'tactics', 'ecology', 'lore', 'claims', 'tags', 'suggestedFacts'] },
@@ -302,14 +312,16 @@ for (const seed of seeds) {
     context: {
       allowedKeys: ['policy', 'campaign', 'canon', 'scene', 'turn', 'input', 'mechanics', 'workflow', 'priorResult'],
       inputTargetBytes: seed.targetBytes ?? (seed.tier === 'structured' ? 24_000 : 64_000),
+      inputHardLimitBytes: seed.hardLimitBytes ?? (seed.tier === 'structured' ? 64_000 : 256_000),
       requiredReferenceRevisions: [],
     },
     provider: {
       temperature: seed.temperature ?? (seed.tier === 'structured' ? 0.2 : 0.6),
+      thinkingLevel: seed.thinkingLevel ?? (seed.tier === 'structured' ? 'minimal' : (seed.tier === 'narrative' ? 'low' : 'medium')),
       maxOutputTokens: seed.maxOutputTokens ?? (seed.tier === 'structured' ? 4000 : 8000),
       timeoutMs: seed.tier === 'reasoning' ? 180_000 : 100_000,
-      maxAttempts: 2,
-      fallbackAllowed: true,
+      maxAttempts: seed.maxAttempts ?? 2,
+      fallbackAllowed: seed.fallbackAllowed ?? true,
       premiumAllowed: seed.operationClass === 'reasoning_high',
     },
     cache: {

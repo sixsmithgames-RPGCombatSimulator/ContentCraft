@@ -83,7 +83,7 @@ describe('operation-owned reference context', () => {
     expect(resolveOperationContext(next, operation).cacheKey).not.toBe(first.cacheKey);
   });
 
-  it('treats context targets as telemetry instead of hard prompt limits', () => {
+  it('keeps adaptive targets as telemetry and rejects the operation hard ceiling', () => {
     const req = request();
     req.references = {};
     req.context.input.value = { instruction: 'x'.repeat(80_000) };
@@ -91,10 +91,11 @@ describe('operation-owned reference context', () => {
     const target = resolveOperationContext(req, operation);
     expect(target.targetExceeded).toBe(true);
     expect(target.totalBytes).toBeGreaterThan(operation.context.inputTargetBytes);
+    expect(target.totalBytes).toBeLessThan(operation.context.inputHardLimitBytes);
 
     req.context.input.value = { instruction: 'x'.repeat(2_100_000) };
-    const large = resolveOperationContext(req, operation);
-    expect(large.targetExceeded).toBe(true);
-    expect(large.totalBytes).toBeGreaterThan(2_000_000);
+    expect(() => resolveOperationContext(req, operation)).toThrowError(expect.objectContaining({
+      code: 'LLM_CONTEXT_HARD_LIMIT_EXCEEDED',
+    }));
   });
 });

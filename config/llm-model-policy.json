@@ -1,7 +1,7 @@
 {
   "schemaVersion": "gma-gmc.model-policy/1",
-  "version": "2026-07-26.2",
-  "effectiveFrom": "2026-07-26T00:00:00.000Z",
+  "version": "2026-08-01.1",
+  "effectiveFrom": "2026-08-01T00:00:00.000Z",
   "providers": {
     "fake": {
       "enabled": true,
@@ -38,34 +38,38 @@
         "structured": {
           "env": "GEMINI_STRUCTURED_MODEL",
           "fallbackEnv": "GEMINI_MODEL",
-          "default": "gemini-3.1-flash-lite-preview",
-          "inputUsdPerMillion": null,
-          "outputUsdPerMillion": null,
-          "cachedInputUsdPerMillion": null
+          "default": "gemini-3.5-flash-lite",
+          "inputUsdPerMillion": 0.30,
+          "outputUsdPerMillion": 2.50,
+          "cachedInputUsdPerMillion": 0.03,
+          "reasoningTokensBilledSeparately": true
         },
         "narrative": {
           "env": "GEMINI_NARRATIVE_MODEL",
           "fallbackEnv": "GEMINI_MODEL",
-          "default": "gemini-3.1-flash-lite-preview",
-          "inputUsdPerMillion": null,
-          "outputUsdPerMillion": null,
-          "cachedInputUsdPerMillion": null
+          "default": "gemini-3.6-flash",
+          "inputUsdPerMillion": 1.50,
+          "outputUsdPerMillion": 7.50,
+          "cachedInputUsdPerMillion": 0.15,
+          "reasoningTokensBilledSeparately": true
         },
         "world": {
           "env": "GEMINI_WORLD_MODEL",
           "fallbackEnv": "GEMINI_MODEL",
-          "default": "gemini-3.1-flash-lite-preview",
-          "inputUsdPerMillion": null,
-          "outputUsdPerMillion": null,
-          "cachedInputUsdPerMillion": null
+          "default": "gemini-3.6-flash",
+          "inputUsdPerMillion": 1.50,
+          "outputUsdPerMillion": 7.50,
+          "cachedInputUsdPerMillion": 0.15,
+          "reasoningTokensBilledSeparately": true
         },
         "reasoning": {
           "env": "GEMINI_REASONING_MODEL",
           "fallbackEnv": "GEMINI_MODEL",
-          "default": "gemini-3.1-flash-lite-preview",
-          "inputUsdPerMillion": null,
-          "outputUsdPerMillion": null,
-          "cachedInputUsdPerMillion": null
+          "default": "gemini-3.6-flash",
+          "inputUsdPerMillion": 1.50,
+          "outputUsdPerMillion": 7.50,
+          "cachedInputUsdPerMillion": 0.15,
+          "reasoningTokensBilledSeparately": true
         }
       }
     },

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   buildNarrationEvidenceBundle,
@@ -892,6 +893,30 @@ describe('contradictionCandidates', () => {
 });
 
 describe('buildNarrationEvidenceBundle', () => {
+  it('uses semantic data requirements to retrieve practical canon without changing the player instruction fingerprint', () => {
+    const instruction = 'If it is possible, I use the alternate route.';
+    const result = buildNarrationEvidenceBundle({
+      campaignId: 'campaign-1',
+      instruction,
+      retrievalQueries: ['Flintwake cargo clearance and the below route'],
+      currentScene: { _id: 'scene-1', presentNpcIds: [] },
+      facts: [
+        { _id: 'fact-1', text: 'Flintwake cargo clearance permits use of the below route.' },
+        { _id: 'fact-2', text: 'The north orchard blooms in spring.' },
+      ],
+      items: [],
+      threads: [],
+      npcs: [],
+      locations: [],
+      factions: [],
+    });
+
+    expect(result.evidence.instructionFingerprint).toBe(createHash('sha256').update(instruction).digest('hex'));
+    expect(result.evidence.canon.facts).toEqual([
+      expect.objectContaining({ id: 'fact-1' }),
+    ]);
+  });
+
   it('returns compact query-specific evidence bound to the complete validation roster', () => {
     const npcs = [
       { _id: 'vesper', canonical_name: 'Old Vesper', aliases: ['Vesper'], details: { role: 'Watchmaker and covert route contact' } },

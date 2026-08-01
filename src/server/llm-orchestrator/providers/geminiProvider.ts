@@ -36,6 +36,14 @@ function providerMessage(payload: any, fallback: string) {
   return String(payload?.error?.message ?? payload?.message ?? fallback);
 }
 
+function providerSpendCap(message: string) {
+  return /\b(?:monthly|project(?:-level)?|billing(?: account)?)\b[^.\n]{0,100}\b(?:spend(?:ing)?|budget|quota|cap|limit)\b|\b(?:spend(?:ing)?|budget) cap\b/i.test(message);
+}
+
+function supportsSamplingTemperature(model: string) {
+  return !/^gemini-(?:3\.[5-9]|[4-9]\.)/i.test(model);
+}
+
 export class GeminiProviderAdapter implements LlmProviderAdapter {
   readonly id = 'gemini';
   readonly version = '1';
@@ -62,6 +70,17 @@ export class GeminiProviderAdapter implements LlmProviderAdapter {
     const onAbort = () => controller.abort();
     request.signal?.addEventListener('abort', onAbort, { once: true });
     try {
+      const generationConfig: Record<string, unknown> = {
+        responseMimeType: 'application/json',
+        responseJsonSchema: request.outputSchema,
+        maxOutputTokens: request.maxOutputTokens,
+      };
+      if (request.temperature !== undefined && supportsSamplingTemperature(request.model)) {
+        generationConfig.temperature = request.temperature;
+      }
+      if (request.thinkingLevel && /^gemini-3\./i.test(request.model)) {
+        generationConfig.thinkingConfig = { thinkingLevel: request.thinkingLevel };
+      }
       const response = await requestGeminiRaw({
         model: request.model,
         apiKey,
@@ -69,21 +88,18 @@ export class GeminiProviderAdapter implements LlmProviderAdapter {
         body: JSON.stringify({
             systemInstruction: { parts: [{ text: request.systemInstruction }] },
             contents: [{ role: 'user', parts: [{ text: JSON.stringify(request.input) }] }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              responseJsonSchema: request.outputSchema,
-              temperature: request.temperature,
-              maxOutputTokens: request.maxOutputTokens,
-            },
+            generationConfig,
           }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
+        const message = providerMessage(payload, `Provider request failed (${response.status}).`);
+        const spendCap = response.status === 429 && providerSpendCap(message);
         throw new OrchestratorError({
-          code: response.status === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_HTTP_ERROR',
+          code: spendCap ? 'PROVIDER_SPEND_CAP_EXCEEDED' : (response.status === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_HTTP_ERROR'),
           category: 'provider',
-          message: providerMessage(payload, `Provider request failed (${response.status}).`),
-          retryable: response.status === 408 || response.status === 429 || response.status >= 500,
+          message,
+          retryable: !spendCap && (response.status === 408 || response.status === 429 || response.status >= 500),
           status: response.status === 429 ? 429 : 502,
           source: 'provider.gemini',
           providerStatus: response.status,

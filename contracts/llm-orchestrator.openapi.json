@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "GameMasterCraft LLM Orchestrator API",
-    "version": "2026-07-28.7"
+    "version": "2026-08-01.1"
   },
   "paths": {
     "/api/gmc/v1/llm/contract": {

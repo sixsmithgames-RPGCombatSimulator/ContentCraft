@@ -61,4 +61,34 @@ describe('enabled provider adapter conformance', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.generationConfig.responseJsonSchema).toEqual(request.outputSchema);
   });
+
+  it('uses model-aware Gemini thinking and omits deprecated sampling parameters', async () => {
+    process.env.GEMINI_API_KEY = 'fixture-key';
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: '{"valid":true}' }] } }],
+      usageMetadata: { promptTokenCount: 7, candidatesTokenCount: 3, thoughtsTokenCount: 1 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await new GeminiProviderAdapter().generateStructured({
+      ...request,
+      model: 'gemini-3.6-flash',
+      temperature: 0.6,
+      thinkingLevel: 'low',
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.generationConfig.temperature).toBeUndefined();
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+  });
+
+  it('classifies a monthly spend cap as terminal instead of retryable rate limiting', async () => {
+    process.env.GEMINI_API_KEY = 'fixture-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: { message: 'The project monthly spending cap has been reached.' },
+    }), { status: 429, headers: { 'Content-Type': 'application/json' } })));
+    await expect(new GeminiProviderAdapter().generateStructured(request)).rejects.toMatchObject({
+      code: 'PROVIDER_SPEND_CAP_EXCEEDED',
+      retryable: false,
+      status: 429,
+    });
+  });
 });

@@ -65,9 +65,11 @@ llmOrchestratorRouter.post('/execute', async (req, res, next) => {
       ? 200
       : response.error?.code === 'IDEMPOTENCY_CONFLICT' || response.error?.code === 'OUTPUT_SCHEMA_VERSION_MISMATCH'
         ? 409
+        : response.error?.code === 'LLM_CONTEXT_HARD_LIMIT_EXCEEDED'
+          ? 413
         : response.error?.category === 'contract' || response.error?.category === 'policy' || response.error?.category === 'context'
           ? 400
-          : response.error?.code === 'PROVIDER_RATE_LIMIT'
+          : response.error?.code === 'PROVIDER_RATE_LIMIT' || response.error?.code === 'PROVIDER_SPEND_CAP_EXCEEDED'
             ? 429
             : 502;
     res.status(status).json(response);

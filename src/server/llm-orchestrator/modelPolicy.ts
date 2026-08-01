@@ -12,6 +12,7 @@ type ModelConfig = {
   inputUsdPerMillion: number | null;
   outputUsdPerMillion: number | null;
   cachedInputUsdPerMillion: number | null;
+  reasoningTokensBilledSeparately?: boolean;
 };
 
 type PolicyFile = {
@@ -100,10 +101,12 @@ export function priceUsage(usage: LlmUsage, route: {
     && (usage.cachedInputTokens === null || cachedRate !== null);
   const cached = usage.cachedInputTokens ?? 0;
   const uncachedInput = Math.max(0, (usage.inputTokens ?? 0) - cached);
+  const billedOutput = (usage.outputTokens ?? 0)
+    + (route.config.reasoningTokensBilledSeparately ? (usage.reasoningTokens ?? 0) : 0);
   const costUsd = canPrice
     ? ((uncachedInput * inputRate!)
       + (cached * (cachedRate ?? inputRate!))
-      + ((usage.outputTokens ?? 0) * outputRate!)) / 1_000_000
+      + (billedOutput * outputRate!)) / 1_000_000
     : null;
   return {
     ...usage,

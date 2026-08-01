@@ -84,6 +84,22 @@ export function resolveOperationContext(request: LlmRequestEnvelope, operation: 
   providerInput.constraints = request.constraints;
   providerInput.outputContract = request.outputSchema;
   const totalBytes = Buffer.byteLength(JSON.stringify(providerInput), 'utf8');
+  if (totalBytes > operation.context.inputHardLimitBytes) {
+    throw new OrchestratorError({
+      code: 'LLM_CONTEXT_HARD_LIMIT_EXCEEDED',
+      category: 'context',
+      message: `Operation '${operation.id}' requires focused context before it can call a model.`,
+      status: 413,
+      source: 'gmc.context-resolver',
+      details: {
+        operation: operation.id,
+        totalBytes,
+        inputTargetBytes: operation.context.inputTargetBytes,
+        inputHardLimitBytes: operation.context.inputHardLimitBytes,
+        bytesByLayer,
+      },
+    });
+  }
   const cacheMaterial = {
     registryVersion: OPERATION_REGISTRY_VERSION,
     operationVersion: operation.version,

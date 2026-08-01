@@ -58,11 +58,14 @@ export class OpenAiProviderAdapter implements LlmProviderAdapter {
       };
     } catch (error) {
       const status = Number((error as any)?.status ?? 0);
+      const message = error instanceof Error ? error.message : 'The alternate provider failed.';
+      const spendCap = status === 429
+        && /\b(?:monthly|project(?:-level)?|billing(?: account)?)\b[^.\n]{0,100}\b(?:spend(?:ing)?|budget|quota|cap|limit)\b|\b(?:spend(?:ing)?|budget) cap\b/i.test(message);
       throw new OrchestratorError({
-        code: status === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_TRANSPORT_ERROR',
+        code: spendCap ? 'PROVIDER_SPEND_CAP_EXCEEDED' : (status === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_TRANSPORT_ERROR'),
         category: 'provider',
-        message: error instanceof Error ? error.message : 'The alternate provider failed.',
-        retryable: status === 408 || status === 429 || status >= 500,
+        message,
+        retryable: !spendCap && (status === 408 || status === 429 || status >= 500),
         status: status === 429 ? 429 : 502,
         source: 'provider.openai',
         providerStatus: status || undefined,

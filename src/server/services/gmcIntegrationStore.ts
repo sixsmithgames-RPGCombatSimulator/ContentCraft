@@ -65,6 +65,36 @@ export async function listEntities(userId: string, campaignId: string, kind: Gmc
   return getCanonEntitiesCollection().find(filter).sort({ canonical_name: 1 }).limit(250).toArray();
 }
 
+/**
+ * Paginated integration feed for every campaign-owned combat actor.
+ * GMA uses the stable canonical ID cursor to mirror actors into VCS without
+ * relying on the 250-row management views. date_of_change: 2026-08-01
+ */
+export async function listActorSyncPage(
+  userId: string,
+  campaignId: string,
+  options: { after?: string; limit?: number } = {},
+) {
+  const limit = Math.max(1, Math.min(200, Math.floor(Number(options.limit ?? 100) || 100)));
+  const after = String(options.after ?? '').trim();
+  const filter: Record<string, unknown> = {
+    userId,
+    project_id: campaignId,
+    type: { $in: ['npc', 'monster'] },
+    status: { $ne: 'superseded' },
+    ...(after ? { _id: { $gt: after } } : {}),
+  };
+  const actors = await getCanonEntitiesCollection()
+    .find(filter)
+    .sort({ _id: 1 })
+    .limit(limit)
+    .toArray();
+  return {
+    actors,
+    nextCursor: actors.length === limit ? String(actors[actors.length - 1]?._id ?? '') || null : null,
+  };
+}
+
 export async function getEntity(userId: string, id: string, kind?: GmcEntityKind) {
   const filter: Record<string, unknown> = { _id: id, userId };
   if (kind) filter.type = kind;
@@ -1903,6 +1933,7 @@ export function buildNarrationEvidenceBundle(input: {
   campaignId: string;
   instruction: string;
   intentTags?: string[];
+  retrievalQueries?: string[];
   currentScene?: any;
   currentLocation?: any;
   gameClock?: any;
@@ -1948,7 +1979,10 @@ export function buildNarrationEvidenceBundle(input: {
   const presentNpcIds = new Set<string>(presenceContract.exactPresentNpcIds.map(String));
   const currentLocationId = String(input?.currentScene?.locationId ?? input?.currentLocation?._id ?? input?.currentLocation?.id ?? '') || null;
   const scoreContext = { currentLocationId, presentNpcIds, referencedIds };
-  const tokens = narrationEvidenceTokens(instruction);
+  const tokens = narrationEvidenceTokens([
+    instruction,
+    ...(Array.isArray(input?.retrievalQueries) ? input.retrievalQueries : []).slice(0, 16),
+  ].join('\n'));
   const ranked = (records: any[], limit: number) => records
     .map((record) => ({ record, score: narrationEvidenceScore(record, tokens, scoreContext) }))
     .filter((entry) => entry.score > 0)

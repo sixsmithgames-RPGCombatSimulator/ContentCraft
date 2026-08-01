@@ -93,6 +93,7 @@ describe('provider-neutral LLM orchestrator', () => {
       expect(entry.outputSchema.version).toBeTruthy();
       expect(entry.validators.length).toBeGreaterThan(0);
       expect(entry.authority.commit).toBe('proposal_only');
+      expect(entry.context.inputHardLimitBytes).toBeGreaterThan(entry.context.inputTargetBytes);
       const schema = entry.outputSchema.schema as any;
       for (const key of schema.required ?? []) {
         expect(Object.keys(schema.properties?.[key] ?? {}).length, `${entry.id}.${key}`).toBeGreaterThan(0);
@@ -177,11 +178,11 @@ describe('provider-neutral LLM orchestrator', () => {
     });
     expect(result.status).toBe('review_required');
     expect(result.validation[0]?.valid).toBe(false);
-    expect(provider.calls).toHaveLength(2);
+    expect(provider.calls).toHaveLength(1);
   });
 
   it('retries one invalid output with the same task and idempotency identity', async () => {
-    const req = request();
+    const req = request('ooc.respond', 'validation-retry');
     let call = 0;
     const provider = new FakeProviderAdapter(() => {
       call += 1;
@@ -352,7 +353,8 @@ describe('provider-neutral LLM orchestrator', () => {
   });
 
   it('falls back to the next conforming provider route after bounded retryable failures', async () => {
-    const req = request('experience.evaluate', 'fallback');
+    const req = request('ooc.respond', 'fallback');
+    req.constraints.allowProviderFallback = true;
     const failing = new FakeProviderAdapter(() => {
       throw new OrchestratorError({
         code: 'PROVIDER_RATE_LIMIT',
@@ -372,6 +374,31 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(result.route.fallbackUsed).toBe(true);
     expect(failing.calls).toHaveLength(2);
     expect(fallback.calls).toHaveLength(1);
+  });
+
+  it('does not retry or fall back after a provider spending cap', async () => {
+    const req = request('ooc.respond', 'spend-cap');
+    req.constraints.allowProviderFallback = true;
+    const capped = new FakeProviderAdapter(() => {
+      throw new OrchestratorError({
+        code: 'PROVIDER_SPEND_CAP_EXCEEDED',
+        category: 'provider',
+        message: 'The project monthly spending cap has been reached.',
+        retryable: false,
+        status: 429,
+      });
+    });
+    const fallback = new FakeProviderAdapter(() => outputFor(req.operation));
+    const result = await executeLlmOperation(req, {
+      userId: 'user-spend-cap',
+      store: new MemoryExecutionStore(),
+      providers: [capped, fallback],
+    });
+    expect(result.status).toBe('failed');
+    expect(result.error?.code).toBe('PROVIDER_SPEND_CAP_EXCEEDED');
+    expect(result.error?.retryable).toBe(false);
+    expect(capped.calls).toHaveLength(1);
+    expect(fallback.calls).toHaveLength(0);
   });
 
   it('does not return a generated proposal when durable completion fails', async () => {

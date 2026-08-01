@@ -1,4 +1,5 @@
 import type { LlmOperationClass, LlmUsage } from '../../shared/llm/orchestratorContracts.js';
+import type { ThinkingLevel } from './operationRegistry.js';
 
 export interface ProviderStructuredRequest {
   requestId: string;
@@ -8,7 +9,8 @@ export interface ProviderStructuredRequest {
   systemInstruction: string;
   input: unknown;
   outputSchema: Record<string, unknown>;
-  temperature: number;
+  temperature?: number;
+  thinkingLevel?: ThinkingLevel;
   maxOutputTokens: number;
   timeoutMs: number;
   signal?: AbortSignal;

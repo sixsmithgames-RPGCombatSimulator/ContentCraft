@@ -21,6 +21,7 @@ import {
   createThreadMutation,
   createQuestMutation,
   getEntity,
+  listActorSyncPage,
   listEntities,
   listFacts,
   listThreads,
@@ -45,7 +46,7 @@ import {
   resolveCharacterSheetReview,
 } from '../services/characterSheetReviewService.js';
 import { llmOrchestratorRouter } from '../llm-orchestrator/routes.js';
-import { executeLegacyOperation } from '../llm-orchestrator/orchestrator.js';
+import { executeLegacyOperation, executeLegacyOperationResult } from '../llm-orchestrator/orchestrator.js';
 import { getDurableUsageSnapshot, MongoExecutionStore } from '../llm-orchestrator/executionStore.js';
 import { OPERATION_REGISTRY_VERSION } from '../llm-orchestrator/operationRegistry.js';
 import { isMongoAvailable } from '../config/mongo.js';
@@ -768,6 +769,10 @@ gmcV1Router.post('/campaigns/:campaignId/narration/evidence', asyncRoute(async (
     campaignId: id,
     instruction,
     intentTags: Array.isArray(req.body?.intentTags) ? req.body.intentTags : [],
+    retrievalQueries: (Array.isArray(req.body?.dataRequirements) ? req.body.dataRequirements : [])
+      .map((requirement: any) => String(requirement?.query ?? '').trim())
+      .filter(Boolean)
+      .slice(0, 16),
     currentScene,
     currentLocation,
     gameClock: state?.gameClock ?? null,
@@ -1011,6 +1016,15 @@ registerEntityRoutes('item', 'items');
 registerEntityRoutes('object', 'objects');
 registerEntityRoutes('hazard', 'hazards');
 registerEntityRoutes('faction', 'factions');
+
+gmcV1Router.get('/campaigns/:campaignId/actors', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const page = await listActorSyncPage(userId(req), req.params.campaignId, {
+    after: String(req.query.after ?? ''),
+    limit: Number(req.query.limit ?? 100),
+  });
+  res.json(page);
+}));
 
 gmcV1Router.post('/campaigns/:campaignId/actors/ensure', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;
@@ -1258,15 +1272,32 @@ async function ai(req: Request, res: Response, instruction: string, requiredKeys
   }
   const bodyFingerprint = createHash('sha256').update(JSON.stringify(req.body ?? null)).digest('hex');
   const idempotencyKey = String(req.header('Idempotency-Key') || `${operation}:${bodyFingerprint}`);
-  const expand = () => executeLegacyOperation({
-    operation,
-    userId: userId(req),
-    correlationId: correlationId(req),
-    idempotencyKey: operation === 'campaign.foundation.build' ? `${idempotencyKey}:expand` : idempotencyKey,
-    body: req.body,
-    sourceRoute: `/api/gmc/v1/ai${req.path}`,
-    runtime: { systemInstruction: instruction, requiredKeys },
-  });
+  const expand = async () => {
+    const execution = await executeLegacyOperationResult({
+      operation,
+      userId: userId(req),
+      correlationId: correlationId(req),
+      idempotencyKey: operation === 'campaign.foundation.build' ? `${idempotencyKey}:expand` : idempotencyKey,
+      body: req.body,
+      sourceRoute: `/api/gmc/v1/ai${req.path}`,
+      runtime: { systemInstruction: instruction, requiredKeys },
+    });
+    const usageHeaders = {
+      'X-GMC-LLM-Input-Tokens': execution.usage.inputTokens,
+      'X-GMC-LLM-Output-Tokens': execution.usage.outputTokens,
+      'X-GMC-LLM-Reasoning-Tokens': execution.usage.reasoningTokens,
+      'X-GMC-LLM-Cached-Input-Tokens': execution.usage.cachedInputTokens,
+      'X-GMC-LLM-Cost-USD': execution.usage.costUsd,
+      'X-GMC-LLM-Model': execution.route.model,
+      'X-GMC-LLM-Provider': execution.route.provider,
+      'X-GMC-LLM-Attempts': execution.timing.attempts,
+      'X-GMC-LLM-Cache-Status': execution.cache.status,
+    };
+    for (const [name, value] of Object.entries(usageHeaders)) {
+      if (value !== null && value !== undefined) res.setHeader(name, String(value));
+    }
+    return execution.output;
+  };
   const output = operation === 'campaign.foundation.build'
     ? await executeGenerationWorkflow({
       userId: userId(req),
@@ -1335,7 +1366,9 @@ gmcV1Router.post('/tools/parse-json', asyncRoute(async (req, res) => {
   });
 }));
 
-gmcV1Router.post('/ai/classify-intent', asyncRoute((req, res) => ai(req, res, 'Classify the input. Return {intentType, confidence, structuredIntent, requiresVcs, requiresGameMasterCraft}. Allowed intentType values: narrative_action, mechanical_action, mixed_action, canon_query, rules_query, generation_request, prep_request, sync_request, correction, retcon, ooc_question, system_command.', ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'])));
+gmcV1Router.post('/ai/classify-intent', asyncRoute((req, res) => ai(req, res, `Interpret the input as a compact action graph; do not narrate, adjudicate, invent canon, choose outcomes, or mutate state.
+Return {intentType,confidence,structuredIntent,requiresVcs,requiresGameMasterCraft,actionPlan?,ambiguities?,dataRequirements?}. Allowed intentType values: narrative_action, mechanical_action, mixed_action, canon_query, rules_query, generation_request, prep_request, sync_request, correction, retcon, ooc_question, system_command.
+Preserve action order, dependencies, alternatives, and fallback conditions. A conditional action must name its condition and the prior action whose success, failure, acceptance, decline, or impossibility controls it. Ask for clarification only when different reasonable interpretations would cause materially different writes, mechanics, or irreversible fiction. Prefer a supplied retained merchant offer or scene frame over asking the player to repeat context. Keep summaries concise and use exact sourceQuote phrases from the player's instruction.`, ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'])));
 gmcV1Router.post('/ai/generate-narration', asyncRoute((req, res) => ai(
   req,
   res,
