@@ -34,6 +34,11 @@ export type CanonBase = {
   features?: string[];
   // NPC details
   npc_details?: {
+    display_label?: string;
+    profession?: string;
+    title?: string;
+    narrative_depth?: 'surface' | 'developed' | 'major';
+    mechanical_depth?: 'none' | 'template' | 'combat_ready' | 'full';
     physical_appearance?: string;
     personality_traits?: string[];
     identifying_features?: string[];
@@ -288,6 +293,58 @@ function NPCFields({ entity, setEntity }: { entity: CanonBase; setEntity: (e: Ca
 
   return (
     <Section title="NPC Details">
+      <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+        Canonical Name is the individual's private, stable identity. Use Player-facing Label for what the party currently knows, such as “dockside enforcer.” Profession is their ordinary job; Title is a rank or honorific. Class &amp; Levels is reserved for actual game mechanics.
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field label="Player-facing Label">
+          <input
+            type="text"
+            value={npc.display_label || ''}
+            onChange={(e) => updateNPC('display_label', e.target.value)}
+            className="input w-full"
+            placeholder="e.g., dockside enforcer"
+          />
+        </Field>
+        <Field label="Profession / Job">
+          <input
+            type="text"
+            value={npc.profession || ''}
+            onChange={(e) => updateNPC('profession', e.target.value)}
+            className="input w-full"
+            placeholder="e.g., dockworker"
+          />
+        </Field>
+        <Field label="Title / Rank">
+          <input
+            type="text"
+            value={npc.title || ''}
+            onChange={(e) => updateNPC('title', e.target.value)}
+            className="input w-full"
+            placeholder="e.g., Watch Captain"
+          />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field label="Narrative Detail">
+          <select value={npc.narrative_depth || 'surface'} onChange={(e) => updateNPC('narrative_depth', e.target.value as NonNullable<CanonBase['npc_details']>['narrative_depth'])} className="input w-full">
+            <option value="surface">Surface — scene-ready essentials</option>
+            <option value="developed">Developed — recurring interaction</option>
+            <option value="major">Major — full story role</option>
+          </select>
+        </Field>
+        <Field label="Mechanical Detail">
+          <select value={npc.mechanical_depth || 'none'} onChange={(e) => updateNPC('mechanical_depth', e.target.value as NonNullable<CanonBase['npc_details']>['mechanical_depth'])} className="input w-full">
+            <option value="none">None — narrative only</option>
+            <option value="template">Template — lightweight checks</option>
+            <option value="combat_ready">Combat ready</option>
+            <option value="full">Full character mechanics</option>
+          </select>
+        </Field>
+      </div>
+
       <Field label="Physical Appearance">
         <textarea
           value={npc.physical_appearance || ''}
@@ -343,7 +400,7 @@ function NPCFields({ entity, setEntity }: { entity: CanonBase; setEntity: (e: Ca
       </Field>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Class & Levels">
+        <Field label="Actual Class & Levels">
           <input
             type="text"
             value={npc.class_levels || ''}
@@ -351,6 +408,7 @@ function NPCFields({ entity, setEntity }: { entity: CanonBase; setEntity: (e: Ca
             placeholder="e.g., Fighter 5/Wizard 3"
             className="input w-full"
           />
+          <p className="mt-1 text-xs text-gray-500">Leave blank when the title is only a job or social rank.</p>
         </Field>
 
         <Field label="Hit Points">

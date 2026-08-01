@@ -7,6 +7,13 @@ import {
   canonicalMutationDocumentId,
   insertCanonicalMutation,
 } from './canonicalMutation.js';
+import {
+  NPC_IDENTITY_CONTRACT_VERSION,
+  assessNpcIdentity,
+  maxNpcMechanicalDepth,
+  maxNpcNarrativeDepth,
+  normalizeNpcIdentitySeed,
+} from './npcIdentity.js';
 
 const now = () => new Date();
 
@@ -21,8 +28,8 @@ export const QUEST_TYPES = ['main', 'side'] as const;
 export const QUEST_STATUSES = ['active', 'paused', 'completed', 'failed', 'abandoned'] as const;
 export const QUEST_LOG_CONTRACT_VERSION = '2026-07-24.1';
 export const CAMPAIGN_MEMORY_CONTRACT_VERSION = '2026-07-24.1';
-export const WORLD_GENERATION_POLICY_VERSION = '2026-07-21.1';
-export const SCENE_TRANSITION_CONTRACT_VERSION = '2026-07-21.1';
+export const WORLD_GENERATION_POLICY_VERSION = '2026-08-01.1';
+export const SCENE_TRANSITION_CONTRACT_VERSION = '2026-08-01.1';
 export const NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-07-24.1';
 
 function includes<T extends readonly string[]>(values: T, value: unknown): value is T[number] {
@@ -235,13 +242,29 @@ export async function upsertCanonicalActor(
   generation: Record<string, any>,
   existingId?: string,
 ) {
-  const name = String(actor.name ?? '').trim();
-  if (!name) throw new Error('name is required');
+  const proposedName = String(actor.name ?? '').trim();
+  if (!proposedName) throw new Error('name is required');
   const existing = await findActorEntity(userId, campaignId, kind, {
     canonicalEntityId: existingId,
-    name,
+    name: proposedName,
     aliases: Array.isArray(actor.aliases) ? actor.aliases : [],
   });
+  const normalizedSeed = kind === 'npc'
+    ? normalizeNpcIdentitySeed(actor, {
+      campaignId,
+      mutationId: String(generation.workflowId ?? generation.idempotencyKey ?? `${generation.source ?? 'actor'}:${proposedName}`),
+      source: String(generation.source ?? 'gmc-actor-workflow'),
+    })
+    : null;
+  const name = String(existing?.canonical_name ?? normalizedSeed?.name ?? proposedName).trim();
+  const normalizedActor = {
+    ...actor,
+    name,
+    aliases: [...new Set([
+      ...(Array.isArray(actor.aliases) ? actor.aliases : []),
+      ...(Array.isArray(normalizedSeed?.aliases) ? normalizedSeed.aliases : []),
+    ].map((value) => String(value).trim()).filter(Boolean))],
+  };
   if (
     existing
     && generation.workflowId
@@ -249,7 +272,17 @@ export async function upsertCanonicalActor(
     && (existing as any).details?.profileCompleteness === 'full'
   ) return existing;
   const timestamp = now();
-  const profileCompleteness = generation.profileCompleteness === 'combat_ready' ? 'combat_ready' : 'full';
+  const requestedNarrativeDepth = generation.narrativeDepth
+    ?? normalizedSeed?.details?.narrativeDepth
+    ?? (generation.profileCompleteness === 'full' ? 'major' : 'surface');
+  const requestedMechanicalDepth = generation.mechanicalDepth
+    ?? normalizedSeed?.details?.mechanicalDepth
+    ?? (generation.profileCompleteness === 'combat_ready' ? 'combat_ready' : 'full');
+  const narrativeDepth = maxNpcNarrativeDepth((existing as any)?.details?.narrativeDepth, requestedNarrativeDepth);
+  const mechanicalDepth = maxNpcMechanicalDepth((existing as any)?.details?.mechanicalDepth, requestedMechanicalDepth);
+  const profileCompleteness = mechanicalDepth === 'full'
+    ? 'full'
+    : mechanicalDepth === 'combat_ready' ? 'combat_ready' : mechanicalDepth;
   const schemaVersion = String(
     generation.schemaVersion
       ?? (profileCompleteness === 'combat_ready' ? `${kind}/combat-ready/1.0` : (kind === 'npc' ? 'npc/1.1' : 'monster/1.0')),
@@ -266,7 +299,7 @@ export async function upsertCanonicalActor(
     const previousDetails = objectRecord((existing as any).details);
     const aliases = Array.from(new Set([
       ...((Array.isArray((existing as any).aliases) ? (existing as any).aliases : []) as string[]),
-      ...((Array.isArray(actor.aliases) ? actor.aliases : []) as string[]),
+      ...((Array.isArray(normalizedActor.aliases) ? normalizedActor.aliases : []) as string[]),
     ].map((value) => String(value).trim()).filter(Boolean)));
     return getCanonEntitiesCollection().findOneAndUpdate(
       { _id: (existing as any)._id, userId, type: kind },
@@ -276,8 +309,20 @@ export async function upsertCanonicalActor(
           aliases,
           details: {
             ...previousDetails,
-            actorProfile: actor,
+            actorProfile: normalizedActor,
             profileCompleteness,
+            narrativeDepth,
+            mechanicalDepth,
+            profileLifecycle: {
+              ...objectRecord(previousDetails.profileLifecycle),
+              contractVersion: NPC_IDENTITY_CONTRACT_VERSION,
+              narrativeDepth,
+              mechanicalDepth,
+            },
+            ...(normalizedSeed?.details?.identity ? { identity: normalizedSeed.details.identity } : {}),
+            ...(normalizedSeed?.details?.displayLabel ? { displayLabel: normalizedSeed.details.displayLabel } : {}),
+            ...(normalizedSeed?.details?.profession ? { profession: normalizedSeed.details.profession } : {}),
+            ...(normalizedSeed?.details?.mechanicalTitleBasis ? { mechanicalTitleBasis: normalizedSeed.details.mechanicalTitleBasis } : {}),
             schemaVersion,
             generation: { ...generation, completedAt: timestamp },
           },
@@ -301,7 +346,7 @@ export async function upsertCanonicalActor(
     project_id: campaignId,
     type: kind,
     canonical_name: name,
-    aliases: Array.isArray(actor.aliases) ? actor.aliases : [],
+    aliases: Array.isArray(normalizedActor.aliases) ? normalizedActor.aliases : [],
     claims: [],
     relationships: [],
     tags: ['actor', kind, profileCompleteness === 'full' ? 'workflow-generated' : 'encounter-ready'],
@@ -310,8 +355,19 @@ export async function upsertCanonicalActor(
     revision: 1,
     schema_version: schemaVersion,
     details: {
-      actorProfile: actor,
+      actorProfile: normalizedActor,
       profileCompleteness,
+      narrativeDepth,
+      mechanicalDepth,
+      profileLifecycle: {
+        contractVersion: NPC_IDENTITY_CONTRACT_VERSION,
+        narrativeDepth,
+        mechanicalDepth,
+      },
+      ...(normalizedSeed?.details?.identity ? { identity: normalizedSeed.details.identity } : {}),
+      ...(normalizedSeed?.details?.displayLabel ? { displayLabel: normalizedSeed.details.displayLabel } : {}),
+      ...(normalizedSeed?.details?.profession ? { profession: normalizedSeed.details.profession } : {}),
+      ...(normalizedSeed?.details?.mechanicalTitleBasis ? { mechanicalTitleBasis: normalizedSeed.details.mechanicalTitleBasis } : {}),
       schemaVersion,
       generation: { ...generation, completedAt: timestamp },
       ...(kind === 'npc' ? { entityTier: 'contact' } : {}),
@@ -332,7 +388,14 @@ export async function upsertCanonicalActor(
 }
 
 export async function createEntityMutation(userId: string, campaignId: string, kind: GmcEntityKind, input: Record<string, any>) {
-  const { mutationId, ...inputData } = input;
+  const { mutationId, ...rawInputData } = input;
+  const inputData = kind === 'npc'
+    ? normalizeNpcIdentitySeed(rawInputData, {
+      campaignId,
+      mutationId: String(mutationId ?? ''),
+      source: String(rawInputData?.source?.kind ?? rawInputData?.source ?? 'gmc-entity-create'),
+    })
+    : rawInputData;
   const name = String(inputData.name || inputData.canonical_name || '').trim();
   if (!name) throw new Error('name is required');
   const aliases = Array.isArray(inputData.aliases) ? inputData.aliases : [];
@@ -435,6 +498,16 @@ export async function createEntity(userId: string, campaignId: string, kind: Gmc
 
 export async function updateEntity(userId: string, id: string, kind: GmcEntityKind, input: Record<string, any>) {
   const allowed: Record<string, unknown> = {};
+  if (kind === 'npc' && input.name !== undefined) {
+    const assessment = assessNpcIdentity(input.name);
+    if (assessment.kind === 'role_descriptor' || assessment.kind === 'group_label') {
+      throw Object.assign(new Error('Canonical NPC name must identify one person. Put jobs and visual descriptions in profession, title, role, or displayLabel.'), {
+        status: 422,
+        code: 'NPC_CANONICAL_NAME_INVALID',
+        details: { proposedName: String(input.name ?? ''), assessment, contractVersion: NPC_IDENTITY_CONTRACT_VERSION },
+      });
+    }
+  }
   if (
     UNIQUE_CANONICAL_IDENTITY_KINDS.has(kind)
     && (input.name !== undefined || input.aliases !== undefined || input.status === 'active')
@@ -490,7 +563,7 @@ export async function updateEntity(userId: string, id: string, kind: GmcEntityKi
   allowed.updated_at = now();
   return getCanonEntitiesCollection().findOneAndUpdate(
     { _id: id, userId, type: kind },
-    { $set: allowed },
+    { $set: allowed, $inc: { revision: 1 } },
     { returnDocument: 'after' }
   );
 }
@@ -959,7 +1032,7 @@ export function classifyWorldGenerationIntent(instruction: string) {
   const departure = /\b(?:leave|depart|head\s+out|set\s+out|go(?:es|ing)?|went|walk|travel|ride|sail|move\s+on)\b/i.test(text);
   const openEnded = (generativeAction && indefiniteTarget) || (explicitCreationAction && !establishedOnly);
   const allowedEntityTypes: MemoryReferenceKind[] = [];
-  if (openEnded && /\b(?:someone|somebody|persons?|people|npcs?|characters?|marks?|targets?|contacts?|patrons?|customers?|merchants?|guides?|hires?|recruits?|witnesses?|victims?|opponents?|allies|companions?)\b/i.test(text)) allowedEntityTypes.push('npc');
+  if (openEnded && /\b(?:someone|somebody|persons?|people|npcs?|characters?|marks?|targets?|contacts?|patrons?|customers?|merchants?|traders?|shopkeepers?|guides?|hires?|recruits?|guards?|watchm(?:an|en)|sentries|soldiers?|sailors?|dockworkers?|workers?|servants?|messengers?|couriers?|witnesses?|victims?|opponents?|allies|companions?)\b/i.test(text)) allowedEntityTypes.push('npc');
   if (openEnded && !canonicalLocationCue && (departure || /\b(?:somewhere|places?|areas?|locations?|destinations?|districts?|wards?|streets?|lanes?|alleys?|markets?|inns?|taverns?|boarding houses?|residences?|homes?|houses?|shops?|stores?|workshops?|rooms?|buildings?|facilities?|courts?|offices?|temples?|chapels?|healers?|clinics?|towers?|guild halls?|entertainment (?:places?|venues?)|theaters?|warehouses?|boundaries|routes?|neighbou?rhoods?)\b/i.test(text))) allowedEntityTypes.push('location');
   if (openEnded && /\b(?:things?|items?|objects?|weapons?|armou?r|keys?|books?|letters?|devices?|tools?|potions?|rings?|amulets?|components?|reagents?|clues?|evidence)\b/i.test(text)) allowedEntityTypes.push('item');
   if (openEnded && /\b(?:factions?|guilds?\b(?!\s+halls?)|watch\b(?!\s+facilit)|orders?|cults?|churches?|companies|gangs?|crews?|families|clans?|organizations?|groups?)\b/i.test(text)) allowedEntityTypes.push('faction');
@@ -1059,6 +1132,165 @@ const NPC_LOCATION_RELATIONSHIP = /\b(?:associated|current|destination|home|hous
 
 function isNpcLocationRelationship(value: unknown) {
   return NPC_LOCATION_RELATIONSHIP.test(String(value ?? '').replace(/[_-]+/g, ' '));
+}
+
+const NPC_PROFILE_PATCH_FIELDS = new Set([
+  'appearance', 'background', 'description', 'goals', 'hooks', 'ideals', 'flaws', 'motivations', 'personality',
+  'personality_traits', 'voice', 'voice_mannerisms', 'fears', 'quirks', 'relationshipToProtagonist', 'affiliation',
+  'location', 'profession', 'occupation', 'role', 'title', 'identifying_features',
+]);
+
+/**
+ * Monotonic NPC profile promotion. This records only facts supplied by an
+ * already-authorized caller and never generates or replaces identity. Deeper
+ * material can be added later without forcing a complete actor workflow.
+ */
+export async function promoteNpcProfile(
+  userId: string,
+  campaignId: string,
+  npcId: string,
+  input: Record<string, any>,
+) {
+  const current = await getCanonEntitiesCollection().findOne({
+    _id: npcId,
+    userId,
+    project_id: campaignId,
+    type: 'npc',
+    status: { $ne: 'superseded' },
+  });
+  if (!current) return null;
+  const expectedRevision = Number(input.expectedRevision);
+  const currentRevision = Math.max(1, Number((current as any).revision ?? 1));
+  if (Number.isFinite(expectedRevision) && expectedRevision !== currentRevision) {
+    throw Object.assign(new Error('This NPC changed before the profile update could be applied.'), {
+      status: 409,
+      code: 'NPC_PROFILE_REVISION_CONFLICT',
+      details: { npcId, expectedRevision, currentRevision },
+    });
+  }
+  const currentDetails = objectRecord((current as any).details);
+  const patchSource = objectRecord(input.detailsPatch ?? input.details);
+  const detailsPatch = Object.fromEntries(Object.entries(patchSource).filter(([key]) => NPC_PROFILE_PATCH_FIELDS.has(key)));
+  const narrativeDepth = maxNpcNarrativeDepth(
+    currentDetails.narrativeDepth ?? currentDetails.profileLifecycle?.narrativeDepth,
+    input.narrativeDepth ?? input.targetNarrativeDepth,
+  );
+  const mechanicalDepth = maxNpcMechanicalDepth(
+    currentDetails.mechanicalDepth ?? currentDetails.profileLifecycle?.mechanicalDepth,
+    input.mechanicalDepth ?? input.targetMechanicalDepth,
+  );
+  const priorNarrativeDepth = maxNpcNarrativeDepth(currentDetails.narrativeDepth ?? currentDetails.profileLifecycle?.narrativeDepth, 'surface');
+  const priorMechanicalDepth = maxNpcMechanicalDepth(currentDetails.mechanicalDepth ?? currentDetails.profileLifecycle?.mechanicalDepth, 'none');
+  if (!Object.keys(detailsPatch).length && narrativeDepth === priorNarrativeDepth && mechanicalDepth === priorMechanicalDepth) return current;
+  const timestamp = now();
+  const nextRevision = currentRevision + 1;
+  const lifecycleEvent = {
+    at: timestamp,
+    action: 'profile_promoted',
+    narrativeDepth,
+    mechanicalDepth,
+    source: String(input.source ?? 'gmc-profile-contract'),
+    reason: String(input.reason ?? '').slice(0, 1_000) || null,
+    correlationId: String(input.correlationId ?? '').slice(0, 240) || null,
+  };
+  return getCanonEntitiesCollection().findOneAndUpdate(
+    {
+      _id: npcId,
+      userId,
+      project_id: campaignId,
+      type: 'npc',
+      ...((current as any).revision === undefined
+        ? { revision: { $exists: false } }
+        : { revision: (current as any).revision }),
+    },
+    {
+      $set: {
+        details: {
+          ...currentDetails,
+          ...detailsPatch,
+          narrativeDepth,
+          mechanicalDepth,
+          profileLifecycle: {
+            ...objectRecord(currentDetails.profileLifecycle),
+            contractVersion: NPC_IDENTITY_CONTRACT_VERSION,
+            narrativeDepth,
+            mechanicalDepth,
+            lastPromotedAt: timestamp,
+          },
+        },
+        revision: nextRevision,
+        version: `1.0.${nextRevision - 1}`,
+        updated_at: timestamp,
+      },
+      $push: { audit_trail: { $each: [lifecycleEvent], $slice: -100 } } as any,
+    },
+    { returnDocument: 'after' },
+  );
+}
+
+export async function supersedeNpcIdentity(
+  userId: string,
+  campaignId: string,
+  npcId: string,
+  input: Record<string, any>,
+) {
+  const targetId = String(input.mergedIntoEntityId ?? '').trim();
+  let source = await getCanonEntitiesCollection().findOne({ _id: npcId, userId, project_id: campaignId, type: 'npc' });
+  if (!source) return null;
+  const timestamp = now();
+  if (targetId) {
+    const target = await getCanonEntitiesCollection().findOne({ _id: targetId, userId, project_id: campaignId, type: 'npc', status: { $ne: 'superseded' } });
+    if (!target) throw Object.assign(new Error('The intended surviving NPC identity could not be found.'), { status: 404, code: 'NPC_MERGE_TARGET_NOT_FOUND' });
+    if ((source as any).status !== 'superseded') {
+      source = await getCanonEntitiesCollection().findOneAndUpdate(
+        { _id: npcId, userId, project_id: campaignId, type: 'npc', status: { $ne: 'superseded' } },
+        {
+          $set: {
+            status: 'superseded',
+            'details.mergedIntoEntityId': targetId,
+            'details.supersededAt': timestamp,
+            'details.supersedeReason': String(input.reason ?? 'NPC identity cleanup').slice(0, 2_000),
+            updated_at: timestamp,
+          },
+          $unset: { canonicalIdentityKey: '' },
+          $inc: { revision: 1 },
+          $push: { audit_trail: { at: timestamp, action: 'identity_superseded', mergedIntoEntityId: targetId, source: String(input.source ?? 'gmc-npc-identity-migration') } } as any,
+        },
+        { returnDocument: 'after' },
+      ) ?? source;
+    }
+    const existingAliases = Array.isArray((target as any).aliases) ? (target as any).aliases.map((value: unknown) => String(value).trim()).filter(Boolean) : [];
+    const aliases = [...new Set([
+      ...existingAliases,
+      String((source as any).canonical_name ?? ''),
+      ...(Array.isArray((source as any).aliases) ? (source as any).aliases : []),
+    ].map((value) => String(value).trim()).filter(Boolean))];
+    await assertCanonicalEntityIdentityAvailable({ userId, campaignId, kind: 'npc', identities: [String((target as any).canonical_name), ...aliases], excludeId: targetId });
+    if (aliases.length !== existingAliases.length || aliases.some((alias) => !existingAliases.includes(alias))) {
+      await getCanonEntitiesCollection().updateOne(
+        { _id: targetId, userId, project_id: campaignId, type: 'npc' },
+        { $set: { aliases, updated_at: timestamp }, $inc: { revision: 1 } },
+      );
+    }
+    return source;
+  }
+  if ((source as any).status === 'superseded') return source;
+  return getCanonEntitiesCollection().findOneAndUpdate(
+    { _id: npcId, userId, project_id: campaignId, type: 'npc' },
+    {
+      $set: {
+        status: 'superseded',
+        'details.mergedIntoEntityId': targetId || null,
+        'details.supersededAt': timestamp,
+        'details.supersedeReason': String(input.reason ?? 'NPC identity cleanup').slice(0, 2_000),
+        updated_at: timestamp,
+      },
+      $unset: { canonicalIdentityKey: '' },
+      $inc: { revision: 1 },
+      $push: { audit_trail: { at: timestamp, action: 'identity_superseded', mergedIntoEntityId: targetId || null, source: String(input.source ?? 'gmc-npc-identity-migration') } } as any,
+    },
+    { returnDocument: 'after' },
+  );
 }
 
 function recordId(value: any) {
@@ -2381,10 +2613,10 @@ function normalizeGeneratedSceneEntityPlan(
 ) {
   const entityType = String(raw?.entityType ?? '').trim().toLowerCase() as GeneratedSceneEntityKind;
   const mutationId = String(raw?.mutationId ?? '').trim();
-  const name = String(raw?.name ?? raw?.payload?.name ?? '').trim();
-  if (!['npc', 'location'].includes(entityType) || !mutationId || mutationId.length > 240 || !name || name.length > 200) {
+  const proposedName = String(raw?.name ?? raw?.payload?.name ?? '').trim();
+  if (!['npc', 'location'].includes(entityType) || !mutationId || mutationId.length > 240 || !proposedName || proposedName.length > 200) {
     throw Object.assign(new Error('Generated scene entities require entityType npc|location, mutationId, and a bounded canonical name.'), {
-      status: 409, code: 'SCENE_GENERATED_ENTITY_INVALID', details: { entityType, mutationId: mutationId || null, name: name || null },
+      status: 409, code: 'SCENE_GENERATED_ENTITY_INVALID', details: { entityType, mutationId: mutationId || null, name: proposedName || null },
     });
   }
   if (generationPolicy.mode !== 'world_generation_allowed' || !generationPolicy.allowedEntityTypes.includes(entityType)) {
@@ -2395,7 +2627,16 @@ function normalizeGeneratedSceneEntityPlan(
   // A normalized preview is intentionally valid input to the commit-time
   // resolver. This makes the preview/commit boundary replayable instead of
   // asking either GMA or GMC to reinterpret the model's original proposal.
-  const payload = objectRecord(raw?.payload ?? raw?.input);
+  const originalPayload = objectRecord(raw?.payload ?? raw?.input);
+  const normalizedNpc = entityType === 'npc'
+    ? normalizeNpcIdentitySeed({ ...originalPayload, ...raw, name: proposedName, details: objectRecord(originalPayload.details ?? raw?.details) }, {
+      campaignId,
+      mutationId,
+      source: 'gmc-scene-transition',
+    })
+    : null;
+  const payload = normalizedNpc ?? originalPayload;
+  const name = String(normalizedNpc?.name ?? proposedName).trim();
   const aliases = (Array.isArray(payload.aliases ?? raw?.aliases) ? (payload.aliases ?? raw.aliases) : [])
     .map(String).map((value: string) => value.trim()).filter(Boolean).slice(0, 20);
   const tags = (Array.isArray(payload.tags ?? raw?.tags) ? (payload.tags ?? raw.tags) : [])
@@ -2405,7 +2646,7 @@ function normalizeGeneratedSceneEntityPlan(
   const entityTier = includes(ENTITY_SCOPE_TIERS, raw?.entityTier ?? payload.entityTier) ? String(raw?.entityTier ?? payload.entityTier) : 'contact';
   const geographicTier = includes(GEOGRAPHIC_SCOPE_TIERS, raw?.geographicTier ?? payload.geographicTier) ? String(raw?.geographicTier ?? payload.geographicTier) : 'site';
   const parentLocationId = raw?.parentLocationId ?? payload.parentLocationId ?? null;
-  const descriptiveDetails = Object.fromEntries(['description', 'role', 'appearance', 'personality', 'occupation', 'address', 'notes']
+  const descriptiveDetails = Object.fromEntries(['description', 'role', 'appearance', 'personality', 'profession', 'occupation', 'title', 'displayLabel', 'address', 'notes']
     .flatMap((key) => {
       const value = payload[key];
       if (typeof value !== 'string' || !value.trim()) return [];
@@ -2500,7 +2741,12 @@ export function resolveSceneTransitionContract(input: {
     String(input.userId), String(input.campaignId), entity, generationPolicy,
   ));
   for (const staged of stagedEntities) {
-    const existing = exactEntityIdentityMatches(staged.name, staged.entityType === 'npc' ? (input?.npcs ?? []) : (input?.locations ?? []));
+    const canonRecords = staged.entityType === 'npc' ? (input?.npcs ?? []) : (input?.locations ?? []);
+    const existing = [...new Map(
+      [staged.name, ...(staged.previewRecord?.aliases ?? [])]
+        .flatMap((identity) => exactEntityIdentityMatches(identity, canonRecords))
+        .map((entry: any) => [String(entry?._id ?? entry?.id), entry]),
+    ).values()];
     if (existing.length) {
       throw Object.assign(new Error(`The proposed new ${staged.entityType} “${staged.name}” already matches canonical GMC data. Use the existing record instead of creating a duplicate.`), {
         status: 409, code: 'SCENE_GENERATED_ENTITY_ALREADY_EXISTS', details: { entityType: staged.entityType, name: staged.name, existingIds: existing.map((entry: any) => String(entry?._id ?? entry?.id)) },

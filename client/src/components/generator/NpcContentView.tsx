@@ -259,6 +259,8 @@ const NpcContentView: FC<NpcContentViewProps> = ({ npc }) => {
       <header className="border-b border-gray-200 pb-4">
         <h2 className="text-2xl font-bold text-gray-900">{npc.name}</h2>
         <div className="mt-2 space-y-1 text-sm text-gray-600">
+          {npc.displayLabel && npc.displayLabel !== npc.name && <p>Player-facing label: {npc.displayLabel}</p>}
+          {npc.profession && <p>Profession: {npc.profession}</p>}
           {npc.title && <p>Title: {npc.title}</p>}
           {npc.role && <p>Role: {npc.role}</p>}
           {npc.race && <p>Race: {npc.race}</p>}
@@ -269,6 +271,8 @@ const NpcContentView: FC<NpcContentViewProps> = ({ npc }) => {
           {npc.region && <p>Region: {npc.region}</p>}
           {npc.challengeRating && <p>Challenge Rating: {npc.challengeRating}</p>}
           {npc.experiencePoints !== undefined && <p>XP: {npc.experiencePoints}</p>}
+          {npc.narrativeDepth && <p>Narrative detail: {npc.narrativeDepth}</p>}
+          {npc.mechanicalDepth && <p>Mechanical detail: {npc.mechanicalDepth}</p>}
           {npc.schemaVersion && <p>Schema Version: {npc.schemaVersion}</p>}
         </div>
       </header>

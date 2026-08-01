@@ -794,6 +794,25 @@ describe('resolveSceneTransitionContract', () => {
     expect(replay.presenceContract.revision).toBe(contract.presenceContract.revision);
   });
 
+  it('refuses to recreate an existing NPC when the staged player-facing label is already a canonical alias', () => {
+    expect(() => resolveSceneTransitionContract({
+      userId: 'player-1',
+      campaignId: 'campaign-1',
+      currentContract,
+      currentScene: { _id: 'bent-nail-scene', locationId: 'bent-nail', presentNpcIds: ['mara'] },
+      locations,
+      npcs: [...npcs, { _id: 'jessa', canonical_name: 'Jessa Marr', aliases: ['Waxed-coat Guard'], status: 'active' }],
+      instruction: 'I go looking for a new guard to question.',
+      where: 'The Bent Nail',
+      who: ['Kerrigan Brynn', 'Waxed-coat Guard'],
+      playerCharacterNames: ['Kerrigan Brynn'],
+      generatedEntities: [{
+        entityType: 'npc', mutationId: 'scene-npc:waxed-guard', name: 'Waxed-coat Guard',
+        payload: { displayLabel: 'Waxed-coat Guard', profession: 'guard' },
+      }],
+    })).toThrowError(expect.objectContaining({ code: 'SCENE_GENERATED_ENTITY_ALREADY_EXISTS' }));
+  });
+
   it('uses the same quest-bound generation policy as memory resolution', () => {
     const instruction = 'I leave and continue onward to find Lordling Caspian Rheel in the better quarters.';
     const gameClock = { day: 4, hour: 12, minute: 20 };

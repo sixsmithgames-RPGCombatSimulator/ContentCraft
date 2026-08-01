@@ -214,9 +214,9 @@ const STAGE_DEFINITIONS: Record<string, StageDefinition> = {
     retrievalPolicy: 'hints_allowed',
     retryPolicy: DEFAULT_RETRY_POLICY,
     contract: {
-      outputAllowedKeys: ['name', 'title', 'description', 'appearance', 'background', 'species', 'race', 'alignment', 'class_levels', 'location', 'affiliation'],
+      outputAllowedKeys: ['name', 'display_label', 'title', 'profession', 'description', 'appearance', 'background', 'species', 'race', 'alignment', 'class_levels', 'narrative_depth', 'mechanical_depth', 'mechanical_title_basis', 'location', 'affiliation'],
       requiredKeys: ['name', 'description', 'appearance', 'background', 'species', 'alignment', 'class_levels'],
-      proxyAllowedKeys: ['name', 'title', 'description', 'appearance', 'background', 'species', 'race', 'alignment', 'class_levels', 'location', 'affiliation'],
+      proxyAllowedKeys: ['name', 'display_label', 'title', 'profession', 'description', 'appearance', 'background', 'species', 'race', 'alignment', 'class_levels', 'narrative_depth', 'mechanical_depth', 'mechanical_title_basis', 'location', 'affiliation'],
       zeroRawGuard: true,
     },
   },

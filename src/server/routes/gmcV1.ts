@@ -27,15 +27,18 @@ import {
   listThreads,
   listQuests,
   prepareMemoryReferences,
+  promoteNpcProfile,
   resolveMemoryReferences,
   resolveSceneTransitionContract,
   restoreMemoryReferences,
   revertQuestProgress,
+  supersedeNpcIdentity,
   updateEntity,
   updateQuest,
   validateNarrativePresenceContract,
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
+import { NPC_IDENTITY_CONTRACT_VERSION, isCanonicalNpcName, normalizeNpcIdentitySeed } from '../services/npcIdentity.js';
 import { generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
 import { ensureCampaignActor } from '../services/actorEnsureWorkflow.js';
 import { applyCampaignClockMutation } from '../services/campaignClockMutation.js';
@@ -1016,6 +1019,78 @@ registerEntityRoutes('item', 'items');
 registerEntityRoutes('object', 'objects');
 registerEntityRoutes('hazard', 'hazards');
 registerEntityRoutes('faction', 'factions');
+
+gmcV1Router.post('/campaigns/:campaignId/npcs/resolve-seed', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const existing = await listEntities(userId(req), req.params.campaignId, 'npc');
+  const requestedIdentity = String(req.body?.name ?? req.body?.canonical_name ?? '').trim().toLowerCase();
+  const existingMatch = existing.find((npc: any) => [npc?.canonical_name, ...(Array.isArray(npc?.aliases) ? npc.aliases : [])]
+    .some((value) => String(value ?? '').trim().toLowerCase() === requestedIdentity));
+  if (existingMatch && isCanonicalNpcName(existingMatch.canonical_name)) {
+    res.json({
+      contractVersion: NPC_IDENTITY_CONTRACT_VERSION,
+      authority: 'gmc.npcIdentity',
+      status: 'resolved',
+      existing: true,
+      seed: {
+        canonicalEntityId: String(existingMatch._id),
+        name: String(existingMatch.canonical_name),
+        canonicalName: String(existingMatch.canonical_name),
+        displayLabel: String(existingMatch.details?.displayLabel ?? req.body?.displayLabel ?? req.body?.name ?? existingMatch.canonical_name),
+        aliases: Array.isArray(existingMatch.aliases) ? existingMatch.aliases : [],
+        title: existingMatch.details?.title ?? null,
+        profession: existingMatch.details?.profession ?? existingMatch.details?.occupation ?? null,
+        narrativeDepth: existingMatch.details?.narrativeDepth ?? 'surface',
+        mechanicalDepth: existingMatch.details?.mechanicalDepth ?? 'none',
+        identity: existingMatch.details?.identity ?? null,
+        details: existingMatch.details ?? {},
+      },
+    });
+    return;
+  }
+  const seed = normalizeNpcIdentitySeed(req.body ?? {}, {
+    campaignId: req.params.campaignId,
+    mutationId: String(req.body?.mutationId ?? req.header('Idempotency-Key') ?? correlationId(req)),
+    unavailableNames: existing
+      .filter((npc: any) => String(npc?._id ?? '') !== String(existingMatch?._id ?? '') && isCanonicalNpcName(npc?.canonical_name))
+      .map((npc: any) => String(npc.canonical_name)),
+    source: 'gmc-npc-seed-resolver',
+  });
+  res.json({
+    contractVersion: NPC_IDENTITY_CONTRACT_VERSION,
+    authority: 'gmc.npcIdentity',
+    status: 'resolved',
+    seed: {
+      name: seed.name,
+      canonicalName: seed.name,
+      displayLabel: seed.details.displayLabel,
+      aliases: seed.aliases,
+      title: seed.details.title ?? null,
+      profession: seed.details.profession ?? null,
+      narrativeDepth: seed.details.narrativeDepth,
+      mechanicalDepth: seed.details.mechanicalDepth,
+      identity: seed.details.identity,
+      details: seed.details,
+    },
+  });
+}));
+
+gmcV1Router.patch('/campaigns/:campaignId/npcs/:npcId/profile', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const npc = await promoteNpcProfile(userId(req), req.params.campaignId, req.params.npcId, {
+    ...(req.body ?? {}),
+    correlationId: correlationId(req),
+  });
+  if (!npc) { fail(req, res, 404, 'NOT_FOUND', 'NPC not found.'); return; }
+  res.json({ contractVersion: NPC_IDENTITY_CONTRACT_VERSION, npc });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/npcs/:npcId/supersede', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const npc = await supersedeNpcIdentity(userId(req), req.params.campaignId, req.params.npcId, req.body ?? {});
+  if (!npc) { fail(req, res, 404, 'NOT_FOUND', 'NPC not found.'); return; }
+  res.json({ contractVersion: NPC_IDENTITY_CONTRACT_VERSION, npc });
+}));
 
 gmcV1Router.get('/campaigns/:campaignId/actors', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;

@@ -558,6 +558,9 @@ function actorResponse(entity: any, created: boolean, workflowId?: string) {
       kind: entity?.type,
       name: entity?.canonical_name ?? actor.name,
       profileCompleteness: String(entity?.details?.profileCompleteness ?? 'full'),
+      narrativeDepth: String(entity?.details?.narrativeDepth ?? (entity?.details?.profileCompleteness === 'full' ? 'major' : 'surface')),
+      mechanicalDepth: String(entity?.details?.mechanicalDepth ?? (entity?.details?.profileCompleteness === 'full' ? 'full' : 'combat_ready')),
+      displayLabel: String(entity?.details?.displayLabel ?? entity?.canonical_name ?? actor.name ?? ''),
       profile: actor,
     },
   };
@@ -588,6 +591,8 @@ async function finalizeWorkflow(state: ActorWorkflowDocument) {
       completedStages: state.stageSequence,
       stageCount: state.stageSequence.length,
       warnings: 'warnings' in validation ? validation.warnings : [],
+      narrativeDepth: 'major',
+      mechanicalDepth: 'full',
     },
     state.canonicalEntityId,
   );
@@ -761,6 +766,8 @@ export async function ensureCampaignActor(userId: string, campaignId: string, in
       validation.actor,
       {
         profileCompleteness: 'combat_ready',
+        narrativeDepth: 'surface',
+        mechanicalDepth: 'combat_ready',
         schemaVersion: `${kind}/combat-ready/1.0`,
         source: 'gmc-encounter-contract',
         executionMode: 'deterministic',

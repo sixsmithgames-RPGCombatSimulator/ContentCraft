@@ -87,7 +87,12 @@ export interface HitPointsValue {
 
 export interface NormalizedNpc {
   name: string;
+  displayLabel?: string;
+  profession?: string;
   title?: string;
+  narrativeDepth?: 'surface' | 'developed' | 'major';
+  mechanicalDepth?: 'none' | 'template' | 'combat_ready' | 'full';
+  mechanicalTitleBasis?: PrimitiveRecord;
   aliases: string[];
   role?: string;
   description: string;
@@ -587,7 +592,14 @@ export const normalizeNpc = (record: PrimitiveRecord): NormalizedNpc => {
 
   return {
     name: ensureString(npcSource.name) || 'Unknown NPC',
+    displayLabel: ensureString(npcSource.display_label || npcSource.displayLabel || ensureObject(npcSource.identity).displayLabel) || undefined,
+    profession: ensureString(npcSource.profession || npcSource.occupation) || undefined,
     title: ensureString(npcSource.title) || undefined,
+    narrativeDepth: ensureString(npcSource.narrative_depth || npcSource.narrativeDepth || ensureObject(npcSource.profile_lifecycle || npcSource.profileLifecycle).narrativeDepth) as NormalizedNpc['narrativeDepth'] || undefined,
+    mechanicalDepth: ensureString(npcSource.mechanical_depth || npcSource.mechanicalDepth || ensureObject(npcSource.profile_lifecycle || npcSource.profileLifecycle).mechanicalDepth) as NormalizedNpc['mechanicalDepth'] || undefined,
+    mechanicalTitleBasis: Object.keys(ensureObject(npcSource.mechanical_title_basis || npcSource.mechanicalTitleBasis)).length
+      ? ensureObject(npcSource.mechanical_title_basis || npcSource.mechanicalTitleBasis)
+      : undefined,
     aliases: ensureStringArray(npcSource.aliases),
     role: ensureString(npcSource.role) || undefined,
     description: ensureString(npcSource.description),
@@ -814,7 +826,12 @@ export const normalizedNpcToRecord = (
   updated.type = 'npc';
   assign('name', npc.name);
   assign('canonical_name', npc.name);
+  assign('display_label', npc.displayLabel);
+  assign('profession', npc.profession);
   assign('title', npc.title);
+  assign('narrative_depth', npc.narrativeDepth);
+  assign('mechanical_depth', npc.mechanicalDepth);
+  assign('mechanical_title_basis', npc.mechanicalTitleBasis);
   assign('role', npc.role);
   assign('description', npc.description);
   assign('appearance', npc.appearance);
@@ -983,6 +1000,5 @@ export const collectDiscreteCanonCandidates = (npc: NormalizedNpc): DiscreteCano
 
   return entries;
 };
-
 
 

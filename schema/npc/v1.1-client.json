@@ -25,7 +25,14 @@
       "minLength": 2,
       "description": "The NPC's canonical name"
     },
-    "title": { "type": "string", "description": "Title or role (e.g., 'Knight Commander', 'Master Thief')" },
+    "title": { "type": "string", "description": "Rank, office, or honorific; never a substitute for the canonical personal name" },
+    "display_label": { "type": "string", "description": "Player-facing label used while the canonical personal name is unknown" },
+    "profession": { "type": "string", "description": "Ordinary job or story role; does not grant class mechanics" },
+    "narrative_depth": { "type": "string", "enum": ["surface", "developed", "major"] },
+    "mechanical_depth": { "type": "string", "enum": ["none", "template", "combat_ready", "full"] },
+    "identity": { "type": "object", "additionalProperties": true },
+    "profile_lifecycle": { "type": "object", "additionalProperties": true },
+    "mechanical_title_basis": { "type": "object", "additionalProperties": true, "description": "Present only when a title has explicit rules-bearing class, hit-dice, feature, or feat meaning" },
     "aliases": {
       "type": "array",
       "items": { "type": "string" },
@@ -56,6 +63,7 @@
     },
     "tactics": { "type": "string", "description": "Combat tactics and strategy" },
     "class_levels": {
+      "description": "Actual rules-bearing class levels only; professions and ordinary job titles belong in profession or title",
       "oneOf": [
         {
           "type": "array",
