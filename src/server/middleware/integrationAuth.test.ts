@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { integrationAuth } from './integrationAuth.js';
+import { integrationAuth, requireServiceIntegration } from './integrationAuth.js';
 
 const original = { ...process.env };
 afterEach(() => { process.env = { ...original }; });
@@ -147,5 +147,31 @@ describe('integrationAuth', () => {
     await integrationAuth(req, res, vi.fn());
     expect(state.status).toBe(401);
     expect(state.body.error.code).toBe('AUTH_REQUIRED');
+  });
+});
+
+describe('requireServiceIntegration', () => {
+  it.each(['service', 'local'])('allows trusted %s integration callers', (integrationAuth) => {
+    const req: any = { integrationAuth, header: () => undefined };
+    const { res } = response(); const next = vi.fn();
+    requireServiceIntegration(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('rejects browser Clerk callers without returning private data', () => {
+    const req: any = { integrationAuth: 'clerk', header: () => 'correlation-1' };
+    const { res, state } = response(); const next = vi.fn();
+    requireServiceIntegration(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(state.status).toBe(403);
+    expect(state.body).toEqual({
+      error: {
+        code: 'SERVICE_AUTH_REQUIRED',
+        message: 'This private integration endpoint requires service authentication.',
+        correlationId: 'correlation-1',
+        details: {},
+      },
+    });
+    expect(JSON.stringify(state.body)).not.toContain('privatePayload');
   });
 });

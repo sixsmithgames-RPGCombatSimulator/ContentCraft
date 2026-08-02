@@ -193,6 +193,22 @@ async function createIndexes(database: Db): Promise<void> {
     { unique: true, name: 'unique_gma_mechanics_ledger_interaction' },
   );
   await database.collection('gma_mechanics_ledger').createIndex({ userId: 1, campaignId: 1, updatedAt: -1 });
+  await database.collection('gma_scene_plan_revisions').createIndex(
+    { userId: 1, campaignId: 1, scenePlanId: 1, revision: -1 },
+    { unique: true, name: 'unique_gma_scene_plan_revision' },
+  );
+  await database.collection('gma_scene_plan_revisions').createIndex(
+    { userId: 1, campaignId: 1, idempotencyKey: 1 },
+    { unique: true, name: 'unique_gma_scene_plan_idempotency' },
+  );
+  await database.collection('gma_scene_plan_revisions').createIndex(
+    { userId: 1, campaignId: 1, sceneId: 1, scenePlanId: 1, status: 1, revision: -1 },
+    { name: 'gma_scene_plan_active_lookup' },
+  );
+  await database.collection('gma_scene_plan_revisions').createIndex(
+    { userId: 1, campaignId: 1, scenePlanId: 1, supersededByRewindId: 1 },
+    { name: 'gma_scene_plan_rewind_replay' },
+  );
   await database.collection('llm_generation_workflows').createIndex(
     { userId: 1, workflowId: 1 },
     { unique: true, name: 'unique_llm_generation_workflow' },

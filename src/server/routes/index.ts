@@ -16,6 +16,12 @@ import { progressRouter } from './progress.js';
 import { aiRouter } from './ai.js';
 import { gmcV1Router } from './gmcV1.js';
 import { GMC_VERSION } from '../serviceVersion.js';
+import {
+  GMA_SCENE_PLAN_PRIVATE_PAYLOAD_MAX_BYTES,
+  GMA_SCENE_PLAN_REFERENCE_CONTRACT_VERSION,
+  GMA_SCENE_PLAN_SCHEMA_ALLOWLIST,
+  GMA_SCENE_PLAN_STORE_CONTRACT_VERSION,
+} from '../services/gmaScenePlanStore.js';
 
 export const apiRouter = Router();
 
@@ -38,5 +44,14 @@ apiRouter.get('/health', (_req, res) => {
     service: 'gamemastercraft',
     version: GMC_VERSION,
     message: 'GameMasterCraft API is running',
+    contracts: {
+      gmaScenePlanStore: {
+        contractVersion: GMA_SCENE_PLAN_STORE_CONTRACT_VERSION,
+        referenceContractVersion: GMA_SCENE_PLAN_REFERENCE_CONTRACT_VERSION,
+        schemaVersions: GMA_SCENE_PLAN_SCHEMA_ALLOWLIST,
+        maximumPrivatePayloadBytes: GMA_SCENE_PLAN_PRIVATE_PAYLOAD_MAX_BYTES,
+        access: 'service_only',
+      },
+    },
   });
 });

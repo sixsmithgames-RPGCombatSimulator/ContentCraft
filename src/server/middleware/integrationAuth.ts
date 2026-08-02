@@ -178,3 +178,23 @@ export async function integrationAuth(req: Request, res: Response, next: NextFun
     error: { code: 'AUTH_REQUIRED', message, correlationId: req.header('X-Sixsmith-Correlation-Id') || null, details: {} },
   });
 }
+
+/**
+ * Restricts an integration route to trusted server-to-server or local runtime
+ * callers after {@link integrationAuth} has established the tenant identity.
+ */
+export function requireServiceIntegration(req: Request, res: Response, next: NextFunction): void {
+  const auth = (req as IntegrationRequest).integrationAuth;
+  if (auth === 'service' || auth === 'local') {
+    next();
+    return;
+  }
+  res.status(403).json({
+    error: {
+      code: 'SERVICE_AUTH_REQUIRED',
+      message: 'This private integration endpoint requires service authentication.',
+      correlationId: req.header('X-Sixsmith-Correlation-Id') || null,
+      details: {},
+    },
+  });
+}

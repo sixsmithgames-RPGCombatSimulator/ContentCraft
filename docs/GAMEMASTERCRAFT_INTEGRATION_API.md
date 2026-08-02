@@ -23,6 +23,59 @@ X-Sixsmith-Correlation-Id: <UUID>
 The service key must contain at least 32 characters and must remain server-side.
 When a Clerk token is supplied, GMC derives the owner from the token `sub`.
 
+## Private GMA scene plans
+
+GMC advertises the additive `gmc.gma-scene-plan-store/1` contract in
+`GET /api/health`. These endpoints require service authentication (or local
+single-user mode); a Clerk browser session receives
+`403 SERVICE_AUTH_REQUIRED`. The private payload is integration state, not
+campaign canon, and never appears in health, dashboard, scene, timeline, or
+public campaign responses.
+
+```http
+POST /api/gmc/v1/campaigns/{campaignId}/integration/scene-plans/revisions
+GET  /api/gmc/v1/campaigns/{campaignId}/integration/scene-plans/active?scenePlanId={id}&sceneId={id}&schemaVersion=gma.scene-plan/2
+GET  /api/gmc/v1/campaigns/{campaignId}/integration/scene-plans/{scenePlanId}/revisions/{revision}?payloadHash={sha256}
+POST /api/gmc/v1/campaigns/{campaignId}/integration/scene-plans/{scenePlanId}/rewind
+```
+
+An append supplies one `gma.scene-plan/2` private payload plus its canonical
+scene ID, stable plan ID, expected active revision, idempotency key, source
+revision map, interaction ID, and timeline anchor:
+
+```json
+{
+  "sceneId": "scene-flintwake",
+  "scenePlanId": "plan-flintwake",
+  "schemaVersion": "gma.scene-plan/2",
+  "expectedRevision": 0,
+  "idempotencyKey": "scene-plan:interaction-123",
+  "sourceRevisions": { "gmcCanon": 12, "gmcPresence": "presence-4", "vcs": 9 },
+  "interactionId": "interaction-123",
+  "timelineAnchor": { "messageId": "message-123", "sequence": 18 },
+  "privatePayload": {
+    "schemaVersion": "gma.scene-plan/2",
+    "sceneId": "scene-flintwake"
+  }
+}
+```
+
+GMC validates a schema allowlist, JSON shape, tenant/campaign ownership, and a
+65,536-byte hard payload ceiling. It hashes canonical JSON so field order does
+not change identity. The append is optimistic: `expectedRevision` must equal
+the active compatible revision (`0` for the first append). Repeating an
+identical idempotency key returns the original opaque `gma.scene-plan-ref/1`
+data; reusing it for different content or writing from a stale revision returns
+a typed `409` without changing storage.
+
+Revision content is append-only. A rewind supplies `expectedRevision`, a
+non-negative `boundarySequence`, and a stable `rewindId`. GMC supersedes every
+available revision after that timeline boundary and returns the exact prior
+opaque reference, or `null` when the rewind predates the plan. Later writes use
+new monotonically increasing revision numbers; superseded history is never
+overwritten. Diagnostics contain hashes, sizes, top-level key names, source
+revision key names, and timeline anchors only—not private payload values.
+
 ## Campaign and live context
 
 ```http

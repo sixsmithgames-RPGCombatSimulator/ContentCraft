@@ -88,10 +88,12 @@ import {
   PLAN_ENCOUNTER_INSTRUCTION,
   PLAN_ENCOUNTER_REQUIRED_KEYS,
 } from './gmcV1PlanningContracts.js';
+import { gmaScenePlanRouter } from './gmaScenePlans.js';
 
 export const gmcV1Router = Router();
 gmcV1Router.use(integrationAuth);
 gmcV1Router.use('/llm', llmOrchestratorRouter);
+gmcV1Router.use('/campaigns/:campaignId/integration/scene-plans', gmaScenePlanRouter);
 
 export function shouldResolveNarrativeTransition(responseMode: string, sceneSegment: Record<string, unknown> | null) {
   return responseMode !== 'ooc' && sceneSegment !== null;
