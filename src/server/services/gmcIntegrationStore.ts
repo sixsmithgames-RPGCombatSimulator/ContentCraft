@@ -31,9 +31,12 @@ export const CAMPAIGN_MEMORY_CONTRACT_VERSION = '2026-07-24.1';
 export const WORLD_GENERATION_POLICY_VERSION = '2026-08-02.1';
 export const PREVIOUS_WORLD_GENERATION_POLICY_VERSION = '2026-08-01.1';
 export const SCENE_TRANSITION_CONTRACT_VERSION = '2026-08-01.1';
-export const NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-08-02.1';
-export const PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-07-24.1';
+export const NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-08-03.1';
+export const PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-08-02.1';
+export const LEGACY_NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-07-24.1';
 export const GMA_LOCATION_ROUTING_CONTRACT_VERSION = 'gma.location-routing/1';
+export const GMA_NPC_TOPIC_REQUIREMENT_CONTRACT_VERSION = 'gma.npc-topic-requirement/1';
+export const GMC_NPC_BACKGROUND_DEVELOPMENT_CONTRACT_VERSION = 'gmc.npc-background-development/1';
 
 const GMA_LOCATION_ROLES = new Set([
   'current_setting',
@@ -2403,6 +2406,232 @@ function compactEvidenceReference(reference: any) {
   };
 }
 
+function normalizedNpcTopic(value: unknown) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+}
+
+function canonicalNpcRevision(npc: any) {
+  const explicit = npc?.revision ?? npc?.updatedAt ?? npc?.updated_at ?? npc?.createdAt ?? npc?.created_at;
+  if (explicit !== undefined && explicit !== null && String(explicit).trim()) return String(explicit).trim().slice(0, 160);
+  return createHash('sha256').update(stablePresenceJson({
+    id: npc?._id ?? npc?.id ?? null,
+    name: npc?.canonical_name ?? npc?.name ?? null,
+    aliases: npc?.aliases ?? npc?.details?.aliases ?? [],
+  })).digest('hex');
+}
+
+function factRelatedNpcIds(fact: any) {
+  return [...new Set([
+    ...(Array.isArray(fact?.relatedEntityIds) ? fact.relatedEntityIds : []),
+    ...(Array.isArray(fact?.relatedNpcIds) ? fact.relatedNpcIds : []),
+    fact?.scope?.entityId,
+    fact?.memory?.npcId,
+  ].filter(Boolean).map(String))];
+}
+
+function factNpcTopics(fact: any) {
+  return [...new Set([
+    fact?.topic,
+    fact?.memory?.npcTopic,
+    fact?.memory?.topic,
+    ...(Array.isArray(fact?.tags) ? fact.tags.flatMap((tag: unknown) => {
+      const match = String(tag).match(/^(?:npc-topic|topic):(.+)$/i);
+      return match ? [match[1]] : [];
+    }) : []),
+  ].map(normalizedNpcTopic).filter(Boolean))];
+}
+
+function explicitNpcKnowledgeState(fact: any) {
+  const tags = Array.isArray(fact?.tags) ? fact.tags.map(String) : [];
+  const raw = normalizedNpcTopic(
+    fact?.knowledgeState
+    ?? fact?.memory?.npcKnowledgeState
+    ?? fact?.memory?.knowledgeState
+    ?? tags.find((tag: string) => /^knowledge:/i.test(tag))?.split(':').slice(1).join(':'),
+  );
+  if (['knows', 'partial', 'does_not_know'].includes(raw)) return raw;
+  const claim = String(fact?.text ?? fact?.claim ?? '').trim();
+  if (/\b(?:does not|doesn't|did not|didn't|cannot|can't) know\b|\bhas no knowledge of\b/i.test(claim)) return 'does_not_know';
+  return null;
+}
+
+function topicFactScore(fact: any, requirement: any) {
+  const npcId = String(requirement.npcId);
+  if (!factRelatedNpcIds(fact).includes(npcId)) return 0;
+  const topic = normalizedNpcTopic(requirement.topic);
+  const metadataTopics = factNpcTopics(fact);
+  if (metadataTopics.includes(topic)) return 200 + (fact?.locked === true ? 5 : 0);
+  const queryTokens = narrationEvidenceTokens([
+    topic.replace(/_/g, ' '),
+    ...(Array.isArray(requirement.requestedKnowledgeFields) ? requirement.requestedKnowledgeFields : []),
+    requirement.sourceSpan?.quote,
+  ].join(' '));
+  const corpus = narrationEvidenceText(fact);
+  const overlap = queryTokens.filter((token) => corpus.includes(token)).length;
+  return overlap > 0 ? (overlap * 12) + (fact?.locked === true ? 5 : 0) : 0;
+}
+
+function topicRevealRestrictions(fact: any) {
+  const supplied = Array.isArray(fact?.memory?.revealRestrictions)
+    ? fact.memory.revealRestrictions.map(String).filter(Boolean).slice(0, 6)
+    : [];
+  return [...new Set([
+    ...(fact?.secret === true ? ['gm_only_until_disclosed_in_play'] : ['reveal_only_through_the_npc_or_supported_scene_consequence']),
+    ...supplied,
+  ])];
+}
+
+function compileNpcTopicEvidenceInternal(input: {
+  instruction: string;
+  requirements?: any[];
+  npcs?: any[];
+  facts?: any[];
+  creationPolicy?: any;
+}) {
+  const instruction = String(input?.instruction ?? '');
+  const requirements = Array.isArray(input?.requirements) ? input.requirements.slice(0, 6) : [];
+  const npcs = Array.isArray(input?.npcs) ? input.npcs : [];
+  const facts = Array.isArray(input?.facts) ? input.facts : [];
+  const issues: Array<{ code: string; index: number; field?: string }> = [];
+  const seen = new Set<string>();
+  const entries = requirements.flatMap((raw, index) => {
+    const requirement = objectRecord(raw);
+    const npcId = String(requirement.npcId ?? '').trim();
+    const npcName = String(requirement.npcName ?? '').trim();
+    const npcRevision = String(requirement.npcRevision ?? '').trim();
+    const topic = normalizedNpcTopic(requirement.topic);
+    const span = objectRecord(requirement.sourceSpan);
+    const start = Number(span.start);
+    const end = Number(span.end);
+    const quote = String(span.quote ?? '');
+    const requestedKnowledgeFields = [...new Set(
+      (Array.isArray(requirement.requestedKnowledgeFields) ? requirement.requestedKnowledgeFields : [])
+        .map(normalizedNpcTopic).filter(Boolean).slice(0, 8),
+    )];
+    const npc = npcs.find((candidate: any) => String(candidate?._id ?? candidate?.id ?? '') === npcId);
+    const canonicalName = String(npc?.canonical_name ?? npc?.name ?? '').trim();
+    const currentRevision = npc ? canonicalNpcRevision(npc) : '';
+    if (requirement.schemaVersion !== GMA_NPC_TOPIC_REQUIREMENT_CONTRACT_VERSION) issues.push({ code: 'contract_version', index, field: 'schemaVersion' });
+    if (!npcId || !npc) issues.push({ code: 'npc_not_found', index, field: 'npcId' });
+    if (!npcName || !canonicalName || normalizedReferenceIdentity(npcName) !== normalizedReferenceIdentity(canonicalName)) issues.push({ code: 'npc_name_mismatch', index, field: 'npcName' });
+    if (!npcRevision || npcRevision !== currentRevision) issues.push({ code: 'npc_revision_stale', index, field: 'npcRevision' });
+    if (!topic) issues.push({ code: 'topic_required', index, field: 'topic' });
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end <= start || end > instruction.length || instruction.slice(start, end) !== quote) {
+      issues.push({ code: 'source_span_invalid', index, field: 'sourceSpan' });
+    }
+    if (!requestedKnowledgeFields.length) issues.push({ code: 'knowledge_fields_required', index, field: 'requestedKnowledgeFields' });
+    const key = `${npcId}\0${topic}`;
+    if (seen.has(key)) issues.push({ code: 'duplicate_topic', index, field: 'topic' });
+    seen.add(key);
+    if (issues.some((issue) => issue.index === index)) return [];
+
+    const rankedFacts = facts
+      .map((fact) => ({ fact, score: topicFactScore(fact, { ...requirement, npcId, topic, requestedKnowledgeFields, sourceSpan: { start, end, quote } }) }))
+      .filter((candidate) => candidate.score > 0)
+      .sort((left, right) => right.score - left.score || narrationEvidenceText(left.fact).localeCompare(narrationEvidenceText(right.fact)))
+      .slice(0, 4)
+      .map((candidate) => candidate.fact);
+    const states = rankedFacts.map(explicitNpcKnowledgeState).filter(Boolean);
+    const knowledgeState = !rankedFacts.length
+      ? 'not_established'
+      : (states.includes('partial') ? 'partial' : (states.length === rankedFacts.length && states.every((state) => state === 'does_not_know') ? 'does_not_know' : 'knows'));
+    const policyAllowsDevelopment = input?.creationPolicy?.mode === 'world_generation_allowed'
+      && Array.isArray(input.creationPolicy.allowedDevelopmentKinds)
+      && input.creationPolicy.allowedDevelopmentKinds.map(String).includes('npc_background');
+    const requestedDevelopment = requirement.developmentPermission === 'npc_background';
+    const sourceRefs = rankedFacts.map((fact) => String(fact?._id ?? fact?.id ?? '')).filter(Boolean);
+    const selectedEvidence = rankedFacts.map((fact) => ({
+      sourceRef: String(fact?._id ?? fact?.id ?? '') || null,
+      summary: String(fact?.text ?? fact?.claim ?? '').slice(0, 700),
+      secret: fact?.secret === true,
+      revealRestrictions: topicRevealRestrictions(fact),
+    }));
+    return [{
+      entry: {
+        schemaVersion: GMA_NPC_TOPIC_REQUIREMENT_CONTRACT_VERSION,
+        npcId,
+        npcName: canonicalName,
+        npcRevision: currentRevision,
+        topic,
+        sourceSpan: { start, end, quote },
+        requestedKnowledgeFields,
+        purpose: String(requirement.purpose ?? 'private_dialogue_grounding').slice(0, 80),
+        scenePlanRevision: String(requirement.scenePlanRevision ?? '').slice(0, 160) || null,
+        knowledgeState,
+        sourceRefs,
+        selectedEvidence,
+        revealRestrictions: [...new Set(selectedEvidence.flatMap((evidence) => evidence.revealRestrictions))],
+        developmentPermission: requestedDevelopment && policyAllowsDevelopment ? 'npc_background' : 'forbidden',
+        developmentReason: requestedDevelopment && policyAllowsDevelopment
+          ? 'The effective campaign policy permits one bounded hidden fact for this existing NPC and topic.'
+          : 'The effective campaign policy does not permit bounded development for this request.',
+      },
+      records: rankedFacts,
+    }];
+  });
+  return {
+    validation: {
+      authority: 'gmc.npc-topic-evidence-validation',
+      contractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+      valid: issues.length === 0,
+      issues,
+      requestedCount: requirements.length,
+      resolvedCount: entries.length,
+    },
+    entries,
+  };
+}
+
+export function buildNpcTopicEvidence(input: {
+  instruction: string;
+  requirements?: any[];
+  npcs?: any[];
+  facts?: any[];
+  creationPolicy?: any;
+}) {
+  const compiled = compileNpcTopicEvidenceInternal(input);
+  return {
+    validation: compiled.validation,
+    topics: compiled.entries.map(({ entry }) => entry),
+  };
+}
+
+function effectiveNpcTopicCreationPolicy(basePolicy: any, instruction: string, locationRouting: unknown, requirements: any[]) {
+  const requested = requirements.some((requirement) => requirement?.developmentPermission === 'npc_background');
+  const routing = validateGmaLocationRoutingProjection(locationRouting, instruction);
+  if (
+    !requested
+    || routing.status !== 'accepted'
+    || routing.positiveMovement
+    || routing.positiveCreationTarget
+    || routing.projection?.generationIntent !== 'npc_background'
+  ) return basePolicy;
+  const source: Record<string, any> = {
+    ...objectRecord(basePolicy),
+    authority: 'gmc.worldGenerationPolicy',
+    contractVersion: WORLD_GENERATION_POLICY_VERSION,
+    mode: 'world_generation_allowed',
+    allowedEntityTypes: [],
+    allowedDevelopmentKinds: ['npc_background'],
+    allowSceneSettingCreation: false,
+    destinationAuthority: null,
+    rules: [...new Set([
+      ...(Array.isArray(basePolicy?.rules) ? basePolicy.rules.map(String) : []),
+      'NPC background development may add one bounded hidden fact to the requested existing NPC and topic; it cannot create an NPC, location, scene setting, destination, player action, or mechanical result.',
+    ])],
+  };
+  const { revision: _priorRevision, ...revisionSource } = source;
+  return {
+    ...source,
+    revision: createHash('sha256').update(stablePresenceJson(revisionSource)).digest('hex'),
+  };
+}
+
 /**
  * Produces one revision-bound narration snapshot. `evidence` is deliberately
  * small enough for a model prompt; `validation` retains GMC's complete
@@ -2426,13 +2655,17 @@ export function buildNarrationEvidenceBundle(input: {
   quests?: any[];
   resolution?: any;
   locationRouting?: unknown;
+  npcTopicRequirements?: any[];
   narrationEvidenceContractVersion?: string;
   worldGenerationPolicyVersion?: string;
   limits?: { facts?: number; items?: number; threads?: number; locations?: number };
 }) {
   const instruction = String(input?.instruction ?? '').trim();
-  const narrationEvidenceContractVersion = input?.narrationEvidenceContractVersion === PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION
-    ? PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION
+  const narrationEvidenceContractVersion = [
+    PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+    LEGACY_NARRATION_EVIDENCE_CONTRACT_VERSION,
+  ].includes(String(input?.narrationEvidenceContractVersion))
+    ? String(input.narrationEvidenceContractVersion)
     : NARRATION_EVIDENCE_CONTRACT_VERSION;
   const facts = Array.isArray(input?.facts) ? input.facts : [];
   const items = Array.isArray(input?.items) ? input.items : [];
@@ -2452,6 +2685,10 @@ export function buildNarrationEvidenceBundle(input: {
     locationRouting: input?.locationRouting,
     worldGenerationPolicyVersion: input?.worldGenerationPolicyVersion,
   });
+  const npcTopicRequirements = Array.isArray(input?.npcTopicRequirements) ? input.npcTopicRequirements.slice(0, 6) : [];
+  const effectiveCreationPolicy = narrationEvidenceContractVersion === NARRATION_EVIDENCE_CONTRACT_VERSION
+    ? effectiveNpcTopicCreationPolicy(resolution?.creationPolicy, instruction, input?.locationRouting, npcTopicRequirements)
+    : resolution?.creationPolicy;
   const presenceContract = buildScenePresenceContract(input?.currentScene ?? null, npcs);
   const references = (Array.isArray(resolution?.references) ? resolution.references : []).map(compactEvidenceReference);
   const referencedIds = new Set<string>(references.flatMap((reference: any) => [
@@ -2465,6 +2702,14 @@ export function buildNarrationEvidenceBundle(input: {
     ...(selectedQuest?.relatedLocationIds ?? []),
     ...(selectedQuest?.relatedItemIds ?? []),
   ]) referencedIds.add(String(id));
+  const topicEvidence = compileNpcTopicEvidenceInternal({
+    instruction,
+    requirements: npcTopicRequirements,
+    npcs,
+    facts,
+    creationPolicy: effectiveCreationPolicy,
+  });
+  for (const { entry } of topicEvidence.entries) referencedIds.add(String(entry.npcId));
   const presentNpcIds = new Set<string>(presenceContract.exactPresentNpcIds.map(String));
   const currentLocationId = String(input?.currentScene?.locationId ?? input?.currentLocation?._id ?? input?.currentLocation?.id ?? '') || null;
   const scoreContext = { currentLocationId, presentNpcIds, referencedIds };
@@ -2484,7 +2729,10 @@ export function buildNarrationEvidenceBundle(input: {
     threads: Math.max(1, Math.min(8, Number(input?.limits?.threads ?? 5))),
     locations: Math.max(1, Math.min(6, Number(input?.limits?.locations ?? 3))),
   };
-  const selectedFacts = ranked(facts, limits.facts);
+  const topicFacts = topicEvidence.entries.flatMap(({ records }) => records);
+  const selectedFacts = [...topicFacts, ...ranked(facts, limits.facts)]
+    .filter((fact, index, all) => all.findIndex((candidate) => String(candidate?._id ?? candidate?.id ?? '') === String(fact?._id ?? fact?.id ?? '')) === index)
+    .slice(0, limits.facts);
   const selectedItems = ranked(items, limits.items);
   const selectedThreads = ranked(threads, limits.threads);
   const selectedLocations = ranked(locations, limits.locations);
@@ -2507,7 +2755,7 @@ export function buildNarrationEvidenceBundle(input: {
     contractVersion: resolution?.contractVersion ?? CAMPAIGN_MEMORY_CONTRACT_VERSION,
     status: resolution?.status ?? 'resolved',
     references,
-    creationPolicy: resolution?.creationPolicy ?? classifyWorldGenerationIntent(instruction, {
+    creationPolicy: effectiveCreationPolicy ?? classifyWorldGenerationIntent(instruction, {
       locationRouting: input?.locationRouting,
       worldGenerationPolicyVersion: input?.worldGenerationPolicyVersion,
     }),
@@ -2551,6 +2799,9 @@ export function buildNarrationEvidenceBundle(input: {
       },
     },
     references: compactResolution,
+    ...(narrationEvidenceContractVersion === NARRATION_EVIDENCE_CONTRACT_VERSION ? {
+      npcTopics: topicEvidence.entries.map(({ entry }) => entry),
+    } : {}),
     canon: {
       quests: (selectedQuest
         ? quests.filter((quest: any) => String(quest?._id ?? quest?.id ?? '') === String(selectedQuest.id))
@@ -2619,6 +2870,7 @@ export function buildNarrationEvidenceBundle(input: {
         referencedNonPresentNpcs: referencedNonPresentNpcs.length,
         npcProfiles: selectedNpcs.length,
         quests: selectedQuest ? 1 : Math.min(quests.length, 4),
+        npcTopics: topicEvidence.entries.length,
       },
       available: {
         facts: facts.length,
@@ -2638,6 +2890,9 @@ export function buildNarrationEvidenceBundle(input: {
       contractVersion: narrationEvidenceContractVersion,
       evidenceRevision,
       scenePresenceContract: presenceContract,
+      ...(narrationEvidenceContractVersion === NARRATION_EVIDENCE_CONTRACT_VERSION ? {
+        npcTopicRequirements: topicEvidence.validation,
+      } : {}),
     },
   };
 }

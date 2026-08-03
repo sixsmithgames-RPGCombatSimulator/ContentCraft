@@ -30,6 +30,7 @@ import {
 } from './gmcV1.js';
 import {
   GMA_LOCATION_ROUTING_CONTRACT_VERSION,
+  LEGACY_NARRATION_EVIDENCE_CONTRACT_VERSION,
   NARRATION_EVIDENCE_CONTRACT_VERSION,
   PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
   PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
@@ -98,12 +99,15 @@ describe('GMC compact interaction envelope contract', () => {
     } as any)).not.toThrow();
   });
 
-  it('keeps old GMA clients on previous evidence contracts and negotiates the typed-routing versions explicitly', () => {
+  it('keeps legacy GMA clients stable and negotiates both additive evidence contracts explicitly', () => {
     expect(requestedSceneStoryContracts({})).toEqual({
-      narrationEvidenceContractVersion: PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+      narrationEvidenceContractVersion: LEGACY_NARRATION_EVIDENCE_CONTRACT_VERSION,
       worldGenerationPolicyVersion: PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
       locationRouting: null,
     });
+    expect(requestedSceneStoryContracts({
+      contractVersions: { narrationEvidence: PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION },
+    }).narrationEvidenceContractVersion).toBe(PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION);
     const locationRouting = { authority: 'gma.location-routing', contractVersion: GMA_LOCATION_ROUTING_CONTRACT_VERSION };
     expect(requestedSceneStoryContracts({
       contractVersions: {

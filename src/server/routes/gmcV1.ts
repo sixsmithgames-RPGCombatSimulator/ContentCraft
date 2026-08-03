@@ -26,6 +26,7 @@ import {
   listFacts,
   listThreads,
   listQuests,
+  LEGACY_NARRATION_EVIDENCE_CONTRACT_VERSION,
   NARRATION_EVIDENCE_CONTRACT_VERSION,
   PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
   PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
@@ -105,7 +106,9 @@ export function requestedSceneStoryContracts(body: any) {
   return {
     narrationEvidenceContractVersion: requestedEvidence === NARRATION_EVIDENCE_CONTRACT_VERSION
       ? NARRATION_EVIDENCE_CONTRACT_VERSION
-      : PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+      : (requestedEvidence === PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION
+        ? PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION
+        : LEGACY_NARRATION_EVIDENCE_CONTRACT_VERSION),
     worldGenerationPolicyVersion: requestedWorldPolicy === WORLD_GENERATION_POLICY_VERSION
       ? WORLD_GENERATION_POLICY_VERSION
       : PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
@@ -789,7 +792,7 @@ gmcV1Router.post('/campaigns/:campaignId/narration/evidence', asyncRoute(async (
   const currentLocation = currentScene?.locationId
     ? locations.find((location: any) => String(location?._id) === String(currentScene.locationId)) ?? null
     : null;
-  res.json(buildNarrationEvidenceBundle({
+  const evidenceBundle = buildNarrationEvidenceBundle({
     campaignId: id,
     instruction,
     intentTags: Array.isArray(req.body?.intentTags) ? req.body.intentTags : [],
@@ -808,9 +811,17 @@ gmcV1Router.post('/campaigns/:campaignId/narration/evidence', asyncRoute(async (
     factions,
     quests,
     resolution: prepared.resolution,
+    npcTopicRequirements: Array.isArray(req.body?.npcTopicRequirements) ? req.body.npcTopicRequirements : [],
     ...sceneStoryContracts,
     limits: req.body?.limits,
-  }));
+  });
+  if (evidenceBundle.validation?.npcTopicRequirements?.valid === false) {
+    fail(req, res, 409, 'GMC_NPC_TOPIC_REQUIREMENTS_INVALID', 'NPC topic requirements are stale or do not match current campaign canon.', {
+      validation: evidenceBundle.validation.npcTopicRequirements,
+    });
+    return;
+  }
+  res.json(evidenceBundle);
 }));
 
 gmcV1Router.post('/campaigns/:campaignId/memory/context', asyncRoute(async (req, res) => {

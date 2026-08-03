@@ -181,6 +181,63 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(provider.calls).toHaveLength(1);
   });
 
+  it('registers bounded NPC background development with the positive first-pass authority contract', () => {
+    const operation = getOperationDefinition('npc.background.develop');
+    expect(operation.prompt.version).toBe('gmc.npc-background-development/1');
+    expect(operation.prompt.systemInstruction).toMatch(/exactly one bounded hidden background fact/i);
+    expect(operation.prompt.systemInstruction).toMatch(/Create no NPC, entity, location, scene setting, player action, roll, resource change, or mechanical result/i);
+    expect(operation.provider.maxAttempts).toBe(1);
+    expect(operation.context.inputHardLimitBytes).toBe(20_000);
+    expect(operation.validators).toContain('npc-background-proposal');
+  });
+
+  it('accepts one scoped proposal and rejects entity or location creation without retrying', async () => {
+    const trusted = {
+      existingNpcId: 'dorrik', topic: 'origin', sourceRevision: 'npc-r7',
+      worldPolicyRevision: 'policy-r3', sourceRefs: ['fact-route'], idempotencyKey: 'background-dorrik-origin-r7',
+    };
+    const policy = {
+      mode: 'world_generation_allowed', allowedEntityTypes: [], allowedDevelopmentKinds: ['npc_background'],
+      allowSceneSettingCreation: false, destinationAuthority: null,
+    };
+    const proposal = {
+      schemaVersion: 'gmc.npc-background-development/1', status: 'proposal_only', ...trusted,
+      fact: {
+        type: 'FACT', visibility: 'gm_only', claim: 'Dorrik previously worked a northern river route.',
+        relatedNpcId: 'dorrik', topic: 'origin', knowledgeState: 'knows',
+        revealMetadata: { defaultVisibility: 'gm_only', restrictions: ['Reveal only through supported dialogue.'] },
+      },
+      proposedEntities: [], proposedLocations: [],
+    };
+    const makeRequest = (suffix: string) => createUniversalRequest({
+      operation: 'npc.background.develop', taskId: `background-${suffix}`, correlationId: `corr-${suffix}`,
+      idempotencyKey: `request-${suffix}`, references: { campaignId: 'campaign-1', canonVersion: 'canon-r2' },
+      context: {
+        input: { label: 'user_text', value: trusted },
+        policy: { label: 'trusted_policy', revision: trusted.worldPolicyRevision, value: policy },
+        campaign: { label: 'retrieved_authority_data', revision: 'canon-r2', value: { constraints: ['Keep the fact local to the existing NPC.'] } },
+      },
+    });
+    const validProvider = new FakeProviderAdapter(() => proposal);
+    const valid = await executeLlmOperation(makeRequest('valid'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [validProvider],
+    });
+    expect(valid.status).toBe('succeeded');
+    expect(validProvider.calls).toHaveLength(1);
+
+    const invalidProvider = new FakeProviderAdapter(() => ({
+      ...proposal,
+      proposedLocations: [{ name: 'Invented River Town' }],
+    }));
+    const invalid = await executeLlmOperation(makeRequest('invalid'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [invalidProvider],
+    });
+    expect(invalid.status).toBe('review_required');
+    expect(invalid.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('NPC_BACKGROUND_ENTITY_CREATION_FORBIDDEN');
+    expect(invalidProvider.calls).toHaveLength(1);
+  });
+
   it('retries one invalid output with the same task and idempotency identity', async () => {
     const req = request('ooc.respond', 'validation-retry');
     let call = 0;

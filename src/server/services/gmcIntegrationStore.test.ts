@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   buildNarrationEvidenceBundle,
+  buildNpcTopicEvidence,
   buildProposedScenePresenceContract,
   buildScenePresenceContract,
   CAMPAIGN_MEMORY_CONTRACT_VERSION,
@@ -10,6 +11,8 @@ import {
   classifyWorldGenerationIntent,
   contradictionCandidates,
   GMA_LOCATION_ROUTING_CONTRACT_VERSION,
+  GMA_NPC_TOPIC_REQUIREMENT_CONTRACT_VERSION,
+  LEGACY_NARRATION_EVIDENCE_CONTRACT_VERSION,
   NARRATION_EVIDENCE_CONTRACT_VERSION,
   PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
   PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
@@ -1101,6 +1104,96 @@ describe('buildNarrationEvidenceBundle', () => {
       allowedDevelopmentKinds: [],
       destinationAuthority: null,
     }));
+  });
+
+  it('preserves the legacy default while negotiating the two additive evidence contracts explicitly', () => {
+    const base = {
+      campaignId: 'campaign-1', instruction: 'I ask Dorrik about the route.',
+      currentScene: { _id: 'scene-1', presentNpcIds: ['dorrik'] },
+      npcs: [{ _id: 'dorrik', canonical_name: 'Dorrik Siltvein', revision: 4 }],
+    };
+    expect(buildNarrationEvidenceBundle({ ...base, narrationEvidenceContractVersion: LEGACY_NARRATION_EVIDENCE_CONTRACT_VERSION }).evidence.contractVersion)
+      .toBe(LEGACY_NARRATION_EVIDENCE_CONTRACT_VERSION);
+    expect(buildNarrationEvidenceBundle({ ...base, narrationEvidenceContractVersion: PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION }).evidence.contractVersion)
+      .toBe(PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION);
+    expect(buildNarrationEvidenceBundle({ ...base, narrationEvidenceContractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION }).evidence.contractVersion)
+      .toBe(NARRATION_EVIDENCE_CONTRACT_VERSION);
+  });
+
+  it('selects exact NPC/topic evidence ahead of unrelated token matches and returns a stable knowledge state', () => {
+    const instruction = 'I ask Dorrik where he learned the trade.';
+    const sourceStart = instruction.indexOf('where he learned the trade');
+    const requirement = {
+      schemaVersion: GMA_NPC_TOPIC_REQUIREMENT_CONTRACT_VERSION,
+      npcId: 'dorrik', npcName: 'Dorrik Siltvein', npcRevision: '7', topic: 'trade_training',
+      sourceSpan: { start: sourceStart, end: instruction.length - 1, quote: 'where he learned the trade' },
+      requestedKnowledgeFields: ['trade_training'], purpose: 'private_dialogue_grounding',
+      scenePlanRevision: 'scene-plan-r3', developmentPermission: 'npc_background',
+    };
+    const result = buildNarrationEvidenceBundle({
+      campaignId: 'campaign-1', instruction,
+      narrationEvidenceContractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+      currentScene: { _id: 'scene-1', presentNpcIds: ['dorrik'] },
+      npcs: [{ _id: 'dorrik', canonical_name: 'Dorrik Siltvein', revision: 7 }],
+      facts: [
+        { _id: 'exact', text: 'Dorrik learned cargo tallying from a retired river factor.', relatedEntityIds: ['dorrik'], tags: ['npc-topic:trade_training'], secret: true },
+        { _id: 'unrelated-same-npc', text: 'Dorrik once crossed the northern route.', relatedEntityIds: ['dorrik'], tags: ['npc-topic:origin'] },
+        { _id: 'unrelated-token-hit', text: 'Mara learned the trade in Waterdeep.', relatedEntityIds: ['mara'], tags: ['npc-topic:trade_training'] },
+      ],
+      locationRouting: locationRouting(instruction, [{ quote: 'where he learned the trade', role: 'background_fact', movementState: 'none' }], { locationIntent: 'reference', generationIntent: 'npc_background' }),
+      worldGenerationPolicyVersion: WORLD_GENERATION_POLICY_VERSION,
+      npcTopicRequirements: [requirement],
+    });
+
+    expect(result.validation.npcTopicRequirements).toEqual(expect.objectContaining({ valid: true, resolvedCount: 1 }));
+    expect(result.evidence.npcTopics).toEqual([expect.objectContaining({
+      npcId: 'dorrik', topic: 'trade_training', knowledgeState: 'knows', sourceRefs: ['exact'],
+      developmentPermission: 'npc_background',
+    })]);
+    expect(result.evidence.canon.facts[0].id).toBe('exact');
+    expect(JSON.stringify(result.evidence.npcTopics)).not.toContain('Mara learned');
+  });
+
+  it('keeps genuine lack of knowledge distinct from an unestablished topic', () => {
+    const instruction = "I ask Dorrik who the Watch officer is.";
+    const quote = 'who the Watch officer is';
+    const start = instruction.indexOf(quote);
+    const base = {
+      instruction,
+      requirements: [{
+        schemaVersion: GMA_NPC_TOPIC_REQUIREMENT_CONTRACT_VERSION,
+        npcId: 'dorrik', npcName: 'Dorrik Siltvein', npcRevision: '2', topic: 'watch_identity',
+        sourceSpan: { start, end: start + quote.length, quote }, requestedKnowledgeFields: ['watch_identity'],
+        purpose: 'private_dialogue_grounding', scenePlanRevision: 'plan-r1', developmentPermission: 'forbidden',
+      }],
+      npcs: [{ _id: 'dorrik', canonical_name: 'Dorrik Siltvein', revision: 2 }],
+      creationPolicy: { mode: 'canonical_only', allowedDevelopmentKinds: [] },
+    };
+    const knownLimit = buildNpcTopicEvidence({
+      ...base,
+      facts: [{ _id: 'limit', text: 'Dorrik does not know the Watch contact’s identity.', relatedEntityIds: ['dorrik'], tags: ['npc-topic:watch_identity', 'knowledge:does_not_know'] }],
+    });
+    const gap = buildNpcTopicEvidence({ ...base, facts: [] });
+    expect(knownLimit.topics[0].knowledgeState).toBe('does_not_know');
+    expect(gap.topics[0].knowledgeState).toBe('not_established');
+  });
+
+  it('rejects a stale NPC revision before topic evidence can reach narration', () => {
+    const instruction = 'I ask Dorrik where he is from.';
+    const quote = 'where he is from';
+    const start = instruction.indexOf(quote);
+    const result = buildNpcTopicEvidence({
+      instruction,
+      requirements: [{
+        schemaVersion: GMA_NPC_TOPIC_REQUIREMENT_CONTRACT_VERSION,
+        npcId: 'dorrik', npcName: 'Dorrik Siltvein', npcRevision: '3', topic: 'origin',
+        sourceSpan: { start, end: start + quote.length, quote }, requestedKnowledgeFields: ['origin'],
+      }],
+      npcs: [{ _id: 'dorrik', canonical_name: 'Dorrik Siltvein', revision: 4 }],
+    });
+    expect(result.validation.valid).toBe(false);
+    expect(result.validation.issues).toContainEqual(expect.objectContaining({ code: 'npc_revision_stale' }));
+    expect(result.topics).toEqual([]);
   });
 
   it('uses semantic data requirements to retrieve practical canon without changing the player instruction fingerprint', () => {
