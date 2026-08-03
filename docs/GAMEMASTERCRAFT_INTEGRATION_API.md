@@ -76,6 +76,63 @@ new monotonically increasing revision numbers; superseded history is never
 overwritten. Diagnostics contain hashes, sizes, top-level key names, source
 revision key names, and timeline anchors only—not private payload values.
 
+## Typed GMA location routing
+
+GMC advertises the additive scene-story routing family in `GET /api/health`:
+
+- `gma.location-routing/1` for the compact GMA routing projection;
+- narration evidence `2026-08-02.1`; and
+- world-generation policy `2026-08-02.1`.
+
+Older GMA clients that omit `contractVersions` continue receiving narration
+evidence `2026-07-24.1` and world-generation policy `2026-08-01.1`. A new
+client opts into the additive contracts explicitly, so deploying GMC first does
+not break the already-deployed consumer.
+
+`memory/resolve-references`, `memory/prepare-references`, and
+`narration/evidence` accept this optional request material:
+
+```json
+{
+  "contractVersions": {
+    "narrationEvidence": "2026-08-02.1",
+    "worldGenerationPolicy": "2026-08-02.1"
+  },
+  "locationRouting": {
+    "authority": "gma.location-routing",
+    "contractVersion": "gma.location-routing/1",
+    "policyVersion": "gma.location-intent/1",
+    "instructionFingerprint": "sha256-without-prefix",
+    "locationMentions": [
+      {
+        "id": "location-1",
+        "sourceSpan": { "start": 0, "end": 21, "quote": "Where is Dorrik from?" },
+        "actingEntity": "player",
+        "normalizedReference": "dorrik origin",
+        "role": "background_fact",
+        "movementState": "none",
+        "confidence": 0.99,
+        "ambiguity": null
+      }
+    ],
+    "movementState": "none",
+    "locationIntent": "reference",
+    "generationIntent": "npc_background",
+    "taskKind": "narration"
+  }
+}
+```
+
+GMC validates every source span against the exact instruction. A person-location
+relationship gap can become destination authority only when the accepted
+projection positively establishes player travel and arrival (or an explicit
+creation target). Background facts, dialogue subjects, references, current
+settings, malformed projections, and absent positive movement fail closed to no
+destination authority. Existing-NPC background development uses
+`allowedDevelopmentKinds:["npc_background"]` with
+`allowedEntityTypes:[]`, `allowSceneSettingCreation:false`, and
+`destinationAuthority:null`; it never creates a substitute NPC or location.
+
 ## Campaign and live context
 
 ```http
@@ -143,7 +200,7 @@ Content-Type: application/json
 
 The returned `memoryContext` always includes world FACTs, plot ITEMs, and BBEG/lieutenant entity memory. It adds geographic FACTs/EVENTs whose location is in the current ancestry, minor entity memory only when that entity is present, and mundane/currency/furniture ITEMs only when their location or owner is in the scene. `retrieval.included` and `retrieval.excluded` make the selection auditable.
 
-`memory/resolve-references` is read-only. Its result includes a revision-bound `gmc.worldGenerationPolicy`. Canonical cues such as “back,” “same,” “usual,” or “last” remain binding and are never replaced by generated canon. Open-ended intent such as looking for a new mark may authorize only the necessary entity types; a mixed instruction can therefore bind a known location while allowing a new NPC there. `memory/prepare-references` performs deterministic canonical normalization, then returns the same reference-resolution contract. For example, when a player exactly names an NPC-associated place already stored in that NPC's `details.location`, GMC materializes the missing typed Location with provenance and a reciprocal relationship. It does not invent an address, layout, business type, or other setting detail.
+`memory/resolve-references` is read-only. Its result includes a revision-bound `gmc.worldGenerationPolicy`. Canonical cues such as “back,” “same,” “usual,” or “last” remain binding and are never replaced by generated canon. Open-ended intent such as looking for a new mark may authorize only the necessary entity types; a mixed instruction can therefore bind a known location while allowing a new NPC there. With a typed routing projection, location generation additionally requires positive player movement/creation authority. `memory/prepare-references` performs deterministic canonical normalization, then returns the same reference-resolution contract. For example, when a player exactly names an NPC-associated place already stored in that NPC's `details.location`, GMC may materialize the missing typed Location with provenance and a reciprocal relationship only when the typed route permits location normalization. It does not invent an address, layout, business type, or other setting detail.
 
 `narration/evidence` is the narration synchronization gate. It completes the same canonical preparation, then produces one hash-bound snapshot with:
 

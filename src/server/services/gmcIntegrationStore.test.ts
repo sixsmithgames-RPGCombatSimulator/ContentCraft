@@ -9,18 +9,55 @@ import {
   canonicalEntityIdentityKey,
   classifyWorldGenerationIntent,
   contradictionCandidates,
+  GMA_LOCATION_ROUTING_CONTRACT_VERSION,
   NARRATION_EVIDENCE_CONTRACT_VERSION,
+  PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+  PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
   resolveMemoryReferences,
   resolveSceneTransitionContract,
   selectMemoryContext,
   validateMemoryRestorationCandidate,
   validateNarrativePresenceContract,
+  WORLD_GENERATION_POLICY_VERSION,
 } from './gmcIntegrationStore.js';
 import {
   CHARACTER_SHEET_REVIEW_CONTRACT_VERSION,
   describeCharacterSheetChanges,
   normalizeCharacterSheetReviewSnapshot,
 } from './characterSheetReviewService.js';
+
+function locationRouting(
+  instruction: string,
+  mentions: Array<{ quote: string; role: string; movementState: string; actingEntity?: string }>,
+  fields: { movementState?: string; locationIntent?: string; generationIntent?: string } = {},
+) {
+  let cursor = 0;
+  const locationMentions = mentions.map((mention, index) => {
+    const start = instruction.indexOf(mention.quote, cursor);
+    cursor = start + mention.quote.length;
+    return {
+      id: `location-${index + 1}`,
+      sourceSpan: { start, end: start + mention.quote.length, quote: mention.quote },
+      actingEntity: mention.actingEntity ?? 'player',
+      normalizedReference: mention.quote.toLocaleLowerCase(),
+      role: mention.role,
+      movementState: mention.movementState,
+      confidence: 0.98,
+      ambiguity: null,
+    };
+  });
+  return {
+    authority: 'gma.location-routing',
+    contractVersion: GMA_LOCATION_ROUTING_CONTRACT_VERSION,
+    policyVersion: 'gma.location-intent/1',
+    instructionFingerprint: createHash('sha256').update(instruction).digest('hex'),
+    locationMentions,
+    movementState: fields.movementState ?? 'none',
+    locationIntent: fields.locationIntent ?? 'none',
+    generationIntent: fields.generationIntent ?? 'none',
+    taskKind: 'narration',
+  };
+}
 
 describe('character sheet change review contract', () => {
   it('normalizes every first-class inventory bucket without dropping item state', () => {
@@ -212,6 +249,119 @@ describe('resolveMemoryReferences', () => {
     expect(classifyWorldGenerationIntent('Retrieve the already-established Waterdeep locations and develop those existing records in more detail.')).toEqual(expect.objectContaining({
       mode: 'canonical_only',
       allowedEntityTypes: [],
+    }));
+  });
+
+  it('requires positive typed player movement before a named NPC relationship gap can become destination authority', () => {
+    const dorrik = { _id: 'dorrik', type: 'npc', canonical_name: 'Dorrik Siltvein', aliases: ['Dorrik'] };
+    const backgroundInstruction = 'Where is Dorrik from?';
+    const background = resolveMemoryReferences({
+      facts: [], items: [], locations: [{ _id: 'owl', canonical_name: "Kerrigan's Owl" }], factions: [], npcs: [dorrik],
+    }, backgroundInstruction, {
+      locationRouting: locationRouting(backgroundInstruction, [{
+        quote: backgroundInstruction,
+        role: 'background_fact',
+        movementState: 'none',
+      }], { locationIntent: 'reference', generationIntent: 'npc_background' }),
+    });
+
+    expect(background.locationRouting).toEqual(expect.objectContaining({
+      status: 'accepted',
+      locationRoles: ['background_fact'],
+      movementState: 'none',
+    }));
+    expect(background.references.some((reference: any) => reference.relationship === 'target_entity_location')).toBe(false);
+    expect(background.creationPolicy).toEqual(expect.objectContaining({
+      contractVersion: WORLD_GENERATION_POLICY_VERSION,
+      mode: 'canonical_only',
+      allowedEntityTypes: [],
+      allowedDevelopmentKinds: [],
+      allowSceneSettingCreation: false,
+      destinationAuthority: null,
+    }));
+
+    const travelInstruction = 'I go to where Dorrik is from.';
+    const travel = resolveMemoryReferences({
+      facts: [], items: [], locations: [], factions: [], npcs: [dorrik],
+    }, travelInstruction, {
+      locationRouting: locationRouting(travelInstruction, [{
+        quote: travelInstruction,
+        role: 'destination',
+        movementState: 'arrival',
+      }], { movementState: 'arrival', locationIntent: 'arrival' }),
+    });
+    expect(travel.creationPolicy).toEqual(expect.objectContaining({
+      mode: 'world_generation_allowed',
+      allowedEntityTypes: ['location'],
+      allowSceneSettingCreation: true,
+      destinationAuthority: expect.objectContaining({
+        kind: 'named_entity_location_gap',
+        targets: [{ npcId: 'dorrik', npcName: 'Dorrik Siltvein' }],
+      }),
+    }));
+  });
+
+  it('binds compound dialogue and travel authority only to the player-authored movement span', () => {
+    const instruction = 'Tell me where Dorrik is from, then go there.';
+    const result = resolveMemoryReferences({
+      facts: [], items: [], locations: [], factions: [],
+      npcs: [{ _id: 'dorrik', type: 'npc', canonical_name: 'Dorrik Siltvein', aliases: ['Dorrik'] }],
+    }, instruction, {
+      locationRouting: locationRouting(instruction, [
+        { quote: 'Tell me where Dorrik is from', role: 'background_fact', movementState: 'none' },
+        { quote: 'go there', role: 'destination', movementState: 'arrival' },
+      ], { movementState: 'arrival', locationIntent: 'arrival', generationIntent: 'npc_background' }),
+    });
+
+    expect(result.locationRouting).toEqual(expect.objectContaining({
+      status: 'accepted',
+      locationRoles: ['background_fact', 'destination'],
+      movementState: 'arrival',
+    }));
+    expect(result.creationPolicy.destinationAuthority).toEqual(expect.objectContaining({
+      kind: 'named_entity_location_gap',
+    }));
+  });
+
+  it('fails closed when a typed projection tries to turn a background span into movement', () => {
+    const instruction = 'Dorrik came from Neverwinter.';
+    const result = resolveMemoryReferences({
+      facts: [], items: [], locations: [], factions: [],
+      npcs: [{ _id: 'dorrik', type: 'npc', canonical_name: 'Dorrik Siltvein', aliases: ['Dorrik'] }],
+    }, instruction, {
+      locationRouting: locationRouting(instruction, [{
+        quote: instruction,
+        role: 'background_fact',
+        movementState: 'arrival',
+      }], { movementState: 'arrival', locationIntent: 'arrival', generationIntent: 'npc_background' }),
+    });
+
+    expect(result.locationRouting.status).toBe('invalid');
+    expect(result.creationPolicy).toEqual(expect.objectContaining({
+      mode: 'canonical_only',
+      allowedEntityTypes: [],
+      allowSceneSettingCreation: false,
+      destinationAuthority: null,
+    }));
+  });
+
+  it('separates existing-NPC background development from entity and location creation', () => {
+    const instruction = "Develop Dorrik's origin background without creating a place.";
+    const policy = classifyWorldGenerationIntent(instruction, {
+      locationRouting: locationRouting(instruction, [{
+        quote: "Dorrik's origin background",
+        role: 'background_fact',
+        movementState: 'none',
+      }], { locationIntent: 'reference', generationIntent: 'npc_background' }),
+    });
+
+    expect(policy).toEqual(expect.objectContaining({
+      contractVersion: WORLD_GENERATION_POLICY_VERSION,
+      mode: 'world_generation_allowed',
+      allowedEntityTypes: [],
+      allowedDevelopmentKinds: ['npc_background'],
+      allowSceneSettingCreation: false,
+      destinationAuthority: null,
     }));
   });
 
@@ -912,6 +1062,47 @@ describe('contradictionCandidates', () => {
 });
 
 describe('buildNarrationEvidenceBundle', () => {
+  it('supports the previous evidence contract while advertising typed routing in the new contract', () => {
+    const instruction = 'Where is Dorrik from?';
+    const routing = locationRouting(instruction, [{
+      quote: instruction,
+      role: 'background_fact',
+      movementState: 'none',
+    }], { locationIntent: 'reference', generationIntent: 'npc_background' });
+    const base = {
+      campaignId: 'campaign-1',
+      instruction,
+      currentScene: { _id: 'scene-1', presentNpcIds: ['dorrik'] },
+      npcs: [{ _id: 'dorrik', canonical_name: 'Dorrik Siltvein', aliases: ['Dorrik'] }],
+      facts: [], items: [], threads: [], locations: [], factions: [],
+    };
+    const previous = buildNarrationEvidenceBundle({
+      ...base,
+      narrationEvidenceContractVersion: PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+      worldGenerationPolicyVersion: PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
+    });
+    const current = buildNarrationEvidenceBundle({
+      ...base,
+      locationRouting: routing,
+      narrationEvidenceContractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+      worldGenerationPolicyVersion: WORLD_GENERATION_POLICY_VERSION,
+    });
+
+    expect(previous.evidence.contractVersion).toBe(PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION);
+    expect(previous.validation.contractVersion).toBe(PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION);
+    expect(previous.evidence.references.creationPolicy.contractVersion).toBe(PREVIOUS_WORLD_GENERATION_POLICY_VERSION);
+    expect(current.evidence.contractVersion).toBe(NARRATION_EVIDENCE_CONTRACT_VERSION);
+    expect(current.evidence.references.locationRouting).toEqual(expect.objectContaining({
+      status: 'accepted',
+      locationRoles: ['background_fact'],
+    }));
+    expect(current.evidence.references.creationPolicy).toEqual(expect.objectContaining({
+      contractVersion: WORLD_GENERATION_POLICY_VERSION,
+      allowedDevelopmentKinds: [],
+      destinationAuthority: null,
+    }));
+  });
+
   it('uses semantic data requirements to retrieve practical canon without changing the player instruction fingerprint', () => {
     const instruction = 'If it is possible, I use the alternate route.';
     const result = buildNarrationEvidenceBundle({

@@ -28,9 +28,148 @@ export const QUEST_TYPES = ['main', 'side'] as const;
 export const QUEST_STATUSES = ['active', 'paused', 'completed', 'failed', 'abandoned'] as const;
 export const QUEST_LOG_CONTRACT_VERSION = '2026-07-24.1';
 export const CAMPAIGN_MEMORY_CONTRACT_VERSION = '2026-07-24.1';
-export const WORLD_GENERATION_POLICY_VERSION = '2026-08-01.1';
+export const WORLD_GENERATION_POLICY_VERSION = '2026-08-02.1';
+export const PREVIOUS_WORLD_GENERATION_POLICY_VERSION = '2026-08-01.1';
 export const SCENE_TRANSITION_CONTRACT_VERSION = '2026-08-01.1';
-export const NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-07-24.1';
+export const NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-08-02.1';
+export const PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION = '2026-07-24.1';
+export const GMA_LOCATION_ROUTING_CONTRACT_VERSION = 'gma.location-routing/1';
+
+const GMA_LOCATION_ROLES = new Set([
+  'current_setting',
+  'dialogue_subject',
+  'background_fact',
+  'reference',
+  'route',
+  'destination',
+  'creation_target',
+]);
+const GMA_LOCATION_MOVEMENT_STATES = new Set(['none', 'transit', 'arrival']);
+const GMA_LOCATION_INTENTS = new Set(['none', 'reference', 'transit', 'arrival']);
+const GMA_GENERATION_INTENTS = new Set(['none', 'npc_background', 'scene']);
+
+type GmaLocationRoutingValidation = {
+  status: 'absent' | 'accepted' | 'invalid';
+  reasons: string[];
+  projection: Record<string, any> | null;
+  positiveMovement: boolean;
+  positiveArrival: boolean;
+  positiveCreationTarget: boolean;
+};
+
+function validateGmaLocationRoutingProjection(value: unknown, instruction: string): GmaLocationRoutingValidation {
+  if (value === undefined || value === null) {
+    return {
+      status: 'absent', reasons: [], projection: null,
+      positiveMovement: false, positiveArrival: false, positiveCreationTarget: false,
+    };
+  }
+  const source = objectRecord(value);
+  const reasons: string[] = [];
+  const instructionFingerprint = createHash('sha256').update(instruction).digest('hex');
+  if (source.authority !== 'gma.location-routing') reasons.push('authority');
+  if (source.contractVersion !== GMA_LOCATION_ROUTING_CONTRACT_VERSION) reasons.push('contract_version');
+  if (source.instructionFingerprint !== instructionFingerprint) reasons.push('instruction_fingerprint');
+  const rawMentions = Array.isArray(source.locationMentions) ? source.locationMentions.slice(0, 24) : [];
+  const locationMentions = rawMentions.flatMap((entry: any, index: number) => {
+    const mention = objectRecord(entry);
+    const span = objectRecord(mention.sourceSpan);
+    const start = Number(span.start);
+    const end = Number(span.end);
+    const quote = String(span.quote ?? '');
+    const role = String(mention.role ?? '');
+    const movementState = String(mention.movementState ?? '');
+    const actingEntity = String(mention.actingEntity ?? '').trim();
+    if (
+      !Number.isSafeInteger(start) || !Number.isSafeInteger(end)
+      || start < 0 || end <= start || end > instruction.length
+      || instruction.slice(start, end) !== quote
+      || !GMA_LOCATION_ROLES.has(role)
+      || !GMA_LOCATION_MOVEMENT_STATES.has(movementState)
+      || !actingEntity
+    ) {
+      reasons.push(`mention_${index + 1}`);
+      return [];
+    }
+    if (['background_fact', 'dialogue_subject', 'reference', 'current_setting', 'creation_target'].includes(role) && movementState !== 'none') {
+      reasons.push(`mention_${index + 1}_movement`);
+      return [];
+    }
+    if (role === 'route' && movementState !== 'transit') {
+      reasons.push(`mention_${index + 1}_route`);
+      return [];
+    }
+    if (role === 'destination' && movementState !== 'arrival') {
+      reasons.push(`mention_${index + 1}_destination`);
+      return [];
+    }
+    return [{
+      id: String(mention.id ?? `location-${index + 1}`).slice(0, 80),
+      sourceSpan: { start, end, quote },
+      actingEntity: actingEntity.slice(0, 120),
+      normalizedReference: String(mention.normalizedReference ?? '').slice(0, 240) || null,
+      role,
+      movementState,
+      confidence: Math.max(0, Math.min(1, Number(mention.confidence ?? 0) || 0)),
+      ambiguity: mention.ambiguity ? String(mention.ambiguity).slice(0, 240) : null,
+    }];
+  });
+  const movementState = String(source.movementState ?? 'none');
+  const locationIntent = String(source.locationIntent ?? 'none');
+  const generationIntent = String(source.generationIntent ?? 'none');
+  if (!GMA_LOCATION_MOVEMENT_STATES.has(movementState)) reasons.push('movement_state');
+  if (!GMA_LOCATION_INTENTS.has(locationIntent)) reasons.push('location_intent');
+  if (!GMA_GENERATION_INTENTS.has(generationIntent)) reasons.push('generation_intent');
+  const positiveMovement = locationMentions.some((mention: any) => (
+    mention.actingEntity === 'player'
+    && ['route', 'destination'].includes(mention.role)
+    && ['transit', 'arrival'].includes(mention.movementState)
+  ));
+  const positiveArrival = locationMentions.some((mention: any) => (
+    mention.actingEntity === 'player'
+    && mention.role === 'destination'
+    && mention.movementState === 'arrival'
+  ));
+  const positiveCreationTarget = locationMentions.some((mention: any) => mention.role === 'creation_target');
+  const derivedMovementState = positiveArrival ? 'arrival' : (positiveMovement ? 'transit' : 'none');
+  if (movementState !== derivedMovementState) reasons.push('movement_summary');
+  if (locationIntent === 'arrival' && !positiveArrival) reasons.push('arrival_without_destination');
+  if (locationIntent === 'transit' && !positiveMovement) reasons.push('transit_without_route');
+  if (locationIntent === 'reference' && positiveMovement) reasons.push('reference_with_movement');
+  const projection = {
+    authority: 'gma.location-routing',
+    contractVersion: GMA_LOCATION_ROUTING_CONTRACT_VERSION,
+    policyVersion: String(source.policyVersion ?? '').slice(0, 80) || null,
+    instructionFingerprint,
+    locationMentions,
+    movementState,
+    locationIntent,
+    generationIntent,
+    taskKind: String(source.taskKind ?? 'narration').slice(0, 80),
+  };
+  return {
+    status: reasons.length ? 'invalid' : 'accepted',
+    reasons: [...new Set(reasons)].slice(0, 12),
+    projection: reasons.length ? null : projection,
+    positiveMovement: reasons.length ? false : positiveMovement,
+    positiveArrival: reasons.length ? false : positiveArrival,
+    positiveCreationTarget: reasons.length ? false : positiveCreationTarget,
+  };
+}
+
+function compactLocationRoutingValidation(validation: GmaLocationRoutingValidation) {
+  const projection = validation.projection;
+  return {
+    status: validation.status,
+    contractVersion: projection?.contractVersion ?? GMA_LOCATION_ROUTING_CONTRACT_VERSION,
+    policyVersion: projection?.policyVersion ?? null,
+    locationRoles: [...new Set((projection?.locationMentions ?? []).map((mention: any) => mention.role))].sort(),
+    movementState: projection?.movementState ?? 'none',
+    locationIntent: projection?.locationIntent ?? 'none',
+    generationIntent: projection?.generationIntent ?? 'none',
+    reasons: validation.reasons,
+  };
+}
 
 function includes<T extends readonly string[]>(values: T, value: unknown): value is T[number] {
   return values.includes(String(value) as T[number]);
@@ -959,12 +1098,18 @@ export function resolveQuestReference(
   };
 }
 
-function questBoundCreationPolicy(basePolicy: any, questResolution: any) {
+function questBoundCreationPolicy(
+  basePolicy: any,
+  questResolution: any,
+  routing: GmaLocationRoutingValidation,
+) {
   const selected = questResolution?.status === 'resolved' ? questResolution.selected : null;
   const allowLocation = selected?.destination?.allowSceneSettingCreation === true
     || selected?.destination?.mode === 'search_area'
     || selected?.destination?.mode === 'target_entity_current_location';
-  if (!allowLocation) return basePolicy;
+  const routingAllowsLocation = routing.status === 'absent'
+    || (routing.status === 'accepted' && (routing.positiveMovement || routing.positiveCreationTarget));
+  if (!allowLocation || !routingAllowsLocation) return basePolicy;
   const source = {
     ...basePolicy,
     mode: 'world_generation_allowed',
@@ -1021,8 +1166,16 @@ function normalizedImplicitMentionPhrase(value: unknown) {
  * organization. This permission is narrow and instruction-bound: it never
  * authorizes replacing an unresolved "back/same/usual/last" reference.
  */
-export function classifyWorldGenerationIntent(instruction: string) {
+export function classifyWorldGenerationIntent(
+  instruction: string,
+  options: {
+    locationRouting?: unknown;
+    worldGenerationPolicyVersion?: string;
+    validatedRouting?: GmaLocationRoutingValidation;
+  } = {},
+) {
   const text = String(instruction ?? '').trim();
+  const routing = options.validatedRouting ?? validateGmaLocationRoutingProjection(options.locationRouting, text);
   const generativeAction = /\b(?:find|look(?:ing)?\s+for|search(?:ing)?\s+for|seek(?:ing)?|hunt(?:ing)?\s+for|scout(?:ing)?\s+for|explore|wander|pick(?:ing)?\s+out|choose|locate)\b/i.test(text);
   const indefiniteTarget = /\b(?:a|an|some|someone|somebody|somewhere|new|another|any)\b/i.test(text);
   const explicitCreationAction = /\b(?:create|generate|invent|introduce|populate|add|draft|design|name|make\s+up|establish\s+(?:a|an|some|new|additional))\b/i.test(text);
@@ -1036,20 +1189,44 @@ export function classifyWorldGenerationIntent(instruction: string) {
   if (openEnded && !canonicalLocationCue && (departure || /\b(?:somewhere|places?|areas?|locations?|destinations?|districts?|wards?|streets?|lanes?|alleys?|markets?|inns?|taverns?|boarding houses?|residences?|homes?|houses?|shops?|stores?|workshops?|rooms?|buildings?|facilities?|courts?|offices?|temples?|chapels?|healers?|clinics?|towers?|guild halls?|entertainment (?:places?|venues?)|theaters?|warehouses?|boundaries|routes?|neighbou?rhoods?)\b/i.test(text))) allowedEntityTypes.push('location');
   if (openEnded && /\b(?:things?|items?|objects?|weapons?|armou?r|keys?|books?|letters?|devices?|tools?|potions?|rings?|amulets?|components?|reagents?|clues?|evidence)\b/i.test(text)) allowedEntityTypes.push('item');
   if (openEnded && /\b(?:factions?|guilds?\b(?!\s+halls?)|watch\b(?!\s+facilit)|orders?|cults?|churches?|companies|gangs?|crews?|families|clans?|organizations?|groups?)\b/i.test(text)) allowedEntityTypes.push('faction');
-  const uniqueTypes = [...new Set(allowedEntityTypes)].sort();
+  const explicitNpcBackgroundDevelopment = /\b(?:create|develop|invent|establish|fill\s+in|make\s+up)\b[^.!?]{0,100}\b(?:background|backstory|origin|upbringing|personal history|past)\b/i.test(text)
+    || /\b(?:background|backstory|origin|upbringing|personal history|past)\b[^.!?]{0,100}\b(?:create|develop|invent|establish|fill\s+in|make\s+up)\b/i.test(text);
+  const typedNpcBackground = routing.status === 'accepted'
+    && routing.projection?.generationIntent === 'npc_background';
+  let uniqueTypes = [...new Set(allowedEntityTypes)].sort();
+  let allowedDevelopmentKinds: string[] = explicitNpcBackgroundDevelopment ? ['npc_background'] : [];
+  if (routing.status === 'invalid') {
+    uniqueTypes = [];
+    allowedDevelopmentKinds = [];
+  } else if (typedNpcBackground) {
+    if (uniqueTypes.includes('npc')) allowedDevelopmentKinds.push('npc_background');
+    uniqueTypes = [];
+  } else if (routing.status === 'accepted' && !routing.positiveMovement && !routing.positiveCreationTarget) {
+    uniqueTypes = uniqueTypes.filter((kind) => kind !== 'location');
+  }
+  allowedDevelopmentKinds = [...new Set(allowedDevelopmentKinds)].sort();
+  const policyVersion = options.worldGenerationPolicyVersion === PREVIOUS_WORLD_GENERATION_POLICY_VERSION
+    ? PREVIOUS_WORLD_GENERATION_POLICY_VERSION
+    : WORLD_GENERATION_POLICY_VERSION;
   const source = {
     authority: 'gmc.worldGenerationPolicy',
-    contractVersion: WORLD_GENERATION_POLICY_VERSION,
+    contractVersion: policyVersion,
     instruction: normalizedReferenceIdentity(text),
-    mode: uniqueTypes.length ? 'world_generation_allowed' : 'canonical_only',
+    mode: uniqueTypes.length || allowedDevelopmentKinds.length ? 'world_generation_allowed' : 'canonical_only',
     allowedEntityTypes: uniqueTypes,
+    ...(policyVersion === WORLD_GENERATION_POLICY_VERSION ? { allowedDevelopmentKinds } : {}),
   };
   return {
     ...source,
     revision: createHash('sha256').update(stablePresenceJson(source)).digest('hex'),
-    allowSceneSettingCreation: uniqueTypes.includes('location'),
-    rules: uniqueTypes.length ? [
+    allowSceneSettingCreation: uniqueTypes.includes('location')
+      && (routing.status === 'absent' || routing.positiveMovement || routing.positiveCreationTarget),
+    destinationAuthority: null,
+    rules: uniqueTypes.length || allowedDevelopmentKinds.length ? [
       'Creation is allowed only for the listed entity types and only to fulfill this instruction.',
+      ...(allowedDevelopmentKinds.includes('npc_background')
+        ? ['NPC background development may add one bounded fact to an existing NPC; it cannot create an NPC, location, scene setting, or destination.']
+        : []),
       'Any established canonical reference selected by memory resolution remains binding.',
       'New scene-local people and places must be returned as matching ENTITY create proposals.',
     ] : [
@@ -1058,10 +1235,10 @@ export function classifyWorldGenerationIntent(instruction: string) {
   };
 }
 
-function referenceSpecs(instruction: string): MemoryReferenceSpec[] {
+function referenceSpecs(instruction: string, generationPolicyInput?: any): MemoryReferenceSpec[] {
   const text = String(instruction ?? '');
   const mostRecent = /\b(?:back to|return(?:ing|ed)? to|same|usual|last|previous(?:ly)?|again|where\s+\w+\s+(?:stayed|slept|lodged))\b/i.test(text);
-  const generationPolicy = classifyWorldGenerationIntent(text);
+  const generationPolicy = generationPolicyInput ?? classifyWorldGenerationIntent(text);
   const specs: MemoryReferenceSpec[] = [];
   if (/\b(?:inn|tavern|lodg(?:e|ed|ing)?|room for the night|sleep|slept|stayed|staying|night's? rest)\b/i.test(text)) {
     if (!generationPolicy.allowedEntityTypes.includes('location')) specs.push({ key: 'lodging_location', kind: 'location', relationship: mostRecent ? 'most_recent' : 'explicit', activity: 'lodging', label: 'lodging location', recordTerms: /\b(?:inn|tavern|lodg|hostel|boarding)\b/i, evidenceTerms: /\b(?:stay(?:ed|ing)?|slept|lodg|room key|night's? rest|paid for (?:the )?night)\b/i });
@@ -1344,11 +1521,18 @@ function npcDestinationReferences(
   locations: any[],
   facts: any[],
   instruction: string,
+  routing: GmaLocationRoutingValidation,
 ): { specs: MemoryReferenceSpec[]; gaps: Array<{ npcId: string; npcName: string }> } {
   const text = normalizedReferenceIdentity(instruction);
   const specs = new Map<string, MemoryReferenceSpec>();
   const gaps: Array<{ npcId: string; npcName: string }> = [];
-  if (!NPC_DESTINATION_CUE.test(text)) return { specs: [], gaps };
+  const routingAllowsPersonLocation = routing.status === 'absent'
+    ? NPC_DESTINATION_CUE.test(text)
+    : routing.status === 'accepted' && (
+      routing.positiveMovement
+      || routing.positiveCreationTarget
+    );
+  if (!routingAllowsPersonLocation) return { specs: [], gaps };
   for (const npc of npcs ?? []) {
     const npcIdentities = recordIdentities(npc);
     if (!npcIdentities.some((identity) => containsNormalizedIdentity(text, identity))) continue;
@@ -1440,8 +1624,14 @@ function npcDestinationReferences(
   return { specs: [...specs.values()], gaps };
 }
 
-function relationshipGapCreationPolicy(basePolicy: any, gaps: Array<{ npcId: string; npcName: string }>) {
-  if (!gaps.length) return basePolicy;
+function relationshipGapCreationPolicy(
+  basePolicy: any,
+  gaps: Array<{ npcId: string; npcName: string }>,
+  routing: GmaLocationRoutingValidation,
+) {
+  const routingAllowsArrivalCreation = routing.status === 'absent'
+    || (routing.status === 'accepted' && (routing.positiveArrival || routing.positiveCreationTarget));
+  if (!gaps.length || !routingAllowsArrivalCreation) return basePolicy;
   const source = {
     ...basePolicy,
     mode: 'world_generation_allowed',
@@ -1472,8 +1662,17 @@ function relationshipGapCreationPolicy(basePolicy: any, gaps: Array<{ npcId: str
 export function resolveMemoryReferences(
   records: { facts: any[]; items: any[]; npcs: any[]; locations: any[]; factions?: any[]; quests?: any[]; gameClock?: any },
   instruction: string,
+  routingOptions: {
+    locationRouting?: unknown;
+    worldGenerationPolicyVersion?: string;
+  } = {},
 ) {
   const facts = Array.isArray(records.facts) ? records.facts : [];
+  const routing = validateGmaLocationRoutingProjection(routingOptions.locationRouting, instruction);
+  const baseGenerationPolicy = classifyWorldGenerationIntent(instruction, {
+    validatedRouting: routing,
+    worldGenerationPolicyVersion: routingOptions.worldGenerationPolicyVersion,
+  });
   const byKind: Record<Exclude<MemoryReferenceKind, 'quest'>, any[]> = {
     location: records.locations ?? [],
     npc: records.npcs ?? [],
@@ -1485,9 +1684,10 @@ export function resolveMemoryReferences(
     byKind.location,
     facts,
     instruction,
+    routing,
   );
   const specs = [
-    ...referenceSpecs(instruction),
+    ...referenceSpecs(instruction, baseGenerationPolicy),
     ...destinationReferences.specs,
     ...explicitCanonicalReferenceSpecs(byKind, instruction),
   ];
@@ -1578,10 +1778,11 @@ export function resolveMemoryReferences(
   const allReferences = [...references, ...questReference];
   const unresolved = allReferences.filter((reference) => reference.status !== 'resolved');
   const creationPolicy = relationshipGapCreationPolicy(
-    questBoundCreationPolicy(classifyWorldGenerationIntent(instruction), questResolution),
+    questBoundCreationPolicy(baseGenerationPolicy, questResolution, routing),
     destinationReferences.gaps,
+    routing,
   );
-  const options = [...new Map(unresolved.flatMap((reference) => reference.candidates)
+  const clarificationOptions = [...new Map(unresolved.flatMap((reference) => reference.candidates)
     .map((candidate: any) => {
       const description = String(
         candidate?.objective
@@ -1606,21 +1807,33 @@ export function resolveMemoryReferences(
     references: allReferences,
     questResolution,
     creationPolicy,
+    locationRouting: compactLocationRoutingValidation(routing),
     clarification: unresolved.length ? {
-      question: options.length
+      question: clarificationOptions.length
         ? `Which established ${unresolved.map((entry) => entry.label).join(' and ')} did you mean?`
         : `GMC is missing the established ${unresolved.map((entry) => entry.label).join(' and ')}. What canonical name should be restored?`,
-      options,
+      options: clarificationOptions,
       unresolvedKeys: unresolved.map((entry) => entry.key),
     } : null,
   };
 }
 
-export async function prepareMemoryReferences(userId: string, campaignId: string, instruction: string) {
+export async function prepareMemoryReferences(
+  userId: string,
+  campaignId: string,
+  instruction: string,
+  options: {
+    locationRouting?: unknown;
+    worldGenerationPolicyVersion?: string;
+  } = {},
+) {
   const npcs = await listEntities(userId, campaignId, 'npc');
   const locations = await listEntities(userId, campaignId, 'location');
   const repairs: any[] = [];
-  for (const npc of npcs) {
+  const routing = validateGmaLocationRoutingProjection(options.locationRouting, instruction);
+  const mayNormalizeLocation = routing.status === 'absent'
+    || (routing.status === 'accepted' && (routing.positiveMovement || routing.positiveCreationTarget));
+  for (const npc of mayNormalizeLocation ? npcs : []) {
     const locationName = String(npc?.details?.location ?? '').trim();
     const npcName = String(npc?.canonical_name ?? '').trim();
     if (!locationName || !npcName) continue;
@@ -1692,7 +1905,7 @@ export async function prepareMemoryReferences(userId: string, campaignId: string
     factions,
     quests,
     gameClock: state?.gameClock ?? null,
-  }, instruction);
+  }, instruction, options);
   return { repairs, resolution: { ...resolution, canonicalRepairs: repairs } };
 }
 
@@ -2212,9 +2425,15 @@ export function buildNarrationEvidenceBundle(input: {
   factions?: any[];
   quests?: any[];
   resolution?: any;
+  locationRouting?: unknown;
+  narrationEvidenceContractVersion?: string;
+  worldGenerationPolicyVersion?: string;
   limits?: { facts?: number; items?: number; threads?: number; locations?: number };
 }) {
   const instruction = String(input?.instruction ?? '').trim();
+  const narrationEvidenceContractVersion = input?.narrationEvidenceContractVersion === PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION
+    ? PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION
+    : NARRATION_EVIDENCE_CONTRACT_VERSION;
   const facts = Array.isArray(input?.facts) ? input.facts : [];
   const items = Array.isArray(input?.items) ? input.items : [];
   const threads = Array.isArray(input?.threads) ? input.threads : [];
@@ -2229,7 +2448,10 @@ export function buildNarrationEvidenceBundle(input: {
     factions: input?.factions ?? [],
     quests,
     gameClock: input?.gameClock ?? null,
-  }, instruction);
+  }, instruction, {
+    locationRouting: input?.locationRouting,
+    worldGenerationPolicyVersion: input?.worldGenerationPolicyVersion,
+  });
   const presenceContract = buildScenePresenceContract(input?.currentScene ?? null, npcs);
   const references = (Array.isArray(resolution?.references) ? resolution.references : []).map(compactEvidenceReference);
   const referencedIds = new Set<string>(references.flatMap((reference: any) => [
@@ -2285,7 +2507,12 @@ export function buildNarrationEvidenceBundle(input: {
     contractVersion: resolution?.contractVersion ?? CAMPAIGN_MEMORY_CONTRACT_VERSION,
     status: resolution?.status ?? 'resolved',
     references,
-    creationPolicy: resolution?.creationPolicy ?? classifyWorldGenerationIntent(instruction),
+    creationPolicy: resolution?.creationPolicy ?? classifyWorldGenerationIntent(instruction, {
+      locationRouting: input?.locationRouting,
+      worldGenerationPolicyVersion: input?.worldGenerationPolicyVersion,
+    }),
+    locationRouting: resolution?.locationRouting
+      ?? compactLocationRoutingValidation(validateGmaLocationRoutingProjection(input?.locationRouting, instruction)),
     clarification: resolution?.clarification ? {
       question: resolution.clarification.question ?? null,
       options: (Array.isArray(resolution.clarification.options) ? resolution.clarification.options : []).slice(0, 8),
@@ -2301,7 +2528,7 @@ export function buildNarrationEvidenceBundle(input: {
   };
   const evidenceCore = {
     authority: 'gmc.narration-evidence',
-    contractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+    contractVersion: narrationEvidenceContractVersion,
     campaignId: String(input?.campaignId ?? ''),
     instructionFingerprint: createHash('sha256').update(instruction).digest('hex'),
     intentTags: [...new Set((input?.intentTags ?? []).map(String).filter(Boolean))].sort(),
@@ -2408,7 +2635,7 @@ export function buildNarrationEvidenceBundle(input: {
     evidence: { ...evidenceCore, evidenceRevision },
     validation: {
       authority: 'gmc.narration-validation',
-      contractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+      contractVersion: narrationEvidenceContractVersion,
       evidenceRevision,
       scenePresenceContract: presenceContract,
     },
@@ -2766,7 +2993,11 @@ export function resolveSceneTransitionContract(input: {
   if (!where) throw Object.assign(new Error('The proposed scene must declare where it occurs.'), { status: 409, code: 'SCENE_DESTINATION_LOCATION_REQUIRED' });
   const instruction = String(input?.instruction ?? '');
   const questResolution = resolveQuestReference(input?.quests ?? [], instruction, input?.gameClock ?? null);
-  const generationPolicy = questBoundCreationPolicy(classifyWorldGenerationIntent(instruction), questResolution);
+  const generationPolicy = questBoundCreationPolicy(
+    classifyWorldGenerationIntent(instruction),
+    questResolution,
+    validateGmaLocationRoutingProjection(undefined, instruction),
+  );
   const rawGeneratedEntities = Array.isArray(input?.generatedEntities) ? input.generatedEntities : [];
   if (rawGeneratedEntities.length > 20) throw Object.assign(new Error('No more than 20 generated scene entities may be staged.'), { status: 409, code: 'SCENE_GENERATED_ENTITY_LIMIT' });
   if (rawGeneratedEntities.length && (!input?.userId || !input?.campaignId)) {

@@ -26,6 +26,9 @@ import {
   listFacts,
   listThreads,
   listQuests,
+  NARRATION_EVIDENCE_CONTRACT_VERSION,
+  PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+  PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
   prepareMemoryReferences,
   promoteNpcProfile,
   resolveMemoryReferences,
@@ -36,6 +39,7 @@ import {
   updateEntity,
   updateQuest,
   validateNarrativePresenceContract,
+  WORLD_GENERATION_POLICY_VERSION,
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
 import { NPC_IDENTITY_CONTRACT_VERSION, isCanonicalNpcName, normalizeNpcIdentitySeed } from '../services/npcIdentity.js';
@@ -94,6 +98,20 @@ export const gmcV1Router = Router();
 gmcV1Router.use(integrationAuth);
 gmcV1Router.use('/llm', llmOrchestratorRouter);
 gmcV1Router.use('/campaigns/:campaignId/integration/scene-plans', gmaScenePlanRouter);
+
+export function requestedSceneStoryContracts(body: any) {
+  const requestedEvidence = String(body?.contractVersions?.narrationEvidence ?? '').trim();
+  const requestedWorldPolicy = String(body?.contractVersions?.worldGenerationPolicy ?? '').trim();
+  return {
+    narrationEvidenceContractVersion: requestedEvidence === NARRATION_EVIDENCE_CONTRACT_VERSION
+      ? NARRATION_EVIDENCE_CONTRACT_VERSION
+      : PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+    worldGenerationPolicyVersion: requestedWorldPolicy === WORLD_GENERATION_POLICY_VERSION
+      ? WORLD_GENERATION_POLICY_VERSION
+      : PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
+    locationRouting: body?.locationRouting ?? null,
+  };
+}
 
 export function shouldResolveNarrativeTransition(responseMode: string, sceneSegment: Record<string, unknown> | null) {
   return responseMode !== 'ooc' && sceneSegment !== null;
@@ -750,10 +768,11 @@ gmcV1Router.post('/campaigns/:campaignId/narration/evidence', asyncRoute(async (
   const id = req.params.campaignId;
   const instruction = String(req.body?.instruction ?? '').trim();
   if (!instruction) { fail(req, res, 400, 'VALIDATION_ERROR', 'instruction is required.'); return; }
+  const sceneStoryContracts = requestedSceneStoryContracts(req.body);
 
   // Canonical repairs complete before the snapshot is read. The resulting
   // evidence and validation contracts are hashed together by one builder.
-  const prepared = await prepareMemoryReferences(uid, id, instruction);
+  const prepared = await prepareMemoryReferences(uid, id, instruction, sceneStoryContracts);
   const state = await collections.state().findOne({ userId: uid, campaignId: id });
   const currentScene = state?.currentSceneId
     ? await collections.scenes().findOne({ _id: state.currentSceneId, userId: uid, campaignId: id })
@@ -789,6 +808,7 @@ gmcV1Router.post('/campaigns/:campaignId/narration/evidence', asyncRoute(async (
     factions,
     quests,
     resolution: prepared.resolution,
+    ...sceneStoryContracts,
     limits: req.body?.limits,
   }));
 }));
@@ -811,6 +831,7 @@ gmcV1Router.post('/campaigns/:campaignId/memory/resolve-references', asyncRoute(
   const uid = userId(req); const id = req.params.campaignId;
   const instruction = String(req.body?.instruction ?? '').trim();
   if (!instruction) { fail(req, res, 400, 'VALIDATION_ERROR', 'instruction is required.'); return; }
+  const sceneStoryContracts = requestedSceneStoryContracts(req.body);
   const state = await collections.state().findOne({ userId: uid, campaignId: id });
   const [facts, threads, items, npcs, locations, factions, quests] = await Promise.all([
     listFacts(uid, id),
@@ -830,7 +851,7 @@ gmcV1Router.post('/campaigns/:campaignId/memory/resolve-references', asyncRoute(
       factions,
       quests,
       gameClock: state?.gameClock ?? null,
-    }, instruction),
+    }, instruction, sceneStoryContracts),
   });
 }));
 
@@ -870,7 +891,12 @@ gmcV1Router.post('/campaigns/:campaignId/memory/prepare-references', asyncRoute(
   if (!await campaign(req, res)) return;
   const instruction = String(req.body?.instruction ?? '').trim();
   if (!instruction) { fail(req, res, 400, 'VALIDATION_ERROR', 'instruction is required.'); return; }
-  res.json(await prepareMemoryReferences(userId(req), req.params.campaignId, instruction));
+  res.json(await prepareMemoryReferences(
+    userId(req),
+    req.params.campaignId,
+    instruction,
+    requestedSceneStoryContracts(req.body),
+  ));
 }));
 
 gmcV1Router.post('/campaigns/:campaignId/memory/restore-references', asyncRoute(async (req, res) => {

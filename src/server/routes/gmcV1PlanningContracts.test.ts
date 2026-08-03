@@ -23,10 +23,18 @@ import {
   PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION,
   PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS,
   SKILL_ENVELOPE_INSTRUCTION,
+  requestedSceneStoryContracts,
   shouldResolveNarrativeTransition,
   validateCompactAiInput,
   validateStructuredAiOutput,
 } from './gmcV1.js';
+import {
+  GMA_LOCATION_ROUTING_CONTRACT_VERSION,
+  NARRATION_EVIDENCE_CONTRACT_VERSION,
+  PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+  PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
+  WORLD_GENERATION_POLICY_VERSION,
+} from '../services/gmcIntegrationStore.js';
 
 describe('GMC narrative transition validation contract', () => {
   it('validates every in-character scene segment against its resolved presence', () => {
@@ -88,6 +96,26 @@ describe('GMC compact interaction envelope contract', () => {
         policy: { authority: 'gma.character-sheet-mutation-policy' },
       },
     } as any)).not.toThrow();
+  });
+
+  it('keeps old GMA clients on previous evidence contracts and negotiates the typed-routing versions explicitly', () => {
+    expect(requestedSceneStoryContracts({})).toEqual({
+      narrationEvidenceContractVersion: PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+      worldGenerationPolicyVersion: PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
+      locationRouting: null,
+    });
+    const locationRouting = { authority: 'gma.location-routing', contractVersion: GMA_LOCATION_ROUTING_CONTRACT_VERSION };
+    expect(requestedSceneStoryContracts({
+      contractVersions: {
+        narrationEvidence: NARRATION_EVIDENCE_CONTRACT_VERSION,
+        worldGenerationPolicy: WORLD_GENERATION_POLICY_VERSION,
+      },
+      locationRouting,
+    })).toEqual({
+      narrationEvidenceContractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+      worldGenerationPolicyVersion: WORLD_GENERATION_POLICY_VERSION,
+      locationRouting,
+    });
   });
 
   it('uses task-specific provider instructions and validates response types without hard prompt ceilings', () => {

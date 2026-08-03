@@ -22,6 +22,13 @@ import {
   GMA_SCENE_PLAN_SCHEMA_ALLOWLIST,
   GMA_SCENE_PLAN_STORE_CONTRACT_VERSION,
 } from '../services/gmaScenePlanStore.js';
+import {
+  GMA_LOCATION_ROUTING_CONTRACT_VERSION,
+  NARRATION_EVIDENCE_CONTRACT_VERSION,
+  PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+  PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
+  WORLD_GENERATION_POLICY_VERSION,
+} from '../services/gmcIntegrationStore.js';
 
 export const apiRouter = Router();
 
@@ -51,6 +58,19 @@ apiRouter.get('/health', (_req, res) => {
         schemaVersions: GMA_SCENE_PLAN_SCHEMA_ALLOWLIST,
         maximumPrivatePayloadBytes: GMA_SCENE_PLAN_PRIVATE_PAYLOAD_MAX_BYTES,
         access: 'service_only',
+      },
+      gmaSceneStoryRouting: {
+        locationRoutingContractVersion: GMA_LOCATION_ROUTING_CONTRACT_VERSION,
+        narrationEvidenceContractVersion: NARRATION_EVIDENCE_CONTRACT_VERSION,
+        acceptedNarrationEvidenceContractVersions: [
+          PREVIOUS_NARRATION_EVIDENCE_CONTRACT_VERSION,
+          NARRATION_EVIDENCE_CONTRACT_VERSION,
+        ],
+        worldGenerationPolicyContractVersion: WORLD_GENERATION_POLICY_VERSION,
+        acceptedWorldGenerationPolicyContractVersions: [
+          PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
+          WORLD_GENERATION_POLICY_VERSION,
+        ],
       },
     },
   });
