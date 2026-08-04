@@ -2,8 +2,11 @@ import type { Collection, Filter } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
   NPC_IDENTITY_PROMOTION_CONTRACT_VERSION,
+  NPC_IDENTITY_REVEAL_CONTRACT_VERSION,
   promoteExistingNpcIdentity,
+  revealExistingNpcIdentity,
   type PromoteExistingNpcIdentityInput,
+  type RevealExistingNpcIdentityInput,
 } from './npcIdentityPromotion.js';
 
 type Npc = Record<string, any> & { _id: string; userId: string; project_id: string; type: 'npc' };
@@ -98,6 +101,22 @@ function promotion(overrides: Partial<PromoteExistingNpcIdentityInput> = {}): Pr
   };
 }
 
+function revelation(overrides: Partial<RevealExistingNpcIdentityInput> = {}): RevealExistingNpcIdentityInput {
+  return {
+    schemaVersion: NPC_IDENTITY_REVEAL_CONTRACT_VERSION,
+    userId: 'tenant-a',
+    campaignId: 'campaign-a',
+    npcId: 'assigned-watch-officer',
+    expectedRevision: 7,
+    revealMode: 'self_introduction',
+    interactionId: 'interaction:flintwake:introduction',
+    evidenceFingerprint: 'a'.repeat(64),
+    idempotencyKey: 'npc-reveal:campaign-a:assigned-watch-officer:flintwake',
+    correlationId: 'correlation:flintwake',
+    ...overrides,
+  };
+}
+
 describe('existing NPC identity promotion', () => {
   it('promotes the same role-seed record once while keeping the private name unrevealed', async () => {
     const store = memoryCollection([roleSeed()]);
@@ -187,5 +206,56 @@ describe('existing NPC identity promotion', () => {
       caught = error;
     }
     expect(JSON.stringify(caught)).not.toMatch(/[A-Z][a-z]+ [A-Z][a-z]+/);
+  });
+});
+
+describe('prepared NPC identity reveal', () => {
+  it('reveals the existing prepared name once and records the exact narration evidence', async () => {
+    const store = memoryCollection([roleSeed()]);
+    const promoted = await promoteExistingNpcIdentity(promotion(), store.records as any);
+    const result = await revealExistingNpcIdentity(revelation({ expectedRevision: promoted?.revision }), store.records as any);
+
+    expect(result).toMatchObject({
+      npcId: 'assigned-watch-officer',
+      revision: 8,
+      displayLabel: promoted?.privateCanonicalName,
+      identityMaturity: 'canonical_player_known',
+      revealState: 'introduced',
+      duplicate: false,
+      authorityReceipt: {
+        contractVersion: 'gmc.npc-identity-reveal-receipt/1',
+        status: 'applied',
+        authoritativeStateChanged: true,
+        interactionId: 'interaction:flintwake:introduction',
+        evidenceFingerprint: 'a'.repeat(64),
+      },
+    });
+    expect(store.documents[0].canonical_name).toBe(promoted?.privateCanonicalName);
+    expect(store.documents[0].details.identity).toMatchObject({
+      nameKnownToPlayers: true,
+      identityMaturity: 'canonical_player_known',
+      revealState: 'introduced',
+    });
+    expect(store.documents[0].audit_trail.at(-1)).toMatchObject({
+      action: 'identity_revealed',
+      evidenceFingerprint: 'a'.repeat(64),
+    });
+  });
+
+  it('replays exactly without revising twice and rejects stale or unprepared reveals', async () => {
+    const store = memoryCollection([roleSeed()]);
+    await promoteExistingNpcIdentity(promotion(), store.records as any);
+    const first = await revealExistingNpcIdentity(revelation(), store.records as any);
+    const replay = await revealExistingNpcIdentity(revelation(), store.records as any);
+    expect(replay).toMatchObject({ revision: first?.revision, duplicate: true });
+    expect(store.documents[0].revision).toBe(8);
+
+    const stale = memoryCollection([roleSeed()]);
+    await promoteExistingNpcIdentity(promotion(), stale.records as any);
+    await expect(revealExistingNpcIdentity(revelation({ expectedRevision: 6 }), stale.records as any))
+      .rejects.toMatchObject({ code: 'NPC_IDENTITY_REVEAL_REVISION_CONFLICT', status: 409 });
+
+    await expect(revealExistingNpcIdentity(revelation({ expectedRevision: 6 }), memoryCollection([roleSeed()]).records as any))
+      .rejects.toMatchObject({ code: 'NPC_IDENTITY_REVEAL_NOT_PREPARED', status: 409 });
   });
 });

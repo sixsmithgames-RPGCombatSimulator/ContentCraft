@@ -1,6 +1,28 @@
 # LLM orchestrator operations and security policy
 
-Version: 2026-07-26.2
+Version: 2026-08-04.1
+
+## Living Story preparation operations
+
+The universal registry includes three proposal-only, single-attempt Story
+planning operations. They never commit canon, mechanics, presence, player
+choices, or narration:
+
+- `story.portfolio.refresh` maintains at most six source-grounded dramatic
+  questions and pressures. A provisional mention cannot become an active arc.
+- `story.frontier.refresh` maintains at most five optional situations, with at
+  most three `ready_soon`. Each has a causal trigger, stakes, pressures,
+  dependencies, exclusions, and exact source references; no candidate may
+  require a player action or guarantee an outcome.
+- `story.scene.elaborate` fills one already selected, source-grounded scene kit.
+  It must preserve exact present/anticipated cast, give anticipated people an
+  arrival condition, provide current activity, two-to-five beats, stakes,
+  pressures, access vectors, and completion/failure/abandonment/redirect exits.
+
+GMA validates the returned source set and compiles a revision-bound
+`studio.story-delta/1`; GMC independently validates the proposal and the exact
+record patch before persistence. Ordinary dialogue does not call these
+operations. Future-preparation failures do not invalidate a completed turn.
 
 ## Runtime boundary
 

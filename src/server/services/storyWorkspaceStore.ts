@@ -47,7 +47,7 @@ export interface StoryWorkspaceRevisionDocument {
   requestHash: string;
   status: 'available' | 'superseded';
   workspace: JsonObject;
-  source: 'studio_manual' | 'story_delta' | 'migration' | 'gmc';
+  source: 'studio_manual' | 'story_delta' | 'migration' | 'gmc' | 'npc_identity_promotion' | 'npc_identity_reveal';
   deltaId: string | null;
   idempotencyKey: string;
   timelineAnchor: { messageId: string; sequence: number } | null;
@@ -353,6 +353,21 @@ function normalizeWorkspace(
 }
 
 function validateNormalizedWorkspace(workspace: Record<string, JsonValue>) {
+  const sessionPreparation = workspace.sessionPreparation;
+  if (sessionPreparation !== undefined) {
+    if (!plainObject(sessionPreparation)) {
+      throw new StoryWorkspaceStoreError(400, 'STORY_VALIDATION_FAILED', 'sessionPreparation must be an object.', { field: 'sessionPreparation' });
+    }
+    for (const [field, maximum] of [['focus', 2_000], ['notes', 3_000]] as const) {
+      const value = sessionPreparation[field];
+      if (value !== undefined && (typeof value !== 'string' || value.length > maximum || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(value))) {
+        throw new StoryWorkspaceStoreError(400, 'STORY_VALIDATION_FAILED', `sessionPreparation.${field} is invalid.`, { field: `sessionPreparation.${field}` });
+      }
+    }
+    if (sessionPreparation.likelySituationRefs !== undefined) {
+      stringArray(sessionPreparation.likelySituationRefs, 'sessionPreparation.likelySituationRefs', 12);
+    }
+  }
   const portfolio = workspace.portfolio as Record<string, unknown>;
   const arcs = Array.isArray(portfolio.arcs) ? portfolio.arcs as Record<string, unknown>[] : [];
   const liveArcs = arcs.filter((arc) => ['idea', 'draft', 'prepared', 'active'].includes(String(arc.planningState)));
@@ -483,6 +498,26 @@ function validateSceneKitReadiness(workspace: Record<string, JsonValue>) {
       }
     }
     if (!runnable) continue;
+    const requiredTextFields = ['purpose', 'dramaticQuestion', 'locationRef'] as const;
+    for (const field of requiredTextFields) {
+      const value = field === 'locationRef' && plainObject(kit[field])
+        ? String((kit[field] as Record<string, unknown>).id ?? (kit[field] as Record<string, unknown>)._id ?? '')
+        : String(kit[field] ?? '');
+      if (!value.trim()) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_PREPARATION_INCOMPLETE', `A runnable scene kit requires ${field}.`, {
+        sceneKitId: kit.sceneKitId, field,
+      });
+    }
+    const requiredCollections: Array<[string, number, number]> = [
+      ['activity', 1, 12], ['importantBeats', 2, 5], ['stakes', 1, 8], ['pressures', 1, 8],
+    ];
+    for (const [field, minimum, maximum] of requiredCollections) {
+      const values = Array.isArray(kit[field]) ? kit[field] as unknown[] : [];
+      if (values.length < minimum || values.length > maximum) {
+        throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_PREPARATION_INCOMPLETE', `A runnable scene kit has an invalid ${field} count.`, {
+          sceneKitId: kit.sceneKitId, field, minimum, maximum, actual: values.length,
+        });
+      }
+    }
     const information = Array.isArray(kit.information) ? kit.information as Record<string, unknown>[] : [];
     for (const item of information.filter((entry) => !['revealed', 'revealed_canon'].includes(String(entry.status)))) {
       if (!Array.isArray(item.accessVectors) || !item.accessVectors.length || !String(item.revealAuthority ?? '').trim()) {
@@ -491,9 +526,11 @@ function validateSceneKitReadiness(workspace: Record<string, JsonValue>) {
         });
       }
     }
-    if (!Array.isArray(kit.exitVectors) || !kit.exitVectors.length) {
-      throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_EXIT_VECTOR_REQUIRED', 'A runnable scene kit requires at least one completion, failure, abandonment, or redirect path.', {
-        sceneKitId: kit.sceneKitId,
+    const exits = Array.isArray(kit.exitVectors) ? kit.exitVectors as Record<string, unknown>[] : [];
+    const exitKinds = new Set(exits.map((entry) => String(entry.kind ?? '')));
+    for (const kind of ['completion', 'failure', 'abandonment', 'redirect']) {
+      if (!exitKinds.has(kind)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_EXIT_VECTOR_REQUIRED', `A runnable scene kit requires a ${kind} exit.`, {
+        sceneKitId: kit.sceneKitId, kind,
       });
     }
   }
@@ -950,6 +987,99 @@ export async function rewindStoryWorkspace(
   };
 }
 
+/**
+ * Closes Story preparation debt after GMC has authoritatively promoted an
+ * existing NPC identity. The private canonical name remains in the NPC record;
+ * Story stores only its opaque reference and reveal metadata.
+ */
+export async function synchronizeNpcIdentityPromotionToStory(
+  input: {
+    userId: string;
+    campaignId: string;
+    npcId: string;
+    npcRevision: number;
+    identityMaturity: string;
+    revealState: string;
+    narrativeDepth: string;
+    mechanicalDepth: string;
+    displayLabel: string;
+    authorityReceiptRef: string;
+    idempotencyKey: string;
+    source?: 'npc_identity_promotion' | 'npc_identity_reveal';
+  },
+  records: RevisionCollection = collection(),
+) {
+  const userId = text(input.userId, 'userId', 254);
+  const campaignId = identifier(input.campaignId, 'campaignId');
+  const npcId = identifier(input.npcId, 'npcId');
+  const active = await activeRecord(records, { userId, campaignId });
+  if (!active) return null;
+  const workspace = clone(active.workspace);
+  const changedRecordRefs: string[] = [];
+  const readiness = recordArray(workspace, recordDescriptors.npc_readiness);
+  for (const record of readiness) {
+    if (String(record.npcRef ?? '') !== npcId) continue;
+    const before = canonicalJson(record as JsonObject);
+    record.npcRevision = nonNegativeInteger(input.npcRevision, 'npcRevision');
+    record.identityMaturity = input.identityMaturity === 'canonical_player_known'
+      ? 'canonical_player_known'
+      : 'canonical_private';
+    record.publicLabel = boundedText(input.displayLabel, 200) ?? String(record.publicLabel ?? 'Prepared NPC');
+    record.privateCanonicalNameRef = `${npcId}#canonical-name`;
+    record.revealState = ['known', 'introduced', 'eligible'].includes(input.revealState)
+      ? input.revealState
+      : 'not_known';
+    record.revealEligibility = String(record.revealEligibility ?? 'self_introduction_on_arrival');
+    record.narrativeDepth = input.narrativeDepth;
+    record.mechanicalDepth = input.mechanicalDepth;
+    record.readiness = 'ready';
+    record.truthState = 'private_canon';
+    record.sourceRefs = [...new Set([
+      ...(Array.isArray(record.sourceRefs) ? record.sourceRefs.map(String) : []),
+      identifier(input.authorityReceiptRef, 'authorityReceiptRef'),
+    ])].slice(0, 32);
+    if (canonicalJson(record as JsonObject) !== before) {
+      record.recordRevision = recordRevision(record.recordRevision) + 1;
+      changedRecordRefs.push(`npc_readiness:${String(record.readinessId)}`);
+    }
+  }
+  const requirements = recordArray(workspace, recordDescriptors.preparation_requirement);
+  for (const requirement of requirements) {
+    if (String(requirement.targetRef ?? '') !== npcId
+      || !['npc_identity', 'npc_readiness_review', 'npc_profile'].includes(String(requirement.kind ?? ''))
+      || ['complete', 'cancelled', 'invalidated'].includes(String(requirement.status ?? ''))) continue;
+    requirement.status = 'complete';
+    requirement.recordRevision = recordRevision(requirement.recordRevision) + 1;
+    requirement.sourceRefs = [...new Set([
+      ...(Array.isArray(requirement.sourceRefs) ? requirement.sourceRefs.map(String) : []),
+      identifier(input.authorityReceiptRef, 'authorityReceiptRef'),
+    ])].slice(0, 32);
+    changedRecordRefs.push(`preparation_requirement:${String(requirement.requirementId)}`);
+  }
+  if (!changedRecordRefs.length) return {
+    contractVersion: STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION,
+    authoritativeStateChanged: false,
+    storyWorkspaceRef: workspaceRef(active),
+  };
+  const written = await replaceStoryWorkspace({
+    userId,
+    campaignId,
+    expectedRevision: active.revision,
+    idempotencyKey: identifier(input.idempotencyKey, 'idempotencyKey'),
+    source: input.source ?? 'npc_identity_promotion',
+    timelineAnchor: plainObject(workspace.timelineAnchor)
+      ? workspace.timelineAnchor as { messageId: string; sequence: number }
+      : null,
+    workspace,
+    changedRecordRefs,
+  }, records);
+  return {
+    contractVersion: STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION,
+    authoritativeStateChanged: !written.duplicate,
+    storyWorkspaceRef: written.storyWorkspaceRef,
+  };
+}
+
 function boundedText(value: unknown, max = 1_000): string | null {
   const result = String(value ?? '').trim();
   return result ? result.slice(0, max) : null;
@@ -1052,7 +1182,7 @@ export function buildPlayableStoryProjection(workspace: JsonObject, requestedSce
   };
   const sceneKit = selectFields(kit, [
     'sceneKitId', 'recordRevision', 'sceneId', 'planningState', 'truthState', 'title', 'purpose',
-    'dramaticQuestion', 'locationRef', 'participants', 'activity', 'information', 'exitVectors',
+    'dramaticQuestion', 'locationRef', 'participants', 'activity', 'importantBeats', 'stakes', 'pressures', 'information', 'exitVectors',
     'preparationLedgerRefs', 'arcRefs', 'frontierCandidateId', 'sourceRefs',
   ]);
   sceneKit.participants = projectedParticipants;

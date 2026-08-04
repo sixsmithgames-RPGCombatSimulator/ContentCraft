@@ -11,6 +11,8 @@ import {
 
 export const NPC_IDENTITY_PROMOTION_CONTRACT_VERSION = 'gmc.npc-identity-promotion/1';
 export const NPC_IDENTITY_PROMOTION_RECEIPT_CONTRACT_VERSION = 'gmc.npc-identity-promotion-receipt/1';
+export const NPC_IDENTITY_REVEAL_CONTRACT_VERSION = 'gmc.npc-identity-reveal/1';
+export const NPC_IDENTITY_REVEAL_RECEIPT_CONTRACT_VERSION = 'gmc.npc-identity-reveal-receipt/1';
 
 interface NpcRecord {
   _id: string;
@@ -46,6 +48,19 @@ export interface PromoteExistingNpcIdentityInput {
   requiredNarrativeDepth: typeof NPC_NARRATIVE_DEPTHS[number];
   unavailableNames?: string[];
   reason: string;
+  idempotencyKey: string;
+  correlationId?: string;
+}
+
+export interface RevealExistingNpcIdentityInput {
+  schemaVersion: typeof NPC_IDENTITY_REVEAL_CONTRACT_VERSION;
+  userId: string;
+  campaignId: string;
+  npcId: string;
+  expectedRevision: number;
+  revealMode: 'self_introduction' | 'introduced_by_actor' | 'already_known';
+  interactionId: string;
+  evidenceFingerprint: string;
   idempotencyKey: string;
   correlationId?: string;
 }
@@ -105,6 +120,19 @@ function requestHash(input: PromoteExistingNpcIdentityInput) {
     requiredNarrativeDepth: input.requiredNarrativeDepth,
     unavailableNames: input.unavailableNames ?? [],
     reason: input.reason,
+    idempotencyKey: input.idempotencyKey,
+  }), 'utf8').digest('hex');
+}
+
+function revealRequestHash(input: RevealExistingNpcIdentityInput) {
+  return createHash('sha256').update(canonicalJson({
+    schemaVersion: input.schemaVersion,
+    campaignId: input.campaignId,
+    npcId: input.npcId,
+    expectedRevision: input.expectedRevision,
+    revealMode: input.revealMode,
+    interactionId: input.interactionId,
+    evidenceFingerprint: input.evidenceFingerprint,
     idempotencyKey: input.idempotencyKey,
   }), 'utf8').digest('hex');
 }
@@ -322,4 +350,141 @@ export async function promoteExistingNpcIdentity(
     });
   }
   return receipt(updated, 'applied', false);
+}
+
+/**
+ * Commits a name reveal only after validated player-facing narration used the
+ * already prepared canonical name. This operation never generates or changes
+ * the name; it moves the existing identity from private canon to player-known.
+ */
+export async function revealExistingNpcIdentity(
+  input: RevealExistingNpcIdentityInput,
+  records: NpcCollection = collection(),
+) {
+  if (!plainObject(input) || input.schemaVersion !== NPC_IDENTITY_REVEAL_CONTRACT_VERSION) {
+    fail(422, 'NPC_IDENTITY_REVEAL_SCHEMA_UNSUPPORTED', 'The NPC identity-reveal contract is not supported.', {
+      supportedSchemaVersions: [NPC_IDENTITY_REVEAL_CONTRACT_VERSION],
+    });
+  }
+  const userId = text(input.userId, 'userId', 254);
+  const campaignId = identifier(input.campaignId, 'campaignId');
+  const npcId = identifier(input.npcId, 'npcId');
+  const interactionId = identifier(input.interactionId, 'interactionId');
+  const idempotencyKey = identifier(input.idempotencyKey, 'idempotencyKey');
+  const evidenceFingerprint = text(input.evidenceFingerprint, 'evidenceFingerprint', 128);
+  const expectedRevision = Number(input.expectedRevision);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+    fail(400, 'NPC_IDENTITY_REVEAL_INVALID', 'expectedRevision must be a positive integer.', { field: 'expectedRevision' });
+  }
+  if (!['self_introduction', 'introduced_by_actor', 'already_known'].includes(String(input.revealMode))) {
+    fail(422, 'NPC_IDENTITY_REVEAL_INVALID', 'revealMode is invalid.', { field: 'revealMode' });
+  }
+  if (!/^[a-f0-9]{64}$/i.test(evidenceFingerprint)) {
+    fail(422, 'NPC_IDENTITY_REVEAL_INVALID', 'evidenceFingerprint must be a SHA-256 fingerprint.', { field: 'evidenceFingerprint' });
+  }
+  const normalized = {
+    ...input, userId, campaignId, npcId, interactionId, idempotencyKey, evidenceFingerprint,
+  } as RevealExistingNpcIdentityInput;
+  const hash = revealRequestHash(normalized);
+  const current = await records.findOne({
+    _id: npcId, userId, project_id: campaignId, type: 'npc', status: { $ne: 'superseded' },
+  } as any);
+  if (!current) return null;
+  const priorOperation = (Array.isArray(current.audit_trail) ? current.audit_trail : []).find((event) => (
+    event.action === 'identity_revealed' && event.idempotencyKey === idempotencyKey
+  ));
+  const revealReceipt = (record: NpcRecord, status: 'applied' | 'no_change', duplicate: boolean) => ({
+    schemaVersion: NPC_IDENTITY_REVEAL_CONTRACT_VERSION,
+    npcId: record._id,
+    revision: currentRevision(record),
+    displayLabel: record.canonical_name,
+    identityMaturity: 'canonical_player_known',
+    revealState: 'introduced',
+    duplicate,
+    authorityReceipt: {
+      contractVersion: NPC_IDENTITY_REVEAL_RECEIPT_CONTRACT_VERSION,
+      authority: 'gmc',
+      status,
+      authoritativeStateChanged: status === 'applied' && !duplicate,
+      npcId: record._id,
+      authorityRevision: String(currentRevision(record)),
+      interactionId,
+      evidenceFingerprint,
+    },
+    npc: record,
+  });
+  if (priorOperation) {
+    if (priorOperation.requestHash !== hash) {
+      fail(409, 'NPC_IDENTITY_REVEAL_IDEMPOTENCY_CONFLICT', 'The identity-reveal key was already used for a different request.', {});
+    }
+    return revealReceipt(current, 'applied', true);
+  }
+  const revision = currentRevision(current);
+  if (revision !== expectedRevision) {
+    fail(409, 'NPC_IDENTITY_REVEAL_REVISION_CONFLICT', 'The NPC changed before its prepared name reveal could be recorded.', {
+      npcId, expectedRevision, actualRevision: revision,
+    });
+  }
+  const details = plainObject(current.details) ? current.details : {};
+  const identity = plainObject(details.identity) ? details.identity : {};
+  if (!isCanonicalNpcName(current.canonical_name)
+    || !['canonical_private', 'canonical_player_known'].includes(String(identity.identityMaturity))) {
+    fail(409, 'NPC_IDENTITY_REVEAL_NOT_PREPARED', 'The NPC does not have a stable prepared identity to reveal.', { npcId });
+  }
+  if (identity.nameKnownToPlayers === true && identity.identityMaturity === 'canonical_player_known') {
+    return revealReceipt(current, 'no_change', false);
+  }
+  const timestamp = new Date();
+  const nextDetails = {
+    ...details,
+    name: current.canonical_name,
+    displayLabel: current.canonical_name,
+    identity: {
+      ...identity,
+      canonicalName: current.canonical_name,
+      displayLabel: current.canonical_name,
+      nameKnownToPlayers: true,
+      identityMaturity: 'canonical_player_known',
+      revealState: 'introduced',
+      revealedByInteractionId: interactionId,
+    },
+  };
+  const event = {
+    at: timestamp,
+    action: 'identity_revealed',
+    schemaVersion: NPC_IDENTITY_REVEAL_CONTRACT_VERSION,
+    idempotencyKey,
+    requestHash: hash,
+    revealMode: input.revealMode,
+    interactionId,
+    evidenceFingerprint,
+    correlationId: String(input.correlationId ?? '').slice(0, 240) || null,
+  };
+  const updated = await records.findOneAndUpdate(
+    {
+      _id: npcId, userId, project_id: campaignId, type: 'npc', status: { $ne: 'superseded' },
+      ...(current.revision === undefined ? { revision: { $exists: false } } : { revision: current.revision }),
+    } as any,
+    {
+      $set: {
+        details: nextDetails,
+        revision: revision + 1,
+        version: `1.0.${revision}`,
+        updated_at: timestamp,
+      },
+      $push: { audit_trail: { $each: [event], $slice: -100 } },
+    } as any,
+    { returnDocument: 'after' },
+  );
+  if (!updated) {
+    const concurrent = await records.findOne({ _id: npcId, userId, project_id: campaignId, type: 'npc' } as any);
+    const replay = concurrent && (Array.isArray(concurrent.audit_trail) ? concurrent.audit_trail : []).find((candidate) => (
+      candidate.action === 'identity_revealed' && candidate.idempotencyKey === idempotencyKey && candidate.requestHash === hash
+    ));
+    if (concurrent && replay) return revealReceipt(concurrent, 'applied', true);
+    fail(409, 'NPC_IDENTITY_REVEAL_REVISION_CONFLICT', 'The NPC changed before its prepared name reveal could be recorded.', {
+      npcId, expectedRevision, actualRevision: concurrent ? currentRevision(concurrent) : null,
+    });
+  }
+  return revealReceipt(updated, 'applied', false);
 }

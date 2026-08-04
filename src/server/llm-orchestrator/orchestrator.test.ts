@@ -238,6 +238,130 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(invalidProvider.calls).toHaveLength(1);
   });
 
+  it('registers bounded proposal-only Story planners with agency rules in the first pass', () => {
+    const portfolio = getOperationDefinition('story.portfolio.refresh');
+    const frontier = getOperationDefinition('story.frontier.refresh');
+    const scene = getOperationDefinition('story.scene.elaborate');
+    expect(portfolio.prompt.version).toBe('gmc.story-portfolio-proposal/1');
+    expect(portfolio.prompt.systemInstruction).toMatch(/not a plot sequence, required player action, guaranteed result/i);
+    expect(frontier.prompt.systemInstruction).toMatch(/Prepare situations, never player choices/i);
+    expect(scene.prompt.systemInstruction).toMatch(/exact present and separately anticipated cast/i);
+    expect(scene.prompt.systemInstruction).toMatch(/completion\/failure\/abandonment\/redirect exits/i);
+    expect(frontier.provider.maxAttempts).toBe(1);
+    expect(scene.validators).toContain('story-scene-readiness');
+    expect(portfolio.authority.commit).toBe('proposal_only');
+  });
+
+  it('accepts an optional grounded frontier and rejects forced player action or excessive ready-soon prep', async () => {
+    const trusted = {
+      sourceRefs: ['gma:validated-interaction:turn-flintwake', 'gmc:scene:flintwake'],
+      idempotencyKey: 'story-frontier:turn-flintwake',
+    };
+    const candidate = (suffix: string, horizon = 'ready_soon') => ({
+      trigger: `A grounded pressure ${suffix} matures.`,
+      dramaticQuestion: `How will the situation ${suffix} change the yard?`,
+      stakes: ['Yard legitimacy'], pressures: ['Watch scrutiny'], likelyCastRefs: [], prerequisiteRefs: [], exclusionRefs: [],
+      sourceRefs: ['gma:validated-interaction:turn-flintwake'], preparationHorizon: horizon,
+    });
+    const proposal = {
+      schemaVersion: 'gmc.story-frontier-proposal/1', status: 'proposal_only', ...trusted,
+      proposal: { candidates: [candidate('one')], retirementRefs: [] },
+    };
+    const makeRequest = (suffix: string) => createUniversalRequest({
+      operation: 'story.frontier.refresh', taskId: `story-frontier-${suffix}`, correlationId: `story-frontier-corr-${suffix}`,
+      idempotencyKey: `story-frontier-request-${suffix}`, references: { campaignId: 'campaign-1', canonVersion: 'canon-r2' },
+      context: {
+        input: { label: 'user_text', value: trusted },
+        campaign: { label: 'retrieved_authority_data', revision: 'canon-r2', value: { campaignQuestion: 'Who benefits from control of the yard?' } },
+      },
+    });
+    const validProvider = new FakeProviderAdapter(() => proposal);
+    const valid = await executeLlmOperation(makeRequest('valid'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [validProvider],
+    });
+    expect(valid.status).toBe('succeeded');
+
+    const forcedProvider = new FakeProviderAdapter(() => ({
+      ...proposal,
+      proposal: { candidates: [
+        candidate('one'), candidate('two'), candidate('three'),
+        { ...candidate('four'), dramaticQuestion: 'The player must return to the yard and accept Watch control.' },
+      ], retirementRefs: [] },
+    }));
+    const invalid = await executeLlmOperation(makeRequest('forced'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [forcedProvider],
+    });
+    const codes = invalid.validation.flatMap((entry) => entry.issues).map((issue) => issue.code);
+    expect(invalid.status).toBe('review_required');
+    expect(codes).toContain('STORY_PLANNING_PLAYER_AGENCY_VIOLATION');
+    expect(codes).toContain('STORY_FRONTIER_READY_SOON_BOUND');
+    expect(forcedProvider.calls).toHaveLength(1);
+  });
+
+  it('rejects casual-mention arc promotion and incomplete scene readiness in one proposal pass', async () => {
+    const sourceRefs = ['gma:validated-interaction:turn-flintwake'];
+    const portfolioTrusted = { sourceRefs, idempotencyKey: 'story-portfolio:turn-flintwake' };
+    const portfolioRequest = createUniversalRequest({
+      operation: 'story.portfolio.refresh', taskId: 'story-portfolio-material-threshold', correlationId: 'story-portfolio-corr',
+      idempotencyKey: 'story-portfolio-request', references: { campaignId: 'campaign-1', canonVersion: 'canon-r2' },
+      context: {
+        input: { label: 'user_text', value: portfolioTrusted },
+        campaign: { label: 'retrieved_authority_data', revision: 'canon-r2', value: {} },
+      },
+    });
+    const portfolioProvider = new FakeProviderAdapter(() => ({
+      schemaVersion: 'gmc.story-portfolio-proposal/1', status: 'proposal_only', ...portfolioTrusted,
+      proposal: { campaignQuestion: null, arcs: [{
+        title: 'A passing tavern rumor', dramaticQuestion: 'Will the rumor matter?', pressures: ['A patron repeats it.'],
+        sourceRefs, playerInvestment: 'provisional', planningState: 'active',
+      }] },
+    }));
+    const portfolio = await executeLlmOperation(portfolioRequest, {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [portfolioProvider],
+    });
+    expect(portfolio.status).toBe('review_required');
+    expect(portfolio.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('STORY_ARC_MATERIAL_THRESHOLD_REQUIRED');
+
+    const sceneTrusted = { sourceRefs, idempotencyKey: 'story-scene:turn-flintwake' };
+    const sceneRequest = createUniversalRequest({
+      operation: 'story.scene.elaborate', taskId: 'story-scene-readiness', correlationId: 'story-scene-corr',
+      idempotencyKey: 'story-scene-request', references: { campaignId: 'campaign-1', canonVersion: 'canon-r2' },
+      context: {
+        input: { label: 'user_text', value: sceneTrusted },
+        campaign: { label: 'retrieved_authority_data', revision: 'canon-r2', value: {} },
+      },
+    });
+    const sceneProvider = new FakeProviderAdapter(() => ({
+      schemaVersion: 'gmc.story-scene-proposal/1', status: 'proposal_only', ...sceneTrusted,
+      proposal: {
+        title: 'Flintwake Wage Yard', purpose: 'Make the opening pressure playable.', dramaticQuestion: 'Will the yard accept new authority?',
+        locationRef: 'gmc:location:flintwake',
+        participants: {
+          present: [{ entityRef: 'gmc:npc:dorrik', publicLabel: 'Dorrik', reason: 'He arrived first.', identityKind: 'individual' }],
+          anticipated: [{ entityRef: 'gmc:npc:dorrik', publicLabel: 'Dorrik', reason: 'He might arrive.', identityKind: 'individual' }],
+        },
+        activity: ['Dockworkers call loads.'], importantBeats: ['A tally is challenged.', 'The yard reacts.'],
+        stakes: ['Yard legitimacy'], pressures: ['Opening-day scrutiny'],
+        information: [{ summary: 'One tally is duplicated.', truthState: 'gm_preparation', accessVectors: ['Inspect the ledger.'], critical: true, sourceRefs }],
+        exitVectors: [
+          { kind: 'completion', condition: 'The count closes.', consequence: 'Work continues.' },
+          { kind: 'failure', condition: 'The count fails.', consequence: 'Confidence falls.' },
+          { kind: 'abandonment', condition: 'Kerrigan leaves.', consequence: 'The issue waits.' },
+          { kind: 'redirect', condition: 'Another priority wins.', consequence: 'The scene remains optional.' },
+        ],
+      },
+    }));
+    const scene = await executeLlmOperation(sceneRequest, {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [sceneProvider],
+    });
+    const sceneCodes = scene.validation.flatMap((entry) => entry.issues).map((issue) => issue.code);
+    expect(scene.status).toBe('review_required');
+    expect(sceneCodes).toContain('STORY_SCENE_PRESENCE_OVERLAP');
+    expect(sceneCodes).toContain('STORY_SCENE_ANTICIPATED_TRIGGER_REQUIRED');
+    expect(sceneCodes).toContain('STORY_SCENE_CRITICAL_ACCESS_REQUIRED');
+  });
+
   it('retries one invalid output with the same task and idempotency identity', async () => {
     const req = request('ooc.respond', 'validation-retry');
     let call = 0;

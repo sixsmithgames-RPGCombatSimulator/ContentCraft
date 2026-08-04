@@ -10,6 +10,7 @@ import {
   readActiveStoryWorkspace,
   replaceStoryWorkspace,
   rewindStoryWorkspace,
+  synchronizeNpcIdentityPromotionToStory,
   STORY_DELTA_RECEIPT_CONTRACT_VERSION,
   STORY_PROMPT_PROJECTION_MAX_BYTES,
   STORY_WORKSPACE_CONTRACT_VERSION,
@@ -107,17 +108,26 @@ function flintwakeWorkspace() {
     },
     sceneKits: [{
       sceneKitId: 'scene-kit:flintwake', sceneId: 'scene:flintwake', planningState: 'active', truthState: 'gm_preparation',
-      title: 'Flintwake Wage Yard', publicTitle: 'Flintwake Wage Yard', dramaticQuestion: 'Who controls the yard?',
+      title: 'Flintwake Wage Yard', publicTitle: 'Flintwake Wage Yard', purpose: 'Put the yard into honest operation.',
+      dramaticQuestion: 'Who controls the yard?', locationRef: 'gmc:location:flintwake',
       participants: {
         present: [{ entityId: 'gmc:npc:dorrik', publicLabel: 'Dorrik Siltvein', readinessRef: 'readiness:dorrik' }],
         anticipated: [{ entityId: 'gmc:npc:watch-officer', publicLabel: 'Watch officer', readinessRef: 'readiness:watch' }],
       },
+      activity: ['Dockworkers call loads while the clerk checks tallies.'],
+      importantBeats: ['A disputed tally surfaces.', 'The yard tests Kerrigan’s authority.'],
+      stakes: ['Yard legitimacy'], pressures: ['Opening-day scrutiny'],
       information: [{
         informationId: 'info:private-ledger', status: 'prepared_private_canon',
         secret: 'Dorrik stole the hidden ledger', accessVectors: ['accounts conversation'],
         revealAuthority: 'current-interaction validation required',
       }],
-      exitVectors: [{ kind: 'redirect', condition: 'Kerrigan leaves.', consequence: 'The appointment remains unresolved.' }],
+      exitVectors: [
+        { kind: 'completion', condition: 'The authority question is answered.', consequence: 'The yard settles into a working posture.' },
+        { kind: 'failure', condition: 'Operations break down.', consequence: 'Confidence in the new authority falls.' },
+        { kind: 'abandonment', condition: 'Kerrigan leaves the issue unresolved.', consequence: 'The yard continues provisionally.' },
+        { kind: 'redirect', condition: 'Kerrigan leaves.', consequence: 'The appointment remains unresolved.' },
+      ],
       preparationLedgerRefs: ['prep:watch-identity'],
       arcRefs: ['arc:flintwake'],
     }],
@@ -310,6 +320,39 @@ describe('GMC Story workspace authority store', () => {
     }, memoryCollection().records)).rejects.toMatchObject({ code: 'STORY_SCENE_EXIT_VECTOR_REQUIRED' });
   });
 
+  it('closes linked identity readiness debt after the existing NPC is promoted in place', async () => {
+    const { records } = memoryCollection();
+    const workspace = flintwakeWorkspace();
+    (workspace.sceneKits as JsonObject[])[0].planningState = 'draft';
+    const readiness = (workspace.npcReadiness as JsonObject[]).find((record) => record.readinessId === 'readiness:watch')!;
+    readiness.identityMaturity = 'role_seed';
+    readiness.readiness = 'required';
+    delete readiness.privateCanonicalNameRef;
+    await replaceStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 0,
+      idempotencyKey: 'story-create-role-seed', workspace,
+    }, records);
+
+    const synchronized = await synchronizeNpcIdentityPromotionToStory({
+      userId: 'tenant-a', campaignId: 'campaign-a', npcId: 'gmc:npc:watch-officer',
+      npcRevision: 8, identityMaturity: 'canonical_private', revealState: 'not_known',
+      narrativeDepth: 'surface', mechanicalDepth: 'none', displayLabel: 'Watch officer',
+      authorityReceiptRef: 'gmc:npc-identity-promotion-receipt:watch:8',
+      idempotencyKey: 'npc-identity:watch:story',
+    }, records);
+
+    expect(synchronized).toMatchObject({ authoritativeStateChanged: true, storyWorkspaceRef: { revision: 2 } });
+    const active = (await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, records))!.workspace;
+    expect((active.npcReadiness as JsonObject[]).find((record) => record.readinessId === 'readiness:watch')).toMatchObject({
+      recordRevision: 2, npcRevision: 8, identityMaturity: 'canonical_private', readiness: 'ready',
+      privateCanonicalNameRef: 'gmc:npc:watch-officer#canonical-name', revealState: 'not_known',
+      narrativeDepth: 'surface', truthState: 'private_canon',
+    });
+    expect(((active.preparationLedger as JsonObject).requirements as JsonObject[])
+      .find((record) => record.requirementId === 'prep:watch-identity')).toMatchObject({ status: 'complete' });
+    expect(JSON.stringify(active)).not.toContain('Vessa Graymantle');
+  });
+
   it('rewinds by timeline boundary and exposes only redacted revision history', async () => {
     const { records } = memoryCollection();
     await replaceStoryWorkspace({
@@ -341,6 +384,30 @@ describe('GMC Story workspace authority store', () => {
     }
     expect(caught).toBeInstanceOf(StoryWorkspaceStoreError);
     expect(JSON.stringify(caught)).not.toContain(secret);
+  });
+
+  it('stores bounded session outlook without turning it into scene order', async () => {
+    const { records } = memoryCollection();
+    const workspace = {
+      ...flintwakeWorkspace(),
+      sessionPreparation: {
+        focus: 'Let current yard pressure guide play without requiring a scene order.',
+        likelySituationRefs: ['situation:watch-review'],
+        notes: 'Dorrik may speak first; the Watch officer remains anticipated until the appointment matures.',
+      },
+    } as JsonObject;
+    await replaceStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 0,
+      idempotencyKey: 'story-session-outlook', workspace,
+    }, records);
+    const active = await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, records);
+    expect(active?.workspace.sessionPreparation).toEqual(workspace.sessionPreparation);
+
+    await expect(replaceStoryWorkspace({
+      userId: 'tenant-b', campaignId: 'campaign-a', expectedRevision: 0,
+      idempotencyKey: 'story-session-outlook-oversize',
+      workspace: { ...workspace, sessionPreparation: { ...workspace.sessionPreparation as JsonObject, likelySituationRefs: Array.from({ length: 13 }, (_entry, index) => `situation:${index}`) } },
+    }, memoryCollection().records)).rejects.toMatchObject({ code: 'STORY_VALIDATION_FAILED' });
   });
 
   it('imports a legacy GMA scene plan once as draft GMC preparation with explicit readiness debt', async () => {

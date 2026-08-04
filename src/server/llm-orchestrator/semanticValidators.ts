@@ -159,6 +159,90 @@ registerSemanticValidator('npc-background-proposal', ({ request, output }) => {
   return result('npc-background-proposal', issues);
 });
 
+function storySourceRefs(value: unknown, found: string[] = []): string[] {
+  if (Array.isArray(value)) {
+    for (const entry of value) storySourceRefs(entry, found);
+    return found;
+  }
+  if (!value || typeof value !== 'object') return found;
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (key === 'sourceRefs' && Array.isArray(entry)) found.push(...entry.map(String));
+    else storySourceRefs(entry, found);
+  }
+  return found;
+}
+
+registerSemanticValidator('story-planning-proposal', ({ request, output }) => {
+  const issues: Array<{ code: string; message: string; path?: string }> = [];
+  const trusted = request.context?.input?.value as any;
+  if (String(output?.idempotencyKey ?? '') !== String(trusted?.idempotencyKey ?? '')) {
+    issues.push({ code: 'STORY_PLANNING_IDEMPOTENCY_MISMATCH', message: 'The proposal changed the trusted idempotency key.', path: '/idempotencyKey' });
+  }
+  const expectedRefs = [...new Set((Array.isArray(trusted?.sourceRefs) ? trusted.sourceRefs : []).map(String))].sort();
+  const outputRefs = [...new Set((Array.isArray(output?.sourceRefs) ? output.sourceRefs : []).map(String))].sort();
+  if (JSON.stringify(expectedRefs) !== JSON.stringify(outputRefs)) {
+    issues.push({ code: 'STORY_PLANNING_SOURCE_MISMATCH', message: 'The proposal changed the trusted source references.', path: '/sourceRefs' });
+  }
+  const allowedRefs = new Set(expectedRefs);
+  for (const ref of storySourceRefs(output?.proposal)) {
+    if (!allowedRefs.has(ref)) issues.push({ code: 'STORY_PLANNING_UNGROUNDED_REFERENCE', message: 'A proposed record cites a source outside the trusted scope.', path: '/proposal' });
+  }
+  const text = JSON.stringify(output?.proposal ?? {});
+  if (/\b(?:the player|players?|the party|the character)\s+(?:must|has to|have to|will|chooses?|decides?|agrees?|refuses?)\b|\b(?:guaranteed|inevitable|predetermined)\s+(?:outcome|arrival|victory|failure|choice)\b/i.test(text)) {
+    issues.push({ code: 'STORY_PLANNING_PLAYER_AGENCY_VIOLATION', message: 'Preparation may describe situations and consequences, not decide player action or outcome.', path: '/proposal' });
+  }
+  if (/\b(?:attack roll|saving throw|difficulty class|\bDC\s*\d|hit points?|damage dice|initiative|spell slots?|character sheet)\b/i.test(text)) {
+    issues.push({ code: 'STORY_PLANNING_MECHANICS_FORBIDDEN', message: 'Story preparation cannot establish mechanics.', path: '/proposal' });
+  }
+  const arcs = Array.isArray(output?.proposal?.arcs) ? output.proposal.arcs : [];
+  for (const [index, arc] of arcs.entries()) {
+    if (!Array.isArray(arc?.sourceRefs) || arc.sourceRefs.length === 0) {
+      issues.push({ code: 'STORY_ARC_GROUNDING_REQUIRED', message: 'Every proposed arc needs at least one committed source.', path: `/proposal/arcs/${index}/sourceRefs` });
+    }
+    if (arc?.playerInvestment === 'provisional' && arc?.planningState === 'active') {
+      issues.push({ code: 'STORY_ARC_MATERIAL_THRESHOLD_REQUIRED', message: 'A provisional mention cannot become an active arc.', path: `/proposal/arcs/${index}` });
+    }
+  }
+  const candidates = Array.isArray(output?.proposal?.candidates) ? output.proposal.candidates : [];
+  if (candidates.filter((candidate: any) => candidate?.preparationHorizon === 'ready_soon').length > 3) {
+    issues.push({ code: 'STORY_FRONTIER_READY_SOON_BOUND', message: 'At most three frontier candidates may be ready soon.', path: '/proposal/candidates' });
+  }
+  for (const [index, candidate] of candidates.entries()) {
+    if (!Array.isArray(candidate?.sourceRefs) || candidate.sourceRefs.length === 0) {
+      issues.push({ code: 'STORY_FRONTIER_GROUNDING_REQUIRED', message: 'Every frontier candidate needs a committed source.', path: `/proposal/candidates/${index}/sourceRefs` });
+    }
+  }
+  return result('story-planning-proposal', issues);
+});
+
+registerSemanticValidator('story-scene-readiness', ({ output }) => {
+  const issues: Array<{ code: string; message: string; path?: string }> = [];
+  const proposal = output?.proposal ?? {};
+  const present = Array.isArray(proposal?.participants?.present) ? proposal.participants.present : [];
+  const anticipated = Array.isArray(proposal?.participants?.anticipated) ? proposal.participants.anticipated : [];
+  const presentIds = new Set(present.map((entry: any) => String(entry?.entityRef ?? '')).filter(Boolean));
+  for (const [index, entry] of anticipated.entries()) {
+    if (presentIds.has(String(entry?.entityRef ?? ''))) {
+      issues.push({ code: 'STORY_SCENE_PRESENCE_OVERLAP', message: 'A participant cannot be both present and anticipated.', path: `/proposal/participants/anticipated/${index}` });
+    }
+    if (!String(entry?.arrivalCondition ?? '').trim()) {
+      issues.push({ code: 'STORY_SCENE_ANTICIPATED_TRIGGER_REQUIRED', message: 'An anticipated participant needs an arrival condition.', path: `/proposal/participants/anticipated/${index}/arrivalCondition` });
+    }
+  }
+  const exits = Array.isArray(proposal?.exitVectors) ? proposal.exitVectors : [];
+  const exitKinds = new Set(exits.map((entry: any) => String(entry?.kind ?? '')));
+  for (const kind of ['completion', 'failure', 'abandonment', 'redirect']) {
+    if (!exitKinds.has(kind)) issues.push({ code: 'STORY_SCENE_EXIT_REQUIRED', message: `A ready scene needs a ${kind} exit.`, path: '/proposal/exitVectors' });
+  }
+  const information = Array.isArray(proposal?.information) ? proposal.information : [];
+  for (const [index, entry] of information.entries()) {
+    if (entry?.critical === true && (!Array.isArray(entry?.accessVectors) || entry.accessVectors.length < 2)) {
+      issues.push({ code: 'STORY_SCENE_CRITICAL_ACCESS_REQUIRED', message: 'Critical information needs at least two plausible access vectors.', path: `/proposal/information/${index}/accessVectors` });
+    }
+  }
+  return result('story-scene-readiness', issues);
+});
+
 export function semanticValidatorsLoaded() {
   return true;
 }

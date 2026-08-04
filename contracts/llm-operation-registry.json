@@ -1,6 +1,6 @@
 {
   "schemaVersion": "gma-gmc.llm-registry-artifact/1",
-  "registryVersion": "2026-08-03.1",
+  "registryVersion": "2026-08-04.1",
   "modelPolicyVersion": "2026-08-01.1",
   "operations": [
     {
@@ -2819,6 +2819,751 @@
       "cache": {
         "enabled": false,
         "ttlMs": 300000
+      }
+    },
+    {
+      "id": "story.frontier.refresh",
+      "version": "1",
+      "operationClass": "reasoning_high",
+      "capabilityTier": "reasoning",
+      "authority": {
+        "canon": "GMC",
+        "mechanics": "none",
+        "commit": "proposal_only"
+      },
+      "prompt": {
+        "id": "story.frontier.refresh.prompt",
+        "systemInstruction": "Refresh a small optional frontier of causally supported situations from supplied Story records and committed receipts. Return proposal-only JSON under gmc.story-frontier-proposal/1; copy sourceRefs and idempotencyKey exactly. Each candidate needs a trigger, dramatic question, stakes, pressures, dependencies, exclusions, and preparation horizon. Prepare situations, never player choices, mandatory paths, guaranteed arrivals, or predetermined outcomes. Return at most five candidates and at most three ready_soon. Never commit, create mechanics, or narrate play.",
+        "version": "gmc.story-frontier-proposal/1"
+      },
+      "outputSchema": {
+        "id": "story.frontier.refresh.result",
+        "version": "1",
+        "schema": {
+          "$id": "story.frontier.refresh.result/1",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "status",
+            "sourceRefs",
+            "idempotencyKey",
+            "proposal"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "gmc.story-frontier-proposal/1"
+            },
+            "status": {
+              "const": "proposal_only"
+            },
+            "sourceRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "maxItems": 16,
+              "uniqueItems": true
+            },
+            "idempotencyKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "proposal": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "candidates",
+                "retirementRefs"
+              ],
+              "properties": {
+                "candidates": {
+                  "type": "array",
+                  "maxItems": 5,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "trigger",
+                      "dramaticQuestion",
+                      "stakes",
+                      "pressures",
+                      "likelyCastRefs",
+                      "prerequisiteRefs",
+                      "exclusionRefs",
+                      "sourceRefs",
+                      "preparationHorizon"
+                    ],
+                    "properties": {
+                      "trigger": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      },
+                      "dramaticQuestion": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      },
+                      "stakes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        },
+                        "minItems": 1,
+                        "maxItems": 8
+                      },
+                      "pressures": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        },
+                        "minItems": 1,
+                        "maxItems": 8
+                      },
+                      "likelyCastRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "maxItems": 16,
+                        "uniqueItems": true
+                      },
+                      "prerequisiteRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "maxItems": 16,
+                        "uniqueItems": true
+                      },
+                      "exclusionRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "maxItems": 16,
+                        "uniqueItems": true
+                      },
+                      "sourceRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "maxItems": 16,
+                        "uniqueItems": true
+                      },
+                      "preparationHorizon": {
+                        "enum": [
+                          "ready_soon",
+                          "seeded"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "retirementRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "maxItems": 16,
+                  "uniqueItems": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "validators": [
+        "authority-boundary",
+        "story-planning-proposal"
+      ],
+      "context": {
+        "allowedKeys": [
+          "policy",
+          "campaign",
+          "canon",
+          "scene",
+          "turn",
+          "input",
+          "mechanics",
+          "workflow",
+          "priorResult"
+        ],
+        "inputTargetBytes": 40000,
+        "inputHardLimitBytes": 64000,
+        "requiredReferenceRevisions": []
+      },
+      "provider": {
+        "temperature": 0.35,
+        "thinkingLevel": "medium",
+        "maxOutputTokens": 2200,
+        "timeoutMs": 180000,
+        "maxAttempts": 1,
+        "fallbackAllowed": false,
+        "premiumAllowed": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttlMs": 900000
+      }
+    },
+    {
+      "id": "story.portfolio.refresh",
+      "version": "1",
+      "operationClass": "reasoning_high",
+      "capabilityTier": "reasoning",
+      "authority": {
+        "canon": "GMC",
+        "mechanics": "none",
+        "commit": "proposal_only"
+      },
+      "prompt": {
+        "id": "story.portfolio.refresh.prompt",
+        "systemInstruction": "Refresh a bounded campaign story portfolio from only the supplied revisioned records and receipts. Return proposal-only JSON under gmc.story-portfolio-proposal/1; copy sourceRefs and idempotencyKey exactly. Maintain dramatic questions and active pressures, not a plot sequence, required player action, guaranteed result, or invented canon. A casual mention is not an arc. Require material player investment or durable consequences from supplied receipts. Return at most six arcs. Never commit, reveal private canon, create mechanics, or narrate play.",
+        "version": "gmc.story-portfolio-proposal/1"
+      },
+      "outputSchema": {
+        "id": "story.portfolio.refresh.result",
+        "version": "1",
+        "schema": {
+          "$id": "story.portfolio.refresh.result/1",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "status",
+            "sourceRefs",
+            "idempotencyKey",
+            "proposal"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "gmc.story-portfolio-proposal/1"
+            },
+            "status": {
+              "const": "proposal_only"
+            },
+            "sourceRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "maxItems": 16,
+              "uniqueItems": true
+            },
+            "idempotencyKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "proposal": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "campaignQuestion",
+                "arcs"
+              ],
+              "properties": {
+                "campaignQuestion": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "arcs": {
+                  "type": "array",
+                  "maxItems": 6,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "title",
+                      "dramaticQuestion",
+                      "pressures",
+                      "sourceRefs",
+                      "playerInvestment"
+                    ],
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "dramaticQuestion": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      },
+                      "pressures": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        },
+                        "minItems": 1,
+                        "maxItems": 8
+                      },
+                      "sourceRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "maxItems": 16,
+                        "uniqueItems": true
+                      },
+                      "playerInvestment": {
+                        "enum": [
+                          "provisional",
+                          "material",
+                          "sustained"
+                        ]
+                      },
+                      "planningState": {
+                        "enum": [
+                          "idea",
+                          "active",
+                          "dormant",
+                          "resolved",
+                          "retired"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "validators": [
+        "authority-boundary",
+        "story-planning-proposal"
+      ],
+      "context": {
+        "allowedKeys": [
+          "policy",
+          "campaign",
+          "canon",
+          "scene",
+          "turn",
+          "input",
+          "mechanics",
+          "workflow",
+          "priorResult"
+        ],
+        "inputTargetBytes": 56000,
+        "inputHardLimitBytes": 80000,
+        "requiredReferenceRevisions": []
+      },
+      "provider": {
+        "temperature": 0.3,
+        "thinkingLevel": "medium",
+        "maxOutputTokens": 2500,
+        "timeoutMs": 180000,
+        "maxAttempts": 1,
+        "fallbackAllowed": false,
+        "premiumAllowed": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttlMs": 900000
+      }
+    },
+    {
+      "id": "story.scene.elaborate",
+      "version": "1",
+      "operationClass": "reasoning_high",
+      "capabilityTier": "reasoning",
+      "authority": {
+        "canon": "GMC",
+        "mechanics": "none",
+        "commit": "proposal_only"
+      },
+      "prompt": {
+        "id": "story.scene.elaborate.prompt",
+        "systemInstruction": "Elaborate exactly one selected ready-now situation into a playable scene kit using only supplied authority and possibilities. Return proposal-only JSON under gmc.story-scene-proposal/1; copy sourceRefs and idempotencyKey exactly. Provide a dramatic question, exact present and separately anticipated cast, participant reasons, current activity, two to five beats, stakes, pressures, information access, and completion/failure/abandonment/redirect exits. Critical information needs at least two plausible access vectors. Anticipated participants cannot act or arrive without their trigger. Do not decide a player method or outcome, invent canon, reveal private material, create mechanics, or narrate play.",
+        "version": "gmc.story-scene-proposal/1"
+      },
+      "outputSchema": {
+        "id": "story.scene.elaborate.result",
+        "version": "1",
+        "schema": {
+          "$id": "story.scene.elaborate.result/1",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "status",
+            "sourceRefs",
+            "idempotencyKey",
+            "proposal"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "gmc.story-scene-proposal/1"
+            },
+            "status": {
+              "const": "proposal_only"
+            },
+            "sourceRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "maxItems": 16,
+              "uniqueItems": true
+            },
+            "idempotencyKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "proposal": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "title",
+                "purpose",
+                "dramaticQuestion",
+                "locationRef",
+                "participants",
+                "activity",
+                "importantBeats",
+                "stakes",
+                "pressures",
+                "information",
+                "exitVectors"
+              ],
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "purpose": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1200
+                },
+                "dramaticQuestion": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1200
+                },
+                "locationRef": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "participants": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "present",
+                    "anticipated"
+                  ],
+                  "properties": {
+                    "present": {
+                      "type": "array",
+                      "maxItems": 16,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "entityRef",
+                          "publicLabel",
+                          "reason",
+                          "identityKind"
+                        ],
+                        "properties": {
+                          "entityRef": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "publicLabel": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1200
+                          },
+                          "identityKind": {
+                            "enum": [
+                              "individual",
+                              "anonymous_extra",
+                              "collective"
+                            ]
+                          },
+                          "arrivalCondition": {
+                            "type": "string",
+                            "maxLength": 600
+                          },
+                          "sourceRefs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "maxItems": 16,
+                            "uniqueItems": true
+                          }
+                        }
+                      }
+                    },
+                    "anticipated": {
+                      "type": "array",
+                      "maxItems": 16,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "entityRef",
+                          "publicLabel",
+                          "reason",
+                          "identityKind"
+                        ],
+                        "properties": {
+                          "entityRef": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "publicLabel": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1200
+                          },
+                          "identityKind": {
+                            "enum": [
+                              "individual",
+                              "anonymous_extra",
+                              "collective"
+                            ]
+                          },
+                          "arrivalCondition": {
+                            "type": "string",
+                            "maxLength": 600
+                          },
+                          "sourceRefs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "maxItems": 16,
+                            "uniqueItems": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "activity": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1200
+                  },
+                  "minItems": 1,
+                  "maxItems": 12
+                },
+                "importantBeats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1200
+                  },
+                  "minItems": 2,
+                  "maxItems": 5
+                },
+                "stakes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1200
+                  },
+                  "minItems": 1,
+                  "maxItems": 8
+                },
+                "pressures": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1200
+                  },
+                  "minItems": 1,
+                  "maxItems": 8
+                },
+                "information": {
+                  "type": "array",
+                  "maxItems": 12,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "summary",
+                      "truthState",
+                      "accessVectors",
+                      "critical",
+                      "sourceRefs"
+                    ],
+                    "properties": {
+                      "summary": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      },
+                      "truthState": {
+                        "enum": [
+                          "private_canon",
+                          "gm_preparation"
+                        ]
+                      },
+                      "accessVectors": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        },
+                        "minItems": 1,
+                        "maxItems": 6
+                      },
+                      "critical": {
+                        "type": "boolean"
+                      },
+                      "sourceRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "maxItems": 16,
+                        "uniqueItems": true
+                      }
+                    }
+                  }
+                },
+                "exitVectors": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 8,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "condition",
+                      "consequence"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "completion",
+                          "failure",
+                          "abandonment",
+                          "redirect"
+                        ]
+                      },
+                      "condition": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      },
+                      "consequence": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1200
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "validators": [
+        "authority-boundary",
+        "story-planning-proposal",
+        "story-scene-readiness"
+      ],
+      "context": {
+        "allowedKeys": [
+          "policy",
+          "campaign",
+          "canon",
+          "scene",
+          "turn",
+          "input",
+          "mechanics",
+          "workflow",
+          "priorResult"
+        ],
+        "inputTargetBytes": 48000,
+        "inputHardLimitBytes": 72000,
+        "requiredReferenceRevisions": []
+      },
+      "provider": {
+        "temperature": 0.35,
+        "thinkingLevel": "medium",
+        "maxOutputTokens": 3200,
+        "timeoutMs": 180000,
+        "maxAttempts": 1,
+        "fallbackAllowed": false,
+        "premiumAllowed": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttlMs": 900000
       }
     },
     {

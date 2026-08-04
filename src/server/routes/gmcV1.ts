@@ -46,8 +46,11 @@ import {
 import { NPC_IDENTITY_CONTRACT_VERSION, isCanonicalNpcName, normalizeNpcIdentitySeed } from '../services/npcIdentity.js';
 import {
   NPC_IDENTITY_PROMOTION_CONTRACT_VERSION,
+  NPC_IDENTITY_REVEAL_CONTRACT_VERSION,
   promoteExistingNpcIdentity,
+  revealExistingNpcIdentity,
 } from '../services/npcIdentityPromotion.js';
+import { synchronizeNpcIdentityPromotionToStory } from '../services/storyWorkspaceStore.js';
 import { generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
 import { ensureCampaignActor } from '../services/actorEnsureWorkflow.js';
 import { applyCampaignClockMutation } from '../services/campaignClockMutation.js';
@@ -1150,7 +1153,59 @@ gmcV1Router.post('/campaigns/:campaignId/npcs/:npcId/promote-identity', asyncRou
     correlationId: correlationId(req),
   });
   if (!result) { fail(req, res, 404, 'NOT_FOUND', 'NPC not found.'); return; }
-  res.status(result.authorityReceipt.status === 'applied' && !result.duplicate ? 201 : 200).json(result);
+  const storyReadiness = await synchronizeNpcIdentityPromotionToStory({
+    userId: userId(req),
+    campaignId: req.params.campaignId,
+    npcId: result.npcId,
+    npcRevision: result.revision,
+    identityMaturity: result.identityMaturity,
+    revealState: result.revealState,
+    narrativeDepth: result.narrativeDepth,
+    mechanicalDepth: result.mechanicalDepth,
+    displayLabel: result.displayLabel,
+    authorityReceiptRef: `gmc:npc-identity-promotion-receipt:${result.npcId}:${result.revision}`,
+    idempotencyKey: `${req.body.idempotencyKey}:story`,
+  });
+  res.status(result.authorityReceipt.status === 'applied' && !result.duplicate ? 201 : 200).json({
+    ...result,
+    storyReadiness,
+  });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/npcs/:npcId/reveal-identity', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  if (req.body?.campaignId !== req.params.campaignId || req.body?.npcId !== req.params.npcId) {
+    fail(req, res, 422, 'NPC_IDENTITY_REVEAL_ENVELOPE_MISMATCH', 'The identity-reveal request does not match its route target.');
+    return;
+  }
+  const result = await revealExistingNpcIdentity({
+    ...(req.body ?? {}),
+    schemaVersion: req.body?.schemaVersion ?? NPC_IDENTITY_REVEAL_CONTRACT_VERSION,
+    userId: userId(req),
+    campaignId: req.params.campaignId,
+    npcId: req.params.npcId,
+    correlationId: correlationId(req),
+  });
+  if (!result) { fail(req, res, 404, 'NOT_FOUND', 'NPC not found.'); return; }
+  const details = result.npc?.details ?? {};
+  const storyReadiness = await synchronizeNpcIdentityPromotionToStory({
+    userId: userId(req),
+    campaignId: req.params.campaignId,
+    npcId: result.npcId,
+    npcRevision: result.revision,
+    identityMaturity: result.identityMaturity,
+    revealState: result.revealState,
+    narrativeDepth: String(details.narrativeDepth ?? 'surface'),
+    mechanicalDepth: String(details.mechanicalDepth ?? 'none'),
+    displayLabel: result.displayLabel,
+    authorityReceiptRef: `gmc:npc-identity-reveal-receipt:${result.npcId}:${result.revision}`,
+    idempotencyKey: `${req.body.idempotencyKey}:story`,
+    source: 'npc_identity_reveal',
+  });
+  res.status(result.authorityReceipt.status === 'applied' && !result.duplicate ? 201 : 200).json({
+    ...result,
+    storyReadiness,
+  });
 }));
 
 gmcV1Router.post('/campaigns/:campaignId/npcs/:npcId/supersede', asyncRoute(async (req, res) => {

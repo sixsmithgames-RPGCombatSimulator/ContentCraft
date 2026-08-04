@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-03.1';
+export const OPERATION_REGISTRY_VERSION = '2026-08-04.1';
 
 export type CapabilityTier = 'structured' | 'narrative' | 'world' | 'reasoning';
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
@@ -243,6 +243,98 @@ const typeByKey: Record<string, Record<string, unknown>> = {
   },
 };
 
+const boundedStoryText = { type: 'string', minLength: 1, maxLength: 1200 } as const;
+const boundedStoryRefs = { type: 'array', items: { type: 'string', minLength: 1, maxLength: 240 }, maxItems: 16, uniqueItems: true } as const;
+const storyParticipant = {
+  type: 'object', additionalProperties: false,
+  required: ['entityRef', 'publicLabel', 'reason', 'identityKind'],
+  properties: {
+    entityRef: { type: 'string', minLength: 1, maxLength: 240 }, publicLabel: { type: 'string', minLength: 1, maxLength: 200 },
+    reason: boundedStoryText, identityKind: { enum: ['individual', 'anonymous_extra', 'collective'] },
+    arrivalCondition: { type: 'string', maxLength: 600 }, sourceRefs: boundedStoryRefs,
+  },
+} as const;
+const storyPlanningOutput = (schemaVersion: string, proposal: Record<string, unknown>) => ({
+  schemaVersion: { const: schemaVersion },
+  status: { const: 'proposal_only' },
+  sourceRefs: boundedStoryRefs,
+  idempotencyKey: { type: 'string', minLength: 1, maxLength: 200 },
+  proposal,
+});
+
+const portfolioProposal = {
+  type: 'object', additionalProperties: false,
+  required: ['campaignQuestion', 'arcs'],
+  properties: {
+    campaignQuestion: { anyOf: [{ type: 'string', minLength: 1, maxLength: 2000 }, { type: 'null' }] },
+    arcs: {
+      type: 'array', maxItems: 6, items: {
+        type: 'object', additionalProperties: false,
+        required: ['title', 'dramaticQuestion', 'pressures', 'sourceRefs', 'playerInvestment'],
+        properties: {
+          title: { type: 'string', minLength: 1, maxLength: 200 }, dramaticQuestion: boundedStoryText,
+          pressures: { type: 'array', items: boundedStoryText, minItems: 1, maxItems: 8 }, sourceRefs: boundedStoryRefs,
+          playerInvestment: { enum: ['provisional', 'material', 'sustained'] },
+          planningState: { enum: ['idea', 'active', 'dormant', 'resolved', 'retired'] },
+        },
+      },
+    },
+  },
+} as const;
+
+const frontierProposal = {
+  type: 'object', additionalProperties: false,
+  required: ['candidates', 'retirementRefs'],
+  properties: {
+    candidates: {
+      type: 'array', maxItems: 5, items: {
+        type: 'object', additionalProperties: false,
+        required: ['trigger', 'dramaticQuestion', 'stakes', 'pressures', 'likelyCastRefs', 'prerequisiteRefs', 'exclusionRefs', 'sourceRefs', 'preparationHorizon'],
+        properties: {
+          trigger: boundedStoryText, dramaticQuestion: boundedStoryText,
+          stakes: { type: 'array', items: boundedStoryText, minItems: 1, maxItems: 8 },
+          pressures: { type: 'array', items: boundedStoryText, minItems: 1, maxItems: 8 },
+          likelyCastRefs: boundedStoryRefs, prerequisiteRefs: boundedStoryRefs, exclusionRefs: boundedStoryRefs,
+          sourceRefs: boundedStoryRefs, preparationHorizon: { enum: ['ready_soon', 'seeded'] },
+        },
+      },
+    },
+    retirementRefs: boundedStoryRefs,
+  },
+} as const;
+
+const sceneProposal = {
+  type: 'object', additionalProperties: false,
+  required: ['title', 'purpose', 'dramaticQuestion', 'locationRef', 'participants', 'activity', 'importantBeats', 'stakes', 'pressures', 'information', 'exitVectors'],
+  properties: {
+    title: { type: 'string', minLength: 1, maxLength: 200 }, purpose: boundedStoryText, dramaticQuestion: boundedStoryText,
+    locationRef: { type: 'string', minLength: 1, maxLength: 500 },
+    participants: {
+      type: 'object', additionalProperties: false, required: ['present', 'anticipated'],
+      properties: { present: { type: 'array', maxItems: 16, items: storyParticipant }, anticipated: { type: 'array', maxItems: 16, items: storyParticipant } },
+    },
+    activity: { type: 'array', items: boundedStoryText, minItems: 1, maxItems: 12 },
+    importantBeats: { type: 'array', items: boundedStoryText, minItems: 2, maxItems: 5 },
+    stakes: { type: 'array', items: boundedStoryText, minItems: 1, maxItems: 8 },
+    pressures: { type: 'array', items: boundedStoryText, minItems: 1, maxItems: 8 },
+    information: {
+      type: 'array', maxItems: 12, items: {
+        type: 'object', additionalProperties: false, required: ['summary', 'truthState', 'accessVectors', 'critical', 'sourceRefs'],
+        properties: {
+          summary: boundedStoryText, truthState: { enum: ['private_canon', 'gm_preparation'] },
+          accessVectors: { type: 'array', items: boundedStoryText, minItems: 1, maxItems: 6 }, critical: { type: 'boolean' }, sourceRefs: boundedStoryRefs,
+        },
+      },
+    },
+    exitVectors: {
+      type: 'array', minItems: 2, maxItems: 8, items: {
+        type: 'object', additionalProperties: false, required: ['kind', 'condition', 'consequence'],
+        properties: { kind: { enum: ['completion', 'failure', 'abandonment', 'redirect'] }, condition: boundedStoryText, consequence: boundedStoryText },
+      },
+    },
+  },
+} as const;
+
 function objectOutputSchema(
   id: string,
   required: readonly string[],
@@ -334,6 +426,48 @@ const seeds: Seed[] = [
       'Create no NPC, entity, location, scene setting, player action, roll, resource change, or mechanical result; proposedEntities and proposedLocations must be empty.',
       'Stay within supplied campaign constraints and source evidence. Do not commit or claim that the proposal is canon.',
       'Return only the registered JSON output.',
+    ].join(' '),
+  },
+  {
+    id: 'story.portfolio.refresh', operationClass: 'reasoning_high', tier: 'reasoning',
+    required: ['schemaVersion', 'status', 'sourceRefs', 'idempotencyKey', 'proposal'], validators: ['story-planning-proposal'],
+    temperature: 0.3, maxOutputTokens: 2500, targetBytes: 56_000, hardLimitBytes: 80_000,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gmc.story-portfolio-proposal/1',
+    outputProperties: storyPlanningOutput('gmc.story-portfolio-proposal/1', portfolioProposal),
+    systemInstruction: [
+      'Refresh a bounded campaign story portfolio from only the supplied revisioned records and receipts.',
+      'Return proposal-only JSON under gmc.story-portfolio-proposal/1; copy sourceRefs and idempotencyKey exactly.',
+      'Maintain dramatic questions and active pressures, not a plot sequence, required player action, guaranteed result, or invented canon.',
+      'A casual mention is not an arc. Require material player investment or durable consequences from supplied receipts.',
+      'Return at most six arcs. Never commit, reveal private canon, create mechanics, or narrate play.',
+    ].join(' '),
+  },
+  {
+    id: 'story.frontier.refresh', operationClass: 'reasoning_high', tier: 'reasoning',
+    required: ['schemaVersion', 'status', 'sourceRefs', 'idempotencyKey', 'proposal'], validators: ['story-planning-proposal'],
+    temperature: 0.35, maxOutputTokens: 2200, targetBytes: 40_000, hardLimitBytes: 64_000,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gmc.story-frontier-proposal/1',
+    outputProperties: storyPlanningOutput('gmc.story-frontier-proposal/1', frontierProposal),
+    systemInstruction: [
+      'Refresh a small optional frontier of causally supported situations from supplied Story records and committed receipts.',
+      'Return proposal-only JSON under gmc.story-frontier-proposal/1; copy sourceRefs and idempotencyKey exactly.',
+      'Each candidate needs a trigger, dramatic question, stakes, pressures, dependencies, exclusions, and preparation horizon.',
+      'Prepare situations, never player choices, mandatory paths, guaranteed arrivals, or predetermined outcomes.',
+      'Return at most five candidates and at most three ready_soon. Never commit, create mechanics, or narrate play.',
+    ].join(' '),
+  },
+  {
+    id: 'story.scene.elaborate', operationClass: 'reasoning_high', tier: 'reasoning',
+    required: ['schemaVersion', 'status', 'sourceRefs', 'idempotencyKey', 'proposal'], validators: ['story-planning-proposal', 'story-scene-readiness'],
+    temperature: 0.35, maxOutputTokens: 3200, targetBytes: 48_000, hardLimitBytes: 72_000,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gmc.story-scene-proposal/1',
+    outputProperties: storyPlanningOutput('gmc.story-scene-proposal/1', sceneProposal),
+    systemInstruction: [
+      'Elaborate exactly one selected ready-now situation into a playable scene kit using only supplied authority and possibilities.',
+      'Return proposal-only JSON under gmc.story-scene-proposal/1; copy sourceRefs and idempotencyKey exactly.',
+      'Provide a dramatic question, exact present and separately anticipated cast, participant reasons, current activity, two to five beats, stakes, pressures, information access, and completion/failure/abandonment/redirect exits.',
+      'Critical information needs at least two plausible access vectors. Anticipated participants cannot act or arrive without their trigger.',
+      'Do not decide a player method or outcome, invent canon, reveal private material, create mechanics, or narrate play.',
     ].join(' '),
   },
   { id: 'actor.ensure.generate', operationClass: 'world_generation', tier: 'world', required: ['name'], openOutput: true },
