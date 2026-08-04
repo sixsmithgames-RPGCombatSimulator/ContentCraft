@@ -209,6 +209,22 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, scenePlanId: 1, supersededByRewindId: 1 },
     { name: 'gma_scene_plan_rewind_replay' },
   );
+  await database.collection('gmc_story_workspace_revisions').createIndex(
+    { userId: 1, campaignId: 1, workspaceId: 1, revision: -1 },
+    { unique: true, name: 'unique_gmc_story_workspace_revision' },
+  );
+  await database.collection('gmc_story_workspace_revisions').createIndex(
+    { userId: 1, campaignId: 1, idempotencyKey: 1 },
+    { unique: true, name: 'unique_gmc_story_workspace_idempotency' },
+  );
+  await database.collection('gmc_story_workspace_revisions').createIndex(
+    { userId: 1, campaignId: 1, workspaceId: 1, status: 1, revision: -1 },
+    { name: 'gmc_story_workspace_active_lookup' },
+  );
+  await database.collection('gmc_story_workspace_revisions').createIndex(
+    { userId: 1, campaignId: 1, supersededByRewindId: 1 },
+    { name: 'gmc_story_workspace_rewind_replay' },
+  );
   await database.collection('llm_generation_workflows').createIndex(
     { userId: 1, workflowId: 1 },
     { unique: true, name: 'unique_llm_generation_workflow' },

@@ -29,6 +29,16 @@ import {
   PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
   WORLD_GENERATION_POLICY_VERSION,
 } from '../services/gmcIntegrationStore.js';
+import {
+  PLAYABLE_STORY_PROJECTION_CONTRACT_VERSION,
+  STORY_DELTA_CONTRACT_VERSION,
+  STORY_PROMPT_PROJECTION_MAX_BYTES,
+  STORY_PUBLIC_PROJECTION_CONTRACT_VERSION,
+  STORY_WORKSPACE_CONTRACT_VERSION,
+  STORY_WORKSPACE_MAX_BYTES,
+  STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION,
+} from '../services/storyWorkspaceStore.js';
+import { NPC_IDENTITY_PROMOTION_CONTRACT_VERSION } from '../services/npcIdentityPromotion.js';
 
 export const apiRouter = Router();
 
@@ -71,6 +81,17 @@ apiRouter.get('/health', (_req, res) => {
           PREVIOUS_WORLD_GENERATION_POLICY_VERSION,
           WORLD_GENERATION_POLICY_VERSION,
         ],
+      },
+      storyPreparation: {
+        workspaceContractVersion: STORY_WORKSPACE_CONTRACT_VERSION,
+        workspaceReferenceContractVersion: STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION,
+        storyDeltaContractVersion: STORY_DELTA_CONTRACT_VERSION,
+        publicProjectionContractVersion: STORY_PUBLIC_PROJECTION_CONTRACT_VERSION,
+        playableProjectionContractVersion: PLAYABLE_STORY_PROJECTION_CONTRACT_VERSION,
+        npcIdentityPromotionContractVersion: NPC_IDENTITY_PROMOTION_CONTRACT_VERSION,
+        maximumWorkspaceBytes: STORY_WORKSPACE_MAX_BYTES,
+        maximumPlayableProjectionBytes: STORY_PROMPT_PROJECTION_MAX_BYTES,
+        authority: 'gmc',
       },
     },
   });

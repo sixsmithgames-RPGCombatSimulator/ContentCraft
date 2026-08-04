@@ -44,6 +44,10 @@ import {
   type GmcEntityKind,
 } from '../services/gmcIntegrationStore.js';
 import { NPC_IDENTITY_CONTRACT_VERSION, isCanonicalNpcName, normalizeNpcIdentitySeed } from '../services/npcIdentity.js';
+import {
+  NPC_IDENTITY_PROMOTION_CONTRACT_VERSION,
+  promoteExistingNpcIdentity,
+} from '../services/npcIdentityPromotion.js';
 import { generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
 import { ensureCampaignActor } from '../services/actorEnsureWorkflow.js';
 import { applyCampaignClockMutation } from '../services/campaignClockMutation.js';
@@ -94,11 +98,13 @@ import {
   PLAN_ENCOUNTER_REQUIRED_KEYS,
 } from './gmcV1PlanningContracts.js';
 import { gmaScenePlanRouter } from './gmaScenePlans.js';
+import { storyWorkspaceRouter } from './storyWorkspace.js';
 
 export const gmcV1Router = Router();
 gmcV1Router.use(integrationAuth);
 gmcV1Router.use('/llm', llmOrchestratorRouter);
 gmcV1Router.use('/campaigns/:campaignId/integration/scene-plans', gmaScenePlanRouter);
+gmcV1Router.use('/campaigns/:campaignId/story', storyWorkspaceRouter);
 
 export function requestedSceneStoryContracts(body: any) {
   const requestedEvidence = String(body?.contractVersions?.narrationEvidence ?? '').trim();
@@ -1127,6 +1133,24 @@ gmcV1Router.patch('/campaigns/:campaignId/npcs/:npcId/profile', asyncRoute(async
   });
   if (!npc) { fail(req, res, 404, 'NOT_FOUND', 'NPC not found.'); return; }
   res.json({ contractVersion: NPC_IDENTITY_CONTRACT_VERSION, npc });
+}));
+
+gmcV1Router.post('/campaigns/:campaignId/npcs/:npcId/promote-identity', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  if (req.body?.campaignId !== req.params.campaignId || req.body?.npcId !== req.params.npcId) {
+    fail(req, res, 422, 'NPC_IDENTITY_PROMOTION_ENVELOPE_MISMATCH', 'The identity-promotion request does not match its route target.');
+    return;
+  }
+  const result = await promoteExistingNpcIdentity({
+    ...(req.body ?? {}),
+    schemaVersion: req.body?.schemaVersion ?? NPC_IDENTITY_PROMOTION_CONTRACT_VERSION,
+    userId: userId(req),
+    campaignId: req.params.campaignId,
+    npcId: req.params.npcId,
+    correlationId: correlationId(req),
+  });
+  if (!result) { fail(req, res, 404, 'NOT_FOUND', 'NPC not found.'); return; }
+  res.status(result.authorityReceipt.status === 'applied' && !result.duplicate ? 201 : 200).json(result);
 }));
 
 gmcV1Router.post('/campaigns/:campaignId/npcs/:npcId/supersede', asyncRoute(async (req, res) => {
