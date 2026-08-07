@@ -189,5 +189,9 @@ deployment.
 
 The full GMC check passes with 108 test files and 676 tests, including operation
 policy, compatibility, receipt-catalog, atomic handoff, typecheck, lint, and
-production builds. GMA gameplay routing remains disabled; production
-verification of this D5 addendum is pending before D6 may begin.
+production builds. Commit `4ee49b2db7636a65b9de0e09964d9c770a7489d2`
+is on `origin/main`; all three Vercel targets are `READY`. Public health and the
+service-authenticated LLM contract confirm GMC 1.9.0, registry `2026-08-07.1`,
+32 operations, and `story.turn.direct` with policy
+`gma.story-director-policy/1`. GMA gameplay routing remains disabled; D6 may
+begin only after separate authorization.
