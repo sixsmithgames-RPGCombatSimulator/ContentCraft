@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   applyStoryRecordPatch,
+  compileLegacyScenePlanImport,
   type JsonObject,
   type JsonValue,
   PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
@@ -16,6 +17,7 @@ import {
   STORY_GRAPH_MAX_BYTES,
   STORY_PLANNING_STATES,
   STORY_TRUTH_STATES,
+  STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION,
   type StoryRecordPatch,
   StoryWorkspaceStoreError,
   type StoryWorkspaceRevisionCollection,
@@ -28,6 +30,7 @@ import {
 /** D2 authority receipt and service-only projection versions. */
 export const STORY_GRAPH_WRITE_RECEIPT_CONTRACT_VERSION = 'gmc.story-graph-write-receipt/1';
 export const STORY_MIGRATION_RECEIPT_CONTRACT_VERSION = 'gmc.story-v2-migration-receipt/1';
+export const STORY_MIGRATION_PREVIEW_CONTRACT_VERSION = 'gmc.story-migration-preview/1';
 export const PRIVATE_SCENE_CONTEXT_CONTRACT_VERSION = 'gmc.scene-director-context/1';
 export const PRIVATE_SCENE_CONTEXT_MAX_BYTES = 12_288;
 export const STORY_AUTHORITY_RECEIPT_CATALOG_CONTRACT_VERSION = 'gmc.story-authority-receipt-catalog/1';
@@ -459,6 +462,69 @@ export function compileStoryWorkspaceV2Migration(workspace: JsonObject): JsonObj
       ?? (activeKit.beats as JsonObject[])[0]?.beatId ?? null;
   }
   return migrated;
+}
+
+/**
+ * Builds the first Story migration preview directly from GMC's immutable
+ * legacy scene-plan revision. The returned workspace is never persisted and
+ * its revision-zero reference is explicitly marked as a preview.
+ * date_of_change: 2026-08-07
+ */
+export function compileLegacyScenePlanV2MigrationPreview(input: {
+  campaignId: string;
+  scenePlanRef: { scenePlanId: string; sceneId: string; revision: number; payloadHash: string };
+  privatePayload: JsonObject;
+}) {
+  const imported = compileLegacyScenePlanImport(input);
+  const migrated = compileStoryWorkspaceV2Migration(imported);
+  const graph = projectStoryGraphV2(migrated);
+  const kits = sceneKits(migrated);
+  const previewRef = {
+    contractVersion: STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION,
+    workspaceId: String(migrated.workspaceId),
+    revision: 0,
+    payloadHash: hash(migrated),
+    status: 'preview',
+  };
+  const evidenceRef = `gma-scene-plan:${input.scenePlanRef.scenePlanId}:r${input.scenePlanRef.revision}`;
+  const catalog = buildStoryAuthorityReceiptCatalog(migrated) as JsonObject;
+  catalog.receipts = (catalog.receipts as JsonObject[]).map((receipt) => ({
+    ...receipt,
+    receiptRef: `gmc:legacy-scene-plan:${hash({
+      evidenceRef,
+      payloadHash: input.scenePlanRef.payloadHash,
+      sourceRef: receipt.sourceRef,
+    })}`,
+    evidenceRef,
+  }));
+  return {
+    contractVersion: STORY_MIGRATION_PREVIEW_CONTRACT_VERSION,
+    dryRun: true,
+    mutationApplied: false,
+    source: 'legacy_scene_plan',
+    migrationPreview: {
+      contractVersion: STORY_MIGRATION_RECEIPT_CONTRACT_VERSION,
+      dryRun: true,
+      changed: true,
+      fromWorkspaceRevision: 0,
+      graphRevision: graph.revision,
+      graphNodeCount: graphNodes(graph).length,
+      sceneKitCount: kits.length,
+      activeSceneKitId: isObject(migrated.activeSceneKitRef) ? migrated.activeSceneKitRef.sceneKitId ?? null : null,
+      storyWorkspaceRef: previewRef,
+    },
+    sceneContext: {
+      storyWorkspaceRef: previewRef,
+      playableSceneContext: buildPlayableSceneContextV2(migrated),
+      privateSceneContext: buildPrivateSceneDirectorContext(migrated),
+      authorityReceiptCatalog: catalog,
+    },
+    history: {
+      revisions: [],
+      legacyBackupRef: input.scenePlanRef,
+    },
+    importedScenePlanRef: input.scenePlanRef,
+  };
 }
 
 /** Dry-runs or commits the additive version 2 Story migration. */

@@ -33,6 +33,7 @@ describe('D2 Story authority routes', () => {
       ['POST', '/deltas-v2'],
       ['PUT', '/graph'],
       ['POST', '/migrate-v2'],
+      ['POST', '/migration-preview'],
       ['POST', '/scene-handoffs'],
       ['GET', '/scene-context'],
     ] as const) {

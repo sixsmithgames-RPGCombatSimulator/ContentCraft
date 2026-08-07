@@ -344,6 +344,32 @@ export async function readActiveScenePlan(
   return { contractVersion: GMA_SCENE_PLAN_STORE_CONTRACT_VERSION, scenePlanRef: reference(record), privatePayload: record.privatePayload };
 }
 
+/**
+ * Resolves the most recent available plan when a migration rehearsal begins
+ * before a Story workspace has recorded an active Scene-kit reference.
+ * date_of_change: 2026-08-07
+ */
+export async function readLatestActiveScenePlan(
+  input: { userId: string; campaignId: string; schemaVersion: string },
+  records: RevisionCollection = collection(),
+) {
+  const userId = text(input.userId, 'userId', 254);
+  const campaignId = text(input.campaignId, 'campaignId');
+  const schemaVersion = text(input.schemaVersion, 'schemaVersion');
+  if (!GMA_SCENE_PLAN_SCHEMA_ALLOWLIST.includes(schemaVersion)) {
+    throw new ScenePlanStoreError(422, 'GMA_SCENE_PLAN_SCHEMA_UNSUPPORTED', 'The scene-plan schema version is not supported.', {
+      supportedSchemaVersions: GMA_SCENE_PLAN_SCHEMA_ALLOWLIST,
+    });
+  }
+  const record = await records.findOne(
+    { userId, campaignId, schemaVersion, status: 'available' },
+    { sort: { 'timelineAnchor.sequence': -1, createdAt: -1, revision: -1 } },
+  );
+  return record
+    ? { contractVersion: GMA_SCENE_PLAN_STORE_CONTRACT_VERSION, scenePlanRef: reference(record), privatePayload: record.privatePayload }
+    : null;
+}
+
 /** Resolves an opaque revision reference without exposing database identifiers. */
 export async function resolveScenePlanRevision(
   input: { userId: string; campaignId: string; scenePlanId: string; revision: number; payloadHash?: string },

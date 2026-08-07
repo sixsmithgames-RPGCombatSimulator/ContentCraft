@@ -17,16 +17,18 @@ import {
   STORY_WORKSPACE_CONTRACT_VERSION,
   StoryWorkspaceStoreError,
 } from '../services/storyWorkspaceStore.js';
-import { GMA_SCENE_PLAN_SCHEMA_ALLOWLIST, readActiveScenePlan } from '../services/gmaScenePlanStore.js';
+import { GMA_SCENE_PLAN_SCHEMA_ALLOWLIST, readActiveScenePlan, readLatestActiveScenePlan } from '../services/gmaScenePlanStore.js';
 import {
   applyStoryDeltaV2,
   commitSceneHandoff,
+  compileLegacyScenePlanV2MigrationPreview,
   migrateStoryWorkspaceV2,
   readCurrentSceneContexts,
   readStoryGraphV2,
   replaceStoryGraphV2,
   type SceneHandoffAuthorityEnvelope,
   type StoryDeltaV2,
+  STORY_MIGRATION_PREVIEW_CONTRACT_VERSION,
 } from '../services/actionDirectedStoryStore.js';
 import {
   ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -190,6 +192,66 @@ storyWorkspaceRouter.post('/migrate-v2', requireServiceIntegration, asyncRoute(a
     dryRun: body.dryRun !== false,
   });
   res.status(result.dryRun || result.changed === false || ('duplicate' in result && result.duplicate) ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.post('/migration-preview', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const userId = (req as IntegrationRequest).userId;
+  const campaignId = req.params.campaignId;
+  const active = await readActiveStoryWorkspace({ userId, campaignId });
+  if (active) {
+    const migrationPreview = await migrateStoryWorkspaceV2({
+      userId,
+      campaignId,
+      expectedWorkspaceRevision: body.expectedWorkspaceRevision,
+      idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+      dryRun: true,
+    });
+    const sceneContext = await readCurrentSceneContexts({ userId, campaignId });
+    const history = await listStoryWorkspaceHistory({ userId, campaignId, limit: 100 });
+    res.json({
+      contractVersion: STORY_MIGRATION_PREVIEW_CONTRACT_VERSION,
+      dryRun: true,
+      mutationApplied: false,
+      source: 'story_workspace',
+      migrationPreview,
+      sceneContext,
+      history,
+    });
+    return;
+  }
+  if (Number(body.expectedWorkspaceRevision ?? 0) !== 0) {
+    throw new StoryWorkspaceStoreError(409, 'STORY_WORKSPACE_REVISION_CONFLICT', 'The Story workspace changed before migration preview.', {
+      expectedRevision: body.expectedWorkspaceRevision,
+      actualRevision: 0,
+    });
+  }
+  const legacy = body.scenePlanId
+    ? await readActiveScenePlan({
+      userId,
+      campaignId,
+      scenePlanId: body.scenePlanId,
+      sceneId: body.sceneId,
+      schemaVersion: GMA_SCENE_PLAN_SCHEMA_ALLOWLIST[0],
+    })
+    : await readLatestActiveScenePlan({ userId, campaignId, schemaVersion: GMA_SCENE_PLAN_SCHEMA_ALLOWLIST[0] });
+  if (!legacy) {
+    res.status(404).json({
+      error: {
+        code: 'STORY_LEGACY_SCENE_PLAN_NOT_FOUND',
+        message: 'No compatible legacy scene plan was found to preview.',
+        correlationId: correlationId(req),
+        details: {},
+      },
+    });
+    return;
+  }
+  res.json(compileLegacyScenePlanV2MigrationPreview({
+    campaignId,
+    scenePlanRef: legacy.scenePlanRef,
+    privatePayload: legacy.privatePayload,
+  }));
 }));
 
 storyWorkspaceRouter.post('/scene-handoffs', requireServiceIntegration, asyncRoute(async (req, res) => {

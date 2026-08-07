@@ -5,6 +5,7 @@ import {
   GMA_SCENE_PLAN_PRIVATE_PAYLOAD_MAX_BYTES,
   GMA_SCENE_PLAN_STORE_CONTRACT_VERSION,
   readActiveScenePlan,
+  readLatestActiveScenePlan,
   redactScenePlanRevision,
   resolveScenePlanRevision,
   rewindScenePlan,
@@ -35,10 +36,14 @@ function matches(record: ScenePlanRevisionDocument, filter: Filter<ScenePlanRevi
 function memoryCollection() {
   const documents: ScenePlanRevisionDocument[] = [];
   const api = {
-    async findOne(filter: Filter<ScenePlanRevisionDocument>, options?: { sort?: { revision?: number } }) {
+    async findOne(filter: Filter<ScenePlanRevisionDocument>, options?: { sort?: { revision?: number; 'timelineAnchor.sequence'?: number; createdAt?: number } }) {
       const found = documents.filter((document) => matches(document, filter));
+      const timelineOrder = options?.sort?.['timelineAnchor.sequence'];
+      if (timelineOrder) found.sort((left, right) => (right.timelineAnchor.sequence - left.timelineAnchor.sequence) * -Math.sign(timelineOrder));
+      const createdOrder = options?.sort?.createdAt;
+      if (!timelineOrder && createdOrder) found.sort((left, right) => (right.createdAt.getTime() - left.createdAt.getTime()) * -Math.sign(createdOrder));
       const revisionOrder = options?.sort?.revision;
-      if (revisionOrder) found.sort((left, right) => (right.revision - left.revision) * -Math.sign(revisionOrder));
+      if (!timelineOrder && !createdOrder && revisionOrder) found.sort((left, right) => (right.revision - left.revision) * -Math.sign(revisionOrder));
       return found[0] ?? null;
     },
     async insertOne(document: ScenePlanRevisionDocument) {
@@ -114,6 +119,24 @@ describe('GMA private scene-plan integration store', () => {
       userId: 'tenant-b', campaignId: 'campaign-a', scenePlanId: 'plan-flintwake',
       schemaVersion: 'gma.scene-plan/2',
     }, records)).toBeNull();
+  });
+
+  it('finds the latest available plan for a non-mutating first-workspace migration preview', async () => {
+    const { records } = memoryCollection();
+    await appendScenePlanRevision(appendInput(), records);
+    await appendScenePlanRevision(appendInput({
+      sceneId: 'scene-cart',
+      scenePlanId: 'plan-cart',
+      idempotencyKey: 'append-cart',
+      timelineAnchor: { messageId: 'message-9', sequence: 9 },
+      privatePayload: { schemaVersion: 'gma.scene-plan/2', sceneId: 'scene-cart', title: 'The Cart Interception' },
+    }), records);
+
+    const latest = await readLatestActiveScenePlan({
+      userId: 'tenant-a', campaignId: 'campaign-a', schemaVersion: 'gma.scene-plan/2',
+    }, records);
+
+    expect(latest?.scenePlanRef).toMatchObject({ scenePlanId: 'plan-cart', sceneId: 'scene-cart', revision: 1 });
   });
 
   it('replays an identical idempotency key but rejects changed content and stale CAS writes', async () => {

@@ -255,6 +255,7 @@ phase.
 GET  /api/gmc/v1/campaigns/{campaignId}/story/graph
 PUT  /api/gmc/v1/campaigns/{campaignId}/story/graph
 POST /api/gmc/v1/campaigns/{campaignId}/story/migrate-v2
+POST /api/gmc/v1/campaigns/{campaignId}/story/migration-preview
 POST /api/gmc/v1/campaigns/{campaignId}/story/scene-handoffs
 GET  /api/gmc/v1/campaigns/{campaignId}/story/scene-context
 POST /api/gmc/v1/campaigns/{campaignId}/story/deltas-v2
@@ -277,6 +278,13 @@ and retains `portfolio.arcs` as a bounded compatibility projection. `PUT
 .../graph` and `POST .../deltas-v2` use exact expected revisions and authority
 receipts; beat and actual Story impacts commit in the same workspace revision
 while unrelated nodes remain byte-identical.
+
+`POST .../migration-preview` is the non-mutating D6 entry point. It returns the
+current workspace migration preview when a Story workspace exists. For an
+uninitialized campaign, it compiles the most recent immutable
+`gma.scene-plan/2` revision through the same GMC migration code and returns a
+revision-zero preview, playable/private scene projections, source-evidence
+receipts, and the legacy backup reference. It never creates a Story revision.
 
 The workspace `activeSceneKitRef` is the only current-scene pointer after a
 version 2 handoff. The current locus, present actors, ambient roles, and active

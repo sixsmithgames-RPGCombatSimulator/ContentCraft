@@ -4,6 +4,7 @@ import {
   applyStoryDeltaV2,
   buildPlayableSceneContextV2,
   commitSceneHandoff,
+  compileLegacyScenePlanV2MigrationPreview,
   compileStoryWorkspaceV2Migration,
   migrateStoryWorkspaceV2,
   projectStoryGraphV2,
@@ -489,5 +490,41 @@ describe('D2 action-directed Story authority', () => {
     const replay = await migrateStoryWorkspaceV2(request, store.records);
     expect(first).toMatchObject({ duplicate: false, storyWorkspaceRef: { revision: 2 } });
     expect(replay).toMatchObject({ duplicate: true, storyWorkspaceRef: { revision: 2 } });
+  });
+
+  it('previews the first v2 workspace from immutable legacy preparation without writing revision one', () => {
+    const preview = compileLegacyScenePlanV2MigrationPreview({
+      campaignId: 'campaign-a',
+      scenePlanRef: {
+        scenePlanId: 'plan-cart', sceneId: 'scene-cart', revision: 3, payloadHash: 'a'.repeat(64),
+      },
+      privatePayload: {
+        schemaVersion: 'gma.scene-plan/2',
+        sceneId: 'scene-cart',
+        scenePlanId: 'plan-cart',
+        title: 'The Cart Interception',
+        objective: 'Stop and investigate the identified cart.',
+        dramaticQuestion: 'Can Kerrigan stop the cart without exposing herself?',
+        locationRef: { id: 'gmc:location:flintwake', label: 'Ahead of Flintwake' },
+        participants: { present: [{ entityId: 'gmc:pc:kerrigan', name: 'Kerrigan' }], anticipated: [] },
+        knownDetails: [{ detail: 'A covered cart approaches before dawn.' }],
+        doneWhen: ['The cart is stopped or passes beyond reach.'],
+      },
+    });
+
+    expect(preview).toMatchObject({
+      contractVersion: 'gmc.story-migration-preview/1',
+      dryRun: true,
+      mutationApplied: false,
+      source: 'legacy_scene_plan',
+      migrationPreview: { fromWorkspaceRevision: 0, storyWorkspaceRef: { revision: 0, status: 'preview' } },
+      sceneContext: {
+        playableSceneContext: { playableLocus: { label: 'Ahead of Flintwake', canonicalAnchorRef: 'gmc:location:flintwake' } },
+      },
+      history: { revisions: [], legacyBackupRef: { scenePlanId: 'plan-cart', revision: 3 } },
+    });
+    expect(preview.sceneContext.authorityReceiptCatalog.receipts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceRef: 'gmc:location:flintwake', status: 'committed' }),
+    ]));
   });
 });
