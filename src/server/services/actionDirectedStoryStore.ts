@@ -534,7 +534,7 @@ export function compileLegacyScenePlanV2MigrationPreview(input: {
  * not grant the browser continuing Story authority and it never writes.
  * date_of_change: 2026-08-07
  */
-export function compileAcceptedV1SceneSnapshotMigrationPreview(input: {
+function compileAcceptedV1SceneSnapshotMigration(input: {
   campaignId: string;
   snapshot: JsonObject;
   canonicalAnchor: { locationRef: string; label: string };
@@ -640,7 +640,7 @@ export function compileAcceptedV1SceneSnapshotMigrationPreview(input: {
     payloadHash: snapshotHash,
     sourceReceiptRefs: sourceRefs,
   };
-  return {
+  const preview = {
     contractVersion: STORY_MIGRATION_PREVIEW_CONTRACT_VERSION,
     dryRun: true,
     mutationApplied: false,
@@ -664,6 +664,82 @@ export function compileAcceptedV1SceneSnapshotMigrationPreview(input: {
     },
     history: { revisions: [], acceptedV1BackupRef },
     acceptedV1BackupRef,
+  };
+  return { preview, workspace: migrated, acceptedV1BackupRef };
+}
+
+export function compileAcceptedV1SceneSnapshotMigrationPreview(input: {
+  campaignId: string;
+  snapshot: JsonObject;
+  canonicalAnchor: { locationRef: string; label: string };
+}) {
+  return compileAcceptedV1SceneSnapshotMigration(input).preview;
+}
+
+/**
+ * Persists the verified revision-zero bridge as the first immutable Story
+ * revision. The accepted snapshot remains migration evidence only; all later
+ * scene authority is derived from the committed GMC Scene kit.
+ */
+export async function importAcceptedV1SceneSnapshotMigration(
+  input: {
+    userId: string;
+    campaignId: string;
+    expectedWorkspaceRevision: number;
+    idempotencyKey: string;
+    snapshot: JsonObject;
+    canonicalAnchor: { locationRef: string; label: string };
+  },
+  records?: StoryWorkspaceRevisionCollection,
+) {
+  if (Number(input.expectedWorkspaceRevision) !== 0) {
+    throw new StoryWorkspaceStoreError(409, 'STORY_WORKSPACE_REVISION_CONFLICT', 'The accepted scene can only initialize an empty Story workspace.', {
+      expectedRevision: input.expectedWorkspaceRevision,
+      actualRevision: 0,
+    });
+  }
+  const idempotencyKey = stableId(input.idempotencyKey, 'idempotencyKey');
+  const compiled = compileAcceptedV1SceneSnapshotMigration({
+    campaignId: input.campaignId,
+    snapshot: input.snapshot,
+    canonicalAnchor: input.canonicalAnchor,
+  });
+  const requestHash = hash({
+    campaignId: input.campaignId,
+    expectedWorkspaceRevision: 0,
+    acceptedV1SceneSnapshot: input.snapshot,
+    canonicalAnchor: input.canonicalAnchor,
+    dryRun: false,
+  } as JsonObject);
+  const written = await replaceStoryWorkspace({
+    userId: input.userId,
+    campaignId: input.campaignId,
+    expectedRevision: 0,
+    idempotencyKey,
+    source: 'migration',
+    workspace: compiled.workspace,
+    changedRecordRefs: [
+      `story_graph:accepted-v1:${String(compiled.acceptedV1BackupRef.payloadHash).slice(0, 24)}`,
+      ...sceneKits(compiled.workspace).map((kit) => `scene_kit:${String(kit.sceneKitId)}`),
+    ],
+    requestHashOverride: requestHash,
+  }, records);
+  const graph = projectStoryGraphV2(compiled.workspace);
+  const kits = sceneKits(compiled.workspace);
+  return {
+    contractVersion: STORY_MIGRATION_RECEIPT_CONTRACT_VERSION,
+    dryRun: false,
+    changed: true,
+    duplicate: written.duplicate,
+    mutationApplied: !written.duplicate,
+    source: 'accepted_v1_scene_snapshot',
+    fromWorkspaceRevision: 0,
+    graphRevision: graph.revision,
+    graphNodeCount: graphNodes(graph).length,
+    sceneKitCount: kits.length,
+    activeSceneKitId: isObject(compiled.workspace.activeSceneKitRef) ? compiled.workspace.activeSceneKitRef.sceneKitId ?? null : null,
+    storyWorkspaceRef: written.storyWorkspaceRef,
+    acceptedV1BackupRef: compiled.acceptedV1BackupRef,
   };
 }
 

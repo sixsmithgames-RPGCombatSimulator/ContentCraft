@@ -24,6 +24,7 @@ import {
   commitSceneHandoff,
   compileAcceptedV1SceneSnapshotMigrationPreview,
   compileLegacyScenePlanV2MigrationPreview,
+  importAcceptedV1SceneSnapshotMigration,
   migrateStoryWorkspaceV2,
   readCurrentSceneContexts,
   readStoryGraphV2,
@@ -81,6 +82,29 @@ async function requireCampaign(req: Request, res: Response) {
     },
   });
   return null;
+}
+
+async function currentCanonicalAnchor(userId: string, campaignId: string) {
+  const state = await collections.state().findOne({ userId, campaignId });
+  const currentScene = state?.currentSceneId
+    ? await collections.scenes().findOne({ _id: state.currentSceneId, userId, campaignId })
+    : null;
+  const currentLocation = currentScene?.locationId
+    ? await collections.entities().findOne({
+      _id: currentScene.locationId,
+      userId,
+      project_id: campaignId,
+      type: 'location',
+      status: { $ne: 'superseded' },
+    })
+    : null;
+  if (!currentLocation) {
+    throw new StoryWorkspaceStoreError(409, 'STORY_ACCEPTED_SCENE_ANCHOR_MISSING', 'The campaign current location is unavailable for accepted-scene migration.', {});
+  }
+  return {
+    locationRef: String(currentLocation._id),
+    label: String(currentLocation.canonical_name ?? ''),
+  };
 }
 
 storyWorkspaceRouter.get('/', asyncRoute(async (req, res) => {
@@ -186,6 +210,29 @@ storyWorkspaceRouter.put('/graph', requireServiceIntegration, asyncRoute(async (
 storyWorkspaceRouter.post('/migrate-v2', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   const body = req.body ?? {};
+  const acceptedSnapshot = body.acceptedV1SceneSnapshot;
+  if (acceptedSnapshot && typeof acceptedSnapshot === 'object' && !Array.isArray(acceptedSnapshot)) {
+    const userId = (req as IntegrationRequest).userId;
+    const canonicalAnchor = await currentCanonicalAnchor(userId, req.params.campaignId);
+    if (body.dryRun !== false) {
+      res.json(compileAcceptedV1SceneSnapshotMigrationPreview({
+        campaignId: req.params.campaignId,
+        snapshot: acceptedSnapshot,
+        canonicalAnchor,
+      }));
+      return;
+    }
+    const result = await importAcceptedV1SceneSnapshotMigration({
+      userId,
+      campaignId: req.params.campaignId,
+      expectedWorkspaceRevision: Number(body.expectedWorkspaceRevision ?? 0),
+      idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+      snapshot: acceptedSnapshot,
+      canonicalAnchor,
+    });
+    res.status(result.duplicate ? 200 : 201).json(result);
+    return;
+  }
   const result = await migrateStoryWorkspaceV2({
     userId: (req as IntegrationRequest).userId,
     campaignId: req.params.campaignId,
@@ -241,23 +288,11 @@ storyWorkspaceRouter.post('/migration-preview', requireServiceIntegration, async
   if (!legacy) {
     const acceptedSnapshot = body.acceptedV1SceneSnapshot;
     if (acceptedSnapshot && typeof acceptedSnapshot === 'object' && !Array.isArray(acceptedSnapshot)) {
-      const state = await collections.state().findOne({ userId, campaignId });
-      const currentScene = state?.currentSceneId
-        ? await collections.scenes().findOne({ _id: state.currentSceneId, userId, campaignId })
-        : null;
-      const currentLocation = currentScene?.locationId
-        ? await collections.entities().findOne({ _id: currentScene.locationId, userId, project_id: campaignId, type: 'location', status: { $ne: 'superseded' } })
-        : null;
-      if (!currentLocation) {
-        throw new StoryWorkspaceStoreError(409, 'STORY_ACCEPTED_SCENE_ANCHOR_MISSING', 'The campaign current location is unavailable for accepted-scene migration.', {});
-      }
+      const canonicalAnchor = await currentCanonicalAnchor(userId, campaignId);
       res.json(compileAcceptedV1SceneSnapshotMigrationPreview({
         campaignId,
         snapshot: acceptedSnapshot,
-        canonicalAnchor: {
-          locationRef: String(currentLocation._id),
-          label: String(currentLocation.canonical_name ?? ''),
-        },
+        canonicalAnchor,
       }));
       return;
     }

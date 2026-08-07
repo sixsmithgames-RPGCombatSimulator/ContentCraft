@@ -279,6 +279,14 @@ and retains `portfolio.arcs` as a bounded compatibility projection. `PUT
 receipts; beat and actual Story impacts commit in the same workspace revision
 while unrelated nodes remain byte-identical.
 
+For a campaign with no Story workspace, the trusted GMA service may send the
+same verified `acceptedV1SceneSnapshot` accepted by `migration-preview` to
+`migrate-v2` with `expectedWorkspaceRevision: 0` and `dryRun: false`. GMC
+rechecks the saved canonical anchor and commits that deterministic preview as
+revision one. The idempotency key makes the initializer safe to confirm again;
+it never imports narration, rejected drafts, corrections, or browser-only
+preparation.
+
 `POST .../migration-preview` is the non-mutating D6 entry point. It returns the
 current workspace migration preview when a Story workspace exists. For an
 uninitialized campaign, it compiles the most recent immutable

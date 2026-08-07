@@ -7,6 +7,7 @@ import {
   compileAcceptedV1SceneSnapshotMigrationPreview,
   compileLegacyScenePlanV2MigrationPreview,
   compileStoryWorkspaceV2Migration,
+  importAcceptedV1SceneSnapshotMigration,
   migrateStoryWorkspaceV2,
   projectStoryGraphV2,
   readCurrentSceneContexts,
@@ -580,6 +581,60 @@ describe('D2 action-directed Story authority', () => {
       expect.objectContaining({ sourceRef: 'gma:timeline:turn-1:transit', status: 'committed' }),
       expect.objectContaining({ sourceRef: 'gma:timeline:message-2:scene-segment', status: 'committed' }),
     ]));
+  });
+
+  it('commits the accepted pre-Story scene once as revision one and replays idempotently', async () => {
+    const store = memoryCollection();
+    const snapshot: JsonObject = {
+      schemaVersion: 'gma.accepted-v1-scene-snapshot/1',
+      campaignId: 'campaign-a',
+      canonicalAnchor: { locationRef: 'location-flintwake', label: 'Flintwake Wage Yard' },
+      playableLocus: { kind: 'scene_local_locus', label: 'Ahead of the identified cart route before it reaches Flintwake Wage Yard' },
+      scene: {
+        sceneId: 'accepted-v1-cart-interception',
+        title: 'The Cart Interception',
+        status: 'active',
+        purpose: 'Stop or disable the identified cart before it reaches Flintwake.',
+        dramaticQuestion: 'How will Kerrigan exploit the stopped cart without losing the lead?',
+        participants: [
+          { entityRef: 'kerrigan-brynn', label: 'Kerrigan Brynn', identityKind: 'individual' },
+          { entityRef: 'kerrigans-familiar', label: "Kerrigan's Familiar", identityKind: 'individual' },
+        ],
+      },
+      sourceReceipts: [
+        { kind: 'transit', receiptRef: 'gma:timeline:turn-1:transit', interactionId: 'turn-1' },
+        { kind: 'scene_segment', receiptRef: 'gma:timeline:message-2:scene-segment', interactionId: 'turn-2' },
+      ],
+    };
+    const request = {
+      userId: 'tenant-a',
+      campaignId: 'campaign-a',
+      expectedWorkspaceRevision: 0,
+      idempotencyKey: 'accepted-v1:cart:initialize',
+      snapshot,
+      canonicalAnchor: { locationRef: 'location-flintwake', label: 'Flintwake Wage Yard' },
+    };
+
+    const first = await importAcceptedV1SceneSnapshotMigration(request, store.records);
+    const replay = await importAcceptedV1SceneSnapshotMigration(request, store.records);
+    const active = await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+
+    expect(first).toMatchObject({
+      dryRun: false,
+      changed: true,
+      duplicate: false,
+      mutationApplied: true,
+      source: 'accepted_v1_scene_snapshot',
+      fromWorkspaceRevision: 0,
+      storyWorkspaceRef: { revision: 1 },
+      acceptedV1BackupRef: { sceneId: 'accepted-v1-cart-interception' },
+    });
+    expect(replay).toMatchObject({ duplicate: true, mutationApplied: false, storyWorkspaceRef: { revision: 1 } });
+    expect(active?.workspace.activeSceneKitRef).toMatchObject({ revision: 1 });
+    expect(buildPlayableSceneContextV2(active!.workspace)).toMatchObject({
+      playableLocus: { label: 'Ahead of the identified cart route before it reaches Flintwake Wage Yard' },
+      presentActors: ['kerrigan-brynn', 'kerrigans-familiar'],
+    });
   });
 
   it('rejects a pre-Story scene snapshot that does not match GMC current anchor', () => {
