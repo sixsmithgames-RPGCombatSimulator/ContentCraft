@@ -903,6 +903,15 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
   const potentialImpacts = (kit.beats as JsonObject[]).slice(0, 5).flatMap((beat) => (
     (beat.potentialImpacts as JsonObject[]).slice(0, 8).map((impact) => ({ beatRef: beat.beatId, ...clone(impact) }))
   )).slice(0, 24);
+  const lastHandoff = isObject(workspace.lastSceneHandoffReceipt) ? workspace.lastSceneHandoffReceipt : null;
+  const acceptedV1Bridge = String(kit.sceneKitId ?? '').startsWith('scene-kit:legacy:accepted-v1:')
+    && (!lastHandoff || lastHandoff.acceptedSceneKitId !== kit.sceneKitId);
+  const preparationDebt = acceptedV1Bridge ? [{
+    debtId: `preparation-debt:accepted-v1:${hash({ sceneKitId: kit.sceneKitId, revision: kit.revision }).slice(0, 24)}`,
+    need: 'Materialize the imported current scene into one complete action-directed Scene kit before narrating the player action.',
+    priority: 'blocking',
+    sourceRefs: (kit.sourceRefs as string[]).slice(0, 8),
+  }] : [];
   const context: JsonObject = {
     schemaVersion: PRIVATE_SCENE_CONTEXT_CONTRACT_VERSION,
     workspaceRef: { workspaceId: workspace.workspaceId, revision: workspace.revision },
@@ -910,6 +919,7 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
     activeBeatRef: workspace.activeBeatRef ?? null,
     storyNodes: graphNodes(projectStoryGraphV2(workspace)).filter((node) => bindings.has(String(node.nodeId))).slice(0, 8).map((node) => clone(node)),
     scenePreparation: { hiddenElements, unresolvedInformation, potentialImpacts },
+    preparationDebt,
   };
   if (bytes(context) > PRIVATE_SCENE_CONTEXT_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_DIRECTOR_CONTEXT_TOO_LARGE', 'The private scene context exceeds its selection bound.', { maximumBytes: PRIVATE_SCENE_CONTEXT_MAX_BYTES });
   return context;

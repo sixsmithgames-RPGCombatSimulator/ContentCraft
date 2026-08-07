@@ -2,6 +2,7 @@ import type { Collection, Filter } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
   applyStoryDeltaV2,
+  buildPrivateSceneDirectorContext,
   buildPlayableSceneContextV2,
   commitSceneHandoff,
   compileAcceptedV1SceneSnapshotMigrationPreview,
@@ -635,6 +636,14 @@ describe('D2 action-directed Story authority', () => {
       playableLocus: { label: 'Ahead of the identified cart route before it reaches Flintwake Wage Yard' },
       presentActors: ['kerrigan-brynn', 'kerrigans-familiar'],
     });
+    expect(buildPrivateSceneDirectorContext(active!.workspace)).toMatchObject({
+      preparationDebt: [expect.objectContaining({ priority: 'blocking' })],
+    });
+    const materialized = structuredClone(active!.workspace);
+    materialized.lastSceneHandoffReceipt = {
+      acceptedSceneKitId: (materialized.activeSceneKitRef as JsonObject).sceneKitId,
+    };
+    expect(buildPrivateSceneDirectorContext(materialized).preparationDebt).toEqual([]);
   });
 
   it('rejects a pre-Story scene snapshot that does not match GMC current anchor', () => {
