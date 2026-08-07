@@ -242,6 +242,48 @@ New records should use these shapes:
 
 Records created before this taxonomy remain compatible. Legacy FACTs infer scope from their category and relationships; legacy ITEMs remain visible until classified so migration cannot silently hide canon.
 
+## Action-directed Story authority (D2)
+
+GMC 1.9.0 persists `gmc.story-graph/2` inside the immutable Story-workspace
+revision and exposes one atomic Scene-kit handoff. D2 mutations and the private
+scene-context read require trusted service authentication; contract discovery
+and the GM-owned graph read retain the existing authenticated integration
+boundary. GMA gameplay routing remains disabled until its later integration
+phase.
+
+```http
+GET  /api/gmc/v1/campaigns/{campaignId}/story/graph
+PUT  /api/gmc/v1/campaigns/{campaignId}/story/graph
+POST /api/gmc/v1/campaigns/{campaignId}/story/migrate-v2
+POST /api/gmc/v1/campaigns/{campaignId}/story/scene-handoffs
+GET  /api/gmc/v1/campaigns/{campaignId}/story/scene-context
+POST /api/gmc/v1/campaigns/{campaignId}/story/deltas-v2
+GET  /api/gmc/v1/campaigns/{campaignId}/story/contracts
+```
+
+`POST .../scene-handoffs` accepts an authority envelope containing one
+`gmc.scene-handoff-proposal/1`, the exact accepted player-action receipt, the
+committed receipts for every proposed source reference, and an optional
+timeline anchor. It validates workspace and current-scene revisions, graph
+references, provenance, exact cast, scene-local roles, playable locus, active
+beat, information states, and byte bounds before writing. A successful call
+creates one workspace revision and returns the idempotent
+`gmc.scene-handoff-receipt/1`, a bounded `gma.playable-scene-context/2`, and a
+service-only director context. A rejection writes nothing.
+
+`POST .../migrate-v2` defaults to `dryRun: true`. Migration preserves legacy
+truth and planning states, adds no unsupported hierarchy or completed outcome,
+and retains `portfolio.arcs` as a bounded compatibility projection. `PUT
+.../graph` and `POST .../deltas-v2` use exact expected revisions and authority
+receipts; beat and actual Story impacts commit in the same workspace revision
+while unrelated nodes remain byte-identical.
+
+The workspace `activeSceneKitRef` is the only current-scene pointer after a
+version 2 handoff. The current locus, present actors, ambient roles, and active
+beat are always derived from that Scene kit. A canonical location may remain a
+secondary anchor inside `playableLocus`, but it is not a competing current
+location.
+
 ## Canon and facts
 
 ```http

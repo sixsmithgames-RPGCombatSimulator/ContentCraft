@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { ProjectModel } from '../models/index.js';
-import { type IntegrationRequest } from '../middleware/integrationAuth.js';
+import { requireServiceIntegration, type IntegrationRequest } from '../middleware/integrationAuth.js';
 import {
   applyStoryDelta,
   compileLegacyScenePlanImport,
@@ -18,6 +18,25 @@ import {
   StoryWorkspaceStoreError,
 } from '../services/storyWorkspaceStore.js';
 import { GMA_SCENE_PLAN_SCHEMA_ALLOWLIST, readActiveScenePlan } from '../services/gmaScenePlanStore.js';
+import {
+  applyStoryDeltaV2,
+  commitSceneHandoff,
+  migrateStoryWorkspaceV2,
+  readCurrentSceneContexts,
+  readStoryGraphV2,
+  replaceStoryGraphV2,
+  type SceneHandoffAuthorityEnvelope,
+  type StoryDeltaV2,
+} from '../services/actionDirectedStoryStore.js';
+import {
+  ACTION_DIRECTED_STORY_CAPABILITIES,
+  PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
+  SCENE_HANDOFF_PROPOSAL_CONTRACT_VERSION,
+  SCENE_KIT_V2_CONTRACT_VERSION,
+  STORY_DELTA_V2_CONTRACT_VERSION,
+  STORY_GRAPH_CONTRACT_VERSION,
+  STORY_GRAPH_NODE_REFERENCE_CONTRACT_VERSION,
+} from '../services/storyWorkspaceStore.js';
 
 export const storyWorkspaceRouter = Router({ mergeParams: true });
 
@@ -125,6 +144,82 @@ storyWorkspaceRouter.post('/deltas', asyncRoute(async (req, res) => {
     delta: req.body,
   });
   res.status(result.status === 'applied' && !result.duplicate ? 201 : 200).json(result);
+}));
+
+storyWorkspaceRouter.post('/deltas-v2', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await applyStoryDeltaV2({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    delta: req.body as StoryDeltaV2,
+  });
+  res.status(result.status === 'applied' && !result.duplicate ? 201 : 200).json(result);
+}));
+
+storyWorkspaceRouter.get('/graph', asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await readStoryGraphV2({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+  }));
+}));
+
+storyWorkspaceRouter.put('/graph', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await replaceStoryGraphV2({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    expectedWorkspaceRevision: body.expectedWorkspaceRevision,
+    expectedGraphRevision: body.expectedGraphRevision,
+    idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+    graph: body.graph,
+    sourceReceiptRefs: body.sourceReceiptRefs ?? [],
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.post('/migrate-v2', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await migrateStoryWorkspaceV2({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    expectedWorkspaceRevision: body.expectedWorkspaceRevision,
+    idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+    dryRun: body.dryRun !== false,
+  });
+  res.status(result.dryRun || result.changed === false || ('duplicate' in result && result.duplicate) ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.post('/scene-handoffs', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await commitSceneHandoff({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    envelope: req.body as SceneHandoffAuthorityEnvelope,
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.get('/scene-context', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await readCurrentSceneContexts({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+  });
+  if (!result) {
+    res.status(404).json({
+      error: {
+        code: 'STORY_WORKSPACE_NOT_FOUND',
+        message: 'No Story workspace has been prepared for this campaign.',
+        correlationId: correlationId(req),
+        details: {},
+      },
+    });
+    return;
+  }
+  res.json(result);
 }));
 
 storyWorkspaceRouter.get('/history', asyncRoute(async (req, res) => {
@@ -235,5 +330,16 @@ storyWorkspaceRouter.get('/contracts', (_req, res) => {
     storyDelta: STORY_DELTA_CONTRACT_VERSION,
     publicProjection: STORY_PUBLIC_PROJECTION_CONTRACT_VERSION,
     playableProjection: PLAYABLE_STORY_PROJECTION_CONTRACT_VERSION,
+    actionDirectedStory: {
+      storyGraph: STORY_GRAPH_CONTRACT_VERSION,
+      storyNodeRef: STORY_GRAPH_NODE_REFERENCE_CONTRACT_VERSION,
+      sceneHandoffProposal: SCENE_HANDOFF_PROPOSAL_CONTRACT_VERSION,
+      sceneKit: SCENE_KIT_V2_CONTRACT_VERSION,
+      playableSceneContext: PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
+      storyDelta: STORY_DELTA_V2_CONTRACT_VERSION,
+      capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
+      authority: 'gmc',
+      routeEnabled: false,
+    },
   });
 });
