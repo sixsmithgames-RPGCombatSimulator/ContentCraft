@@ -284,7 +284,15 @@ current workspace migration preview when a Story workspace exists. For an
 uninitialized campaign, it compiles the most recent immutable
 `gma.scene-plan/2` revision through the same GMC migration code and returns a
 revision-zero preview, playable/private scene projections, source-evidence
-receipts, and the legacy backup reference. It never creates a Story revision.
+receipts, and the legacy backup reference. If neither a workspace nor an
+immutable scene plan exists, the trusted GMA service may supply one bounded
+`gma.accepted-v1-scene-snapshot/1`. GMC first verifies that snapshot's
+canonical anchor against the campaign's saved current scene, then compiles its
+accepted transit and scene-segment receipts into the same revision-zero
+preview. The snapshot contains no prose, draft, correction, or private
+preparation. This fallback is migration evidence only and is ignored whenever
+a senior stored source exists. The endpoint never creates a Story revision or
+changes campaign state.
 
 The workspace `activeSceneKitRef` is the only current-scene pointer after a
 version 2 handoff. The current locus, present actors, ambient roles, and active

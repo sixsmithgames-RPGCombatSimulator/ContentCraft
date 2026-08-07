@@ -28,11 +28,14 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.9.1',
+      version: '1.9.2',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
-          contracts: { migrationPreview: 'gmc.story-migration-preview/1' },
+          contracts: {
+            migrationPreview: 'gmc.story-migration-preview/1',
+            acceptedV1SceneSnapshot: 'gma.accepted-v1-scene-snapshot/1',
+          },
           authority: 'gmc',
           routeEnabled: false,
         },

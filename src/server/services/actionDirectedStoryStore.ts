@@ -31,6 +31,7 @@ import {
 export const STORY_GRAPH_WRITE_RECEIPT_CONTRACT_VERSION = 'gmc.story-graph-write-receipt/1';
 export const STORY_MIGRATION_RECEIPT_CONTRACT_VERSION = 'gmc.story-v2-migration-receipt/1';
 export const STORY_MIGRATION_PREVIEW_CONTRACT_VERSION = 'gmc.story-migration-preview/1';
+export const ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION = 'gma.accepted-v1-scene-snapshot/1';
 export const PRIVATE_SCENE_CONTEXT_CONTRACT_VERSION = 'gmc.scene-director-context/1';
 export const PRIVATE_SCENE_CONTEXT_MAX_BYTES = 12_288;
 export const STORY_AUTHORITY_RECEIPT_CATALOG_CONTRACT_VERSION = 'gmc.story-authority-receipt-catalog/1';
@@ -524,6 +525,145 @@ export function compileLegacyScenePlanV2MigrationPreview(input: {
       legacyBackupRef: input.scenePlanRef,
     },
     importedScenePlanRef: input.scenePlanRef,
+  };
+}
+
+/**
+ * Builds a revision-zero Story preview from the bounded public receipts that
+ * established a pre-Story GMA scene. This is a migration-only bridge: it does
+ * not grant the browser continuing Story authority and it never writes.
+ * date_of_change: 2026-08-07
+ */
+export function compileAcceptedV1SceneSnapshotMigrationPreview(input: {
+  campaignId: string;
+  snapshot: JsonObject;
+  canonicalAnchor: { locationRef: string; label: string };
+}) {
+  const campaignId = stableId(input.campaignId, 'campaignId');
+  const snapshot = input.snapshot;
+  if (!isObject(snapshot) || snapshot.schemaVersion !== ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION
+    || String(snapshot.campaignId ?? '') !== campaignId) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_ACCEPTED_SCENE_SNAPSHOT_INVALID', 'The accepted scene snapshot does not match this campaign.', {});
+  }
+  const anchor = isObject(snapshot.canonicalAnchor) ? snapshot.canonicalAnchor : {};
+  const locationRef = stableId(anchor.locationRef, 'canonicalAnchor.locationRef');
+  const anchorLabel = boundedText(anchor.label, '', 300);
+  if (locationRef !== stableId(input.canonicalAnchor.locationRef, 'canonicalAnchor.expectedLocationRef')
+    || anchorLabel.toLocaleLowerCase() !== boundedText(input.canonicalAnchor.label, '', 300).toLocaleLowerCase()) {
+    throw new StoryWorkspaceStoreError(409, 'STORY_ACCEPTED_SCENE_ANCHOR_MISMATCH', 'The accepted scene snapshot does not continue from the campaign current location.', {});
+  }
+  const locus = isObject(snapshot.playableLocus) ? snapshot.playableLocus : {};
+  const locusKind = String(locus.kind ?? '');
+  if (!['scene_local_locus', 'directional_target'].includes(locusKind)) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_ACCEPTED_SCENE_SNAPSHOT_INVALID', 'The accepted scene snapshot has an invalid playable locus.', {});
+  }
+  const locusLabel = boundedText(locus.label, '', 500);
+  const scene = isObject(snapshot.scene) ? snapshot.scene : {};
+  if (String(scene.status ?? '') !== 'active') {
+    throw new StoryWorkspaceStoreError(422, 'STORY_ACCEPTED_SCENE_SNAPSHOT_INVALID', 'The accepted scene snapshot is not active.', {});
+  }
+  const sceneId = stableId(scene.sceneId, 'scene.sceneId');
+  const participants = (Array.isArray(scene.participants) ? scene.participants : []).slice(0, 32).map((entry, index) => {
+    if (!isObject(entry)) throw new StoryWorkspaceStoreError(422, 'STORY_ACCEPTED_SCENE_SNAPSHOT_INVALID', 'A scene participant is invalid.', { index });
+    const identityKind = ['individual', 'anonymous_extra', 'collective'].includes(String(entry.identityKind))
+      ? String(entry.identityKind) : 'individual';
+    const entityRef = entry.entityRef ? stableId(entry.entityRef, `scene.participants[${index}].entityRef`) : `accepted-v1:${sceneId}:participant:${index + 1}`;
+    return {
+      entityId: entityRef,
+      publicLabel: boundedText(entry.label, `Scene participant ${index + 1}`, 240),
+      identityKind,
+      reason: 'Present in the accepted playable scene at migration time.',
+    } as JsonObject;
+  });
+  if (!participants.length) throw new StoryWorkspaceStoreError(422, 'STORY_ACCEPTED_SCENE_SNAPSHOT_INVALID', 'The accepted scene snapshot has no visible participants.', {});
+  const sourceReceipts = (Array.isArray(snapshot.sourceReceipts) ? snapshot.sourceReceipts : []).slice(0, 8);
+  if (sourceReceipts.length < 2 || sourceReceipts.some((entry) => !isObject(entry))) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_ACCEPTED_SCENE_RECEIPTS_REQUIRED', 'The accepted scene snapshot lacks its migration receipts.', {});
+  }
+  const receiptKinds = new Set(sourceReceipts.map((entry) => String((entry as JsonObject).kind ?? '')));
+  if (!receiptKinds.has('transit') || !receiptKinds.has('scene_segment')) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_ACCEPTED_SCENE_RECEIPTS_REQUIRED', 'The accepted scene snapshot requires transit and scene-segment receipts.', {});
+  }
+  const sourceRefs = [...new Set(sourceReceipts.map((entry, index) => stableId((entry as JsonObject).receiptRef, `sourceReceipts[${index}].receiptRef`)))];
+  if (sourceRefs.length !== sourceReceipts.length) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_ACCEPTED_SCENE_RECEIPTS_REQUIRED', 'The accepted scene snapshot contains a duplicate receipt.', {});
+  }
+  const snapshotHash = hash(snapshot);
+  const scenePlanRef = {
+    scenePlanId: `accepted-v1:${snapshotHash.slice(0, 24)}`,
+    sceneId,
+    revision: 1,
+    payloadHash: snapshotHash,
+  };
+  const privatePayload: JsonObject = {
+    schemaVersion: 'gma.scene-plan/2',
+    sceneId,
+    scenePlanId: scenePlanRef.scenePlanId,
+    title: boundedText(scene.title, 'Accepted playable scene', 300),
+    objective: boundedText(scene.purpose ?? scene.objective, 'Continue the accepted playable scene.', 1_000),
+    dramaticQuestion: boundedText(scene.dramaticQuestion ?? scene.purpose ?? scene.objective, 'What changes through the player’s next action here?', 1_000),
+    locationRef: { id: locationRef, label: locusLabel },
+    participants: { present: participants, anticipated: [] },
+    doneWhen: stringList(scene.doneWhen, 16),
+  };
+  const imported = compileLegacyScenePlanImport({ campaignId, scenePlanRef, privatePayload });
+  const importedKits = imported.sceneKits as JsonObject[];
+  const importedKit = importedKits.find((kit) => kit.sceneKitId === `scene-kit:legacy:${scenePlanRef.scenePlanId}`);
+  if (!importedKit) throw new StoryWorkspaceStoreError(422, 'STORY_ACCEPTED_SCENE_SNAPSHOT_INVALID', 'The accepted scene snapshot could not be compiled.', {});
+  importedKit.planningState = 'active';
+  importedKit.sourceRefs = sourceRefs;
+  importedKit.migrationProvenance = {
+    sourceSchemaVersion: ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION,
+    sourcePayloadHash: snapshotHash,
+    authority: 'migration_evidence_only',
+  };
+  const migrated = compileStoryWorkspaceV2Migration(imported);
+  const graph = projectStoryGraphV2(migrated);
+  const kits = sceneKits(migrated);
+  const previewRef = {
+    contractVersion: STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION,
+    workspaceId: String(migrated.workspaceId),
+    revision: 0,
+    payloadHash: hash(migrated),
+    status: 'preview',
+  };
+  const evidenceRef = `${ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION}:${snapshotHash}`;
+  const catalog = buildStoryAuthorityReceiptCatalog(migrated) as JsonObject;
+  catalog.receipts = (catalog.receipts as JsonObject[]).map((receipt) => ({
+    ...receipt,
+    receiptRef: `gmc:accepted-v1-scene:${hash({ evidenceRef, sourceRef: receipt.sourceRef })}`,
+    evidenceRef,
+  }));
+  const acceptedV1BackupRef = {
+    schemaVersion: ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION,
+    sceneId,
+    payloadHash: snapshotHash,
+    sourceReceiptRefs: sourceRefs,
+  };
+  return {
+    contractVersion: STORY_MIGRATION_PREVIEW_CONTRACT_VERSION,
+    dryRun: true,
+    mutationApplied: false,
+    source: 'accepted_v1_scene_snapshot',
+    migrationPreview: {
+      contractVersion: STORY_MIGRATION_RECEIPT_CONTRACT_VERSION,
+      dryRun: true,
+      changed: true,
+      fromWorkspaceRevision: 0,
+      graphRevision: graph.revision,
+      graphNodeCount: graphNodes(graph).length,
+      sceneKitCount: kits.length,
+      activeSceneKitId: isObject(migrated.activeSceneKitRef) ? migrated.activeSceneKitRef.sceneKitId ?? null : null,
+      storyWorkspaceRef: previewRef,
+    },
+    sceneContext: {
+      storyWorkspaceRef: previewRef,
+      playableSceneContext: buildPlayableSceneContextV2(migrated),
+      privateSceneContext: buildPrivateSceneDirectorContext(migrated),
+      authorityReceiptCatalog: catalog,
+    },
+    history: { revisions: [], acceptedV1BackupRef },
+    acceptedV1BackupRef,
   };
 }
 

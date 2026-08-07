@@ -4,6 +4,7 @@ import {
   applyStoryDeltaV2,
   buildPlayableSceneContextV2,
   commitSceneHandoff,
+  compileAcceptedV1SceneSnapshotMigrationPreview,
   compileLegacyScenePlanV2MigrationPreview,
   compileStoryWorkspaceV2Migration,
   migrateStoryWorkspaceV2,
@@ -526,5 +527,79 @@ describe('D2 action-directed Story authority', () => {
     expect(preview.sceneContext.authorityReceiptCatalog.receipts).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceRef: 'gmc:location:flintwake', status: 'committed' }),
     ]));
+  });
+
+  it('previews an accepted pre-Story GMA scene from bounded transit and scene receipts', () => {
+    const preview = compileAcceptedV1SceneSnapshotMigrationPreview({
+      campaignId: 'campaign-a',
+      canonicalAnchor: { locationRef: 'location-flintwake', label: 'Flintwake Wage Yard' },
+      snapshot: {
+        schemaVersion: 'gma.accepted-v1-scene-snapshot/1',
+        campaignId: 'campaign-a',
+        canonicalAnchor: { locationRef: 'location-flintwake', label: 'Flintwake Wage Yard' },
+        playableLocus: { kind: 'scene_local_locus', label: 'Ahead of the identified cart route before it reaches Flintwake Wage Yard' },
+        scene: {
+          sceneId: 'accepted-v1-cart-interception',
+          title: 'The Cart Interception',
+          status: 'active',
+          purpose: 'Stop or disable the identified cart before it reaches Flintwake.',
+          dramaticQuestion: 'How will Kerrigan exploit the stopped cart without losing the lead?',
+          doneWhen: ['The cart encounter reaches a concrete result.'],
+          participants: [
+            { entityRef: 'kerrigan-brynn', label: 'Kerrigan Brynn', identityKind: 'individual' },
+            { entityRef: 'kerrigans-familiar', label: "Kerrigan's Familiar", identityKind: 'individual' },
+          ],
+        },
+        sourceReceipts: [
+          { kind: 'transit', receiptRef: 'gma:timeline:turn-1:transit', interactionId: 'turn-1' },
+          { kind: 'scene_segment', receiptRef: 'gma:timeline:message-2:scene-segment', interactionId: 'turn-2' },
+        ],
+      },
+    });
+
+    expect(preview).toMatchObject({
+      contractVersion: 'gmc.story-migration-preview/1',
+      dryRun: true,
+      mutationApplied: false,
+      source: 'accepted_v1_scene_snapshot',
+      migrationPreview: { fromWorkspaceRevision: 0, storyWorkspaceRef: { revision: 0, status: 'preview' } },
+      sceneContext: {
+        playableSceneContext: {
+          playableLocus: {
+            kind: 'canonical_location',
+            label: 'Ahead of the identified cart route before it reaches Flintwake Wage Yard',
+            canonicalAnchorRef: 'location-flintwake',
+          },
+          presentActors: ['kerrigan-brynn', 'kerrigans-familiar'],
+        },
+      },
+      history: { revisions: [], acceptedV1BackupRef: { sceneId: 'accepted-v1-cart-interception' } },
+    });
+    expect(preview.sceneContext.authorityReceiptCatalog.receipts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceRef: 'location-flintwake', status: 'committed' }),
+      expect.objectContaining({ sourceRef: 'gma:timeline:turn-1:transit', status: 'committed' }),
+      expect.objectContaining({ sourceRef: 'gma:timeline:message-2:scene-segment', status: 'committed' }),
+    ]));
+  });
+
+  it('rejects a pre-Story scene snapshot that does not match GMC current anchor', () => {
+    expect(() => compileAcceptedV1SceneSnapshotMigrationPreview({
+      campaignId: 'campaign-a',
+      canonicalAnchor: { locationRef: 'location-flintwake', label: 'Flintwake Wage Yard' },
+      snapshot: {
+        schemaVersion: 'gma.accepted-v1-scene-snapshot/1',
+        campaignId: 'campaign-a',
+        canonicalAnchor: { locationRef: 'location-elsewhere', label: 'Elsewhere' },
+        playableLocus: { kind: 'scene_local_locus', label: 'A cart route' },
+        scene: {
+          sceneId: 'scene-cart', title: 'The Cart', status: 'active', purpose: 'Stop the cart.',
+          participants: [{ entityRef: 'kerrigan', label: 'Kerrigan', identityKind: 'individual' }],
+        },
+        sourceReceipts: [
+          { kind: 'transit', receiptRef: 'gma:timeline:turn-1:transit' },
+          { kind: 'scene_segment', receiptRef: 'gma:timeline:turn-2:scene-segment' },
+        ],
+      },
+    })).toThrowError(expect.objectContaining({ code: 'STORY_ACCEPTED_SCENE_ANCHOR_MISMATCH' }));
   });
 });

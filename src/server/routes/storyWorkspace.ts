@@ -18,9 +18,11 @@ import {
   StoryWorkspaceStoreError,
 } from '../services/storyWorkspaceStore.js';
 import { GMA_SCENE_PLAN_SCHEMA_ALLOWLIST, readActiveScenePlan, readLatestActiveScenePlan } from '../services/gmaScenePlanStore.js';
+import { collections } from '../services/gmcIntegrationStore.js';
 import {
   applyStoryDeltaV2,
   commitSceneHandoff,
+  compileAcceptedV1SceneSnapshotMigrationPreview,
   compileLegacyScenePlanV2MigrationPreview,
   migrateStoryWorkspaceV2,
   readCurrentSceneContexts,
@@ -237,6 +239,28 @@ storyWorkspaceRouter.post('/migration-preview', requireServiceIntegration, async
     })
     : await readLatestActiveScenePlan({ userId, campaignId, schemaVersion: GMA_SCENE_PLAN_SCHEMA_ALLOWLIST[0] });
   if (!legacy) {
+    const acceptedSnapshot = body.acceptedV1SceneSnapshot;
+    if (acceptedSnapshot && typeof acceptedSnapshot === 'object' && !Array.isArray(acceptedSnapshot)) {
+      const state = await collections.state().findOne({ userId, campaignId });
+      const currentScene = state?.currentSceneId
+        ? await collections.scenes().findOne({ _id: state.currentSceneId, userId, campaignId })
+        : null;
+      const currentLocation = currentScene?.locationId
+        ? await collections.entities().findOne({ _id: currentScene.locationId, userId, project_id: campaignId, type: 'location', status: { $ne: 'superseded' } })
+        : null;
+      if (!currentLocation) {
+        throw new StoryWorkspaceStoreError(409, 'STORY_ACCEPTED_SCENE_ANCHOR_MISSING', 'The campaign current location is unavailable for accepted-scene migration.', {});
+      }
+      res.json(compileAcceptedV1SceneSnapshotMigrationPreview({
+        campaignId,
+        snapshot: acceptedSnapshot,
+        canonicalAnchor: {
+          locationRef: String(currentLocation._id),
+          label: String(currentLocation.canonical_name ?? ''),
+        },
+      }));
+      return;
+    }
     res.status(404).json({
       error: {
         code: 'STORY_LEGACY_SCENE_PLAN_NOT_FOUND',

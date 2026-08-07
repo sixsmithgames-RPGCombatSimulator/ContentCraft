@@ -47,7 +47,10 @@ import {
   STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION,
 } from '../services/storyWorkspaceStore.js';
 import { NPC_IDENTITY_PROMOTION_CONTRACT_VERSION } from '../services/npcIdentityPromotion.js';
-import { STORY_MIGRATION_PREVIEW_CONTRACT_VERSION } from '../services/actionDirectedStoryStore.js';
+import {
+  ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION,
+  STORY_MIGRATION_PREVIEW_CONTRACT_VERSION,
+} from '../services/actionDirectedStoryStore.js';
 
 export const apiRouter = Router();
 
@@ -112,6 +115,7 @@ apiRouter.get('/health', (_req, res) => {
           playableSceneContext: PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
           storyDelta: STORY_DELTA_V2_CONTRACT_VERSION,
           migrationPreview: STORY_MIGRATION_PREVIEW_CONTRACT_VERSION,
+          acceptedV1SceneSnapshot: ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION,
         },
         authority: 'gmc',
         routeEnabled: false,
