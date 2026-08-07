@@ -1,6 +1,6 @@
 # Action-directed Story authority — D2 implementation record
 
-- Status: Authorized for implementation
+- Status: Implemented and production-verified
 - Date: 2026-08-07
 - Governing design: GMA ADR-005 and Studio ADR-005
 - Subordinate plan: GMA action-directed Story implementation plan, phase D2
@@ -159,3 +159,14 @@ tests pass, production health advertises the complete D2 boundary, and deployed
 routes pass smoke tests. GMA continues to advertise `routeEnabled: false` until
 D4/D5. Human chaotic playtesting is intentionally deferred until the integrated
 route and Studio workflow exist; D2 alone is an authority/API release.
+
+### Completion record
+
+D2 was implemented in GMC 1.9.0 and deployed from `origin/main` on 2026-08-07.
+The full provider, LLM-contract, typecheck, lint, 107-file/674-test, server,
+client, and serverless-import gates passed. All Vercel targets completed
+successfully. Production `GET /api/health` and the service-authenticated Story
+contract route advertise the complete four-capability bundle, the exact version
+2 contracts, `authority: "gmc"`, and `routeEnabled: false`. GMA gameplay
+routing and human chaotic playtesting remain gated for the later integration
+phases.
