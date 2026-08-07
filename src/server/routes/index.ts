@@ -60,7 +60,6 @@ apiRouter.use('/upload', uploadRouter);
 apiRouter.use('/homebrew', homebrewRouter);
 apiRouter.use('/ai', aiRouter);
 apiRouter.use('/gmc/v1', gmcV1Router);
-apiRouter.use('/', progressRouter);
 
 apiRouter.get('/health', (_req, res) => {
   res.json({
@@ -118,3 +117,7 @@ apiRouter.get('/health', (_req, res) => {
     },
   });
 });
+
+// Keep the broad progress router after exact public endpoints so its
+// authentication middleware cannot intercept production health checks.
+apiRouter.use('/', progressRouter);
