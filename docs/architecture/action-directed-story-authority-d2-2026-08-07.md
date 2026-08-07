@@ -170,3 +170,24 @@ contract route advertise the complete four-capability bundle, the exact version
 2 contracts, `authority: "gmc"`, and `routeEnabled: false`. GMA gameplay
 routing and human chaotic playtesting remain gated for the later integration
 phases.
+
+## D5 integration addendum
+
+D5 adds no second Story authority. GMC registry `2026-08-07.1` registers the
+combined proposal-only `story.turn.direct` operation with the complete
+first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
+freedom policy. The operation permits one provider attempt and no fallback;
+GMA owns the one focused field repair and one authority rebase budget.
+
+The existing current-scene context response now includes a bounded
+`gmc.story-authority-receipt-catalog/1` generated from the same immutable Story
+workspace revision as its playable and private projections. GMA may use those
+receipts for GMC-owned sources and may mint only its own `gma:` scene-local
+sources. Scene handoff remains the same one-write D2 transaction. The prior
+registry client version remains accepted only to permit the ordered GMC-first
+deployment.
+
+The full GMC check passes with 108 test files and 676 tests, including operation
+policy, compatibility, receipt-catalog, atomic handoff, typecheck, lint, and
+production builds. GMA gameplay routing remains disabled; production
+verification of this D5 addendum is pending before D6 may begin.

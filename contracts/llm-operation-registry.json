@@ -1,6 +1,6 @@
 {
   "schemaVersion": "gma-gmc.llm-registry-artifact/1",
-  "registryVersion": "2026-08-04.1",
+  "registryVersion": "2026-08-07.1",
   "modelPolicyVersion": "2026-08-01.1",
   "operations": [
     {
@@ -3556,6 +3556,96 @@
         "temperature": 0.35,
         "thinkingLevel": "medium",
         "maxOutputTokens": 3200,
+        "timeoutMs": 180000,
+        "maxAttempts": 1,
+        "fallbackAllowed": false,
+        "premiumAllowed": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttlMs": 900000
+      }
+    },
+    {
+      "id": "story.turn.direct",
+      "version": "1",
+      "operationClass": "reasoning_high",
+      "capabilityTier": "reasoning",
+      "authority": {
+        "canon": "GMC",
+        "mechanics": "none",
+        "commit": "proposal_only"
+      },
+      "prompt": {
+        "id": "story.turn.direct.prompt",
+        "systemInstruction": "Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet. Return exactly one JSON object matching gma.story-director-result/1. This is proposal-only; GMC remains Story and canon authority and VCS remains mechanics authority. Preserve the exact declared action and fingerprint. Prefer an eligible prepared Scene kit; otherwise create only the minimum complete supported Scene kit. Establish one playable locus, one exact present cast, two to five beats with exactly one active beat, all four exit kinds, Story bindings, and potential impacts. The active beat and opening narration must concretely pay off the declared action now or establish the precise position for one provisional VCS mechanic. Bind every material narrated fact, presence, and reveal to supplied fact IDs or IDs created in the proposed Scene kit. Do not reveal concealed or undetermined preparation. Do not invent a player choice, force a path, guarantee an outcome, resolve mechanics, commit authority state, or add unrelated canon. Prose may freely choose tone, sensory detail, sentence order, metaphor, and dialogue wording when it does not create a material fact.",
+        "version": "gma.story-director-policy/1"
+      },
+      "outputSchema": {
+        "id": "story.turn.direct.result",
+        "version": "1",
+        "schema": {
+          "$id": "story.turn.direct.result/1",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "proposal",
+            "materialClaims",
+            "declaredActionPayoff",
+            "agencyAudit",
+            "mechanicsAuthority"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "gma.story-director-result/1"
+            },
+            "proposal": {
+              "type": "object"
+            },
+            "materialClaims": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32
+            },
+            "declaredActionPayoff": {
+              "type": "object"
+            },
+            "agencyAudit": {
+              "type": "object"
+            },
+            "mechanicsAuthority": {
+              "enum": [
+                "none",
+                "provisional_vcs"
+              ]
+            }
+          }
+        }
+      },
+      "validators": [
+        "authority-boundary"
+      ],
+      "context": {
+        "allowedKeys": [
+          "policy",
+          "campaign",
+          "canon",
+          "scene",
+          "turn",
+          "input",
+          "mechanics",
+          "workflow",
+          "priorResult"
+        ],
+        "inputTargetBytes": 24576,
+        "inputHardLimitBytes": 36864,
+        "requiredReferenceRevisions": []
+      },
+      "provider": {
+        "temperature": 0.45,
+        "thinkingLevel": "medium",
+        "maxOutputTokens": 5000,
         "timeoutMs": 180000,
         "maxAttempts": 1,
         "fallbackAllowed": false,

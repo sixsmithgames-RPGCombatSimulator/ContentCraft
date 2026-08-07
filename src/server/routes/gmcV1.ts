@@ -63,7 +63,10 @@ import {
 import { llmOrchestratorRouter } from '../llm-orchestrator/routes.js';
 import { executeLegacyOperation, executeLegacyOperationResult } from '../llm-orchestrator/orchestrator.js';
 import { getDurableUsageSnapshot, MongoExecutionStore } from '../llm-orchestrator/executionStore.js';
-import { OPERATION_REGISTRY_VERSION } from '../llm-orchestrator/operationRegistry.js';
+import {
+  acceptsOperationRegistryClientVersion,
+  OPERATION_REGISTRY_VERSION,
+} from '../llm-orchestrator/operationRegistry.js';
 import { isMongoAvailable } from '../config/mongo.js';
 import {
   defaultGenerationStage,
@@ -1428,7 +1431,7 @@ export function validateStructuredAiOutput(output: any, requiredKeys: string[]) 
 
 async function ai(req: Request, res: Response, instruction: string, requiredKeys: string[]) {
   const expectedRegistryVersion = req.header('X-GMC-LLM-Registry-Version');
-  if (expectedRegistryVersion && expectedRegistryVersion !== OPERATION_REGISTRY_VERSION) {
+  if (expectedRegistryVersion && !acceptsOperationRegistryClientVersion(expectedRegistryVersion)) {
     throw Object.assign(new Error(`GMA expects LLM registry ${expectedRegistryVersion}, but GMC is running ${OPERATION_REGISTRY_VERSION}. Deploy compatible builds before retrying.`), {
       status: 409,
       code: 'LLM_REGISTRY_VERSION_MISMATCH',

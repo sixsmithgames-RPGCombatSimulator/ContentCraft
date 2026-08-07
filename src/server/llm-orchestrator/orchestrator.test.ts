@@ -6,6 +6,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { MemoryExecutionStore } from './executionStore.js';
 import {
+  acceptsOperationRegistryClientVersion,
   bindOperationRuntime,
   getOperationDefinition,
   listOperationDefinitions,
@@ -250,6 +251,27 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(frontier.provider.maxAttempts).toBe(1);
     expect(scene.validators).toContain('story-scene-readiness');
     expect(portfolio.authority.commit).toBe('proposal_only');
+  });
+
+  it('registers the combined action-directed Story turn with the complete first-pass contract', () => {
+    const turn = getOperationDefinition('story.turn.direct');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/1');
+    expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
+    expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
+    expect(turn.prompt.systemInstruction).toMatch(/concretely pay off the declared action now/i);
+    expect(turn.prompt.systemInstruction).toMatch(/Bind every material narrated fact/i);
+    expect(turn.prompt.systemInstruction).toMatch(/Do not invent a player choice/i);
+    expect(turn.provider.maxAttempts).toBe(1);
+    expect(turn.provider.fallbackAllowed).toBe(false);
+    expect(turn.outputSchema.schema.required).toEqual([
+      'schemaVersion', 'proposal', 'materialClaims', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority',
+    ]);
+  });
+
+  it('keeps the immediately previous GMA registry client compatible during the ordered GMC-first deployment', () => {
+    expect(acceptsOperationRegistryClientVersion('2026-08-07.1')).toBe(true);
+    expect(acceptsOperationRegistryClientVersion('2026-08-04.1')).toBe(true);
+    expect(acceptsOperationRegistryClientVersion('2026-08-03.1')).toBe(false);
   });
 
   it('accepts an optional grounded frontier and rejects forced player action or excessive ready-soon prep', async () => {

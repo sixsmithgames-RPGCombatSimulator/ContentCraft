@@ -7,6 +7,7 @@ import {
   compileStoryWorkspaceV2Migration,
   migrateStoryWorkspaceV2,
   projectStoryGraphV2,
+  readCurrentSceneContexts,
   readStoryGraphV2,
   replaceStoryGraphV2,
   type SceneHandoffAuthorityEnvelope,
@@ -303,6 +304,16 @@ describe('D2 action-directed Story authority', () => {
     expect(serialized).not.toContain('unknown-compartment');
     expect(JSON.stringify(first.privateSceneContext)).toContain('possible-counter');
     expect(JSON.stringify(first.privateSceneContext)).toContain('unknown-compartment');
+    const contexts = await readCurrentSceneContexts({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    expect(contexts?.authorityReceiptCatalog).toMatchObject({
+      contractVersion: 'gmc.story-authority-receipt-catalog/1',
+      workspaceRevision: 3,
+      receipts: expect.arrayContaining([
+        expect.objectContaining({ sourceRef: 'gmc:pc:kerrigan', authority: 'gmc', status: 'committed' }),
+        expect.objectContaining({ sourceRef: 'gmc:location:flintwake', authority: 'gmc', status: 'committed' }),
+        expect.objectContaining({ sourceRef: 'gmc:lead:matched-cart-route', authority: 'gmc', status: 'committed' }),
+      ]),
+    });
   });
 
   it('supports select, reuse, and replace without creating a second current scene', async () => {

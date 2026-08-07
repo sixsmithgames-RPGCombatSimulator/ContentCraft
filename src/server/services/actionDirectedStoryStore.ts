@@ -30,6 +30,8 @@ export const STORY_GRAPH_WRITE_RECEIPT_CONTRACT_VERSION = 'gmc.story-graph-write
 export const STORY_MIGRATION_RECEIPT_CONTRACT_VERSION = 'gmc.story-v2-migration-receipt/1';
 export const PRIVATE_SCENE_CONTEXT_CONTRACT_VERSION = 'gmc.scene-director-context/1';
 export const PRIVATE_SCENE_CONTEXT_MAX_BYTES = 12_288;
+export const STORY_AUTHORITY_RECEIPT_CATALOG_CONTRACT_VERSION = 'gmc.story-authority-receipt-catalog/1';
+export const STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES = 192;
 export const SCENE_HANDOFF_AUTHORITY_ENVELOPE_MAX_BYTES = 32_768;
 
 type HandoffMode = 'reuse' | 'select' | 'create' | 'replace';
@@ -631,6 +633,60 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
   return context;
 }
 
+function committedStorySourceRefs(workspace: JsonObject): string[] {
+  const refs = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,239}$/.test(value)) refs.add(value);
+  };
+  const addList = (value: unknown) => {
+    if (Array.isArray(value)) value.forEach(add);
+  };
+  for (const node of graphNodes(projectStoryGraphV2(workspace))) {
+    add(node.nodeId); add(node.primaryParentRef); addList(node.relatedNodeRefs); addList(node.sourceRefs);
+  }
+  for (const kit of sceneKits(workspace)) {
+    const projected = kit.schemaVersion === SCENE_KIT_V2_CONTRACT_VERSION ? kit : projectLegacySceneKitV2(kit, projectStoryGraphV2(workspace));
+    add(projected.sceneKitId); addList(projected.sourceRefs); addList(projected.storyBindings);
+    if (isObject(projected.playableLocus)) {
+      add(projected.playableLocus.canonicalAnchorRef); addList(projected.playableLocus.sourceRefs);
+    }
+    if (isObject(projected.participants)) {
+      addList(projected.participants.present); addList(projected.participants.anticipated);
+    }
+  }
+  const frontier = isObject(workspace.frontier) && Array.isArray(workspace.frontier.candidates)
+    ? workspace.frontier.candidates as JsonObject[]
+    : [];
+  frontier.forEach((candidate) => {
+    add(candidate.candidateId); add(candidate.situationId); addList(candidate.sourceRefs); addList(candidate.likelyCastRefs);
+  });
+  const requirements = isObject(workspace.preparationLedger) && Array.isArray(workspace.preparationLedger.requirements)
+    ? workspace.preparationLedger.requirements as JsonObject[]
+    : [];
+  requirements.forEach((requirement) => {
+    add(requirement.requirementId); add(requirement.targetRef); addList(requirement.sourceRefs);
+  });
+  return [...refs].sort().slice(0, STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES);
+}
+
+/** Mints bounded receipts for identifiers read from one committed GMC Story revision. */
+export function buildStoryAuthorityReceiptCatalog(workspace: JsonObject): JsonObject {
+  const workspaceId = String(workspace.workspaceId ?? '');
+  const revision = Number(workspace.revision ?? 0);
+  const receipts = committedStorySourceRefs(workspace).map((sourceRef) => ({
+    sourceRef,
+    receiptRef: `gmc:story-source:${hash({ workspaceId, revision, sourceRef })}`,
+    authority: 'gmc',
+    status: 'committed',
+  }));
+  return {
+    contractVersion: STORY_AUTHORITY_RECEIPT_CATALOG_CONTRACT_VERSION,
+    workspaceId,
+    workspaceRevision: revision,
+    receipts,
+  };
+}
+
 function validateAuthorityReceipts(envelope: SceneHandoffAuthorityEnvelope, proposal: JsonObject): { receiptRefs: string[]; sources: Map<string, SourceAuthorityReceipt> } {
   const player = envelope.playerActionReceipt;
   if (!isObject(player) || player.status !== 'accepted'
@@ -1033,6 +1089,7 @@ export async function readCurrentSceneContexts(
     storyWorkspaceRef: active.storyWorkspaceRef,
     playableSceneContext: buildPlayableSceneContextV2(active.workspace),
     privateSceneContext: buildPrivateSceneDirectorContext(active.workspace),
+    authorityReceiptCatalog: buildStoryAuthorityReceiptCatalog(active.workspace),
   };
 }
 

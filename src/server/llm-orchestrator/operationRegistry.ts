@@ -9,7 +9,15 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-04.1';
+export const OPERATION_REGISTRY_VERSION = '2026-08-07.1';
+export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
+  OPERATION_REGISTRY_VERSION,
+  '2026-08-04.1',
+]);
+
+export function acceptsOperationRegistryClientVersion(value: string): boolean {
+  return OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS.includes(value);
+}
 
 export type CapabilityTier = 'structured' | 'narrative' | 'world' | 'reasoning';
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
@@ -335,6 +343,15 @@ const sceneProposal = {
   },
 } as const;
 
+const actionDirectedStoryTurnOutput = {
+  schemaVersion: { const: 'gma.story-director-result/1' },
+  proposal: { type: 'object' },
+  materialClaims: { type: 'array', minItems: 1, maxItems: 32 },
+  declaredActionPayoff: { type: 'object' },
+  agencyAudit: { type: 'object' },
+  mechanicsAuthority: { enum: ['none', 'provisional_vcs'] },
+} as const;
+
 function objectOutputSchema(
   id: string,
   required: readonly string[],
@@ -468,6 +485,23 @@ const seeds: Seed[] = [
       'Provide a dramatic question, exact present and separately anticipated cast, participant reasons, current activity, two to five beats, stakes, pressures, information access, and completion/failure/abandonment/redirect exits.',
       'Critical information needs at least two plausible access vectors. Anticipated participants cannot act or arrive without their trigger.',
       'Do not decide a player method or outcome, invent canon, reveal private material, create mechanics, or narrate play.',
+    ].join(' '),
+  },
+  {
+    id: 'story.turn.direct', operationClass: 'reasoning_high', tier: 'reasoning',
+    required: ['schemaVersion', 'proposal', 'materialClaims', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority'],
+    temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/1',
+    outputProperties: actionDirectedStoryTurnOutput,
+    systemInstruction: [
+      'Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet.',
+      'Return exactly one JSON object matching gma.story-director-result/1. This is proposal-only; GMC remains Story and canon authority and VCS remains mechanics authority.',
+      'Preserve the exact declared action and fingerprint. Prefer an eligible prepared Scene kit; otherwise create only the minimum complete supported Scene kit.',
+      'Establish one playable locus, one exact present cast, two to five beats with exactly one active beat, all four exit kinds, Story bindings, and potential impacts.',
+      'The active beat and opening narration must concretely pay off the declared action now or establish the precise position for one provisional VCS mechanic.',
+      'Bind every material narrated fact, presence, and reveal to supplied fact IDs or IDs created in the proposed Scene kit. Do not reveal concealed or undetermined preparation.',
+      'Do not invent a player choice, force a path, guarantee an outcome, resolve mechanics, commit authority state, or add unrelated canon.',
+      'Prose may freely choose tone, sensory detail, sentence order, metaphor, and dialogue wording when it does not create a material fact.',
     ].join(' '),
   },
   { id: 'actor.ensure.generate', operationClass: 'world_generation', tier: 'world', required: ['name'], openOutput: true },
