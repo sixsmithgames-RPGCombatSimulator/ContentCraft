@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-08.2';
+export const OPERATION_REGISTRY_VERSION = '2026-08-08.3';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-08-08.2',
   '2026-08-08.1',
   '2026-08-07.1',
   '2026-08-04.1',
@@ -366,6 +367,112 @@ const storyDirectorSceneKit = {
   },
 } as const;
 
+const storyDirectorRepairSceneKit = {
+  type: ['object', 'null'], additionalProperties: false,
+  required: [
+    'schemaVersion', 'sceneKitId', 'revision', 'planningState', 'playableLocus', 'purpose',
+    'dramaticQuestion', 'participants', 'establishedElements', 'information', 'beats', 'pressures',
+    'exitVectors', 'storyBindings', 'sourceRefs',
+  ],
+  properties: {
+    schemaVersion: { const: 'gmc.scene-kit/2' },
+    sceneKitId: { type: 'string', minLength: 1, maxLength: 240 },
+    revision: { type: 'integer', minimum: 1 },
+    planningState: { const: 'active' },
+    playableLocus: {
+      type: 'object', additionalProperties: false,
+      required: ['kind', 'label', 'canonicalAnchorRef', 'sourceRefs'],
+      properties: {
+        kind: { enum: ['canonical_location', 'canonical_subarea', 'scene_local_locus', 'directional_target'] },
+        label: { type: 'string', minLength: 1, maxLength: 500 },
+        canonicalAnchorRef: { type: ['string', 'null'] },
+        sourceRefs: storyDirectorProviderRefs,
+      },
+    },
+    purpose: { type: 'string', minLength: 1, maxLength: 1000 },
+    dramaticQuestion: { type: 'string', minLength: 1, maxLength: 1000 },
+    participants: {
+      type: 'object', additionalProperties: false,
+      required: ['present', 'sceneLocalRoles', 'anticipated'],
+      properties: {
+        present: storyDirectorProviderRefs,
+        sceneLocalRoles: {
+          type: 'array', maxItems: 16, items: {
+            type: 'object', additionalProperties: false,
+            required: ['roleId', 'label', 'count', 'objective'],
+            properties: {
+              roleId: { type: 'string', minLength: 1, maxLength: 240 },
+              label: { type: 'string', minLength: 1, maxLength: 240 },
+              count: { type: 'integer', minimum: 1 },
+              objective: { type: 'string', minLength: 1, maxLength: 500 },
+            },
+          },
+        },
+        anticipated: storyDirectorProviderRefs,
+      },
+    },
+    establishedElements: {
+      type: 'array', maxItems: 32, items: {
+        type: 'object', additionalProperties: false,
+        required: ['elementId', 'truthState', 'summary'],
+        properties: {
+          elementId: { type: 'string', minLength: 1, maxLength: 240 },
+          truthState: { enum: ['canonical', 'scene_local_established', 'possible', 'undetermined'] },
+          summary: { type: 'string', minLength: 1, maxLength: 1000 },
+        },
+      },
+    },
+    information: {
+      type: 'array', maxItems: 24, items: {
+        type: 'object', additionalProperties: false,
+        required: ['informationId', 'state', 'accessVectors'],
+        properties: {
+          informationId: { type: 'string', minLength: 1, maxLength: 240 },
+          state: { enum: ['concealed', 'plainly_visible', 'absent_in_scope', 'undetermined'] },
+          accessVectors: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 500 } },
+        },
+      },
+    },
+    beats: {
+      type: 'array', minItems: 2, maxItems: 5, items: {
+        type: 'object', additionalProperties: false,
+        required: ['beatId', 'kind', 'state', 'trigger', 'changeSurface', 'potentialImpacts'],
+        properties: {
+          beatId: { type: 'string', minLength: 1, maxLength: 240 },
+          kind: { type: 'string', minLength: 1, maxLength: 240 },
+          state: { enum: ['available', 'active', 'resolved', 'bypassed'] },
+          trigger: { type: 'string', minLength: 1, maxLength: 1000 },
+          changeSurface: { type: 'string', minLength: 1, maxLength: 1000 },
+          potentialImpacts: {
+            type: 'array', maxItems: 8, items: {
+              type: 'object', additionalProperties: false,
+              required: ['storyNodeRef', 'outcome', 'effect'],
+              properties: {
+                storyNodeRef: { type: 'string', minLength: 1, maxLength: 240 },
+                outcome: { type: 'string', minLength: 1, maxLength: 240 },
+                effect: { enum: ['advance', 'complicate', 'resolve', 'reopen', 'retire'] },
+              },
+            },
+          },
+        },
+      },
+    },
+    pressures: { type: 'array', maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 500 } },
+    exitVectors: {
+      type: 'array', minItems: 4, maxItems: 8, items: {
+        type: 'object', additionalProperties: false,
+        required: ['kind', 'condition'],
+        properties: {
+          kind: { enum: ['completion', 'failure', 'abandonment', 'redirect'] },
+          condition: { type: 'string', minLength: 1, maxLength: 1000 },
+        },
+      },
+    },
+    storyBindings: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 240 } },
+    sourceRefs: { type: 'array', minItems: 1, maxItems: 24, items: { type: 'string', minLength: 1, maxLength: 240 } },
+  },
+} as const;
+
 const actionDirectedStoryTurnOutput = {
   schemaVersion: { type: 'string' },
   proposal: {
@@ -419,7 +526,7 @@ const actionDirectedStoryTurnOutput = {
 const actionDirectedStoryRepairOutput = {
   schemaVersion: { const: 'gma.action-directed-story-repair/3' },
   correctionId: { type: 'string', minLength: 1, maxLength: 240 },
-  sceneKitPatch: storyDirectorSceneKit,
+  sceneKitPatch: storyDirectorRepairSceneKit,
   patchesJson: { type: 'string', minLength: 2, maxLength: 32_768 },
 } as const;
 

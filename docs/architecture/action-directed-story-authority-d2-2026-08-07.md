@@ -173,7 +173,7 @@ phases.
 
 ## D5-D7 integration addendum
 
-D5 adds no second Story authority. GMC registry `2026-08-08.2` registers the
+D5 adds no second Story authority. GMC registry `2026-08-08.3` registers the
 combined proposal-only `story.turn.direct` operation with the complete
 first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
 freedom policy. The operation permits one provider attempt and no fallback;
@@ -198,6 +198,11 @@ failure caused by serializing a complete nested Scene kit as one JSON string.
 GMA still validates the exact allowed paths and complete replacement values
 before merging. The operation cannot commit Story state. Version 2 repair
 results remain readable only during the ordered GMC-first/GMA-second rollout.
+The structured repair field uses a leaf-complete Scene-kit provider schema.
+Unlike the broader first-pass Director result, this focused response has enough
+schema budget to require locus, participant, element, information, beat,
+potential-impact, and exit-vector leaves. Empty nested placeholders are thus
+rejected by the provider boundary before GMA spends its single correction.
 
 An accepted-v1 imported scene can legitimately predate explicit Story
 bindings. During that scene's one blocking materialization pass, the private

@@ -291,6 +291,15 @@ describe('provider-neutral LLM orchestrator', () => {
       type: ['object', 'null'],
       required: expect.arrayContaining(['playableLocus', 'participants', 'beats', 'exitVectors']),
     });
+    const repairKit = (repair.outputSchema.schema.properties as any).sceneKitPatch.properties;
+    expect(repairKit.playableLocus).toMatchObject({
+      required: ['kind', 'label', 'canonicalAnchorRef', 'sourceRefs'],
+    });
+    expect(repairKit.participants.properties.sceneLocalRoles.items.required)
+      .toEqual(['roleId', 'label', 'count', 'objective']);
+    expect(repairKit.beats.items.required)
+      .toEqual(['beatId', 'kind', 'state', 'trigger', 'changeSurface', 'potentialImpacts']);
+    expect(repairKit.exitVectors.items.required).toEqual(['kind', 'condition']);
     expect((repair.outputSchema.schema.properties as any).patchesJson).toMatchObject({ type: 'string', minLength: 2 });
     expect(repair.provider.maxAttempts).toBe(1);
     expect(repair.provider.fallbackAllowed).toBe(false);
@@ -327,6 +336,7 @@ describe('provider-neutral LLM orchestrator', () => {
   });
 
   it('keeps the immediately previous GMA registry client compatible during the ordered GMC-first deployment', () => {
+    expect(acceptsOperationRegistryClientVersion('2026-08-08.2')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.1')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-07.1')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-04.1')).toBe(true);

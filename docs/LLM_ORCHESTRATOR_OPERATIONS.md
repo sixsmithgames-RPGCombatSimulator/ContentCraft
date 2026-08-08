@@ -25,8 +25,10 @@ choices, or narration:
 - `story.turn.repair` returns one bound correction ID, an optional structured
   Scene-kit replacement, and compact JSON-string patches for any remaining
   small fields allowed by GMA. A complete Scene kit is never double-encoded in
-  the JSON string. The operation is single-attempt, proposal-only, and cannot
-  replace or commit a saved scene by itself.
+  the JSON string, and its structured repair schema requires every playable
+  leaf rather than accepting empty locus, cast, beat, or exit objects. The
+  operation is single-attempt, proposal-only, and cannot replace or commit a
+  saved scene by itself.
 
 GMA validates the returned source set and compiles a revision-bound
 `studio.story-delta/1`; GMC independently validates the proposal and the exact
