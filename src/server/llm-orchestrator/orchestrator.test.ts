@@ -393,7 +393,8 @@ describe('provider-neutral LLM orchestrator', () => {
       .toEqual(expect.arrayContaining(['STORY_SCENE_KIT_REPAIR_FIELD_DUPLICATE', 'STORY_SCENE_KIT_REPAIR_FIELD_MISSING']));
   });
 
-  it('fails closed for the superseded provider transport while preserving older generic-repair clients', () => {
+  it('accepts the current keyed-row client and fails closed for the superseded provider transport', () => {
+    expect(acceptsOperationRegistryClientVersion('2026-08-08.5')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.4')).toBe(false);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.3')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.2')).toBe(true);

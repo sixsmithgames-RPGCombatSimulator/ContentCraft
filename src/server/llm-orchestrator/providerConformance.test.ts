@@ -80,6 +80,19 @@ describe('enabled provider adapter conformance', () => {
     expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' });
   });
 
+  it('distinguishes output truncation from other malformed provider JSON', async () => {
+    process.env.GEMINI_API_KEY = 'fixture-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: '{"valid":' }] } }],
+      usageMetadata: { promptTokenCount: 7, candidatesTokenCount: 100, thoughtsTokenCount: 50 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+    await expect(new GeminiProviderAdapter().generateStructured(request)).rejects.toMatchObject({
+      code: 'PROVIDER_OUTPUT_TRUNCATED',
+      retryable: true,
+      source: 'provider.gemini',
+    });
+  });
+
   it('classifies a monthly spend cap as terminal instead of retryable rate limiting', async () => {
     process.env.GEMINI_API_KEY = 'fixture-key';
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({

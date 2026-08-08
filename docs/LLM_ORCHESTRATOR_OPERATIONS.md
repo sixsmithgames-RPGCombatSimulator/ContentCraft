@@ -36,6 +36,9 @@ choices, or narration:
   instructions name the keyed-row provider transport rather than the nested
   GMA merge shape. Registry client `2026-08-08.4` is deliberately not compatible
   with this changed transport, so the GMC-first deployment window fails closed.
+  This whole-kit repair uses low reasoning and a 7,000-token combined ceiling
+  in one attempt. GMC distinguishes a `MAX_TOKENS` truncation from other invalid
+  provider JSON in diagnostics; neither condition weakens validation.
 
 GMA validates the returned source set and compiles a revision-bound
 `studio.story-delta/1`; GMC independently validates the proposal and the exact

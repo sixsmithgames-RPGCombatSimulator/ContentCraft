@@ -173,7 +173,7 @@ phases.
 
 ## D5-D7 integration addendum
 
-D5 adds no second Story authority. GMC registry `2026-08-08.5` registers the
+D5 adds no second Story authority. GMC registry `2026-08-08.6` registers the
 combined proposal-only `story.turn.direct` operation with the complete
 first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
 freedom policy. The operation permits one provider attempt and no fallback;
@@ -209,6 +209,10 @@ Gemini's schema-complexity ceiling while preventing empty nested placeholders.
 Registry client `2026-08-08.4` is intentionally incompatible with this transport;
 the ordered GMC-first rollout therefore makes GMA 0.19.12 fail closed until the
 matching GMA release is live instead of allowing it to misread a repair result.
+The whole-kit repair remains one provider operation. It uses low provider
+reasoning and a 7,000-token combined reasoning/output ceiling so the bounded
+keyed rows can finish without spending a second attempt; a provider
+`MAX_TOKENS` finish is recorded distinctly as truncated output.
 It replaces, rather than adds to, the one focused repair call. Small-field and
 manual repairs continue to use `story.turn.repair`; neither operation can
 commit authority state. For the integrated flat operation, GMA replaces only

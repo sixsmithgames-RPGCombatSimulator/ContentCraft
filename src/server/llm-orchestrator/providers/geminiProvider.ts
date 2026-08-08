@@ -6,7 +6,7 @@ import type {
 } from '../provider.js';
 
 type GeminiResponse = {
-  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
@@ -121,10 +121,13 @@ export class GeminiProviderAdapter implements LlmProviderAdapter {
       try {
         output = JSON.parse(text);
       } catch {
+        const truncated = payload.candidates?.[0]?.finishReason === 'MAX_TOKENS';
         throw new OrchestratorError({
-          code: 'PROVIDER_INVALID_JSON',
+          code: truncated ? 'PROVIDER_OUTPUT_TRUNCATED' : 'PROVIDER_INVALID_JSON',
           category: 'validation',
-          message: 'The provider returned invalid JSON.',
+          message: truncated
+            ? 'The provider reached its output limit before completing the structured result.'
+            : 'The provider returned invalid JSON.',
           retryable: true,
           status: 502,
           source: 'provider.gemini',
