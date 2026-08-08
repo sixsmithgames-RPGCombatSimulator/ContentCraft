@@ -325,6 +325,25 @@ describe('D2 action-directed Story authority', () => {
     });
   });
 
+  it('accepts paragraph breaks in player-facing opening narration but rejects other controls', async () => {
+    const paragraphStore = await preparedStore();
+    const paragraphEnvelope = handoffEnvelope();
+    paragraphEnvelope.proposal.openingNarration = 'The wallet opens without shifting.\n\nThe spider completes its search.';
+    await expect(commitSceneHandoff({
+      userId: 'tenant-a', campaignId: 'campaign-a', envelope: paragraphEnvelope,
+    }, paragraphStore.records)).resolves.toMatchObject({ status: 'applied' });
+
+    const controlStore = await preparedStore();
+    const controlEnvelope = handoffEnvelope();
+    controlEnvelope.proposal.openingNarration = 'The wallet opens.\u0001The draft is malformed.';
+    await expect(commitSceneHandoff({
+      userId: 'tenant-a', campaignId: 'campaign-a', envelope: controlEnvelope,
+    }, controlStore.records)).rejects.toMatchObject({
+      code: 'STORY_VALIDATION_FAILED',
+      details: { field: 'proposal.openingNarration' },
+    });
+  });
+
   it('supports select, reuse, and replace without creating a second current scene', async () => {
     const store = await preparedStore();
     const active = (await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records))!;

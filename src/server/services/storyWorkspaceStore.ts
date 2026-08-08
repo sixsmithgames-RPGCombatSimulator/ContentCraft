@@ -174,6 +174,14 @@ function text(value: unknown, field: string, max = 240): string {
   return result;
 }
 
+function narrativeText(value: unknown, field: string, max: number): string {
+  const result = String(value ?? '').trim();
+  if (!result || result.length > max || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(result)) {
+    throw new StoryWorkspaceStoreError(400, 'STORY_VALIDATION_FAILED', `${field} is invalid.`, { field });
+  }
+  return result;
+}
+
 function identifier(value: unknown, field: string): string {
   const result = text(value, field);
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(result)) {
@@ -486,7 +494,7 @@ export function validateSceneHandoffProposal(input: unknown): asserts input is J
   if (activeBeats.length !== 1 || activeBeats[0].beatId !== activeBeatRef) {
     throw new StoryWorkspaceStoreError(422, 'STORY_ACTIVE_BEAT_INVALID', 'An accepted scene handoff requires exactly one active beat matching activeBeatRef.', { field: 'proposal.handoff.activeBeatRef' });
   }
-  text(input.openingNarration, 'proposal.openingNarration', 16_000);
+  narrativeText(input.openingNarration, 'proposal.openingNarration', 16_000);
   if (input.rollRequest !== null && !plainObject(input.rollRequest)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_HANDOFF_INVALID', 'The roll request must be an object or null.', { field: 'proposal.rollRequest' });
   validateJson(input.rollRequest, 'proposal.rollRequest');
   if (byteLength(input as JsonObject) > SCENE_HANDOFF_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_HANDOFF_TOO_LARGE', 'The scene-handoff proposal exceeds its size bound.', { maximumBytes: SCENE_HANDOFF_MAX_BYTES });

@@ -256,6 +256,15 @@ sources. Scene handoff remains the same one-write D2 transaction. The prior
 registry client version remains accepted only to permit the ordered GMC-first
 deployment.
 
+Player-facing `openingNarration` is prose, not an identifier or single-line
+metadata field. Its contract permits ordinary line-feed paragraph breaks and
+horizontal tabs while continuing to reject every other C0 control character,
+DEL, empty text, and text beyond the existing 16,000-character bound. GMA's
+Director compiler and GMC's authority validator must accept the same prose
+surface so a valid multi-paragraph first pass cannot fail only at commit time.
+All identifiers, labels, facts, objectives, and other structured text retain
+their existing stricter single-line validation.
+
 The full GMC check passes with 108 test files and 676 tests, including operation
 policy, compatibility, receipt-catalog, atomic handoff, typecheck, lint, and
 production builds. Commit `4ee49b2db7636a65b9de0e09964d9c770a7489d2`
