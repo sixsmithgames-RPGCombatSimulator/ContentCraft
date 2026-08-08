@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-08.4';
+export const OPERATION_REGISTRY_VERSION = '2026-08-08.5';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-08.3',
@@ -368,7 +368,7 @@ const storyDirectorSceneKit = {
   },
 } as const;
 
-const storyDirectorRepairSceneKit = {
+export const STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA = {
   type: ['object', 'null'], additionalProperties: false,
   required: [
     'schemaVersion', 'sceneKitId', 'revision', 'planningState', 'playableLocus', 'purpose',
@@ -531,72 +531,31 @@ const actionDirectedStoryRepairOutput = {
   patchesJson: { type: 'string', minLength: 2, maxLength: 32_768 },
 } as const;
 
+export const STORY_SCENE_KIT_REPAIR_FIELD_KEYS = Object.freeze([
+  'sceneKitSchemaVersion', 'sceneKitId', 'revision', 'planningState',
+  'locusKind', 'locusLabel', 'canonicalAnchorRef', 'locusSourceRefs',
+  'purpose', 'dramaticQuestion', 'presentActorRefs', 'sceneLocalRoles',
+  'anticipatedActorRefs', 'establishedElements', 'information',
+  'informationAccess', 'beats', 'beatImpacts', 'pressures', 'exitVectors',
+  'storyBindings', 'sourceRefs',
+] as const);
+
 const sceneKitRepairProviderOutput = {
-  schemaVersion: { const: 'gma.story-scene-kit-repair-provider/1' },
+  schemaVersion: { const: 'gma.story-scene-kit-repair-provider/2' },
   correctionId: { type: 'string', minLength: 1, maxLength: 240 },
-  sceneKitSchemaVersion: { const: 'gmc.scene-kit/2' },
-  sceneKitId: { type: 'string', minLength: 1, maxLength: 240 },
-  revision: { type: 'integer', minimum: 1 },
-  planningState: { const: 'active' },
-  locusKind: storyDirectorRepairSceneKit.properties.playableLocus.properties.kind,
-  locusLabel: storyDirectorRepairSceneKit.properties.playableLocus.properties.label,
-  canonicalAnchorRef: storyDirectorRepairSceneKit.properties.playableLocus.properties.canonicalAnchorRef,
-  locusSourceRefs: storyDirectorRepairSceneKit.properties.playableLocus.properties.sourceRefs,
-  purpose: storyDirectorRepairSceneKit.properties.purpose,
-  dramaticQuestion: storyDirectorRepairSceneKit.properties.dramaticQuestion,
-  presentActorRefs: storyDirectorRepairSceneKit.properties.participants.properties.present,
-  sceneLocalRoles: storyDirectorRepairSceneKit.properties.participants.properties.sceneLocalRoles,
-  anticipatedActorRefs: storyDirectorRepairSceneKit.properties.participants.properties.anticipated,
-  establishedElements: storyDirectorRepairSceneKit.properties.establishedElements,
-  information: {
-    type: 'array', maxItems: 24, items: {
+  fields: {
+    type: 'array',
+    minItems: STORY_SCENE_KIT_REPAIR_FIELD_KEYS.length,
+    maxItems: STORY_SCENE_KIT_REPAIR_FIELD_KEYS.length,
+    items: {
       type: 'object', additionalProperties: false,
-      required: ['informationId', 'state'],
+      required: ['key', 'valueJson'],
       properties: {
-        informationId: { type: 'string', minLength: 1, maxLength: 240 },
-        state: { enum: ['concealed', 'plainly_visible', 'absent_in_scope', 'undetermined'] },
+        key: { enum: STORY_SCENE_KIT_REPAIR_FIELD_KEYS },
+        valueJson: { type: 'string', minLength: 1, maxLength: 32_768 },
       },
     },
   },
-  informationAccess: {
-    type: 'array', maxItems: 192, items: {
-      type: 'object', additionalProperties: false,
-      required: ['informationId', 'accessVector'],
-      properties: {
-        informationId: { type: 'string', minLength: 1, maxLength: 240 },
-        accessVector: { type: 'string', minLength: 1, maxLength: 500 },
-      },
-    },
-  },
-  beats: {
-    type: 'array', minItems: 2, maxItems: 5, items: {
-      type: 'object', additionalProperties: false,
-      required: ['beatId', 'kind', 'state', 'trigger', 'changeSurface'],
-      properties: {
-        beatId: { type: 'string', minLength: 1, maxLength: 240 },
-        kind: { type: 'string', minLength: 1, maxLength: 240 },
-        state: { enum: ['available', 'active', 'resolved', 'bypassed'] },
-        trigger: { type: 'string', minLength: 1, maxLength: 1000 },
-        changeSurface: { type: 'string', minLength: 1, maxLength: 1000 },
-      },
-    },
-  },
-  beatImpacts: {
-    type: 'array', minItems: 1, maxItems: 40, items: {
-      type: 'object', additionalProperties: false,
-      required: ['beatId', 'storyNodeRef', 'outcome', 'effect'],
-      properties: {
-        beatId: { type: 'string', minLength: 1, maxLength: 240 },
-        storyNodeRef: { type: 'string', minLength: 1, maxLength: 240 },
-        outcome: { type: 'string', minLength: 1, maxLength: 240 },
-        effect: { enum: ['advance', 'complicate', 'resolve', 'reopen', 'retire'] },
-      },
-    },
-  },
-  pressures: storyDirectorRepairSceneKit.properties.pressures,
-  exitVectors: storyDirectorRepairSceneKit.properties.exitVectors,
-  storyBindings: storyDirectorRepairSceneKit.properties.storyBindings,
-  sourceRefs: storyDirectorRepairSceneKit.properties.sourceRefs,
   patchesJson: { type: 'string', minLength: 2, maxLength: 16_384 },
 } as const;
 
@@ -754,14 +713,15 @@ const seeds: Seed[] = [
   },
   {
     id: 'story.scene-kit.repair', operationClass: 'reasoning_high', tier: 'reasoning',
-    required: Object.keys(sceneKitRepairProviderOutput),
+    required: Object.keys(sceneKitRepairProviderOutput), validators: ['story-scene-kit-repair-rows'],
     temperature: 0.25, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
     thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/1',
     outputProperties: sceneKitRepairProviderOutput,
     systemInstruction: [
       'Repair one complete proposal.handoff.sceneKit from the supplied bounded GMA focused-repair packet.',
-      'Return exactly one gma.story-scene-kit-repair-provider/1 JSON object with the supplied correctionId and every registered field.',
-      'Flatten the Scene kit into the registered locus scalars and shallow collections. Use informationAccess rows keyed by informationId and beatImpacts rows keyed by beatId. Do not return nested playableLocus, participants, information access vectors, or beat impact arrays; exitVectors must be shallow kind-and-condition rows.',
+      'Return exactly one gma.story-scene-kit-repair-provider/2 JSON object with the supplied correctionId, fields, and patchesJson.',
+      `Return exactly one fields row for each key, with no omissions or duplicates: ${STORY_SCENE_KIT_REPAIR_FIELD_KEYS.join(', ')}.`,
+      'Each valueJson must be a valid JSON encoding of only that key value. informationAccess rows join by informationId and beatImpacts rows join by beatId after GMA decodes them.',
       'patchesJson must encode one valid JSON object containing every other allowed field path exactly once, or {} when no other path is allowed.',
       'Copy authority-backed locus, cast, sources, and Story references exactly. Propose only the minimum scene-local elements and beat scaffolding required by the supplied field contract.',
       'Preserve the immutable player action, revisions, accepted fields, player agency, provisional mechanics, and source grounding. Do not commit state or include markdown or commentary.',

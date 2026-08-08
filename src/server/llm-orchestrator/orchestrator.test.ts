@@ -293,17 +293,16 @@ describe('provider-neutral LLM orchestrator', () => {
       required: expect.arrayContaining(['playableLocus', 'participants', 'beats', 'exitVectors']),
     });
     const sceneRepairProperties = sceneKitRepair.outputSchema.schema.properties as any;
-    expect(sceneKitRepair.prompt.systemInstruction).toMatch(/Flatten the Scene kit/i);
-    expect(sceneKitRepair.outputSchema.schema.required).toEqual(expect.arrayContaining([
+    expect(sceneKitRepair.prompt.systemInstruction).toMatch(/one fields row for each key/i);
+    expect(sceneKitRepair.outputSchema.schema.required)
+      .toEqual(['schemaVersion', 'correctionId', 'fields', 'patchesJson']);
+    expect(sceneRepairProperties.fields.minItems).toBe(22);
+    expect(sceneRepairProperties.fields.maxItems).toBe(22);
+    expect(sceneRepairProperties.fields.items.required).toEqual(['key', 'valueJson']);
+    expect(sceneRepairProperties.fields.items.properties.key.enum).toEqual(expect.arrayContaining([
       'locusKind', 'presentActorRefs', 'sceneLocalRoles', 'informationAccess', 'beats', 'beatImpacts', 'exitVectors',
     ]));
-    expect(sceneRepairProperties.sceneLocalRoles.items.required)
-      .toEqual(['roleId', 'label', 'count', 'objective']);
-    expect(sceneRepairProperties.beats.items.required)
-      .toEqual(['beatId', 'kind', 'state', 'trigger', 'changeSurface']);
-    expect(sceneRepairProperties.beatImpacts.items.required)
-      .toEqual(['beatId', 'storyNodeRef', 'outcome', 'effect']);
-    expect(sceneRepairProperties.exitVectors.items.required).toEqual(['kind', 'condition']);
+    expect(sceneKitRepair.validators).toContain('story-scene-kit-repair-rows');
     expect(sceneKitRepair.provider.maxAttempts).toBe(1);
     expect(sceneKitRepair.provider.fallbackAllowed).toBe(false);
     expect((repair.outputSchema.schema.properties as any).patchesJson).toMatchObject({ type: 'string', minLength: 2 });
@@ -343,36 +342,22 @@ describe('provider-neutral LLM orchestrator', () => {
 
   it('accepts a complete flat Scene-kit repair without provider-hostile nesting', async () => {
     const sceneKitRepairRequest = request('story.scene-kit.repair', 'flat-scene-kit-repair');
-    const sceneKitRepairProvider = new FakeProviderAdapter(() => ({
-      schemaVersion: 'gma.story-scene-kit-repair-provider/1',
-      correctionId: 'story-repair:turn-1:scene-kit',
-      sceneKitSchemaVersion: 'gmc.scene-kit/2',
-      sceneKitId: 'scene-kit:cart-interception',
-      revision: 1,
-      planningState: 'active',
-      locusKind: 'directional_target',
-      locusLabel: 'The inbound cart route ahead of Flintwake',
-      canonicalAnchorRef: 'gmc:location:flintwake',
-      locusSourceRefs: ['gmc:lead:cart-route'],
+    const fieldValues = {
+      sceneKitSchemaVersion: 'gmc.scene-kit/2', sceneKitId: 'scene-kit:cart-interception', revision: 1, planningState: 'active',
+      locusKind: 'directional_target', locusLabel: 'The inbound cart route ahead of Flintwake',
+      canonicalAnchorRef: 'gmc:location:flintwake', locusSourceRefs: ['gmc:lead:cart-route'],
       purpose: 'Put Kerrigan at the cart with a concrete cast and activity.',
-      dramaticQuestion: 'Can Kerrigan learn who controls the cart?',
-      presentActorRefs: ['gmc:pc:kerrigan'],
+      dramaticQuestion: 'Can Kerrigan learn who controls the cart?', presentActorRefs: ['gmc:pc:kerrigan'],
       sceneLocalRoles: [{ roleId: 'role:cart-crew', label: 'cart crew', count: 2, objective: 'Deliver the cargo.' }],
       anticipatedActorRefs: [],
-      establishedElements: [{
-        elementId: 'element:covered-cart',
-        truthState: 'scene_local_established',
-        summary: 'A covered cart has stopped on the inbound route.',
-      }],
+      establishedElements: [{ elementId: 'element:covered-cart', truthState: 'scene_local_established', summary: 'A covered cart has stopped on the inbound route.' }],
       information: [{ informationId: 'info:cart-cargo', state: 'concealed' }],
       informationAccess: [{ informationId: 'info:cart-cargo', accessVector: 'Inspect the cart cover.' }],
       beats: [
         { beatId: 'beat:inspect', kind: 'investigation', state: 'active', trigger: 'Kerrigan reaches the cart.', changeSurface: 'The cargo can be investigated.' },
         { beatId: 'beat:crew-reacts', kind: 'reaction', state: 'available', trigger: 'The crew notices interference.', changeSurface: 'The crew responds.' },
       ],
-      beatImpacts: [
-        { beatId: 'beat:inspect', storyNodeRef: 'story:thread:flintwake-cart', outcome: 'cart_investigated', effect: 'advance' },
-      ],
+      beatImpacts: [{ beatId: 'beat:inspect', storyNodeRef: 'story:thread:flintwake-cart', outcome: 'cart_investigated', effect: 'advance' }],
       pressures: ['The crew may notice the inspection.'],
       exitVectors: [
         { kind: 'completion', condition: 'Kerrigan learns what the cart carries.' },
@@ -380,18 +365,36 @@ describe('provider-neutral LLM orchestrator', () => {
         { kind: 'abandonment', condition: 'Kerrigan leaves the cart.' },
         { kind: 'redirect', condition: 'A stronger lead draws Kerrigan elsewhere.' },
       ],
-      storyBindings: ['story:thread:flintwake-cart'],
-      sourceRefs: ['gmc:lead:cart-route'],
+      storyBindings: ['story:thread:flintwake-cart'], sourceRefs: ['gmc:lead:cart-route'],
+    };
+    const providerOutput = () => ({
+      schemaVersion: 'gma.story-scene-kit-repair-provider/2',
+      correctionId: 'story-repair:turn-1:scene-kit',
+      fields: Object.entries(fieldValues).map(([key, value]) => ({ key, valueJson: JSON.stringify(value) })),
       patchesJson: '{}',
-    }));
+    });
+    const sceneKitRepairProvider = new FakeProviderAdapter(providerOutput);
     const accepted = await executeLlmOperation(sceneKitRepairRequest, {
       userId: 'user-1', store: new MemoryExecutionStore(), providers: [sceneKitRepairProvider],
     });
     expect(accepted.status).toBe('succeeded');
     expect(sceneKitRepairProvider.calls).toHaveLength(1);
+
+    const duplicateProvider = new FakeProviderAdapter(() => {
+      const output = providerOutput();
+      output.fields[output.fields.length - 1] = { ...output.fields[0] };
+      return output;
+    });
+    const rejected = await executeLlmOperation(request('story.scene-kit.repair', 'duplicate-scene-kit-repair'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [duplicateProvider],
+    });
+    expect(rejected.status).toBe('review_required');
+    expect(rejected.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toEqual(expect.arrayContaining(['STORY_SCENE_KIT_REPAIR_FIELD_DUPLICATE', 'STORY_SCENE_KIT_REPAIR_FIELD_MISSING']));
   });
 
-  it('keeps the immediately previous GMA registry client compatible during the ordered GMC-first deployment', () => {
+  it('fails closed for the superseded provider transport while preserving older generic-repair clients', () => {
+    expect(acceptsOperationRegistryClientVersion('2026-08-08.4')).toBe(false);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.3')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.2')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.1')).toBe(true);

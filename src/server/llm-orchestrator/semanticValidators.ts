@@ -1,5 +1,10 @@
 import type { LlmValidationResult } from '../../shared/llm/orchestratorContracts.js';
-import { registerSemanticValidator } from './operationRegistry.js';
+import Ajv from 'ajv';
+import {
+  registerSemanticValidator,
+  STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA,
+  STORY_SCENE_KIT_REPAIR_FIELD_KEYS,
+} from './operationRegistry.js';
 
 function result(id: string, issues: Array<{ code: string; message: string; path?: string }>): LlmValidationResult {
   return { validatorId: id, version: '1', valid: issues.length === 0, issues };
@@ -241,6 +246,92 @@ registerSemanticValidator('story-scene-readiness', ({ output }) => {
     }
   }
   return result('story-scene-readiness', issues);
+});
+
+const validateStorySceneKitRepair = new Ajv({ allErrors: true, strict: false })
+  .compile(STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA);
+
+registerSemanticValidator('story-scene-kit-repair-rows', ({ request, output }) => {
+  const issues: Array<{ code: string; message: string; path?: string }> = [];
+  const trusted = request.context?.input?.value as any;
+  if (trusted?.correctionId && String(output?.correctionId ?? '') !== String(trusted.correctionId)) {
+    issues.push({ code: 'STORY_SCENE_KIT_REPAIR_CORRECTION_MISMATCH', message: 'The repair changed the supplied correction ID.', path: '/correctionId' });
+  }
+  const rows = Array.isArray(output?.fields) ? output.fields : [];
+  const expectedKeys = new Set<string>(STORY_SCENE_KIT_REPAIR_FIELD_KEYS);
+  const values = new Map<string, unknown>();
+  for (const [index, row] of rows.entries()) {
+    const key = String(row?.key ?? '');
+    if (!expectedKeys.has(key)) {
+      issues.push({ code: 'STORY_SCENE_KIT_REPAIR_FIELD_UNKNOWN', message: 'The repair returned an unknown Scene-kit field.', path: `/fields/${index}/key` });
+      continue;
+    }
+    if (values.has(key)) {
+      issues.push({ code: 'STORY_SCENE_KIT_REPAIR_FIELD_DUPLICATE', message: 'The repair returned one Scene-kit field more than once.', path: `/fields/${index}/key` });
+      continue;
+    }
+    try {
+      values.set(key, JSON.parse(String(row?.valueJson ?? '')));
+    } catch {
+      issues.push({ code: 'STORY_SCENE_KIT_REPAIR_VALUE_INVALID', message: 'A Scene-kit field did not contain valid JSON.', path: `/fields/${index}/valueJson` });
+    }
+  }
+  for (const key of STORY_SCENE_KIT_REPAIR_FIELD_KEYS) {
+    if (!values.has(key)) issues.push({ code: 'STORY_SCENE_KIT_REPAIR_FIELD_MISSING', message: 'The repair omitted a required Scene-kit field.', path: '/fields' });
+  }
+  let patches: unknown = null;
+  try {
+    patches = JSON.parse(String(output?.patchesJson ?? ''));
+  } catch {
+    issues.push({ code: 'STORY_SCENE_KIT_REPAIR_PATCHES_INVALID', message: 'The remaining repair fields did not contain valid JSON.', path: '/patchesJson' });
+  }
+  if (!patches || typeof patches !== 'object' || Array.isArray(patches)) {
+    issues.push({ code: 'STORY_SCENE_KIT_REPAIR_PATCHES_OBJECT_REQUIRED', message: 'The remaining repair fields must be one JSON object.', path: '/patchesJson' });
+  }
+  if (issues.length === 0) {
+    const informationRows = values.get('information') as any[];
+    const accessRows = values.get('informationAccess') as any[];
+    const beatRows = values.get('beats') as any[];
+    const impactRows = values.get('beatImpacts') as any[];
+    const sceneKit = {
+      schemaVersion: values.get('sceneKitSchemaVersion'), sceneKitId: values.get('sceneKitId'),
+      revision: values.get('revision'), planningState: values.get('planningState'),
+      playableLocus: {
+        kind: values.get('locusKind'), label: values.get('locusLabel'),
+        canonicalAnchorRef: values.get('canonicalAnchorRef'), sourceRefs: values.get('locusSourceRefs'),
+      },
+      purpose: values.get('purpose'), dramaticQuestion: values.get('dramaticQuestion'),
+      participants: {
+        present: values.get('presentActorRefs'), sceneLocalRoles: values.get('sceneLocalRoles'),
+        anticipated: values.get('anticipatedActorRefs'),
+      },
+      establishedElements: values.get('establishedElements'),
+      information: Array.isArray(informationRows) ? informationRows.map((entry) => ({
+        ...entry,
+        accessVectors: Array.isArray(accessRows)
+          ? accessRows.filter((access) => access?.informationId === entry?.informationId).map((access) => access.accessVector)
+          : [],
+      })) : informationRows,
+      beats: Array.isArray(beatRows) ? beatRows.map((entry) => ({
+        ...entry,
+        potentialImpacts: Array.isArray(impactRows)
+          ? impactRows.filter((impact) => impact?.beatId === entry?.beatId).map(({ beatId: _beatId, ...impact }) => impact)
+          : [],
+      })) : beatRows,
+      pressures: values.get('pressures'), exitVectors: values.get('exitVectors'),
+      storyBindings: values.get('storyBindings'), sourceRefs: values.get('sourceRefs'),
+    };
+    if (!validateStorySceneKitRepair(sceneKit)) {
+      for (const error of validateStorySceneKitRepair.errors ?? []) {
+        issues.push({
+          code: 'STORY_SCENE_KIT_REPAIR_VALUE_INVALID',
+          message: `${error.instancePath || '/'} ${error.message ?? 'is invalid'}`,
+          path: `/fields${error.instancePath || ''}`,
+        });
+      }
+    }
+  }
+  return result('story-scene-kit-repair-rows', issues);
 });
 
 export function semanticValidatorsLoaded() {

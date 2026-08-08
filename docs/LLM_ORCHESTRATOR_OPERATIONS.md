@@ -27,13 +27,15 @@ choices, or narration:
   small fields allowed by GMA. A complete Scene kit is never double-encoded in
   the JSON string. The operation is single-attempt and proposal-only.
 - `story.scene-kit.repair` is the integrated whole-kit variant. It returns the
-  same logical correction as leaf-complete shallow locus, cast, element,
-  information, beat, impact, and exit fields. GMA reassembles and validates the
+  same logical correction as one bounded array of exact `{key,valueJson}` rows.
+  GMC requires every registered flat Scene-kit key exactly once and validates
+  each row's JSON before release. GMA decodes, reassembles, and validates the
   versioned Scene kit; this operation replaces the ordinary repair call and
   cannot replace or commit a saved scene by itself. Its input packet uses the
   same evidence and allowed fields as ordinary repair, but response-format
-  instructions name the flat registered transport rather than the nested GMA
-  merge shape.
+  instructions name the keyed-row provider transport rather than the nested
+  GMA merge shape. Registry client `2026-08-08.4` is deliberately not compatible
+  with this changed transport, so the GMC-first deployment window fails closed.
 
 GMA validates the returned source set and compiles a revision-bound
 `studio.story-delta/1`; GMC independently validates the proposal and the exact

@@ -173,7 +173,7 @@ phases.
 
 ## D5-D7 integration addendum
 
-D5 adds no second Story authority. GMC registry `2026-08-08.4` registers the
+D5 adds no second Story authority. GMC registry `2026-08-08.5` registers the
 combined proposal-only `story.turn.direct` operation with the complete
 first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
 freedom policy. The operation permits one provider attempt and no fallback;
@@ -199,12 +199,16 @@ GMA still validates the exact allowed paths and complete replacement values
 before merging. The operation cannot commit Story state. Version 2 repair
 results remain readable only during the ordered GMC-first/GMA-second rollout.
 Integrated whole-Scene-kit correction uses the dedicated
-`story.scene-kit.repair` operation. Its provider response is leaf-complete but
-flat: locus fields are scalars, and local roles, elements, information,
-information-access rows, beats, beat-impact rows, and exits are shallow typed
-collections. GMA deterministically reassembles those rows into
-`gmc.scene-kit/2` and runs the unchanged Director and GMC validators. This fits
+`story.scene-kit.repair` operation. Its provider response is a bounded keyed-row
+transport: every required flat Scene-kit field appears exactly once as
+`{key,valueJson}`, and each `valueJson` contains only that field's JSON value.
+GMC rejects missing, duplicate, unknown, or malformed rows. GMA deterministically
+decodes the rows, reassembles `gmc.scene-kit/2`, and runs the unchanged Director
+and GMC validators. This provider-preflighted four-field root schema fits
 Gemini's schema-complexity ceiling while preventing empty nested placeholders.
+Registry client `2026-08-08.4` is intentionally incompatible with this transport;
+the ordered GMC-first rollout therefore makes GMA 0.19.12 fail closed until the
+matching GMA release is live instead of allowing it to misread a repair result.
 It replaces, rather than adds to, the one focused repair call. Small-field and
 manual repairs continue to use `story.turn.repair`; neither operation can
 commit authority state. For the integrated flat operation, GMA replaces only
