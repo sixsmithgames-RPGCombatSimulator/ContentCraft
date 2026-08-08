@@ -293,6 +293,44 @@ registerSemanticValidator('story-scene-kit-repair-rows', ({ request, output }) =
     const accessRows = values.get('informationAccess') as any[];
     const beatRows = values.get('beats') as any[];
     const impactRows = values.get('beatImpacts') as any[];
+    const informationIds = new Set<string>();
+    for (const [index, entry] of (Array.isArray(informationRows) ? informationRows : []).entries()) {
+      const informationId = String(entry?.informationId ?? '');
+      if (informationIds.has(informationId)) {
+        issues.push({ code: 'STORY_SCENE_KIT_REPAIR_INFORMATION_DUPLICATE', message: 'The repair returned one information record more than once.', path: `/fields/information/${index}/informationId` });
+      }
+      informationIds.add(informationId);
+    }
+    const accessInformationIds = new Set<string>();
+    for (const [index, access] of (Array.isArray(accessRows) ? accessRows : []).entries()) {
+      const informationId = String(access?.informationId ?? '');
+      accessInformationIds.add(informationId);
+      if (!informationIds.has(informationId)) {
+        issues.push({ code: 'STORY_SCENE_KIT_REPAIR_INFORMATION_ACCESS_UNKNOWN', message: 'An information access row referenced an information record that was not returned.', path: `/fields/informationAccess/${index}/informationId` });
+      }
+    }
+    for (const informationId of informationIds) {
+      if (!accessInformationIds.has(informationId)) {
+        issues.push({ code: 'STORY_SCENE_KIT_REPAIR_INFORMATION_ACCESS_MISSING', message: 'A returned information record had no access vector.', path: '/fields/informationAccess' });
+      }
+    }
+    const beatIds = new Set<string>();
+    for (const [index, beat] of (Array.isArray(beatRows) ? beatRows : []).entries()) {
+      const beatId = String(beat?.beatId ?? '');
+      if (beatIds.has(beatId)) {
+        issues.push({ code: 'STORY_SCENE_KIT_REPAIR_BEAT_DUPLICATE', message: 'The repair returned one beat more than once.', path: `/fields/beats/${index}/beatId` });
+      }
+      beatIds.add(beatId);
+    }
+    for (const [index, impact] of (Array.isArray(impactRows) ? impactRows : []).entries()) {
+      if (!beatIds.has(String(impact?.beatId ?? ''))) {
+        issues.push({ code: 'STORY_SCENE_KIT_REPAIR_BEAT_IMPACT_UNKNOWN', message: 'A beat impact referenced a beat that was not returned.', path: `/fields/beatImpacts/${index}/beatId` });
+      }
+    }
+    const exitKinds = new Set((Array.isArray(values.get('exitVectors')) ? values.get('exitVectors') as any[] : []).map((entry) => String(entry?.kind ?? '')));
+    for (const kind of ['completion', 'failure', 'abandonment', 'redirect']) {
+      if (!exitKinds.has(kind)) issues.push({ code: 'STORY_SCENE_KIT_REPAIR_EXIT_MISSING', message: `The repair omitted the ${kind} exit.`, path: '/fields/exitVectors' });
+    }
     const sceneKit = {
       schemaVersion: values.get('sceneKitSchemaVersion'), sceneKitId: values.get('sceneKitId'),
       revision: values.get('revision'), planningState: values.get('planningState'),

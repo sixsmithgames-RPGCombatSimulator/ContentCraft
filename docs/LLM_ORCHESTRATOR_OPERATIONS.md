@@ -39,6 +39,9 @@ choices, or narration:
   This whole-kit repair uses low reasoning and a 7,000-token combined ceiling
   in one attempt. GMC distinguishes a `MAX_TOKENS` truncation from other invalid
   provider JSON in diagnostics; neither condition weakens validation.
+  Its versioned first-pass policy explicitly requires a matching access row for
+  every information record, valid beat-impact joins, and all four terminal exit
+  kinds before GMC runs the complete Scene-kit validator.
 
 GMA validates the returned source set and compiles a revision-bound
 `studio.story-delta/1`; GMC independently validates the proposal and the exact

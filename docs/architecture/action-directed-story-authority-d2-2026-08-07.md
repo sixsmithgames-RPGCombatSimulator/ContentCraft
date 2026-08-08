@@ -173,7 +173,7 @@ phases.
 
 ## D5-D7 integration addendum
 
-D5 adds no second Story authority. GMC registry `2026-08-08.6` registers the
+D5 adds no second Story authority. GMC registry `2026-08-08.7` registers the
 combined proposal-only `story.turn.direct` operation with the complete
 first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
 freedom policy. The operation permits one provider attempt and no fallback;
@@ -213,6 +213,11 @@ The whole-kit repair remains one provider operation. It uses low provider
 reasoning and a 7,000-token combined reasoning/output ceiling so the bounded
 keyed rows can finish without spending a second attempt; a provider
 `MAX_TOKENS` finish is recorded distinctly as truncated output.
+Because `valueJson` is provider-opaque, the versioned first-pass system policy
+also states every logical join constraint: each information record has at least
+one matching access row, beat impacts reference returned beats, and completion,
+failure, abandonment, and redirect exits are all present. GMC verifies those
+requirements after decoding the rows.
 It replaces, rather than adds to, the one focused repair call. Small-field and
 manual repairs continue to use `story.turn.repair`; neither operation can
 commit authority state. For the integrated flat operation, GMA replaces only

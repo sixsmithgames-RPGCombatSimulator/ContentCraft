@@ -294,6 +294,8 @@ describe('provider-neutral LLM orchestrator', () => {
     });
     const sceneRepairProperties = sceneKitRepair.outputSchema.schema.properties as any;
     expect(sceneKitRepair.prompt.systemInstruction).toMatch(/one fields row for each key/i);
+    expect(sceneKitRepair.prompt.systemInstruction).toMatch(/at least one non-empty.*informationId/i);
+    expect(sceneKitRepair.prompt.systemInstruction).toMatch(/completion, failure, abandonment, and redirect/i);
     expect(sceneKitRepair.outputSchema.schema.required)
       .toEqual(['schemaVersion', 'correctionId', 'fields', 'patchesJson']);
     expect(sceneRepairProperties.fields.minItems).toBe(22);
@@ -391,9 +393,23 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(rejected.status).toBe('review_required');
     expect(rejected.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
       .toEqual(expect.arrayContaining(['STORY_SCENE_KIT_REPAIR_FIELD_DUPLICATE', 'STORY_SCENE_KIT_REPAIR_FIELD_MISSING']));
+
+    const unjoinedProvider = new FakeProviderAdapter(() => {
+      const output = providerOutput();
+      const access = output.fields.find((field) => field.key === 'informationAccess');
+      if (access) access.valueJson = '[]';
+      return output;
+    });
+    const unjoined = await executeLlmOperation(request('story.scene-kit.repair', 'unjoined-scene-kit-repair'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [unjoinedProvider],
+    });
+    expect(unjoined.status).toBe('review_required');
+    expect(unjoined.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('STORY_SCENE_KIT_REPAIR_INFORMATION_ACCESS_MISSING');
   });
 
   it('accepts the current keyed-row client and fails closed for the superseded provider transport', () => {
+    expect(acceptsOperationRegistryClientVersion('2026-08-08.6')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.5')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.4')).toBe(false);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.3')).toBe(true);
