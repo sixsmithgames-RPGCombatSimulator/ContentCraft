@@ -12,6 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { apiRouter } from './routes/index.js';
+import { requireSagaCraftOwner } from './middleware/ownerOnlyProduct.js';
 
 // Load .env.local first (for local development), then .env (for defaults)
 // .env.local takes precedence and is gitignored
@@ -72,8 +73,9 @@ app.use((req, _res, next) => {
   next();
 });
 
-// API routes
-app.use('/api', apiRouter);
+// SagaCraft API requests require a cryptographically verified owner identity.
+// Other product deployments pass through this middleware without extra work.
+app.use('/api', requireSagaCraftOwner, apiRouter);
 
 // Serve static files from client build in production
 if (isProduction) {
