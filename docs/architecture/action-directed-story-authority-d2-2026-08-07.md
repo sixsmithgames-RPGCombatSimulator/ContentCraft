@@ -173,7 +173,7 @@ phases.
 
 ## D5-D7 integration addendum
 
-D5 adds no second Story authority. GMC registry `2026-08-08.1` registers the
+D5 adds no second Story authority. GMC registry `2026-08-08.2` registers the
 combined proposal-only `story.turn.direct` operation with the complete
 first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
 freedom policy. The operation permits one provider attempt and no fallback;
@@ -187,14 +187,17 @@ are not valid drafts. The provider-supported schema is deliberately shallower
 inside Scene-kit collections because Gemini rejects the fully expanded schema
 as too complex; the versioned first-pass prompt states every leaf requirement
 and GMA's deterministic compiler enforces every leaf before any GMC write.
-`story.turn.repair` is a distinct proposal-only, single-attempt operation whose
-only output is the bound correction ID and a bounded `patchesJson` string. The
-decoded object may contain only the permitted field paths. This provider-safe
-shape avoids runtime-generated JSON-schema property names while retaining
-GMA's exact path validation and replacement semantics. It
-cannot commit Story state, and GMA still enforces the exact allowed paths before
-merging. This preserves the compact-repair budget without asking one provider
-operation to satisfy two incompatible response schemas.
+`story.turn.repair` is a distinct proposal-only, single-attempt operation. Its
+version 3 result returns the bound correction ID, an optional structured
+`sceneKitPatch`, and a bounded `patchesJson` string for the remaining small
+field replacements. A whole Scene-kit replacement must use `sceneKitPatch` and
+must not be escaped inside `patchesJson`; other decoded keys may contain only
+the permitted field paths. This static provider schema avoids both
+runtime-generated JSON-schema property names and the truncation/escaping
+failure caused by serializing a complete nested Scene kit as one JSON string.
+GMA still validates the exact allowed paths and complete replacement values
+before merging. The operation cannot commit Story state. Version 2 repair
+results remain readable only during the ordered GMC-first/GMA-second rollout.
 
 An accepted-v1 imported scene can legitimately predate explicit Story
 bindings. During that scene's one blocking materialization pass, the private

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "gma-gmc.llm-registry-artifact/1",
-  "registryVersion": "2026-08-08.1",
+  "registryVersion": "2026-08-08.2",
   "modelPolicyVersion": "2026-08-01.1",
   "operations": [
     {
@@ -3897,7 +3897,7 @@
       },
       "prompt": {
         "id": "story.turn.repair.prompt",
-        "systemInstruction": "Repair only the failed fields in one bounded GMA Story Director result. Return exactly one gma.action-directed-story-repair/2 JSON object with the supplied correctionId and a non-empty patchesJson string. patchesJson must encode one valid JSON object. Every decoded key must be one exact allowedFields path from the supplied repair packet. Do not return the complete Story Director result. Preserve the immutable player action, authority revisions, accepted fields, player agency, provisional mechanics, and source grounding. Do not add canon, change a saved scene, broaden the repair, or include markdown or commentary.",
+        "systemInstruction": "Repair only the failed fields in one bounded GMA Story Director result. Return exactly one gma.action-directed-story-repair/3 JSON object with the supplied correctionId, sceneKitPatch, and patchesJson. When proposal.handoff.sceneKit is allowed, put its complete replacement in sceneKitPatch and do not double-encode it in patchesJson; otherwise sceneKitPatch must be null. patchesJson must encode one valid JSON object containing every other allowed field path exactly once, or {} when no other path is allowed. Do not return the complete Story Director result. Preserve the immutable player action, authority revisions, accepted fields, player agency, provisional mechanics, and source grounding. Do not add canon, change a saved scene, broaden the repair, or include markdown or commentary.",
         "version": "gma.story-director-policy/1"
       },
       "outputSchema": {
@@ -3910,16 +3910,109 @@
           "required": [
             "schemaVersion",
             "correctionId",
+            "sceneKitPatch",
             "patchesJson"
           ],
           "properties": {
             "schemaVersion": {
-              "const": "gma.action-directed-story-repair/2"
+              "const": "gma.action-directed-story-repair/3"
             },
             "correctionId": {
               "type": "string",
               "minLength": 1,
               "maxLength": 240
+            },
+            "sceneKitPatch": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "schemaVersion",
+                "sceneKitId",
+                "revision",
+                "planningState",
+                "playableLocus",
+                "purpose",
+                "dramaticQuestion",
+                "participants",
+                "establishedElements",
+                "information",
+                "beats",
+                "pressures",
+                "exitVectors",
+                "storyBindings",
+                "sourceRefs"
+              ],
+              "properties": {
+                "schemaVersion": {
+                  "type": "string"
+                },
+                "sceneKitId": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "integer"
+                },
+                "planningState": {
+                  "type": "string"
+                },
+                "playableLocus": {
+                  "type": "object"
+                },
+                "purpose": {
+                  "type": "string"
+                },
+                "dramaticQuestion": {
+                  "type": "string"
+                },
+                "participants": {
+                  "type": "object"
+                },
+                "establishedElements": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "information": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "beats": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "pressures": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "exitVectors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "storyBindings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "sourceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
             },
             "patchesJson": {
               "type": "string",

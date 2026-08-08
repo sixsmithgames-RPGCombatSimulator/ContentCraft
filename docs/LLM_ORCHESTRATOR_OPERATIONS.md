@@ -22,9 +22,11 @@ choices, or narration:
   handoff and its opening narration. Its provider schema requires the nested
   locus, cast, beats, exits, material claims, payoff, and agency audit rather
   than accepting empty placeholder objects.
-- `story.turn.repair` returns only one bound correction ID and the field patches
-  allowed by GMA's compact repair packet. It is single-attempt, proposal-only,
-  and cannot replace or commit a saved scene by itself.
+- `story.turn.repair` returns one bound correction ID, an optional structured
+  Scene-kit replacement, and compact JSON-string patches for any remaining
+  small fields allowed by GMA. A complete Scene kit is never double-encoded in
+  the JSON string. The operation is single-attempt, proposal-only, and cannot
+  replace or commit a saved scene by itself.
 
 GMA validates the returned source set and compiles a revision-bound
 `studio.story-delta/1`; GMC independently validates the proposal and the exact
