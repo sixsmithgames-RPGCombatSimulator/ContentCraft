@@ -894,6 +894,7 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
   const kit = activeV2SceneKit(workspace);
   if (!kit) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_UNAVAILABLE', 'No version 2 current Scene kit is available.', {});
   const bindings = new Set(kit.storyBindings as string[]);
+  const graph = graphNodes(projectStoryGraphV2(workspace));
   const hiddenElements = (kit.establishedElements as JsonObject[])
     .filter((element) => ['possible', 'undetermined'].includes(String(element.truthState)))
     .slice(0, 16).map((element) => clone(element));
@@ -906,6 +907,14 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
   const lastHandoff = isObject(workspace.lastSceneHandoffReceipt) ? workspace.lastSceneHandoffReceipt : null;
   const acceptedV1Bridge = String(kit.sceneKitId ?? '').startsWith('scene-kit:legacy:accepted-v1:')
     && (!lastHandoff || lastHandoff.acceptedSceneKitId !== kit.sceneKitId);
+  const boundStoryNodes = graph.filter((node) => bindings.has(String(node.nodeId)));
+  // An imported accepted-v1 scene can predate Story bindings. Materializing it
+  // still needs real GMC nodes so the Director can ground the required active
+  // beat impact instead of inventing a Story reference or returning an empty
+  // Scene kit. Once a v2 handoff is committed, exact kit bindings take over.
+  const directorStoryNodes = boundStoryNodes.length || !acceptedV1Bridge
+    ? boundStoryNodes
+    : graph.filter((node) => node.state === 'active' || node.planningState === 'active').slice(0, 4);
   const preparationDebt = acceptedV1Bridge ? [{
     debtId: `preparation-debt:accepted-v1:${hash({ sceneKitId: kit.sceneKitId, revision: kit.revision }).slice(0, 24)}`,
     need: 'Materialize the imported current scene into one complete action-directed Scene kit before narrating the player action.',
@@ -917,7 +926,7 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
     workspaceRef: { workspaceId: workspace.workspaceId, revision: workspace.revision },
     sceneKitRef: sceneKitReference(String(workspace.campaignId), kit),
     activeBeatRef: workspace.activeBeatRef ?? null,
-    storyNodes: graphNodes(projectStoryGraphV2(workspace)).filter((node) => bindings.has(String(node.nodeId))).slice(0, 8).map((node) => clone(node)),
+    storyNodes: directorStoryNodes.slice(0, 8).map((node) => clone(node)),
     scenePreparation: { hiddenElements, unresolvedInformation, potentialImpacts },
     preparationDebt,
   };

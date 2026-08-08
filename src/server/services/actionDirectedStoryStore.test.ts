@@ -639,6 +639,18 @@ describe('D2 action-directed Story authority', () => {
     expect(buildPrivateSceneDirectorContext(active!.workspace)).toMatchObject({
       preparationDebt: [expect.objectContaining({ priority: 'blocking' })],
     });
+    active!.workspace.storyGraph = {
+      schemaVersion: 'gmc.story-graph/2', revision: 1,
+      nodes: [{
+        nodeId: 'story:thread:cart', scope: 'thread', primaryParentRef: null, relatedNodeRefs: [],
+        title: 'The identified cart', dramaticQuestion: 'What does the stopped cart reveal?', state: 'active',
+        planningState: 'active', truthState: 'gm_preparation', pressures: ['The crew may recover.'],
+        sourceRefs: ['gma:timeline:turn-1:transit'],
+      }],
+    };
+    expect(buildPrivateSceneDirectorContext(active!.workspace).storyNodes).toEqual([
+      expect.objectContaining({ nodeId: 'story:thread:cart', state: 'active' }),
+    ]);
     const materialized = structuredClone(active!.workspace);
     materialized.lastSceneHandoffReceipt = {
       acceptedSceneKitId: (materialized.activeSceneKitRef as JsonObject).sceneKitId,

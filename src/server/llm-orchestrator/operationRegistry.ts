@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-07.1';
+export const OPERATION_REGISTRY_VERSION = '2026-08-08.1';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-08-07.1',
   '2026-08-04.1',
 ]);
 
@@ -415,9 +416,9 @@ const actionDirectedStoryTurnOutput = {
 } as const;
 
 const actionDirectedStoryRepairOutput = {
-  schemaVersion: { const: 'gma.action-directed-story-repair/1' },
+  schemaVersion: { const: 'gma.action-directed-story-repair/2' },
   correctionId: { type: 'string', minLength: 1, maxLength: 240 },
-  patches: { type: 'object', minProperties: 1 },
+  patchesJson: { type: 'string', minLength: 2, maxLength: 32_768 },
 } as const;
 
 function objectOutputSchema(
@@ -574,14 +575,14 @@ const seeds: Seed[] = [
   },
   {
     id: 'story.turn.repair', operationClass: 'reasoning_high', tier: 'reasoning',
-    required: ['schemaVersion', 'correctionId', 'patches'],
-    temperature: 0.25, maxOutputTokens: 3000, targetBytes: 12_288, hardLimitBytes: 36_864,
+    required: ['schemaVersion', 'correctionId', 'patchesJson'],
+    temperature: 0.25, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
     thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/1',
     outputProperties: actionDirectedStoryRepairOutput,
     systemInstruction: [
       'Repair only the failed fields in one bounded GMA Story Director result.',
-      'Return exactly one gma.action-directed-story-repair/1 JSON object with the supplied correctionId and a non-empty patches object.',
-      'Every patch key must be one exact allowedFields path from the supplied repair packet. Do not return the complete Story Director result.',
+      'Return exactly one gma.action-directed-story-repair/2 JSON object with the supplied correctionId and a non-empty patchesJson string.',
+      'patchesJson must encode one valid JSON object. Every decoded key must be one exact allowedFields path from the supplied repair packet. Do not return the complete Story Director result.',
       'Preserve the immutable player action, authority revisions, accepted fields, player agency, provisional mechanics, and source grounding.',
       'Do not add canon, change a saved scene, broaden the repair, or include markdown or commentary.',
     ].join(' '),

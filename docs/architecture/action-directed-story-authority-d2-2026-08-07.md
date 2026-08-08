@@ -171,9 +171,9 @@ contract route advertise the complete four-capability bundle, the exact version
 routing and human chaotic playtesting remain gated for the later integration
 phases.
 
-## D5 integration addendum
+## D5-D7 integration addendum
 
-D5 adds no second Story authority. GMC registry `2026-08-07.1` registers the
+D5 adds no second Story authority. GMC registry `2026-08-08.1` registers the
 combined proposal-only `story.turn.direct` operation with the complete
 first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
 freedom policy. The operation permits one provider attempt and no fallback;
@@ -188,10 +188,20 @@ inside Scene-kit collections because Gemini rejects the fully expanded schema
 as too complex; the versioned first-pass prompt states every leaf requirement
 and GMA's deterministic compiler enforces every leaf before any GMC write.
 `story.turn.repair` is a distinct proposal-only, single-attempt operation whose
-only output is the bound correction ID and the permitted field patches. It
+only output is the bound correction ID and a bounded `patchesJson` string. The
+decoded object may contain only the permitted field paths. This provider-safe
+shape avoids runtime-generated JSON-schema property names while retaining
+GMA's exact path validation and replacement semantics. It
 cannot commit Story state, and GMA still enforces the exact allowed paths before
 merging. This preserves the compact-repair budget without asking one provider
 operation to satisfy two incompatible response schemas.
+
+An accepted-v1 imported scene can legitimately predate explicit Story
+bindings. During that scene's one blocking materialization pass, the private
+Director projection includes at most four active GMC Story nodes when exact
+kit bindings are absent. The accepted v2 handoff must bind its active beat to
+one of those real nodes; after that commit, projections return to exact
+Scene-kit bindings only.
 
 The existing current-scene context response now includes a bounded
 `gmc.story-authority-receipt-catalog/1` generated from the same immutable Story

@@ -286,8 +286,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(repair.prompt.version).toBe('gma.story-director-policy/1');
     expect(repair.prompt.systemInstruction).toMatch(/only the failed fields/i);
     expect(repair.prompt.systemInstruction).toMatch(/Do not return the complete Story Director result/i);
-    expect(repair.outputSchema.schema.required).toEqual(['schemaVersion', 'correctionId', 'patches']);
-    expect((repair.outputSchema.schema.properties as any).patches).toMatchObject({ type: 'object', minProperties: 1 });
+    expect(repair.outputSchema.schema.required).toEqual(['schemaVersion', 'correctionId', 'patchesJson']);
+    expect((repair.outputSchema.schema.properties as any).patchesJson).toMatchObject({ type: 'string', minLength: 2 });
     expect(repair.provider.maxAttempts).toBe(1);
     expect(repair.provider.fallbackAllowed).toBe(false);
   });
@@ -311,9 +311,9 @@ describe('provider-neutral LLM orchestrator', () => {
 
     const repairRequest = request('story.turn.repair', 'compact-repair');
     const repairProvider = new FakeProviderAdapter(() => ({
-      schemaVersion: 'gma.action-directed-story-repair/1',
+      schemaVersion: 'gma.action-directed-story-repair/2',
       correctionId: 'story-repair:turn-1:abc',
-      patches: { 'proposal.openingNarration': 'The corrected scene opens here.' },
+      patchesJson: JSON.stringify({ 'proposal.openingNarration': 'The corrected scene opens here.' }),
     }));
     const accepted = await executeLlmOperation(repairRequest, {
       userId: 'user-1', store: new MemoryExecutionStore(), providers: [repairProvider],
