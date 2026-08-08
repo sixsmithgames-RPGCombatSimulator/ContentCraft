@@ -255,6 +255,7 @@ describe('provider-neutral LLM orchestrator', () => {
 
   it('registers the combined action-directed Story turn with the complete first-pass contract', () => {
     const turn = getOperationDefinition('story.turn.direct');
+    const repair = getOperationDefinition('story.turn.repair');
     expect(turn.prompt.version).toBe('gma.story-director-policy/1');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
@@ -266,10 +267,58 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(turn.outputSchema.schema.required).toEqual([
       'schemaVersion', 'proposal', 'materialClaims', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority',
     ]);
-    expect((turn.outputSchema.schema.properties as any).materialClaims).toMatchObject({
+    const properties = turn.outputSchema.schema.properties as any;
+    expect(properties.materialClaims).toMatchObject({
       type: 'array',
-      items: { type: 'object' },
+      items: {
+        type: 'object',
+        required: ['claimId', 'claimText', 'sourceFactRefs'],
+      },
     });
+    expect(properties.proposal).toMatchObject({
+      type: 'object',
+      required: expect.arrayContaining(['openingNarration', 'handoff', 'sourceRefs']),
+    });
+    expect(properties.proposal.properties.handoff.properties.sceneKit).toMatchObject({
+      type: ['object', 'null'],
+      required: expect.arrayContaining(['playableLocus', 'participants', 'beats', 'exitVectors']),
+    });
+    expect(repair.prompt.version).toBe('gma.story-director-policy/1');
+    expect(repair.prompt.systemInstruction).toMatch(/only the failed fields/i);
+    expect(repair.prompt.systemInstruction).toMatch(/Do not return the complete Story Director result/i);
+    expect(repair.outputSchema.schema.required).toEqual(['schemaVersion', 'correctionId', 'patches']);
+    expect((repair.outputSchema.schema.properties as any).patches).toMatchObject({ type: 'object', minProperties: 1 });
+    expect(repair.provider.maxAttempts).toBe(1);
+    expect(repair.provider.fallbackAllowed).toBe(false);
+  });
+
+  it('rejects empty nested Story output and accepts one compact field-scoped repair', async () => {
+    const invalidTurn = request('story.turn.direct', 'nested-empty');
+    const invalidProvider = new FakeProviderAdapter(() => ({
+      schemaVersion: 'gma.story-director-result/1',
+      proposal: {},
+      materialClaims: [{}],
+      declaredActionPayoff: {},
+      agencyAudit: {},
+      mechanicsAuthority: 'none',
+    }));
+    const rejected = await executeLlmOperation(invalidTurn, {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [invalidProvider],
+    });
+    expect(rejected.status).toBe('review_required');
+    expect(rejected.validation.flatMap((entry) => entry.issues).map((issue) => issue.path))
+      .toEqual(expect.arrayContaining(['/proposal', '/materialClaims/0', '/declaredActionPayoff', '/agencyAudit']));
+
+    const repairRequest = request('story.turn.repair', 'compact-repair');
+    const repairProvider = new FakeProviderAdapter(() => ({
+      schemaVersion: 'gma.action-directed-story-repair/1',
+      correctionId: 'story-repair:turn-1:abc',
+      patches: { 'proposal.openingNarration': 'The corrected scene opens here.' },
+    }));
+    const accepted = await executeLlmOperation(repairRequest, {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [repairProvider],
+    });
+    expect(accepted.status).toBe('succeeded');
   });
 
   it('keeps the immediately previous GMA registry client compatible during the ordered GMC-first deployment', () => {

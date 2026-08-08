@@ -343,13 +343,81 @@ const sceneProposal = {
   },
 } as const;
 
+// Gemini rejects the fully expanded Director schema as too complex. Keep the
+// provider shape strong at every orchestration boundary (result, proposal,
+// handoff, Scene kit, claims, payoff, and agency), then let GMA's versioned
+// compiler enforce every leaf and offer its one compact field repair.
+const storyDirectorProviderRefs = { type: 'array', items: { type: 'string' } } as const;
+const storyDirectorSceneKit = {
+  type: ['object', 'null'], additionalProperties: false,
+  required: [
+    'schemaVersion', 'sceneKitId', 'revision', 'planningState', 'playableLocus', 'purpose',
+    'dramaticQuestion', 'participants', 'establishedElements', 'information', 'beats', 'pressures',
+    'exitVectors', 'storyBindings', 'sourceRefs',
+  ],
+  properties: {
+    schemaVersion: { type: 'string' }, sceneKitId: { type: 'string' }, revision: { type: 'integer' }, planningState: { type: 'string' },
+    playableLocus: { type: 'object' }, purpose: { type: 'string' }, dramaticQuestion: { type: 'string' }, participants: { type: 'object' },
+    establishedElements: { type: 'array', items: { type: 'object' } }, information: { type: 'array', items: { type: 'object' } },
+    beats: { type: 'array', items: { type: 'object' } }, pressures: { type: 'array', items: { type: 'string' } },
+    exitVectors: { type: 'array', items: { type: 'object' } }, storyBindings: storyDirectorProviderRefs, sourceRefs: storyDirectorProviderRefs,
+  },
+} as const;
+
 const actionDirectedStoryTurnOutput = {
-  schemaVersion: { const: 'gma.story-director-result/1' },
-  proposal: { type: 'object' },
-  materialClaims: { type: 'array', minItems: 1, maxItems: 32, items: { type: 'object' } },
-  declaredActionPayoff: { type: 'object' },
-  agencyAudit: { type: 'object' },
+  schemaVersion: { type: 'string' },
+  proposal: {
+    type: 'object', additionalProperties: false,
+    required: [
+      'schemaVersion', 'status', 'interactionId', 'idempotencyKey', 'playerActionFingerprint',
+      'expectedWorkspaceRevision', 'expectedCurrentSceneRevision', 'sourceRefs', 'handoff',
+      'openingNarration', 'rollRequest',
+    ],
+    properties: {
+      schemaVersion: { type: 'string' }, status: { type: 'string' }, interactionId: { type: 'string' },
+      idempotencyKey: { type: 'string' }, playerActionFingerprint: { type: 'string' },
+      expectedWorkspaceRevision: { type: 'integer' }, expectedCurrentSceneRevision: { type: 'integer' }, sourceRefs: storyDirectorProviderRefs,
+      handoff: {
+        type: 'object', additionalProperties: false,
+        required: ['mode', 'candidateRef', 'priorSceneExit', 'playerActionPreserved', 'activeBeatRef', 'sceneKit'],
+        properties: {
+          mode: { type: 'string' }, candidateRef: { type: 'string' }, priorSceneExit: { type: 'string' },
+          playerActionPreserved: { type: 'boolean' }, activeBeatRef: { type: 'string' }, sceneKit: storyDirectorSceneKit,
+        },
+      },
+      openingNarration: { type: 'string' }, rollRequest: { type: ['object', 'null'] },
+    },
+  },
+  materialClaims: {
+    type: 'array', minItems: 1, maxItems: 32, items: {
+      type: 'object', additionalProperties: false,
+      required: ['claimId', 'claimText', 'sourceFactRefs'],
+      properties: {
+        claimId: { type: 'string' }, claimText: { type: 'string' }, sourceFactRefs: storyDirectorProviderRefs,
+      },
+    },
+  },
+  declaredActionPayoff: {
+    type: 'object', additionalProperties: false,
+    required: ['status', 'summary', 'narrationEvidence'],
+    properties: {
+      status: { enum: ['completed', 'pending_mechanic'] },
+      summary: { type: 'string' },
+      narrationEvidence: { type: 'string' },
+    },
+  },
+  agencyAudit: {
+    type: 'object', additionalProperties: false,
+    required: ['inventedPlayerChoice', 'guaranteedOutcome'],
+    properties: { inventedPlayerChoice: { const: false }, guaranteedOutcome: { const: false } },
+  },
   mechanicsAuthority: { enum: ['none', 'provisional_vcs'] },
+} as const;
+
+const actionDirectedStoryRepairOutput = {
+  schemaVersion: { const: 'gma.action-directed-story-repair/1' },
+  correctionId: { type: 'string', minLength: 1, maxLength: 240 },
+  patches: { type: 'object', minProperties: 1 },
 } as const;
 
 function objectOutputSchema(
@@ -502,6 +570,20 @@ const seeds: Seed[] = [
       'Bind every material narrated fact, presence, and reveal to supplied fact IDs or IDs created in the proposed Scene kit. Do not reveal concealed or undetermined preparation.',
       'Do not invent a player choice, force a path, guarantee an outcome, resolve mechanics, commit authority state, or add unrelated canon.',
       'Prose may freely choose tone, sensory detail, sentence order, metaphor, and dialogue wording when it does not create a material fact.',
+    ].join(' '),
+  },
+  {
+    id: 'story.turn.repair', operationClass: 'reasoning_high', tier: 'reasoning',
+    required: ['schemaVersion', 'correctionId', 'patches'],
+    temperature: 0.25, maxOutputTokens: 3000, targetBytes: 12_288, hardLimitBytes: 36_864,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/1',
+    outputProperties: actionDirectedStoryRepairOutput,
+    systemInstruction: [
+      'Repair only the failed fields in one bounded GMA Story Director result.',
+      'Return exactly one gma.action-directed-story-repair/1 JSON object with the supplied correctionId and a non-empty patches object.',
+      'Every patch key must be one exact allowedFields path from the supplied repair packet. Do not return the complete Story Director result.',
+      'Preserve the immutable player action, authority revisions, accepted fields, player agency, provisional mechanics, and source grounding.',
+      'Do not add canon, change a saved scene, broaden the repair, or include markdown or commentary.',
     ].join(' '),
   },
   { id: 'actor.ensure.generate', operationClass: 'world_generation', tier: 'world', required: ['name'], openOutput: true },

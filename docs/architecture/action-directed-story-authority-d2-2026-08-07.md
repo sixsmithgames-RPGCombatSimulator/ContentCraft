@@ -179,6 +179,20 @@ first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
 freedom policy. The operation permits one provider attempt and no fallback;
 GMA owns the one focused field repair and one authority rebase budget.
 
+The D7 provider-conformance hardening keeps that authority model unchanged but
+separates the two model result shapes. `story.turn.direct` now supplies the
+provider with required nested boundaries for the handoff, Scene kit,
+material claims, payoff, and agency audit; empty top-level orchestration objects
+are not valid drafts. The provider-supported schema is deliberately shallower
+inside Scene-kit collections because Gemini rejects the fully expanded schema
+as too complex; the versioned first-pass prompt states every leaf requirement
+and GMA's deterministic compiler enforces every leaf before any GMC write.
+`story.turn.repair` is a distinct proposal-only, single-attempt operation whose
+only output is the bound correction ID and the permitted field patches. It
+cannot commit Story state, and GMA still enforces the exact allowed paths before
+merging. This preserves the compact-repair budget without asking one provider
+operation to satisfy two incompatible response schemas.
+
 The existing current-scene context response now includes a bounded
 `gmc.story-authority-receipt-catalog/1` generated from the same immutable Story
 workspace revision as its playable and private projections. GMA may use those

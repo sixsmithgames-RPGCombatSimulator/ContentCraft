@@ -18,6 +18,13 @@ choices, or narration:
   It must preserve exact present/anticipated cast, give anticipated people an
   arrival condition, provide current activity, two-to-five beats, stakes,
   pressures, access vectors, and completion/failure/abandonment/redirect exits.
+- `story.turn.direct` returns one fully shaped, proposal-only action-directed
+  handoff and its opening narration. Its provider schema requires the nested
+  locus, cast, beats, exits, material claims, payoff, and agency audit rather
+  than accepting empty placeholder objects.
+- `story.turn.repair` returns only one bound correction ID and the field patches
+  allowed by GMA's compact repair packet. It is single-attempt, proposal-only,
+  and cannot replace or commit a saved scene by itself.
 
 GMA validates the returned source set and compiles a revision-bound
 `studio.story-delta/1`; GMC independently validates the proposal and the exact
