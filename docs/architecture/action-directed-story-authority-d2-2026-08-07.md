@@ -173,7 +173,7 @@ phases.
 
 ## D5-D7 integration addendum
 
-D5 adds no second Story authority. GMC registry `2026-08-08.3` registers the
+D5 adds no second Story authority. GMC registry `2026-08-08.4` registers the
 combined proposal-only `story.turn.direct` operation with the complete
 first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
 freedom policy. The operation permits one provider attempt and no fallback;
@@ -198,11 +198,19 @@ failure caused by serializing a complete nested Scene kit as one JSON string.
 GMA still validates the exact allowed paths and complete replacement values
 before merging. The operation cannot commit Story state. Version 2 repair
 results remain readable only during the ordered GMC-first/GMA-second rollout.
-The structured repair field uses a leaf-complete Scene-kit provider schema.
-Unlike the broader first-pass Director result, this focused response has enough
-schema budget to require locus, participant, element, information, beat,
-potential-impact, and exit-vector leaves. Empty nested placeholders are thus
-rejected by the provider boundary before GMA spends its single correction.
+Integrated whole-Scene-kit correction uses the dedicated
+`story.scene-kit.repair` operation. Its provider response is leaf-complete but
+flat: locus fields are scalars, and local roles, elements, information,
+information-access rows, beats, beat-impact rows, and exits are shallow typed
+collections. GMA deterministically reassembles those rows into
+`gmc.scene-kit/2` and runs the unchanged Director and GMC validators. This fits
+Gemini's schema-complexity ceiling while preventing empty nested placeholders.
+It replaces, rather than adds to, the one focused repair call. Small-field and
+manual repairs continue to use `story.turn.repair`; neither operation can
+commit authority state. For the integrated flat operation, GMA replaces only
+the repair packet's response-format instructions with the registered flat
+transport contract; immutable action, evidence, allowed paths, current values,
+and field contracts remain unchanged.
 
 An accepted-v1 imported scene can legitimately predate explicit Story
 bindings. During that scene's one blocking materialization pass, the private
