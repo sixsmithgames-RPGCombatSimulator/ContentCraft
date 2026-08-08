@@ -173,7 +173,7 @@ phases.
 
 ## D5-D7 integration addendum
 
-D5 adds no second Story authority. GMC registry `2026-08-08.7` registers the
+D5 adds no second Story authority. GMC registry `2026-08-08.8` registers the
 combined proposal-only `story.turn.direct` operation with the complete
 first-pass locus, cast, beat, payoff, provenance, agency, mechanics, and prose
 freedom policy. The operation permits one provider attempt and no fallback;
@@ -224,6 +224,17 @@ commit authority state. For the integrated flat operation, GMA replaces only
 the repair packet's response-format instructions with the registered flat
 transport contract; immutable action, evidence, allowed paths, current values,
 and field contracts remain unchanged.
+
+Scene-kit information is fact-bearing. Every newly accepted
+`gmc.scene-kit/2` information record carries bounded `factText`: the definite
+in-world fact preparation established, not a label such as “contents
+revealed.” `accessVectors` still describe how it may be learned and `state`
+controls disclosure. Concealed or undetermined `factText` appears only in
+GMC's service-only Director context; the playable projection strips it.
+Plainly visible or confirmed-absent facts may be projected only after accepted
+narration states that exact fact. Legacy persisted v2 records without
+`factText` remain readable, but GMC reports blocking preparation debt and no
+new handoff may commit them unchanged.
 
 An accepted-v1 imported scene can legitimately predate explicit Story
 bindings. During that scene's one blocking materialization pass, the private

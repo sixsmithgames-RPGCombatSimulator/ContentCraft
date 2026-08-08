@@ -300,6 +300,9 @@ registerSemanticValidator('story-scene-kit-repair-rows', ({ request, output }) =
         issues.push({ code: 'STORY_SCENE_KIT_REPAIR_INFORMATION_DUPLICATE', message: 'The repair returned one information record more than once.', path: `/fields/information/${index}/informationId` });
       }
       informationIds.add(informationId);
+      if (/^(?:the\s+)?(?:contents?|details?|information|evidence|findings?)(?:\s+(?:are|is|become|became|were|was))?\s+(?:revealed|visible|found|clear|known)\.?$/i.test(String(entry?.factText ?? '').trim())) {
+        issues.push({ code: 'STORY_SCENE_KIT_REPAIR_FACT_PLACEHOLDER', message: 'A repaired information record used a reveal placeholder instead of a concrete in-world fact.', path: `/fields/information/${index}/factText` });
+      }
     }
     const accessInformationIds = new Set<string>();
     for (const [index, access] of (Array.isArray(accessRows) ? accessRows : []).entries()) {

@@ -867,7 +867,17 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
     establishedElements: (kit.establishedElements as JsonObject[])
       .filter((element) => ['canonical', 'scene_local_established'].includes(String(element.truthState)))
       .slice(0, 24).map((element) => clone(element)),
-    information: (kit.information as JsonObject[]).slice(0, 16).map((entry) => clone(entry)),
+    information: (kit.information as JsonObject[]).slice(0, 16).map((entry) => {
+      const projected = {
+        informationId: entry.informationId,
+        state: entry.state,
+        accessVectors: clone(entry.accessVectors as JsonValue[]),
+      } as JsonObject;
+      if (['plainly_visible', 'absent_in_scope'].includes(String(entry.state)) && typeof entry.factText === 'string') {
+        projected.factText = entry.factText;
+      }
+      return projected;
+    }),
     storyNodeSummaries: (kit.storyBindings as string[]).slice(0, 8).map((nodeId) => nodesById.get(nodeId)).filter((node): node is JsonObject => Boolean(node)).map((node) => ({
       nodeId: node.nodeId,
       title: node.title,
@@ -947,6 +957,15 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
     priority: 'blocking',
     sourceRefs: (kit.sourceRefs as string[]).slice(0, 8),
   }] : [];
+  const missingFactText = (kit.information as JsonObject[])
+    .filter((entry) => typeof entry.factText !== 'string' || entry.factText.trim().length < 3)
+    .map((entry) => String(entry.informationId));
+  if (missingFactText.length) preparationDebt.push({
+    debtId: `preparation-debt:scene-information:${hash({ sceneKitId: kit.sceneKitId, revision: kit.revision, missingFactText }).slice(0, 24)}`,
+    need: 'Prepare the concrete fact text for every current-scene information record before narrating another reveal or investigation result.',
+    priority: 'blocking',
+    sourceRefs: (kit.sourceRefs as string[]).slice(0, 8),
+  });
   const context: JsonObject = {
     schemaVersion: PRIVATE_SCENE_CONTEXT_CONTRACT_VERSION,
     workspaceRef: { workspaceId: workspace.workspaceId, revision: workspace.revision },

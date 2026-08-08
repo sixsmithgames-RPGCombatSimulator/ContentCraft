@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-08.7';
+export const OPERATION_REGISTRY_VERSION = '2026-08-08.8';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-08-08.7',
   '2026-08-08.6',
   '2026-08-08.5',
   '2026-08-08.3',
@@ -428,10 +429,11 @@ export const STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA = {
     information: {
       type: 'array', maxItems: 24, items: {
         type: 'object', additionalProperties: false,
-        required: ['informationId', 'state', 'accessVectors'],
+        required: ['informationId', 'state', 'factText', 'accessVectors'],
         properties: {
           informationId: { type: 'string', minLength: 1, maxLength: 240 },
           state: { enum: ['concealed', 'plainly_visible', 'absent_in_scope', 'undetermined'] },
+          factText: { type: 'string', minLength: 3, maxLength: 800 },
           accessVectors: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 500 } },
         },
       },
@@ -724,7 +726,7 @@ const seeds: Seed[] = [
       'Return exactly one gma.story-scene-kit-repair-provider/2 JSON object with the supplied correctionId, fields, and patchesJson.',
       `Return exactly one fields row for each key, with no omissions or duplicates: ${STORY_SCENE_KIT_REPAIR_FIELD_KEYS.join(', ')}.`,
       'Each valueJson must be a valid JSON encoding of only that key value. informationAccess rows join by informationId and beatImpacts rows join by beatId after GMA decodes them.',
-      'Logical row contract: information is an array of {informationId,state}; informationAccess must contain at least one non-empty {informationId,accessVector} row for every returned informationId and no unknown informationId. beats is an array of 2-5 {beatId,kind,state,trigger,changeSurface} rows with unique beatId values; every beatImpacts row must use one returned beatId and contain {beatId,storyNodeRef,outcome,effect}. exitVectors must include non-empty {kind,condition} rows for completion, failure, abandonment, and redirect. Return arrays, including empty arrays where allowed, for every other collection field.',
+      'Logical row contract: information is an array of {informationId,state,factText}, where factText is the concrete in-world fact to reveal and never a placeholder such as "contents revealed"; informationAccess must contain at least one non-empty {informationId,accessVector} row for every returned informationId and no unknown informationId. beats is an array of 2-5 {beatId,kind,state,trigger,changeSurface} rows with unique beatId values; every beatImpacts row must use one returned beatId and contain {beatId,storyNodeRef,outcome,effect}. exitVectors must include non-empty {kind,condition} rows for completion, failure, abandonment, and redirect. Return arrays, including empty arrays where allowed, for every other collection field.',
       'patchesJson must encode one valid JSON object containing every other allowed field path exactly once, or {} when no other path is allowed.',
       'Copy authority-backed locus, cast, sources, and Story references exactly. Propose only the minimum scene-local elements and beat scaffolding required by the supplied field contract.',
       'Preserve the immutable player action, revisions, accepted fields, player agency, provisional mechanics, and source grounding. Do not commit state or include markdown or commentary.',

@@ -353,7 +353,7 @@ describe('provider-neutral LLM orchestrator', () => {
       sceneLocalRoles: [{ roleId: 'role:cart-crew', label: 'cart crew', count: 2, objective: 'Deliver the cargo.' }],
       anticipatedActorRefs: [],
       establishedElements: [{ elementId: 'element:covered-cart', truthState: 'scene_local_established', summary: 'A covered cart has stopped on the inbound route.' }],
-      information: [{ informationId: 'info:cart-cargo', state: 'concealed' }],
+      information: [{ informationId: 'info:cart-cargo', state: 'concealed', factText: 'The cart carries six sealed crates packed beneath rough canvas.' }],
       informationAccess: [{ informationId: 'info:cart-cargo', accessVector: 'Inspect the cart cover.' }],
       beats: [
         { beatId: 'beat:inspect', kind: 'investigation', state: 'active', trigger: 'Kerrigan reaches the cart.', changeSurface: 'The cargo can be investigated.' },
@@ -406,6 +406,19 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(unjoined.status).toBe('review_required');
     expect(unjoined.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
       .toContain('STORY_SCENE_KIT_REPAIR_INFORMATION_ACCESS_MISSING');
+
+    const placeholderProvider = new FakeProviderAdapter(() => {
+      const output = providerOutput();
+      const information = output.fields.find((field) => field.key === 'information');
+      if (information) information.valueJson = JSON.stringify([{ informationId: 'info:cart-cargo', state: 'concealed', factText: 'Contents revealed.' }]);
+      return output;
+    });
+    const placeholder = await executeLlmOperation(request('story.scene-kit.repair', 'placeholder-scene-information'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [placeholderProvider],
+    });
+    expect(placeholder.status).toBe('review_required');
+    expect(placeholder.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('STORY_SCENE_KIT_REPAIR_FACT_PLACEHOLDER');
   });
 
   it('accepts the current keyed-row client and fails closed for the superseded provider transport', () => {

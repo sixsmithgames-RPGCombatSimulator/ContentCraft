@@ -41,7 +41,9 @@ choices, or narration:
   provider JSON in diagnostics; neither condition weakens validation.
   Its versioned first-pass policy explicitly requires a matching access row for
   every information record, valid beat-impact joins, and all four terminal exit
-  kinds before GMC runs the complete Scene-kit validator.
+  kinds before GMC runs the complete Scene-kit validator. Every information row
+  also carries concrete `factText`; a placeholder such as “the contents are
+  revealed” is not ready scene preparation.
 
 GMA validates the returned source set and compiles a revision-bound
 `studio.story-delta/1`; GMC independently validates the proposal and the exact

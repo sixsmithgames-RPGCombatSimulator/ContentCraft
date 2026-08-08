@@ -49,6 +49,12 @@ export type JsonObject = Record<string, JsonValue>;
 type StoryRecordType = 'workspace' | 'arc' | 'frontier' | 'scene_kit'
   | 'npc_scene_card' | 'npc_readiness' | 'preparation_requirement';
 
+const SCENE_INFORMATION_PLACEHOLDER_PATTERN = /^(?:the\s+)?(?:contents?|details?|information|evidence|findings?)(?:\s+(?:are|is|become|became|were|was))?\s+(?:revealed|visible|found|clear|known)\.?$/i;
+
+function isSceneInformationPlaceholder(value: string): boolean {
+  return SCENE_INFORMATION_PLACEHOLDER_PATTERN.test(value.trim());
+}
+
 export interface StoryWorkspaceReference {
   contractVersion: typeof STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION;
   campaignId: string;
@@ -294,13 +300,14 @@ function validateSceneEstablishedElement(value: unknown, field: string): void {
 
 function validateSceneInformationV2(value: unknown, field: string): void {
   if (!plainObject(value)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_INFORMATION_INVALID', 'A scene information entry must be an object.', { field });
-  exactKeys(value, field, ['informationId', 'state', 'accessVectors']);
+  exactKeys(value, field, ['informationId', 'state', 'factText', 'accessVectors']);
   identifier(value.informationId, `${field}.informationId`);
   if (!['concealed', 'plainly_visible', 'absent_in_scope', 'undetermined'].includes(String(value.state))) {
     throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_INFORMATION_INVALID', 'A scene information entry has an invalid state.', { field: `${field}.state` });
   }
   const vectors = stringArray(value.accessVectors, `${field}.accessVectors`, 8);
   if (!vectors.length) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_INFORMATION_INVALID', 'A scene information entry requires an access vector.', { field: `${field}.accessVectors` });
+  if (value.factText !== undefined) text(value.factText, `${field}.factText`, 800);
 }
 
 function validatePotentialStoryImpact(value: unknown, field: string): void {
@@ -466,6 +473,14 @@ export function validateSceneHandoffProposal(input: unknown): asserts input is J
   if (!['completed', 'failed', 'abandoned', 'redirected', 'superseded'].includes(String(input.handoff.priorSceneExit))) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_HANDOFF_INVALID', 'The prior-scene exit is invalid.', { field: 'proposal.handoff.priorSceneExit' });
   if (input.handoff.playerActionPreserved !== true) throw new StoryWorkspaceStoreError(422, 'STORY_PLAYER_ACTION_NOT_PRESERVED', 'The handoff does not preserve the bound player action.', { field: 'proposal.handoff.playerActionPreserved' });
   validateSceneKitV2(input.handoff.sceneKit);
+  for (const [index, information] of (input.handoff.sceneKit.information as JsonObject[]).entries()) {
+    if (typeof information.factText !== 'string' || information.factText.trim().length < 3) {
+      throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_INFORMATION_NOT_PREPARED', 'A newly accepted scene information entry requires the concrete prepared fact.', { field: `proposal.handoff.sceneKit.information[${index}].factText` });
+    }
+    if (isSceneInformationPlaceholder(information.factText)) {
+      throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_INFORMATION_NOT_PREPARED', 'A newly accepted scene information entry must contain the concrete prepared fact instead of a reveal placeholder.', { field: `proposal.handoff.sceneKit.information[${index}].factText` });
+    }
+  }
   const activeBeatRef = identifier(input.handoff.activeBeatRef, 'proposal.handoff.activeBeatRef');
   const activeBeats = (input.handoff.sceneKit.beats as JsonObject[]).filter((beat) => beat.state === 'active');
   if (activeBeats.length !== 1 || activeBeats[0].beatId !== activeBeatRef) {

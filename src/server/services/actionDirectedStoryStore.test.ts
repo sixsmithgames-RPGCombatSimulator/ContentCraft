@@ -140,8 +140,8 @@ function cartSceneKit(): JsonObject {
     },
     establishedElements: [{ elementId: 'element:cart', truthState: 'scene_local_established', summary: 'A two-wheeled ox cart carries covered trade cargo.' }],
     information: [
-      { informationId: 'information:green-thread', state: 'concealed', accessVectors: ['observe the crew', 'inspect clothing'] },
-      { informationId: 'information:violet-residue', state: 'undetermined', accessVectors: ['inspect the cart', 'magical examination'] },
+      { informationId: 'information:green-thread', state: 'concealed', factText: 'The driver has a green thread knotted inside the left cuff.', accessVectors: ['observe the crew', 'inspect clothing'] },
+      { informationId: 'information:violet-residue', state: 'undetermined', factText: 'A faint violet residue marks the underside of the cart bed near its rear axle.', accessVectors: ['inspect the cart', 'magical examination'] },
     ],
     beats: [
       {
@@ -307,8 +307,12 @@ describe('D2 action-directed Story authority', () => {
     expect(serialized).not.toContain('frontier');
     expect(serialized).not.toContain('possible-counter');
     expect(serialized).not.toContain('unknown-compartment');
+    expect(serialized).not.toContain('green thread knotted inside');
+    expect(serialized).not.toContain('violet residue marks');
     expect(JSON.stringify(first.privateSceneContext)).toContain('possible-counter');
     expect(JSON.stringify(first.privateSceneContext)).toContain('unknown-compartment');
+    expect(JSON.stringify(first.privateSceneContext)).toContain('green thread knotted inside');
+    expect(JSON.stringify(first.privateSceneContext)).toContain('violet residue marks');
     const contexts = await readCurrentSceneContexts({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
     expect(contexts?.authorityReceiptCatalog).toMatchObject({
       contractVersion: 'gmc.story-authority-receipt-catalog/1',
@@ -368,6 +372,18 @@ describe('D2 action-directed Story authority', () => {
 
   it('rejects changed replay, stale scene revision, bad receipts, and concurrent handoffs without half writes', async () => {
     const store = await preparedStore();
+    const missingPreparedFact = handoffEnvelope();
+    delete (((missingPreparedFact.proposal.handoff as JsonObject).sceneKit as JsonObject).information as JsonObject[])[0].factText;
+    await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: missingPreparedFact }, store.records))
+      .rejects.toMatchObject({ code: 'STORY_SCENE_INFORMATION_NOT_PREPARED' });
+    expect(store.documents).toHaveLength(2);
+
+    const placeholderPreparedFact = handoffEnvelope();
+    ((((placeholderPreparedFact.proposal.handoff as JsonObject).sceneKit as JsonObject).information as JsonObject[])[0]).factText = 'Contents revealed.';
+    await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: placeholderPreparedFact }, store.records))
+      .rejects.toMatchObject({ code: 'STORY_SCENE_INFORMATION_NOT_PREPARED' });
+    expect(store.documents).toHaveLength(2);
+
     const badReceipt = handoffEnvelope();
     badReceipt.playerActionReceipt.playerActionFingerprint = 'b'.repeat(64);
     await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: badReceipt }, store.records))
