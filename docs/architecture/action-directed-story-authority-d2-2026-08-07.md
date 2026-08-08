@@ -199,9 +199,14 @@ operation to satisfy two incompatible response schemas.
 An accepted-v1 imported scene can legitimately predate explicit Story
 bindings. During that scene's one blocking materialization pass, the private
 Director projection includes at most four active GMC Story nodes when exact
-kit bindings are absent. The accepted v2 handoff must bind its active beat to
-one of those real nodes; after that commit, projections return to exact
-Scene-kit bindings only.
+kit bindings are absent. If the imported workspace has no graph nodes, GMC
+derives exactly one transitional thread from the accepted Scene kit's stable
+identity, purpose, dramatic question, pressures, and committed source refs.
+That deterministic node has no inferred parent: it appears in the private
+Director projection and is persisted in the same atomic workspace revision as
+the first accepted v2 handoff. The handoff must bind its active beat to one of
+those real nodes; after that commit, projections return to exact Scene-kit
+bindings only.
 
 The existing current-scene context response now includes a bounded
 `gmc.story-authority-receipt-catalog/1` generated from the same immutable Story

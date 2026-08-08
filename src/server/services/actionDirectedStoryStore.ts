@@ -889,6 +889,26 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
   return context;
 }
 
+function acceptedV1BridgeStoryNode(kit: JsonObject): JsonObject | null {
+  const sceneKitId = String(kit.sceneKitId ?? '');
+  if (!sceneKitId.startsWith('scene-kit:legacy:accepted-v1:')) return null;
+  const sourceRefs = stringList(kit.sourceRefs, 24);
+  if (!sourceRefs.length) return null;
+  return {
+    nodeId: `story:thread:accepted-v1:${hash({ sceneKitId }).slice(0, 24)}`,
+    scope: 'thread',
+    primaryParentRef: null,
+    relatedNodeRefs: [],
+    title: boundedText(kit.purpose, 'Accepted scene', 300),
+    dramaticQuestion: boundedText(kit.dramaticQuestion, kit.purpose as string, 1_000),
+    state: 'active',
+    planningState: 'active',
+    truthState: 'gm_preparation',
+    pressures: stringList(kit.pressures, 8),
+    sourceRefs,
+  };
+}
+
 /** Builds a service-only context for later Story Director use. */
 export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObject {
   const kit = activeV2SceneKit(workspace);
@@ -912,9 +932,15 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
   // still needs real GMC nodes so the Director can ground the required active
   // beat impact instead of inventing a Story reference or returning an empty
   // Scene kit. Once a v2 handoff is committed, exact kit bindings take over.
+  const activeStoryNodes = graph.filter((node) => node.state === 'active' || node.planningState === 'active').slice(0, 4);
+  const transitionalStoryNode = acceptedV1Bridge ? acceptedV1BridgeStoryNode(kit) : null;
   const directorStoryNodes = boundStoryNodes.length || !acceptedV1Bridge
     ? boundStoryNodes
-    : graph.filter((node) => node.state === 'active' || node.planningState === 'active').slice(0, 4);
+    : activeStoryNodes.length
+      ? activeStoryNodes
+      : transitionalStoryNode
+        ? [transitionalStoryNode]
+        : [];
   const preparationDebt = acceptedV1Bridge ? [{
     debtId: `preparation-debt:accepted-v1:${hash({ sceneKitId: kit.sceneKitId, revision: kit.revision }).slice(0, 24)}`,
     need: 'Materialize the imported current scene into one complete action-directed Scene kit before narrating the player action.',
@@ -1123,12 +1149,33 @@ export async function commitSceneHandoff(
   if (actualWorkspaceRevision !== proposal.expectedWorkspaceRevision) throw new StoryWorkspaceStoreError(409, 'STORY_WORKSPACE_REVISION_CONFLICT', 'The Story workspace changed before the scene handoff.', { expectedRevision: proposal.expectedWorkspaceRevision, actualRevision: actualWorkspaceRevision });
   const actualSceneRevision = currentSceneRevision(workspace);
   if (actualSceneRevision !== proposal.expectedCurrentSceneRevision) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_REVISION_CONFLICT', 'The current Scene kit changed before the handoff.', { expectedRevision: proposal.expectedCurrentSceneRevision, actualRevision: actualSceneRevision });
-  const graph = projectStoryGraphV2(workspace);
-  workspace.storyGraph = graph;
+  let graph = projectStoryGraphV2(workspace);
   const handoff = proposal.handoff as JsonObject;
   const proposedKit = clone(handoff.sceneKit as JsonObject);
-  assertSceneKitAuthority(proposal, graph, authorityReceipts.sources);
   const current = activeV2SceneKit(workspace);
+  const lastHandoff = isObject(workspace.lastSceneHandoffReceipt) ? workspace.lastSceneHandoffReceipt : null;
+  const acceptedV1Bridge = current
+    && String(current.sceneKitId ?? '').startsWith('scene-kit:legacy:accepted-v1:')
+    && (!lastHandoff || lastHandoff.acceptedSceneKitId !== current.sceneKitId);
+  const transitionalStoryNode = acceptedV1Bridge ? acceptedV1BridgeStoryNode(current) : null;
+  const graphNodeIds = new Set(graphNodes(graph).map((node) => String(node.nodeId)));
+  let transitionalStoryNodeAdded = false;
+  if (transitionalStoryNode
+    && !graphNodeIds.has(String(transitionalStoryNode.nodeId))
+    && (proposedKit.storyBindings as string[]).includes(String(transitionalStoryNode.nodeId))) {
+    for (const sourceRef of transitionalStoryNode.sourceRefs as string[]) {
+      if (!authorityReceipts.sources.has(sourceRef)) {
+        throw new StoryWorkspaceStoreError(422, 'STORY_SOURCE_RECEIPT_REQUIRED', 'The transitional Story thread is missing committed source evidence.', { sourceRef });
+      }
+    }
+    graph = clone(graph);
+    graph.revision = Number(graph.revision) + 1;
+    (graph.nodes as JsonObject[]).push(transitionalStoryNode);
+    validateStoryGraphV2(graph);
+    transitionalStoryNodeAdded = true;
+  }
+  workspace.storyGraph = graph;
+  assertSceneKitAuthority(proposal, graph, authorityReceipts.sources);
   const kits = sceneKits(workspace).map((kit) => kit.schemaVersion === SCENE_KIT_V2_CONTRACT_VERSION ? clone(kit) : projectLegacySceneKitV2(kit, graph));
   const existingIndex = kits.findIndex((kit) => kit.sceneKitId === proposedKit.sceneKitId);
   const existing = existingIndex >= 0 ? kits[existingIndex] : null;
@@ -1192,7 +1239,14 @@ export async function commitSceneHandoff(
     source: 'scene_handoff',
     timelineAnchor,
     workspace,
-    changedRecordRefs: [`scene_kit:${String(proposedKit.sceneKitId)}`, 'workspace:activeSceneKitRef', 'workspace:activeBeatRef'],
+    changedRecordRefs: [
+      `scene_kit:${String(proposedKit.sceneKitId)}`,
+      ...(transitionalStoryNodeAdded && transitionalStoryNode
+        ? [`story_node:${String(transitionalStoryNode.nodeId)}`]
+        : []),
+      'workspace:activeSceneKitRef',
+      'workspace:activeBeatRef',
+    ],
     requestHashOverride: requestHash,
   }, records);
   const committed = await readStoryWorkspaceRevision({ userId: input.userId, campaignId: input.campaignId, revision: written.storyWorkspaceRef.revision }, records);

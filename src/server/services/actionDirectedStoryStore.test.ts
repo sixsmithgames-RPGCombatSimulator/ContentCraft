@@ -4,6 +4,7 @@ import {
   applyStoryDeltaV2,
   buildPrivateSceneDirectorContext,
   buildPlayableSceneContextV2,
+  buildStoryAuthorityReceiptCatalog,
   commitSceneHandoff,
   compileAcceptedV1SceneSnapshotMigrationPreview,
   compileLegacyScenePlanV2MigrationPreview,
@@ -636,8 +637,67 @@ describe('D2 action-directed Story authority', () => {
       playableLocus: { label: 'Ahead of the identified cart route before it reaches Flintwake Wage Yard' },
       presentActors: ['kerrigan-brynn', 'kerrigans-familiar'],
     });
-    expect(buildPrivateSceneDirectorContext(active!.workspace)).toMatchObject({
+    const bridgeContext = buildPrivateSceneDirectorContext(active!.workspace);
+    expect(bridgeContext).toMatchObject({
       preparationDebt: [expect.objectContaining({ priority: 'blocking' })],
+    });
+    expect(bridgeContext.storyNodes).toEqual([
+      expect.objectContaining({
+        nodeId: expect.stringMatching(/^story:thread:accepted-v1:/),
+        scope: 'thread',
+        primaryParentRef: null,
+        state: 'active',
+        planningState: 'active',
+        truthState: 'gm_preparation',
+        sourceRefs: expect.arrayContaining([
+          'gma:timeline:turn-1:transit',
+          'gma:timeline:message-2:scene-segment',
+        ]),
+      }),
+    ]);
+    const bridgeNode = (bridgeContext.storyNodes as JsonObject[])[0];
+    const currentKit = structuredClone((active!.workspace.sceneKits as JsonObject[])
+      .find((kit) => kit.sceneKitId === (active!.workspace.activeSceneKitRef as JsonObject).sceneKitId)!);
+    currentKit.revision = Number(currentKit.revision) + 1;
+    currentKit.storyBindings = [bridgeNode.nodeId];
+    const activeBeat = (currentKit.beats as JsonObject[])
+      .find((beat) => beat.beatId === active!.workspace.activeBeatRef)!;
+    activeBeat.potentialImpacts = [{ storyNodeRef: bridgeNode.nodeId, outcome: 'success', effect: 'advance' }];
+    const catalog = buildStoryAuthorityReceiptCatalog(active!.workspace);
+    const materializationEnvelope: SceneHandoffAuthorityEnvelope = {
+      proposal: {
+        schemaVersion: 'gmc.scene-handoff-proposal/1', status: 'proposal_only', interactionId: 'turn-materialize',
+        idempotencyKey: 'scene-handoff:materialize-accepted-v1', playerActionFingerprint: 'b'.repeat(64),
+        expectedWorkspaceRevision: 1, expectedCurrentSceneRevision: 1,
+        sourceRefs: [...new Set([
+          ...currentKit.sourceRefs as string[],
+          ...(currentKit.playableLocus as JsonObject).sourceRefs as string[],
+        ])],
+        handoff: {
+          mode: 'replace', candidateRef: 'situation:accepted-v1-materialization', priorSceneExit: 'superseded',
+          sceneKit: currentKit, activeBeatRef: activeBeat.beatId, playerActionPreserved: true,
+        },
+        openingNarration: 'The stopped cart remains within reach while the search continues.', rollRequest: null,
+      },
+      playerActionReceipt: {
+        receiptRef: 'gma:player-action-receipt:turn-materialize', interactionId: 'turn-materialize',
+        playerActionFingerprint: 'b'.repeat(64), status: 'accepted',
+      },
+      sourceReceipts: catalog.receipts as unknown as SceneHandoffAuthorityEnvelope['sourceReceipts'],
+    };
+    const materialization = await commitSceneHandoff({
+      userId: 'tenant-a', campaignId: 'campaign-a', envelope: materializationEnvelope,
+    }, store.records);
+    expect(materialization).toMatchObject({
+      status: 'applied', duplicate: false, authoritativeStateChanged: true,
+      storyWorkspaceRef: { revision: 2 },
+      playableSceneContext: { activeBeat: { beatId: activeBeat.beatId } },
+      privateSceneContext: { preparationDebt: [], storyNodes: [{ nodeId: bridgeNode.nodeId }] },
+    });
+    const committed = await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    expect(committed?.workspace.storyGraph).toMatchObject({
+      revision: 2,
+      nodes: [expect.objectContaining({ nodeId: bridgeNode.nodeId, primaryParentRef: null })],
     });
     active!.workspace.storyGraph = {
       schemaVersion: 'gmc.story-graph/2', revision: 1,
