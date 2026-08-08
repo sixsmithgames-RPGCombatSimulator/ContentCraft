@@ -266,6 +266,10 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(turn.outputSchema.schema.required).toEqual([
       'schemaVersion', 'proposal', 'materialClaims', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority',
     ]);
+    expect((turn.outputSchema.schema.properties as any).materialClaims).toMatchObject({
+      type: 'array',
+      items: { type: 'object' },
+    });
   });
 
   it('keeps the immediately previous GMA registry client compatible during the ordered GMC-first deployment', () => {

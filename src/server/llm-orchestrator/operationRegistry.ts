@@ -346,7 +346,7 @@ const sceneProposal = {
 const actionDirectedStoryTurnOutput = {
   schemaVersion: { const: 'gma.story-director-result/1' },
   proposal: { type: 'object' },
-  materialClaims: { type: 'array', minItems: 1, maxItems: 32 },
+  materialClaims: { type: 'array', minItems: 1, maxItems: 32, items: { type: 'object' } },
   declaredActionPayoff: { type: 'object' },
   agencyAudit: { type: 'object' },
   mechanicsAuthority: { enum: ['none', 'provisional_vcs'] },
