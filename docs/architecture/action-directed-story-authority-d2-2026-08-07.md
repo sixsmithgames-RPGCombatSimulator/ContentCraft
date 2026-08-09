@@ -294,3 +294,41 @@ that incompatible operation or to legacy narration. Existing Story workspaces,
 Scene kits, receipts, and accepted timeline history require no migration. The
 new operation cannot commit Story or mechanics; GMC scene handoff and VCS
 receipts remain the only corresponding authorities.
+
+## D9.3 substantive-scene-reveal addendum — 2026-08-09
+
+GMA ADR-005's Accepted D9.3 amendment keeps GMC as the sole owner of prepared
+Scene-kit facts while closing the remaining preparation/narration split. A
+central story-bearing target named by a Scene kit's purpose or dramatic
+question must have a concrete information fact and access vector before that
+scene is released. A container label such as “six sealed crates” does not
+answer what the crates hold; the prepared fact must name their contents or a
+bounded absence.
+
+Registry policy `gma.story-director-policy/3` teaches the Director to resolve
+blocking scene-substance debt through the existing one-operation same-scene
+replacement. The proposal adds the minimum fixed information row, advances the
+Scene-kit revision, and states any directly reached fact exactly in opening
+narration before GMC commits it. This is still one atomic D2 handoff and does
+not create a second current-scene or Story authority.
+
+Registry policy `gma.current-scene-narration-policy/5` accepts only the bounded
+`gma.action-bound-reveal/1` subset supplied by GMA. It may disclose those
+action-matched private rows and no others. Directly observable contents appear
+before a roll. Each prepared check branch binds a concrete finding, bounded
+negative, or specific barrier through `gma.substantive-outcome/1`; the fixed
+contents cannot change between outcome bands. VCS may select cost,
+completeness, danger, time, or interpretation, but never what GMC prepared as
+existing in the scene.
+
+Legacy Scene kits remain readable. If a declared action reaches a target with
+no adequate contents fact, GMA creates blocking preparation debt and asks for
+one same-scene replacement rather than releasing vague narration or a generic
+check. No player action, completed receipt, timeline history, or existing fact
+is rewritten. The registry operations remain single-attempt and proposal-only;
+GMA retains bounded repair and player-facing recovery responsibility.
+
+The D9.3 GMC implementation completed its automated release gate on 2026-08-09:
+provider and generated-contract guards, type checking, lint, 686 tests, and the
+production server/client build passed. Production human replay of the retained
+cart scene remains the final acceptance gate.

@@ -50,9 +50,30 @@ type StoryRecordType = 'workspace' | 'arc' | 'frontier' | 'scene_kit'
   | 'npc_scene_card' | 'npc_readiness' | 'preparation_requirement';
 
 const SCENE_INFORMATION_PLACEHOLDER_PATTERN = /^(?:the\s+)?(?:contents?|details?|information|evidence|findings?)(?:\s+(?:are|is|become|became|were|was))?\s+(?:revealed|visible|found|clear|known)\.?$/i;
+const CENTRAL_CONTENT_TARGET_PATTERN = /\b(?:cart|wagon|carriage|coach|crate|crates|box|boxes|chest|container|containers|barrel|barrels|cask|casks|bundle|bundles|cargo|load|cabinet|case|satchel|pouch|pack)\b/i;
+const CONCRETE_CONTENT_FACT_PATTERN = /\b(?:(?:contains?|contained|holds?|held|carries|carried|is carrying|was carrying|is loaded with|was loaded with|is packed with|was packed with|is filled with|was filled with)\b[^.!?]{2,220}|(?:crates?|boxes?|barrels?|casks?|bundles?|sacks?|tins?|jars?|bales?)\s+of\s+[a-z0-9][a-z0-9'-]*|(?:cargo|load|contents?)\s+(?:is|are|was|were|consists? of|comprised)\b[^.!?]{2,220}|\b(?:empty|nothing relevant|no relevant (?:cargo|goods?|items?|evidence|clues?)))\b/i;
 
 function isSceneInformationPlaceholder(value: string): boolean {
   return SCENE_INFORMATION_PLACEHOLDER_PATTERN.test(value.trim());
+}
+
+function requiresConcreteSceneContents(sceneKit: JsonObject): boolean {
+  const established = Array.isArray(sceneKit.establishedElements)
+    ? sceneKit.establishedElements.map((entry) => plainObject(entry) ? String(entry.summary ?? '') : '')
+    : [];
+  const beats = Array.isArray(sceneKit.beats)
+    ? sceneKit.beats.flatMap((entry) => plainObject(entry) ? [String(entry.trigger ?? ''), String(entry.changeSurface ?? '')] : [])
+    : [];
+  const corpus = [String(sceneKit.purpose ?? ''), String(sceneKit.dramaticQuestion ?? ''), ...established, ...beats].join(' ');
+  return CENTRAL_CONTENT_TARGET_PATTERN.test(corpus);
+}
+
+function isPreparedCentralContent(information: JsonObject): boolean {
+  const accessVectors = Array.isArray(information.accessVectors) ? information.accessVectors.map(String) : [];
+  const targetEvidence = [String(information.factText ?? ''), ...accessVectors].join(' ');
+  return (information.state === 'absent_in_scope'
+    || CONCRETE_CONTENT_FACT_PATTERN.test(String(information.factText ?? '')))
+    && CENTRAL_CONTENT_TARGET_PATTERN.test(targetEvidence);
 }
 
 export interface StoryWorkspaceReference {
@@ -488,6 +509,10 @@ export function validateSceneHandoffProposal(input: unknown): asserts input is J
     if (isSceneInformationPlaceholder(information.factText)) {
       throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_INFORMATION_NOT_PREPARED', 'A newly accepted scene information entry must contain the concrete prepared fact instead of a reveal placeholder.', { field: `proposal.handoff.sceneKit.information[${index}].factText` });
     }
+  }
+  if (requiresConcreteSceneContents(input.handoff.sceneKit)
+    && !(input.handoff.sceneKit.information as JsonObject[]).some(isPreparedCentralContent)) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_INFORMATION_NOT_PREPARED', 'A newly accepted scene with a central story-bearing target must prepare its concrete contents or a bounded absence.', { field: 'proposal.handoff.sceneKit.information' });
   }
   const activeBeatRef = identifier(input.handoff.activeBeatRef, 'proposal.handoff.activeBeatRef');
   const activeBeats = (input.handoff.sceneKit.beats as JsonObject[]).filter((beat) => beat.state === 'active');

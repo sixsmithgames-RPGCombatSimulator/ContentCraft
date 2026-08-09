@@ -140,6 +140,7 @@ function cartSceneKit(): JsonObject {
     },
     establishedElements: [{ elementId: 'element:cart', truthState: 'scene_local_established', summary: 'A two-wheeled ox cart carries covered trade cargo.' }],
     information: [
+      { informationId: 'information:cart-cargo', state: 'concealed', factText: 'Six sealed crates of lamp oil are packed beneath the cart cover.', accessVectors: ['remove the cover and open the crates'] },
       { informationId: 'information:green-thread', state: 'concealed', factText: 'The driver has a green thread knotted inside the left cuff.', accessVectors: ['observe the crew', 'inspect clothing'] },
       { informationId: 'information:violet-residue', state: 'undetermined', factText: 'A faint violet residue marks the underside of the cart bed near its rear axle.', accessVectors: ['inspect the cart', 'magical examination'] },
     ],
@@ -401,6 +402,22 @@ describe('D2 action-directed Story authority', () => {
     ((((placeholderPreparedFact.proposal.handoff as JsonObject).sceneKit as JsonObject).information as JsonObject[])[0]).factText = 'Contents revealed.';
     await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: placeholderPreparedFact }, store.records))
       .rejects.toMatchObject({ code: 'STORY_SCENE_INFORMATION_NOT_PREPARED' });
+    expect(store.documents).toHaveLength(2);
+
+    const contentsNotPrepared = handoffEnvelope();
+    const contentsKit = ((contentsNotPrepared.proposal.handoff as JsonObject).sceneKit as JsonObject);
+    contentsKit.purpose = 'Stop the identified cart before it reaches Flintwake.';
+    contentsKit.dramaticQuestion = 'Can Kerrigan disable the cart without exposing herself?';
+    const contentsInformation = (contentsKit.information as JsonObject[]);
+    contentsInformation.splice(0, contentsInformation.length, {
+      informationId: 'information:cart-shape', state: 'concealed',
+      factText: 'Six sealed crates are packed beneath the cart cover.', accessVectors: ['inspect the cart cover'],
+    }, {
+      informationId: 'information:driver-knife', state: 'concealed',
+      factText: 'The driver carries a narrow belt knife.', accessVectors: ['search the driver'],
+    });
+    await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: contentsNotPrepared }, store.records))
+      .rejects.toMatchObject({ code: 'STORY_SCENE_INFORMATION_NOT_PREPARED', details: { field: 'proposal.handoff.sceneKit.information' } });
     expect(store.documents).toHaveLength(2);
 
     const badReceipt = handoffEnvelope();
@@ -695,6 +712,11 @@ describe('D2 action-directed Story authority', () => {
       .find((kit) => kit.sceneKitId === (active!.workspace.activeSceneKitRef as JsonObject).sceneKitId)!);
     currentKit.revision = Number(currentKit.revision) + 1;
     currentKit.storyBindings = [bridgeNode.nodeId];
+    currentKit.information = [{
+      informationId: 'information:cart-cargo', state: 'concealed',
+      factText: 'Six sealed crates of lamp oil are packed beneath the stopped cart cover.',
+      accessVectors: ['remove the cart cover and open the crates'],
+    }];
     const activeBeat = (currentKit.beats as JsonObject[])
       .find((beat) => beat.beatId === active!.workspace.activeBeatRef)!;
     activeBeat.potentialImpacts = [{ storyNodeRef: bridgeNode.nodeId, outcome: 'success', effect: 'advance' }];

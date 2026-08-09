@@ -258,7 +258,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const currentScene = getOperationDefinition('story.current-scene.narrate');
     const repair = getOperationDefinition('story.turn.repair');
     const sceneKitRepair = getOperationDefinition('story.scene-kit.repair');
-    expect(turn.prompt.version).toBe('gma.story-director-policy/2');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/3');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
     expect(turn.prompt.systemInstruction).toMatch(/concretely pay off the declared action now/i);
@@ -267,6 +267,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(turn.prompt.systemInstruction).toMatch(/gma\.scene-realization\/1/i);
     expect(turn.prompt.systemInstruction).toMatch(/rules analysis out of openingNarration/i);
     expect(turn.prompt.systemInstruction).toMatch(/Merely taking another action cannot fail the scene/i);
+    expect(turn.prompt.systemInstruction).toMatch(/concrete fixed information fact or bounded absence/i);
+    expect(turn.prompt.systemInstruction).toMatch(/gma\.substantive-outcome\/1/i);
     expect(turn.provider.maxAttempts).toBe(1);
     expect(turn.provider.fallbackAllowed).toBe(false);
     expect(turn.outputSchema.schema.required).toEqual([
@@ -292,18 +294,20 @@ describe('provider-neutral LLM orchestrator', () => {
       type: 'object',
       required: ['schemaVersion', 'participantResponses', 'continuityResolutions', 'capabilityResolutions'],
     });
-    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/4');
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/5');
     expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/authorized by actionBoundReveal/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/the load is established/i);
     expect(currentScene.outputSchema.schema.required).toEqual([
       'schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization',
       'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority',
     ]);
-    expect((currentScene.outputSchema.schema.properties as any).schemaVersion.const)
-      .toBe('gma.current-scene-narration-result/4');
+    expect((currentScene.outputSchema.schema.properties as any).schemaVersion.enum)
+      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5']);
     expect(currentScene.provider.maxAttempts).toBe(1);
     expect(currentScene.provider.fallbackAllowed).toBe(false);
-    expect(repair.prompt.version).toBe('gma.story-director-policy/2');
+    expect(repair.prompt.version).toBe('gma.story-director-policy/3');
     expect(repair.prompt.systemInstruction).toMatch(/only the failed fields/i);
     expect(repair.prompt.systemInstruction).toMatch(/Do not return the complete Story Director result/i);
     expect(repair.outputSchema.schema.required).toEqual(['schemaVersion', 'correctionId', 'sceneKitPatch', 'patchesJson']);
@@ -365,7 +369,7 @@ describe('provider-neutral LLM orchestrator', () => {
   it('accepts ready-scene narration only through its dedicated result schema', async () => {
     const responseText = 'All three cart crew stop at the wheel while you remain below their sightline.';
     const output = {
-      schemaVersion: 'gma.current-scene-narration-result/4',
+      schemaVersion: 'gma.current-scene-narration-result/5',
       responseMode: 'in_character',
       responseText,
       rollRequest: null,
@@ -392,6 +396,12 @@ describe('provider-neutral LLM orchestrator', () => {
       userId: 'user-1', store: new MemoryExecutionStore(), providers: [currentProvider],
     });
     expect(accepted.status).toBe('succeeded');
+
+    const legacyProvider = new FakeProviderAdapter(() => ({ ...output, schemaVersion: 'gma.current-scene-narration-result/4' }));
+    const legacyAccepted = await executeLlmOperation(request('story.current-scene.narrate', 'legacy-current-scene'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [legacyProvider],
+    });
+    expect(legacyAccepted.status).toBe('succeeded');
 
     const handoffProvider = new FakeProviderAdapter(() => output);
     const rejected = await executeLlmOperation(request('story.turn.direct', 'wrong-shape'), {

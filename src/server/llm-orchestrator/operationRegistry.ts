@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-08.9';
+export const OPERATION_REGISTRY_VERSION = '2026-08-09.1';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-08-08.9',
   '2026-08-08.7',
   '2026-08-08.6',
   '2026-08-08.5',
@@ -575,7 +576,7 @@ const actionDirectedStoryTurnOutput = {
 } as const;
 
 const actionDirectedCurrentSceneOutput = {
-  schemaVersion: { const: 'gma.current-scene-narration-result/4' },
+  schemaVersion: { enum: ['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5'] },
   responseMode: { const: 'in_character' },
   responseText: { type: 'string', minLength: 1, maxLength: 16_000 },
   rollRequest: { type: ['object', 'null'] },
@@ -779,7 +780,7 @@ const seeds: Seed[] = [
     id: 'story.turn.direct', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'proposal', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/2',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/3',
     outputProperties: actionDirectedStoryTurnOutput,
     systemInstruction: [
       'Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet.',
@@ -787,6 +788,9 @@ const seeds: Seed[] = [
       'Preserve the exact declared action and fingerprint. Prefer an eligible prepared Scene kit; otherwise create only the minimum complete supported Scene kit.',
       'Establish one playable locus, one exact present cast, two to five beats with exactly one active beat, all four exit kinds, Story bindings, and potential impacts.',
       'The active beat and opening narration must concretely pay off the declared action now or establish the precise position for one provisional VCS mechanic.',
+      'Prepare a concrete fixed information fact or bounded absence for every central story-bearing target implied by the scene purpose, dramatic question, active beat, or established elements. A container label or a promise that contents will be revealed later is not an answer.',
+      'When the supplied actionBoundReveal reports blocking scene-substance debt, replace the same Scene kit in place, add the minimum action-matched information row, and state any directly reached fact exactly in openingNarration before requesting a roll.',
+      'For a provisional check on a story-bearing target, prepare all five outcome branches with gma.substantive-outcome/1: a fact-bound finding, scope-limited negative, or specific barrier. Fixed contents cannot change between outcome bands.',
       'Bind every material narrated fact, presence, and reveal to supplied fact IDs or IDs created in the proposed Scene kit. Do not reveal concealed or undetermined preparation.',
       'Return gma.scene-realization/1. Cover every requested responder or cohort member with exact prose evidence; describe a cohort collectively with all, each, both, or its known count, or use one observedCount 1 row with different evidence per member; account for requested concealment and every action-matched capability.',
       'Keep rules analysis out of openingNarration. Put the lived effect or non-effect in prose and an unsupported capability rule only in mechanicsNote.',
@@ -799,12 +803,14 @@ const seeds: Seed[] = [
     id: 'story.current-scene.narrate', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/4',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/5',
     outputProperties: actionDirectedCurrentSceneOutput,
     systemInstruction: [
       'Narrate exactly one player action in the already-current GMC Scene kit from the supplied bounded GMA packet.',
-      'Return exactly one JSON object matching gma.current-scene-narration-result/4. Do not propose, replace, move, or close the Scene kit.',
-      'Preserve the exact declared action. Use only plainly available supplied facts and keep mechanics provisional under VCS authority.',
+      'Return exactly one JSON object using the current-scene result schemaVersion requested by the bounded GMA packet: gma.current-scene-narration-result/5 for the current policy, or /4 only for an older compatible packet during ordered rollout. Do not propose, replace, move, or close the Scene kit.',
+      'Preserve the exact declared action. Use plainly available supplied facts plus only private facts explicitly authorized by actionBoundReveal, and keep mechanics provisional under VCS authority.',
+      'When actionBoundReveal marks a fact requiredNow, state its exact factText in responseText before any roll. A roll may change completeness, time, danger, or interpretation, but not the fixed contents already reached by the action.',
+      'For a provisional check on a story-bearing target, return all five prepared branches with gma.substantive-outcome/1. Each branch must state a concrete fact-bound finding, scope-limited negative, or specific barrier; process-only prose such as “the load is established” is not a result.',
       'Return gma.scene-realization/1. Cover every requested responder or cohort member with exact prose evidence; describe a cohort collectively with all, each, both, or its known count, or use one observedCount 1 row with different evidence per member; account for requested concealment and every action-matched capability.',
       'Keep rules analysis out of responseText. Put the lived effect or non-effect in prose and an unsupported capability rule only in mechanicsNote.',
       'Make exposure or loss conditional on a failed, detected, conspicuous, delayed, or otherwise concrete risky course. Merely taking another action cannot fail the scene.',
@@ -815,7 +821,7 @@ const seeds: Seed[] = [
     id: 'story.scene-kit.repair', operationClass: 'reasoning_high', tier: 'reasoning',
     required: Object.keys(sceneKitRepairProviderOutput), validators: ['story-scene-kit-repair-rows'],
     temperature: 0.25, maxOutputTokens: 7000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/2',
+    thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/3',
     outputProperties: sceneKitRepairProviderOutput,
     systemInstruction: [
       'Repair one complete proposal.handoff.sceneKit from the supplied bounded GMA focused-repair packet.',
@@ -823,6 +829,7 @@ const seeds: Seed[] = [
       `Return exactly one fields row for each key, with no omissions or duplicates: ${STORY_SCENE_KIT_REPAIR_FIELD_KEYS.join(', ')}.`,
       'Each valueJson must be a valid JSON encoding of only that key value. informationAccess rows join by informationId and beatImpacts rows join by beatId after GMA decodes them.',
       'Logical row contract: information is an array of {informationId,state,factText}, where factText is the concrete in-world fact to reveal and never a placeholder such as "contents revealed"; informationAccess must contain at least one non-empty {informationId,accessVector} row for every returned informationId and no unknown informationId. beats is an array of 2-5 {beatId,kind,state,trigger,changeSurface} rows with unique beatId values; every beatImpacts row must use one returned beatId and contain {beatId,storyNodeRef,outcome,effect}. exitVectors must include non-empty {kind,condition} rows for completion, failure, abandonment, and redirect. Return arrays, including empty arrays where allowed, for every other collection field.',
+      'When the scene purpose, dramatic question, or repair evidence names a central story-bearing container or load, information must state its fixed contents or bounded absence. Returning only a container label, an established load, or a future search is not a prepared answer.',
       'A failure exit must tie exposure or loss to a concrete failed, detected, conspicuous, delayed, or otherwise risky course. Merely taking another action cannot fail the scene.',
       'patchesJson must encode one valid JSON object containing every other allowed field path exactly once, or {} when no other path is allowed.',
       'Copy authority-backed locus, cast, sources, and Story references exactly. Propose only the minimum scene-local elements and beat scaffolding required by the supplied field contract.',
@@ -833,7 +840,7 @@ const seeds: Seed[] = [
     id: 'story.turn.repair', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'correctionId', 'sceneKitPatch', 'patchesJson'],
     temperature: 0.25, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/2',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/3',
     outputProperties: actionDirectedStoryRepairOutput,
     systemInstruction: [
       'Repair only the failed fields in one bounded GMA Story Director result.',
@@ -841,6 +848,7 @@ const seeds: Seed[] = [
       'When proposal.handoff.sceneKit is allowed, put its complete replacement in sceneKitPatch and do not double-encode it in patchesJson; otherwise sceneKitPatch must be null.',
       'patchesJson must encode one valid JSON object containing every other allowed field path exactly once, or {} when no other path is allowed. Do not return the complete Story Director result.',
       'Preserve the immutable player action, authority revisions, accepted fields, player agency, provisional mechanics, and source grounding.',
+      'When the supplied repair evidence contains actionBoundReveal or scene-substance debt, repair the allowed information, narration, claims, or prepared branches with the concrete fixed finding, scope-limited negative, or specific barrier. Do not replace it with process-only success prose.',
       'Do not add canon, change a saved scene, broaden the repair, or include markdown or commentary.',
     ].join(' '),
   },
