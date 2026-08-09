@@ -10,9 +10,11 @@ import {
   readStoryWorkspaceRevision,
   replaceStoryWorkspace,
   SCENE_HANDOFF_RECEIPT_CONTRACT_VERSION,
+  SCENE_STORY_DESIGN_CONTRACT_VERSION,
   SCENE_KIT_V2_CONTRACT_VERSION,
   STORY_DELTA_MAX_BYTES,
   STORY_DELTA_V2_CONTRACT_VERSION,
+  STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
   STORY_GRAPH_CONTRACT_VERSION,
   STORY_GRAPH_MAX_BYTES,
   STORY_PLANNING_STATES,
@@ -24,6 +26,8 @@ import {
   emptyStoryWorkspace,
   validateSceneHandoffProposal,
   validateSceneKitV2,
+  validateSceneStoryDesign,
+  validateStorySatisfactionReceipt,
   validateStoryGraphV2,
 } from './storyWorkspaceStore.js';
 
@@ -33,10 +37,10 @@ export const STORY_MIGRATION_RECEIPT_CONTRACT_VERSION = 'gmc.story-v2-migration-
 export const STORY_MIGRATION_PREVIEW_CONTRACT_VERSION = 'gmc.story-migration-preview/1';
 export const ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION = 'gma.accepted-v1-scene-snapshot/1';
 export const PRIVATE_SCENE_CONTEXT_CONTRACT_VERSION = 'gmc.scene-director-context/1';
-export const PRIVATE_SCENE_CONTEXT_MAX_BYTES = 12_288;
+export const PRIVATE_SCENE_CONTEXT_MAX_BYTES = 32_768;
 export const STORY_AUTHORITY_RECEIPT_CATALOG_CONTRACT_VERSION = 'gmc.story-authority-receipt-catalog/1';
 export const STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES = 192;
-export const SCENE_HANDOFF_AUTHORITY_ENVELOPE_MAX_BYTES = 32_768;
+export const SCENE_HANDOFF_AUTHORITY_ENVELOPE_MAX_BYTES = 98_304;
 
 type HandoffMode = 'reuse' | 'select' | 'create' | 'replace';
 type StoryImpactEffect = 'advance' | 'complicate' | 'resolve' | 'reopen' | 'retire';
@@ -84,7 +88,13 @@ export interface StoryDeltaV2 {
   sourceReceiptRefs: string[];
   sceneKitRef: string;
   beatChanges: Array<{ beatRef: string; state: 'available' | 'active' | 'resolved' | 'bypassed'; sourceReceiptRefs: string[] }>;
-  actualStoryImpacts: Array<{ storyNodeRef: string; effect: StoryImpactEffect; reason: string; sourceReceiptRefs: string[] }>;
+  actualStoryImpacts: Array<{
+    storyNodeRef: string;
+    effect: StoryImpactEffect;
+    reason: string;
+    sourceReceiptRefs: string[];
+    satisfactionReceipt?: JsonObject;
+  }>;
   affectedRecords: StoryRecordPatch[];
 }
 
@@ -149,6 +159,23 @@ function workspaceTimelineAnchor(workspace: JsonObject): { messageId: string; se
 
 function sceneKits(workspace: JsonObject): JsonObject[] {
   return Array.isArray(workspace.sceneKits) ? workspace.sceneKits.filter(isObject).map((kit) => kit as JsonObject) : [];
+}
+
+function sceneStoryDesigns(workspace: JsonObject): JsonObject[] {
+  return Array.isArray(workspace.sceneStoryDesigns)
+    ? workspace.sceneStoryDesigns.filter(isObject).map((design) => design as JsonObject)
+    : [];
+}
+
+/** Returns only the GMC design bound to the exact current Scene-kit revision. */
+export function activeSceneStoryDesign(workspace: JsonObject, kit = activeV2SceneKit(workspace)): JsonObject | null {
+  if (!kit) return null;
+  return sceneStoryDesigns(workspace).find((design) => {
+    const ref = isObject(design.sceneKitRef) ? design.sceneKitRef : null;
+    return design.schemaVersion === SCENE_STORY_DESIGN_CONTRACT_VERSION
+      && ref?.sceneKitId === kit.sceneKitId
+      && Number(ref.sceneKitRevision) === Number(kit.revision);
+  }) ?? null;
 }
 
 function graphNodes(graph: JsonObject): JsonObject[] {
@@ -973,6 +1000,7 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
     activeBeatRef: workspace.activeBeatRef ?? null,
     storyNodes: directorStoryNodes.slice(0, 8).map((node) => clone(node)),
     scenePreparation: { hiddenElements, unresolvedInformation, potentialImpacts },
+    sceneStoryDesign: activeSceneStoryDesign(workspace, kit),
     preparationDebt,
   };
   if (bytes(context) > PRIVATE_SCENE_CONTEXT_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_DIRECTOR_CONTEXT_TOO_LARGE', 'The private scene context exceeds its selection bound.', { maximumBytes: PRIVATE_SCENE_CONTEXT_MAX_BYTES });
@@ -1089,6 +1117,48 @@ function assertSceneKitAuthority(proposal: JsonObject, graph: JsonObject, source
   }
 }
 
+function assertSceneStoryDesignAuthority(
+  design: JsonObject,
+  kit: JsonObject,
+  graph: JsonObject,
+  sourceReceipts: Map<string, SourceAuthorityReceipt>,
+): void {
+  validateSceneStoryDesign(design);
+  const sceneKitRef = design.sceneKitRef as JsonObject;
+  if (sceneKitRef.sceneKitId !== kit.sceneKitId || Number(sceneKitRef.sceneKitRevision) !== Number(kit.revision)) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_REVISION_MISMATCH', 'The story design must target the exact accepted Scene-kit revision.', { field: 'proposal.handoff.storyDesign.sceneKitRef' });
+  }
+  const nodeIds = new Set(graphNodes(graph).map((node) => String(node.nodeId)));
+  const bindings = new Set((kit.storyBindings as string[]).map(String));
+  const allowedRefs = new Set<string>([
+    String(kit.sceneKitId),
+    ...(kit.sourceRefs as string[]).map(String),
+    ...(kit.storyBindings as string[]).map(String),
+    ...sourceReceipts.keys(),
+  ]);
+  const locus = kit.playableLocus as JsonObject;
+  if (locus.canonicalAnchorRef !== null) allowedRefs.add(String(locus.canonicalAnchorRef));
+  (locus.sourceRefs as string[]).forEach((ref) => allowedRefs.add(String(ref)));
+  const participants = kit.participants as JsonObject;
+  [...participants.present as string[], ...participants.anticipated as string[]].forEach((ref) => allowedRefs.add(String(ref)));
+  (participants.sceneLocalRoles as JsonObject[]).forEach((role) => allowedRefs.add(String(role.roleId)));
+  (kit.establishedElements as JsonObject[]).forEach((element) => allowedRefs.add(String(element.elementId)));
+  (kit.information as JsonObject[]).forEach((information) => allowedRefs.add(String(information.informationId)));
+  const requireAllowed = (ref: unknown, field: string) => {
+    if (!allowedRefs.has(String(ref))) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_SOURCE_UNBOUND', 'The story design contains a fact or target without GMC authority evidence.', { field, sourceRef: ref });
+  };
+  (design.sourceRefs as string[]).forEach((ref, index) => requireAllowed(ref, `storyDesign.sourceRefs[${index}]`));
+  for (const [index, obligation] of (design.obligations as JsonObject[]).entries()) {
+    const nodeId = String(obligation.storyNodeRef);
+    if (!nodeIds.has(nodeId) || !bindings.has(nodeId)) throw new StoryWorkspaceStoreError(422, 'STORY_GRAPH_REFERENCE_INVALID', 'A story obligation must resolve to a Story node bound to this scene.', { field: `storyDesign.obligations[${index}].storyNodeRef`, nodeId });
+    (obligation.sourceRefs as string[]).forEach((ref, refIndex) => requireAllowed(ref, `storyDesign.obligations[${index}].sourceRefs[${refIndex}]`));
+  }
+  for (const [index, affordance] of (design.affordances as JsonObject[]).entries()) {
+    requireAllowed(affordance.targetRef, `storyDesign.affordances[${index}].targetRef`);
+    (affordance.factRefs as string[]).forEach((ref, refIndex) => requireAllowed(ref, `storyDesign.affordances[${index}].factRefs[${refIndex}]`));
+  }
+}
+
 function comparableSceneKit(kit: JsonObject, omitPlanningState = false): JsonObject {
   const value = clone(kit);
   delete value.revision;
@@ -1195,6 +1265,8 @@ export async function commitSceneHandoff(
   }
   workspace.storyGraph = graph;
   assertSceneKitAuthority(proposal, graph, authorityReceipts.sources);
+  const proposedDesign = isObject(handoff.storyDesign) ? clone(handoff.storyDesign as JsonObject) : null;
+  if (proposedDesign) assertSceneStoryDesignAuthority(proposedDesign, proposedKit, graph, authorityReceipts.sources);
   const kits = sceneKits(workspace).map((kit) => kit.schemaVersion === SCENE_KIT_V2_CONTRACT_VERSION ? clone(kit) : projectLegacySceneKitV2(kit, graph));
   const existingIndex = kits.findIndex((kit) => kit.sceneKitId === proposedKit.sceneKitId);
   const existing = existingIndex >= 0 ? kits[existingIndex] : null;
@@ -1208,6 +1280,26 @@ export async function commitSceneHandoff(
   }
   if (existingIndex >= 0) kits[existingIndex] = proposedKit;
   else kits.push(proposedKit);
+  let designs = sceneStoryDesigns(workspace).map((design) => clone(design));
+  const priorDesign = designs.find((design) => {
+    const ref = isObject(design.sceneKitRef) ? design.sceneKitRef : null;
+    return ref?.sceneKitId === proposedKit.sceneKitId;
+  }) ?? null;
+  designs = designs.filter((design) => {
+    const ref = isObject(design.sceneKitRef) ? design.sceneKitRef : null;
+    return ref?.sceneKitId !== proposedKit.sceneKitId;
+  });
+  if (proposedDesign) {
+    if (priorDesign && priorDesign.designId === proposedDesign.designId) {
+      const priorComparable = clone(priorDesign);
+      const proposedComparable = clone(proposedDesign);
+      delete priorComparable.revision;
+      delete proposedComparable.revision;
+      const expectedRevision = Number(priorDesign.revision) + (canonicalJson(priorComparable) === canonicalJson(proposedComparable) ? 0 : 1);
+      if (Number(proposedDesign.revision) !== expectedRevision) throw new StoryWorkspaceStoreError(409, 'STORY_SCENE_DESIGN_REVISION_CONFLICT', 'The proposed story-design revision does not match its material change.', { designId: proposedDesign.designId, expectedRevision, actualRevision: proposedDesign.revision });
+    } else if (Number(proposedDesign.revision) !== 1) throw new StoryWorkspaceStoreError(409, 'STORY_SCENE_DESIGN_REVISION_CONFLICT', 'A new story design must begin at revision one.', { designId: proposedDesign.designId, expectedRevision: 1, actualRevision: proposedDesign.revision });
+    designs.push(proposedDesign);
+  }
   const priorRef = isObject(workspace.activeSceneKitRef) ? clone(workspace.activeSceneKitRef as JsonObject) : null;
   const changingScene = priorRef !== null && priorRef.sceneKitId !== proposedKit.sceneKitId;
   const exitHistory = Array.isArray(workspace.sceneExitHistory) ? clone(workspace.sceneExitHistory as JsonValue[]) : [];
@@ -1232,11 +1324,13 @@ export async function commitSceneHandoff(
     acceptedSceneKitRevision: proposedKit.revision,
     activeBeatRef: handoff.activeBeatRef,
     playableLocusHash: hash(proposedKit.playableLocus as JsonObject),
+    storyDesignRef: proposedDesign ? { designId: proposedDesign.designId, revision: proposedDesign.revision } : null,
     sourceReceiptRefs: authorityReceiptRefs,
   };
   const receiptHistory = Array.isArray(workspace.sceneHandoffReceipts) ? clone(workspace.sceneHandoffReceipts as JsonValue[]) : [];
   receiptHistory.push(receipt);
   workspace.sceneKits = kits;
+  workspace.sceneStoryDesigns = designs;
   workspace.activeSceneKitRef = { sceneKitId: proposedKit.sceneKitId };
   workspace.activeBeatRef = handoff.activeBeatRef;
   workspace.sceneExitHistory = exitHistory.slice(-128);
@@ -1260,6 +1354,7 @@ export async function commitSceneHandoff(
     workspace,
     changedRecordRefs: [
       `scene_kit:${String(proposedKit.sceneKitId)}`,
+      ...(proposedDesign ? [`scene_story_design:${String(proposedDesign.designId)}`] : []),
       ...(transitionalStoryNodeAdded && transitionalStoryNode
         ? [`story_node:${String(transitionalStoryNode.nodeId)}`]
         : []),
@@ -1305,10 +1400,12 @@ function validateStoryDeltaV2(input: unknown, campaignId: string): StoryDeltaV2 
   });
   input.actualStoryImpacts.forEach((impact, index) => {
     if (!isObject(impact) || !['advance', 'complicate', 'resolve', 'reopen', 'retire'].includes(String(impact.effect))) throw new StoryWorkspaceStoreError(422, 'STORY_DELTA_V2_INVALID', 'An actual Story impact is invalid.', { field: `actualStoryImpacts[${index}]` });
+    requireExactKeys(impact, `actualStoryImpacts[${index}]`, ['storyNodeRef', 'effect', 'reason', 'sourceReceiptRefs', 'satisfactionReceipt']);
     stableId(impact.storyNodeRef, `actualStoryImpacts[${index}].storyNodeRef`);
     if (!String(impact.reason ?? '').trim() || String(impact.reason).length > 1_500) throw new StoryWorkspaceStoreError(422, 'STORY_DELTA_V2_INVALID', 'An actual Story impact reason is invalid.', { field: `actualStoryImpacts[${index}].reason` });
     const refs = stringList(impact.sourceReceiptRefs, 16).map((ref) => stableId(ref, `actualStoryImpacts[${index}].sourceReceiptRefs`));
     if (!refs.length) throw new StoryWorkspaceStoreError(422, 'STORY_DELTA_GROUNDING_REQUIRED', 'An actual Story impact requires a committed receipt.', { field: `actualStoryImpacts[${index}].sourceReceiptRefs` });
+    if (impact.satisfactionReceipt !== undefined) validateStorySatisfactionReceipt(impact.satisfactionReceipt, `actualStoryImpacts[${index}].satisfactionReceipt`);
   });
   input.affectedRecords.forEach((patch, index) => {
     if (!isObject(patch) || !['workspace', 'arc', 'frontier', 'scene_kit', 'npc_scene_card', 'npc_readiness', 'preparation_requirement'].includes(String(patch.recordType))) {
@@ -1348,6 +1445,42 @@ function applyImpactToNode(node: JsonObject, effect: StoryImpactEffect): void {
   }
 }
 
+const EFFECT_OBLIGATION_STATES: Record<StoryImpactEffect, string[]> = {
+  advance: ['partially_satisfied', 'resolved'],
+  complicate: ['transformed'],
+  resolve: ['resolved'],
+  retire: ['resolved'],
+  reopen: ['open'],
+};
+
+function validateImpactSatisfaction(
+  impact: StoryDeltaV2['actualStoryImpacts'][number],
+  design: JsonObject | null,
+): JsonObject | null {
+  const obligations = design && Array.isArray(design.obligations) ? design.obligations as JsonObject[] : [];
+  const designedForNode = obligations.filter((obligation) => obligation.storyNodeRef === impact.storyNodeRef);
+  if (!impact.satisfactionReceipt) {
+    if (designedForNode.length) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_RECEIPT_REQUIRED', 'A designed Story impact requires its concrete satisfaction receipt.', { storyNodeRef: impact.storyNodeRef });
+    return null;
+  }
+  if (!design) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_RECEIPT_UNBOUND', 'A Story satisfaction receipt requires a current GMC scene design.', { storyNodeRef: impact.storyNodeRef });
+  const receipt = clone(impact.satisfactionReceipt);
+  if (receipt.schemaVersion !== STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION || receipt.storyNodeRef !== impact.storyNodeRef) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_RECEIPT_INVALID', 'The Story satisfaction receipt does not match the impacted Story node.', { field: 'satisfactionReceipt.storyNodeRef' });
+  }
+  const obligation = obligations.find((candidate) => candidate.obligationId === receipt.obligationRef);
+  if (!obligation || obligation.storyNodeRef !== impact.storyNodeRef) throw new StoryWorkspaceStoreError(422, 'STORY_OBLIGATION_REFERENCE_INVALID', 'The Story satisfaction receipt does not identify an obligation in the current scene design.', { obligationRef: receipt.obligationRef });
+  if (!(obligation.allowedContributions as string[]).includes(String(receipt.contributionKind))) throw new StoryWorkspaceStoreError(422, 'STORY_CONTRIBUTION_NOT_PREPARED', 'The Story contribution is not allowed by the prepared obligation.', { obligationRef: receipt.obligationRef, contributionKind: receipt.contributionKind });
+  if (!EFFECT_OBLIGATION_STATES[impact.effect].includes(String(receipt.obligationState))) throw new StoryWorkspaceStoreError(422, 'STORY_OBLIGATION_STATE_INVALID', 'The Story obligation state does not correspond to the actual impact.', { effect: impact.effect, obligationState: receipt.obligationState });
+  const affordances = (design.affordances as JsonObject[]).filter((affordance) => (affordance.obligationRefs as string[]).includes(String(receipt.obligationRef)));
+  const allowedFactRefs = new Set<string>([
+    ...(obligation.sourceRefs as string[]).map(String),
+    ...affordances.flatMap((affordance) => (affordance.factRefs as string[]).map(String)),
+  ]);
+  for (const factRef of receipt.factRefs as string[]) if (!allowedFactRefs.has(String(factRef))) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_FACT_UNBOUND', 'The Story satisfaction receipt cites a fact that was not prepared for this obligation.', { obligationRef: receipt.obligationRef, factRef });
+  return receipt;
+}
+
 /** Applies receipt-backed beat and actual Story impacts in one immutable revision. */
 export async function applyStoryDeltaV2(
   input: { userId: string; campaignId: string; delta: StoryDeltaV2 },
@@ -1376,6 +1509,9 @@ export async function applyStoryDeltaV2(
   const workspace = clone(active.workspace);
   const kit = activeV2SceneKit(workspace);
   if (!kit || ![String(kit.sceneKitId), `${String(kit.sceneKitId)}:r${String(kit.revision)}`].includes(delta.sceneKitRef)) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_CONFLICT', 'The Story delta does not target the current Scene kit.', { sceneKitRef: delta.sceneKitRef });
+  const acceptedDesign = activeSceneStoryDesign(workspace, kit);
+  const design = acceptedDesign ? clone(acceptedDesign) : null;
+  let designChanged = false;
   const changedRefs: string[] = [];
   for (const patch of delta.affectedRecords) {
     if (patch.recordType === 'scene_kit' && patch.recordId === kit.sceneKitId) throw new StoryWorkspaceStoreError(422, 'STORY_DELTA_V2_INVALID', 'Use beatChanges for the active version 2 Scene kit.', { recordId: patch.recordId });
@@ -1398,6 +1534,11 @@ export async function applyStoryDeltaV2(
     workspace.sceneKits = kits;
     const nextActive = beats.find((beat) => beat.state === 'active') ?? beats.find((beat) => beat.state === 'available') ?? beats[0];
     workspace.activeBeatRef = nextActive.beatId;
+    if (design) {
+      const sceneKitRef = design.sceneKitRef as JsonObject;
+      sceneKitRef.sceneKitRevision = kit.revision;
+      designChanged = true;
+    }
   }
   const graph = projectStoryGraphV2(workspace);
   const nodes = graphNodes(graph);
@@ -1408,11 +1549,24 @@ export async function applyStoryDeltaV2(
     potential.get(key)!.add(String(impact.effect));
   }
   const history = Array.isArray(workspace.storyImpactReceipts) ? clone(workspace.storyImpactReceipts as JsonValue[]) : [];
+  const satisfactionHistory = Array.isArray(workspace.storySatisfactionReceipts) ? clone(workspace.storySatisfactionReceipts as JsonValue[]) : [];
   for (const impact of delta.actualStoryImpacts) {
     const node = nodes.find((candidate) => candidate.nodeId === impact.storyNodeRef);
     if (!node) throw new StoryWorkspaceStoreError(404, 'STORY_GRAPH_REFERENCE_INVALID', 'An actual Story impact does not resolve.', { storyNodeRef: impact.storyNodeRef });
     const preparedEffects = potential.get(impact.storyNodeRef);
     if (preparedEffects && preparedEffects.size && !preparedEffects.has(impact.effect)) throw new StoryWorkspaceStoreError(422, 'STORY_IMPACT_NOT_PREPARED', 'The actual Story impact conflicts with this scene’s prepared impact.', { storyNodeRef: impact.storyNodeRef, effect: impact.effect });
+    const satisfaction = validateImpactSatisfaction(impact, design);
+    if (satisfaction && design) {
+      const obligation = (design.obligations as JsonObject[]).find((candidate) => candidate.obligationId === satisfaction.obligationRef)!;
+      obligation.state = satisfaction.obligationState;
+      designChanged = true;
+      satisfactionHistory.push({
+        deltaId: delta.deltaId,
+        sceneKitRef: delta.sceneKitRef,
+        impactEffect: impact.effect,
+        receipt: satisfaction,
+      });
+    }
     applyImpactToNode(node, impact.effect);
     history.push({ deltaId: delta.deltaId, sceneKitRef: delta.sceneKitRef, ...clone(impact as unknown as JsonObject) });
     changedRefs.push(`story_node:${impact.storyNodeRef}`);
@@ -1423,8 +1577,17 @@ export async function applyStoryDeltaV2(
     validateStoryGraphV2(graph);
     workspace.storyGraph = graph;
     workspace.storyImpactReceipts = history.slice(-240);
+    workspace.storySatisfactionReceipts = satisfactionHistory.slice(-240);
     const portfolio = isObject(workspace.portfolio) ? workspace.portfolio : {};
     workspace.portfolio = { ...clone(portfolio as JsonObject), arcs: compatibilityArcs(graph, workspace) };
+  }
+  if (design && designChanged) {
+    design.revision = Number(design.revision) + 1;
+    validateSceneStoryDesign(design);
+    const designs = sceneStoryDesigns(workspace).filter((candidate) => candidate.designId !== design.designId);
+    designs.push(design);
+    workspace.sceneStoryDesigns = designs;
+    changedRefs.push(`scene_story_design:${String(design.designId)}`);
   }
   workspace.lastStoryDeltaRef = delta.deltaId;
   workspace.sourceRevisions = clone(delta.sourceRevisions as unknown as JsonObject);

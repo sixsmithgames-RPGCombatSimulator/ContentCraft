@@ -169,6 +169,39 @@ function cartSceneKit(): JsonObject {
   };
 }
 
+function cartStoryDesign(): JsonObject {
+  return {
+    schemaVersion: 'gmc.scene-story-design/1',
+    designId: 'scene-design:cart-interception',
+    revision: 1,
+    sceneKitRef: { sceneKitId: 'scene-kit:cart-interception', sceneKitRevision: 1 },
+    scenePromise: {
+      whyNow: 'Kerrigan can discover what the shipment means before its handlers recover it.',
+      meaningfulDevelopments: ['answer', 'complication', 'consequence', 'decision'],
+    },
+    obligations: [{
+      obligationId: 'obligation:cart-cargo',
+      storyNodeRef: 'story:arc:flintwake',
+      question: 'What is the cart carrying, and how does it connect to Flintwake?',
+      state: 'open',
+      allowedContributions: ['answer', 'confirmation', 'complication', 'consequence', 'decision'],
+      completionConditions: ['The cargo and its relevant connection or lack of connection are stated.'],
+      sourceRefs: ['information:cart-cargo'],
+    }],
+    affordances: [{
+      affordanceId: 'affordance:search-cart',
+      targetRef: 'element:cart',
+      targetLabel: 'covered cart',
+      mode: 'investigate',
+      access: 'The cover and accessible containers can be searched after the crew is displaced.',
+      factRefs: ['information:cart-cargo', 'information:violet-residue'],
+      changeDimensions: ['knowledge', 'options', 'pressure'],
+      obligationRefs: ['obligation:cart-cargo'],
+    }],
+    sourceRefs: ['gmc:lead:matched-cart-route', 'story:arc:flintwake'],
+  };
+}
+
 function handoffEnvelope(overrides: Partial<JsonObject> = {}): SceneHandoffAuthorityEnvelope {
   const proposal: JsonObject = {
     schemaVersion: 'gmc.scene-handoff-proposal/1', status: 'proposal_only', interactionId: 'turn-2',
@@ -326,6 +359,91 @@ describe('D2 action-directed Story authority', () => {
     });
   });
 
+  it('commits a scene story design atomically and applies a concrete satisfaction receipt', async () => {
+    const store = await preparedStore();
+    const envelope = handoffEnvelope();
+    (envelope.proposal.handoff as JsonObject).storyDesign = cartStoryDesign();
+    const committed = await commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope }, store.records);
+    expect(committed).toMatchObject({
+      sceneHandoffReceipt: { storyDesignRef: { designId: 'scene-design:cart-interception', revision: 1 } },
+      privateSceneContext: { sceneStoryDesign: { designId: 'scene-design:cart-interception' } },
+    });
+    expect(JSON.stringify(committed.playableSceneContext)).not.toContain('obligation:cart-cargo');
+    expect(JSON.stringify(committed.playableSceneContext)).not.toContain('Six sealed crates of lamp oil');
+
+    const delta: StoryDeltaV2 = {
+      schemaVersion: 'studio.story-delta/2', deltaId: 'delta:cart-search', operationId: 'operation:cart-search',
+      idempotencyKey: 'delta:cart-search', correlationId: 'correlation:cart-search', campaignId: 'campaign-a',
+      initiatedBy: 'gma', sourceSystem: 'gma', targetAuthority: 'gmc', visibility: 'gm_only', classification: 'beat_update',
+      expectedWorkspaceRevision: 3, reason: 'Kerrigan searched the cart and learned its concrete cargo.',
+      sourceRevisions: { timelineSequence: 3 }, sourceReceiptRefs: ['gma:validated-interaction:turn-3'],
+      sceneKitRef: 'scene-kit:cart-interception:r1',
+      beatChanges: [
+        { beatRef: 'beat:cart-arrival', state: 'resolved', sourceReceiptRefs: ['gma:validated-interaction:turn-3'] },
+        { beatRef: 'beat:cart-search', state: 'active', sourceReceiptRefs: ['gma:validated-interaction:turn-3'] },
+      ],
+      actualStoryImpacts: [{
+        storyNodeRef: 'story:arc:flintwake', effect: 'advance', reason: 'The cargo and residue establish a concrete supply-chain lead.',
+        sourceReceiptRefs: ['gma:validated-interaction:turn-3'],
+        satisfactionReceipt: {
+          schemaVersion: 'gma.story-satisfaction-receipt/1',
+          obligationRef: 'obligation:cart-cargo', storyNodeRef: 'story:arc:flintwake', contributionKind: 'answer',
+          factRefs: ['information:cart-cargo', 'information:violet-residue'],
+          playerFacingEvidence: 'Six sealed crates of lamp oil sit beneath the cover, and violet residue marks the rear axle.',
+          contributionSummary: 'The cargo is lamp oil, while the violet residue connects the cart to the investigated route.',
+          obligationState: 'partially_satisfied', remainingQuestion: 'Who put the marked lamp-oil shipment into the route?',
+        },
+      }],
+      affectedRecords: [],
+    };
+    await expect(applyStoryDeltaV2({ userId: 'tenant-a', campaignId: 'campaign-a', delta }, store.records))
+      .resolves.toMatchObject({ status: 'applied', storyWorkspaceRef: { revision: 4 } });
+    const active = (await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records))!.workspace;
+    expect(active.sceneStoryDesigns).toEqual([expect.objectContaining({
+      designId: 'scene-design:cart-interception', revision: 2,
+      sceneKitRef: { sceneKitId: 'scene-kit:cart-interception', sceneKitRevision: 2 },
+      obligations: [expect.objectContaining({ obligationId: 'obligation:cart-cargo', state: 'partially_satisfied' })],
+    })]);
+    expect(active.storySatisfactionReceipts).toEqual([expect.objectContaining({
+      deltaId: 'delta:cart-search', impactEffect: 'advance',
+      receipt: expect.objectContaining({ contributionKind: 'answer', obligationState: 'partially_satisfied' }),
+    })]);
+  });
+
+  it('requires a satisfaction receipt for a designed impact and rejects unprepared fact references', async () => {
+    const store = await preparedStore();
+    const envelope = handoffEnvelope();
+    (envelope.proposal.handoff as JsonObject).storyDesign = cartStoryDesign();
+    await commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope }, store.records);
+    const base: StoryDeltaV2 = {
+      schemaVersion: 'studio.story-delta/2', deltaId: 'delta:missing-satisfaction', operationId: 'operation:missing-satisfaction',
+      idempotencyKey: 'delta:missing-satisfaction', correlationId: 'correlation:missing-satisfaction', campaignId: 'campaign-a',
+      initiatedBy: 'gma', sourceSystem: 'gma', targetAuthority: 'gmc', visibility: 'gm_only', classification: 'beat_update',
+      expectedWorkspaceRevision: 3, reason: 'The draft claims that the cart lead advanced.',
+      sourceRevisions: { timelineSequence: 3 }, sourceReceiptRefs: ['gma:validated-interaction:turn-3'],
+      sceneKitRef: 'scene-kit:cart-interception:r1', beatChanges: [], affectedRecords: [],
+      actualStoryImpacts: [{
+        storyNodeRef: 'story:arc:flintwake', effect: 'advance', reason: 'The cart was searched.',
+        sourceReceiptRefs: ['gma:validated-interaction:turn-3'],
+      }],
+    };
+    await expect(applyStoryDeltaV2({ userId: 'tenant-a', campaignId: 'campaign-a', delta: base }, store.records))
+      .rejects.toMatchObject({ code: 'STORY_SATISFACTION_RECEIPT_REQUIRED' });
+    const unbound = structuredClone(base);
+    unbound.deltaId = 'delta:unbound-satisfaction';
+    unbound.operationId = 'operation:unbound-satisfaction';
+    unbound.idempotencyKey = 'delta:unbound-satisfaction';
+    unbound.actualStoryImpacts[0].satisfactionReceipt = {
+      schemaVersion: 'gma.story-satisfaction-receipt/1', obligationRef: 'obligation:cart-cargo',
+      storyNodeRef: 'story:arc:flintwake', contributionKind: 'answer', factRefs: ['information:invented-cargo'],
+      playerFacingEvidence: 'The cart contains an unsupported artifact.', contributionSummary: 'An artifact was found.',
+      obligationState: 'partially_satisfied', remainingQuestion: 'Who sent it?',
+    };
+    await expect(applyStoryDeltaV2({ userId: 'tenant-a', campaignId: 'campaign-a', delta: unbound }, store.records))
+      .rejects.toMatchObject({ code: 'STORY_SATISFACTION_FACT_UNBOUND' });
+    expect(store.documents).toHaveLength(3);
+  });
+
   it('accepts paragraph breaks in player-facing opening narration but rejects other controls', async () => {
     const paragraphStore = await preparedStore();
     const paragraphEnvelope = handoffEnvelope();
@@ -445,7 +563,7 @@ describe('D2 action-directed Story authority', () => {
       summary: `Possibility ${index}: ${'x'.repeat(850)}`,
     }));
     await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: oversizedDirectorContext }, store.records))
-      .rejects.toMatchObject({ code: 'STORY_DIRECTOR_CONTEXT_TOO_LARGE' });
+      .rejects.toMatchObject({ code: 'STORY_PROMPT_PROJECTION_TOO_LARGE' });
     expect(store.documents).toHaveLength(2);
 
     const mismatchedActiveBeat = handoffEnvelope();

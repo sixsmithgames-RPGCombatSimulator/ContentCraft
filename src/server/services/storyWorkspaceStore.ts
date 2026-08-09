@@ -17,6 +17,14 @@ export const SCENE_HANDOFF_RECEIPT_CONTRACT_VERSION = 'gmc.scene-handoff-receipt
 export const SCENE_KIT_V2_CONTRACT_VERSION = 'gmc.scene-kit/2';
 export const PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION = 'gma.playable-scene-context/2';
 export const STORY_DELTA_V2_CONTRACT_VERSION = 'studio.story-delta/2';
+export const SCENE_STORY_DESIGN_CONTRACT_VERSION = 'gmc.scene-story-design/1';
+export const STORY_AFFORDANCE_PROJECTION_CONTRACT_VERSION = 'gma.story-affordance-projection/1';
+export const STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION = 'gma.story-satisfaction-receipt/1';
+export const STORY_OBLIGATION_CAPABILITIES = Object.freeze([
+  'scene-story-design/1',
+  'story-affordance-projection/1',
+  'story-satisfaction-receipt/1',
+] as const);
 export const ACTION_DIRECTED_STORY_CAPABILITIES = Object.freeze([
   'action-directed-scene-handoff/1',
   'nested-story-graph/1',
@@ -24,13 +32,15 @@ export const ACTION_DIRECTED_STORY_CAPABILITIES = Object.freeze([
   'combined-manual-story-turn/1',
 ] as const);
 /** D2 storage and projection limits from ADR-005. */
-export const STORY_WORKSPACE_MAX_BYTES = 196_608;
+export const STORY_WORKSPACE_MAX_BYTES = 524_288;
 export const STORY_DELTA_MAX_BYTES = 8_192;
 export const STORY_SCENE_KIT_MAX_BYTES = 65_536;
 export const STORY_PROMPT_PROJECTION_MAX_BYTES = 12_288;
 export const STORY_GRAPH_MAX_BYTES = 65_536;
-export const SCENE_HANDOFF_MAX_BYTES = 20_480;
+export const SCENE_HANDOFF_MAX_BYTES = 65_536;
 export const PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES = 18_432;
+export const SCENE_STORY_DESIGN_MAX_BYTES = 20_480;
+export const STORY_SATISFACTION_RECEIPT_MAX_BYTES = 2_048;
 
 export const STORY_PLANNING_STATES = Object.freeze([
   'idea', 'draft', 'prepared', 'active', 'resolved', 'dormant', 'retired',
@@ -47,7 +57,7 @@ type JsonScalar = string | number | boolean | null;
 export type JsonValue = JsonScalar | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = Record<string, JsonValue>;
 type StoryRecordType = 'workspace' | 'arc' | 'frontier' | 'scene_kit'
-  | 'npc_scene_card' | 'npc_readiness' | 'preparation_requirement';
+  | 'scene_story_design' | 'npc_scene_card' | 'npc_readiness' | 'preparation_requirement';
 
 const SCENE_INFORMATION_PLACEHOLDER_PATTERN = /^(?:the\s+)?(?:contents?|details?|information|evidence|findings?)(?:\s+(?:are|is|become|became|were|was))?\s+(?:revealed|visible|found|clear|known)\.?$/i;
 const CENTRAL_CONTENT_TARGET_PATTERN = /\b(?:cart|wagon|carriage|coach|crate|crates|box|boxes|chest|container|containers|barrel|barrels|cask|casks|bundle|bundles|cargo|load|cabinet|case|satchel|pouch|pack)\b/i;
@@ -106,6 +116,8 @@ export interface StoryWorkspaceRevisionDocument {
     arcCount: number;
     frontierCount: number;
     sceneKitCount: number;
+    sceneStoryDesignCount?: number;
+    storySatisfactionReceiptCount?: number;
     npcSceneCardCount: number;
     npcReadinessCount: number;
     preparationRequirementCount: number;
@@ -173,6 +185,7 @@ const recordDescriptors: Record<Exclude<StoryRecordType, 'workspace'>, {
   arc: { path: ['portfolio', 'arcs'], idField: 'arcId' },
   frontier: { path: ['frontier', 'candidates'], idField: 'candidateId' },
   scene_kit: { path: ['sceneKits'], idField: 'sceneKitId' },
+  scene_story_design: { path: ['sceneStoryDesigns'], idField: 'designId' },
   npc_scene_card: { path: ['npcSceneCards'], idField: 'cardId' },
   npc_readiness: { path: ['npcReadiness'], idField: 'readinessId' },
   preparation_requirement: { path: ['preparationLedger', 'requirements'], idField: 'requirementId' },
@@ -484,6 +497,94 @@ export function validateSceneKitV2(input: unknown): asserts input is JsonObject 
   if (byteLength(input as JsonObject) > STORY_SCENE_KIT_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_KIT_TOO_LARGE', 'A Scene kit exceeds its storage bound.', { maximumBytes: STORY_SCENE_KIT_MAX_BYTES });
 }
 
+const STORY_CONTRIBUTION_KINDS = ['answer', 'confirmation', 'complication', 'consequence', 'decision'] as const;
+const STORY_OBLIGATION_STATES = ['open', 'partially_satisfied', 'transformed', 'resolved'] as const;
+const STORY_AFFORDANCE_MODES = ['observe', 'interact', 'investigate', 'social', 'capability', 'wait'] as const;
+const STORY_CHANGE_DIMENSIONS = ['knowledge', 'position', 'relationship', 'pressure', 'resources', 'options'] as const;
+
+function enumArray(value: unknown, field: string, allowed: readonly string[], maximum: number, minimum = 0): string[] {
+  const result = identifierArray(value, field, maximum, minimum);
+  result.forEach((entry, index) => {
+    if (!allowed.includes(entry)) throw new StoryWorkspaceStoreError(422, 'STORY_CONTRACT_VALUE_INVALID', `${field} contains an unsupported value.`, { field: `${field}[${index}]` });
+  });
+  return result;
+}
+
+/** Validates a GMC-owned dramatic design bound to one exact Scene-kit revision. */
+export function validateSceneStoryDesign(input: unknown): asserts input is JsonObject {
+  if (!plainObject(input)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'The scene story design must be an object.', { field: 'storyDesign' });
+  exactKeys(input, 'storyDesign', ['schemaVersion', 'designId', 'revision', 'sceneKitRef', 'scenePromise', 'obligations', 'affordances', 'sourceRefs']);
+  if (input.schemaVersion !== SCENE_STORY_DESIGN_CONTRACT_VERSION) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'The scene story-design version is not supported.', { field: 'storyDesign.schemaVersion' });
+  identifier(input.designId, 'storyDesign.designId');
+  positiveInteger(input.revision, 'storyDesign.revision');
+  if (!plainObject(input.sceneKitRef)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'The story design requires a Scene-kit reference.', { field: 'storyDesign.sceneKitRef' });
+  exactKeys(input.sceneKitRef, 'storyDesign.sceneKitRef', ['sceneKitId', 'sceneKitRevision']);
+  identifier(input.sceneKitRef.sceneKitId, 'storyDesign.sceneKitRef.sceneKitId');
+  positiveInteger(input.sceneKitRef.sceneKitRevision, 'storyDesign.sceneKitRef.sceneKitRevision');
+  if (!plainObject(input.scenePromise)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'The story design requires a scene promise.', { field: 'storyDesign.scenePromise' });
+  exactKeys(input.scenePromise, 'storyDesign.scenePromise', ['whyNow', 'meaningfulDevelopments']);
+  text(input.scenePromise.whyNow, 'storyDesign.scenePromise.whyNow', 1_500);
+  enumArray(input.scenePromise.meaningfulDevelopments, 'storyDesign.scenePromise.meaningfulDevelopments', STORY_CONTRIBUTION_KINDS, 5, 1);
+  if (!Array.isArray(input.obligations) || input.obligations.length < 1 || input.obligations.length > 4) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'A story design requires one to four obligations.', { field: 'storyDesign.obligations' });
+  const obligationIds = new Set<string>();
+  input.obligations.forEach((obligation, index) => {
+    const field = `storyDesign.obligations[${index}]`;
+    if (!plainObject(obligation)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'A story obligation must be an object.', { field });
+    exactKeys(obligation, field, ['obligationId', 'storyNodeRef', 'question', 'state', 'allowedContributions', 'completionConditions', 'sourceRefs']);
+    const obligationId = identifier(obligation.obligationId, `${field}.obligationId`);
+    if (obligationIds.has(obligationId)) throw new StoryWorkspaceStoreError(409, 'STORY_OBLIGATION_DUPLICATE', 'A story design contains a duplicate obligation.', { obligationId });
+    obligationIds.add(obligationId);
+    identifier(obligation.storyNodeRef, `${field}.storyNodeRef`);
+    text(obligation.question, `${field}.question`, 1_500);
+    if (!STORY_OBLIGATION_STATES.includes(String(obligation.state) as typeof STORY_OBLIGATION_STATES[number])) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'A story obligation has an invalid state.', { field: `${field}.state` });
+    enumArray(obligation.allowedContributions, `${field}.allowedContributions`, STORY_CONTRIBUTION_KINDS, 5, 1);
+    const conditions = stringArray(obligation.completionConditions, `${field}.completionConditions`, 6);
+    if (!conditions.length) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'A story obligation requires a completion condition.', { field: `${field}.completionConditions` });
+    identifierArray(obligation.sourceRefs, `${field}.sourceRefs`, 8);
+  });
+  if (!Array.isArray(input.affordances) || input.affordances.length < 1 || input.affordances.length > 12) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'A story design requires one to twelve affordances.', { field: 'storyDesign.affordances' });
+  const affordanceIds = new Set<string>();
+  input.affordances.forEach((affordance, index) => {
+    const field = `storyDesign.affordances[${index}]`;
+    if (!plainObject(affordance)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'A story affordance must be an object.', { field });
+    exactKeys(affordance, field, ['affordanceId', 'targetRef', 'targetLabel', 'mode', 'access', 'factRefs', 'changeDimensions', 'obligationRefs']);
+    const affordanceId = identifier(affordance.affordanceId, `${field}.affordanceId`);
+    if (affordanceIds.has(affordanceId)) throw new StoryWorkspaceStoreError(409, 'STORY_AFFORDANCE_DUPLICATE', 'A story design contains a duplicate affordance.', { affordanceId });
+    affordanceIds.add(affordanceId);
+    identifier(affordance.targetRef, `${field}.targetRef`);
+    text(affordance.targetLabel, `${field}.targetLabel`, 500);
+    if (!STORY_AFFORDANCE_MODES.includes(String(affordance.mode) as typeof STORY_AFFORDANCE_MODES[number])) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'A story affordance has an invalid mode.', { field: `${field}.mode` });
+    text(affordance.access, `${field}.access`, 1_500);
+    identifierArray(affordance.factRefs, `${field}.factRefs`, 8);
+    enumArray(affordance.changeDimensions, `${field}.changeDimensions`, STORY_CHANGE_DIMENSIONS, 6, 1);
+    const refs = identifierArray(affordance.obligationRefs, `${field}.obligationRefs`, 4, 1);
+    refs.forEach((ref) => {
+      if (!obligationIds.has(ref)) throw new StoryWorkspaceStoreError(422, 'STORY_OBLIGATION_REFERENCE_INVALID', 'A story affordance references an unknown obligation.', { field: `${field}.obligationRefs`, obligationRef: ref });
+    });
+  });
+  identifierArray(input.sourceRefs, 'storyDesign.sourceRefs', 24, 1);
+  if (byteLength(input as JsonObject) > SCENE_STORY_DESIGN_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_DESIGN_TOO_LARGE', 'The scene story design exceeds its storage bound.', { maximumBytes: SCENE_STORY_DESIGN_MAX_BYTES });
+}
+
+/** Validates the concrete contribution attached to an actual Story impact. */
+export function validateStorySatisfactionReceipt(input: unknown, field = 'satisfactionReceipt'): asserts input is JsonObject {
+  if (!plainObject(input)) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_RECEIPT_INVALID', 'A Story satisfaction receipt must be an object.', { field });
+  exactKeys(input, field, ['schemaVersion', 'obligationRef', 'storyNodeRef', 'contributionKind', 'factRefs', 'playerFacingEvidence', 'contributionSummary', 'obligationState', 'remainingQuestion']);
+  if (input.schemaVersion !== STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_RECEIPT_INVALID', 'The Story satisfaction-receipt version is not supported.', { field: `${field}.schemaVersion` });
+  identifier(input.obligationRef, `${field}.obligationRef`);
+  identifier(input.storyNodeRef, `${field}.storyNodeRef`);
+  if (!STORY_CONTRIBUTION_KINDS.includes(String(input.contributionKind) as typeof STORY_CONTRIBUTION_KINDS[number])) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_RECEIPT_INVALID', 'The Story contribution kind is invalid.', { field: `${field}.contributionKind` });
+  identifierArray(input.factRefs, `${field}.factRefs`, 16);
+  narrativeText(input.playerFacingEvidence, `${field}.playerFacingEvidence`, 1_000);
+  narrativeText(input.contributionSummary, `${field}.contributionSummary`, 1_000);
+  if (!STORY_OBLIGATION_STATES.includes(String(input.obligationState) as typeof STORY_OBLIGATION_STATES[number])) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_RECEIPT_INVALID', 'The Story obligation state is invalid.', { field: `${field}.obligationState` });
+  const remainingQuestion = String(input.remainingQuestion ?? '');
+  if (input.obligationState === 'resolved') {
+    if (remainingQuestion !== '') throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_RECEIPT_INVALID', 'A resolved Story obligation cannot retain a remaining question.', { field: `${field}.remainingQuestion` });
+  } else narrativeText(input.remainingQuestion, `${field}.remainingQuestion`, 1_000);
+  if (byteLength(input as JsonObject) > STORY_SATISFACTION_RECEIPT_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SATISFACTION_RECEIPT_TOO_LARGE', 'The Story satisfaction receipt exceeds its storage bound.', { maximumBytes: STORY_SATISFACTION_RECEIPT_MAX_BYTES });
+}
+
 /** Validates the logical scene-handoff proposal before authority checks run. */
 export function validateSceneHandoffProposal(input: unknown): asserts input is JsonObject {
   if (!plainObject(input)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_HANDOFF_INVALID', 'The scene-handoff proposal must be an object.', { field: 'proposal' });
@@ -496,12 +597,19 @@ export function validateSceneHandoffProposal(input: unknown): asserts input is J
   nonNegativeInteger(input.expectedCurrentSceneRevision, 'proposal.expectedCurrentSceneRevision');
   identifierArray(input.sourceRefs, 'proposal.sourceRefs', 24, 1);
   if (!plainObject(input.handoff)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_HANDOFF_INVALID', 'The handoff body must be an object.', { field: 'proposal.handoff' });
-  exactKeys(input.handoff, 'proposal.handoff', ['mode', 'candidateRef', 'priorSceneExit', 'sceneKit', 'activeBeatRef', 'playerActionPreserved']);
+  exactKeys(input.handoff, 'proposal.handoff', ['mode', 'candidateRef', 'priorSceneExit', 'sceneKit', 'storyDesign', 'activeBeatRef', 'playerActionPreserved']);
   if (!['reuse', 'select', 'create', 'replace'].includes(String(input.handoff.mode))) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_HANDOFF_INVALID', 'The handoff mode is invalid.', { field: 'proposal.handoff.mode' });
   identifier(input.handoff.candidateRef, 'proposal.handoff.candidateRef');
   if (!['completed', 'failed', 'abandoned', 'redirected', 'superseded'].includes(String(input.handoff.priorSceneExit))) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_HANDOFF_INVALID', 'The prior-scene exit is invalid.', { field: 'proposal.handoff.priorSceneExit' });
   if (input.handoff.playerActionPreserved !== true) throw new StoryWorkspaceStoreError(422, 'STORY_PLAYER_ACTION_NOT_PRESERVED', 'The handoff does not preserve the bound player action.', { field: 'proposal.handoff.playerActionPreserved' });
   validateSceneKitV2(input.handoff.sceneKit);
+  if (input.handoff.storyDesign !== undefined) {
+    validateSceneStoryDesign(input.handoff.storyDesign);
+    const designRef = input.handoff.storyDesign.sceneKitRef as JsonObject;
+    if (designRef.sceneKitId !== input.handoff.sceneKit.sceneKitId || designRef.sceneKitRevision !== input.handoff.sceneKit.revision) {
+      throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_REVISION_MISMATCH', 'The story design must target the exact proposed Scene-kit revision.', { field: 'proposal.handoff.storyDesign.sceneKitRef' });
+    }
+  }
   for (const [index, information] of (input.handoff.sceneKit.information as JsonObject[]).entries()) {
     if (typeof information.factText !== 'string' || information.factText.trim().length < 3) {
       throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_INFORMATION_NOT_PREPARED', 'A newly accepted scene information entry requires the concrete prepared fact.', { field: `proposal.handoff.sceneKit.information[${index}].factText` });
@@ -637,6 +745,45 @@ function normalizeSceneKitCollection(
   });
 }
 
+function normalizeSceneStoryDesignCollection(
+  proposed: Record<string, unknown>[],
+  previous: Record<string, unknown>[],
+): JsonObject[] {
+  const prior = new Map(previous.map((record) => [String(record.designId), record]));
+  const seen = new Set<string>();
+  return proposed.map((source) => {
+    validateSceneStoryDesign(source);
+    const designId = String(source.designId);
+    if (seen.has(designId)) throw new StoryWorkspaceStoreError(409, 'STORY_SCENE_DESIGN_DUPLICATE', 'Scene story designs contain a duplicate record.', { designId });
+    seen.add(designId);
+    const current = prior.get(designId);
+    if (current) {
+      const nextComparable = clone(source as JsonObject);
+      const priorComparable = clone(current as JsonObject);
+      delete nextComparable.revision;
+      delete priorComparable.revision;
+      const changed = canonicalJson(nextComparable) !== canonicalJson(priorComparable);
+      const expectedRevision = Number(current.revision) + (changed ? 1 : 0);
+      if (Number(source.revision) !== expectedRevision) throw new StoryWorkspaceStoreError(409, 'STORY_SCENE_DESIGN_REVISION_CONFLICT', 'The scene story-design revision does not match its material change.', { designId, expectedRevision, actualRevision: source.revision });
+    } else if (source.revision !== 1) throw new StoryWorkspaceStoreError(409, 'STORY_SCENE_DESIGN_REVISION_CONFLICT', 'A new scene story design must begin at revision one.', { designId, expectedRevision: 1, actualRevision: source.revision });
+    return clone(source as JsonObject);
+  });
+}
+
+function normalizeStorySatisfactionHistory(value: unknown): JsonObject[] {
+  if (!Array.isArray(value) || value.length > 240) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_HISTORY_INVALID', 'Story satisfaction history must be a bounded array.', { field: 'storySatisfactionReceipts' });
+  return value.map((entry, index) => {
+    const field = `storySatisfactionReceipts[${index}]`;
+    if (!plainObject(entry)) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_HISTORY_INVALID', 'A Story satisfaction-history entry must be an object.', { field });
+    exactKeys(entry, field, ['deltaId', 'sceneKitRef', 'impactEffect', 'receipt']);
+    identifier(entry.deltaId, `${field}.deltaId`);
+    identifier(entry.sceneKitRef, `${field}.sceneKitRef`);
+    if (!['advance', 'complicate', 'resolve', 'reopen', 'retire'].includes(String(entry.impactEffect))) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_HISTORY_INVALID', 'A Story satisfaction-history effect is invalid.', { field: `${field}.impactEffect` });
+    validateStorySatisfactionReceipt(entry.receipt, `${field}.receipt`);
+    return clone(entry as JsonObject);
+  });
+}
+
 function setAtPath(target: Record<string, JsonValue>, path: string[], value: JsonValue) {
   let cursor: Record<string, JsonValue> = target;
   for (const segment of path.slice(0, -1)) {
@@ -684,6 +831,8 @@ function normalizeWorkspace(
       invalidations: Array.isArray(ledger.invalidations) ? clone(ledger.invalidations as JsonValue[]) : [],
     },
     sceneKits: [],
+    sceneStoryDesigns: [],
+    storySatisfactionReceipts: normalizeStorySatisfactionHistory(input.storySatisfactionReceipts ?? priorWorkspace.storySatisfactionReceipts ?? []),
     npcSceneCards: [],
     npcReadiness: [],
     ...(storyGraph === undefined ? {} : { storyGraph: clone(storyGraph as JsonValue) }),
@@ -692,6 +841,7 @@ function normalizeWorkspace(
     ['arc', portfolio.arcs ?? []],
     ['frontier', frontier.candidates ?? []],
     ['scene_kit', input.sceneKits ?? []],
+    ['scene_story_design', input.sceneStoryDesigns ?? priorWorkspace.sceneStoryDesigns ?? []],
     ['npc_scene_card', input.npcSceneCards ?? []],
     ['npc_readiness', input.npcReadiness ?? []],
     ['preparation_requirement', ledger.requirements ?? []],
@@ -702,10 +852,19 @@ function normalizeWorkspace(
     const previousRecords = recordArray(priorWorkspace, descriptor);
     const normalized = recordType === 'scene_kit'
       ? normalizeSceneKitCollection(proposedValue as Record<string, unknown>[], previousRecords)
-      : normalizeRecordCollection(proposedValue as Record<string, unknown>[], previousRecords, descriptor.idField, descriptor.path.join('.'));
+      : recordType === 'scene_story_design'
+        ? normalizeSceneStoryDesignCollection(proposedValue as Record<string, unknown>[], previousRecords)
+        : normalizeRecordCollection(proposedValue as Record<string, unknown>[], previousRecords, descriptor.idField, descriptor.path.join('.'));
     setAtPath(next, descriptor.path, normalized);
   }
   if (next.storyGraph !== undefined) validateStoryGraphV2(next.storyGraph);
+  const sceneKitRevisions = new Map((next.sceneKits as JsonObject[]).map((kit) => [String(kit.sceneKitId), Number(kit.revision)]));
+  for (const design of next.sceneStoryDesigns as JsonObject[]) {
+    const sceneKitRef = design.sceneKitRef as JsonObject;
+    if (sceneKitRevisions.get(String(sceneKitRef.sceneKitId)) !== Number(sceneKitRef.sceneKitRevision)) {
+      throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_REVISION_MISMATCH', 'A scene story design must target an existing exact Scene-kit revision.', { designId: design.designId, sceneKitRef });
+    }
+  }
   validateNormalizedWorkspace(next);
   refreshActiveSceneKitReference(next, campaignId);
   const serialized = canonicalJson(next);
@@ -979,6 +1138,8 @@ function audit(workspace: JsonObject, bytes: number, changedRecordRefs: string[]
     arcCount: count(recordDescriptors.arc),
     frontierCount: count(recordDescriptors.frontier),
     sceneKitCount: count(recordDescriptors.scene_kit),
+    sceneStoryDesignCount: count(recordDescriptors.scene_story_design),
+    storySatisfactionReceiptCount: Array.isArray(workspace.storySatisfactionReceipts) ? workspace.storySatisfactionReceipts.length : 0,
     npcSceneCardCount: count(recordDescriptors.npc_scene_card),
     npcReadinessCount: count(recordDescriptors.npc_readiness),
     preparationRequirementCount: count(recordDescriptors.preparation_requirement),
@@ -1002,6 +1163,8 @@ export function emptyStoryWorkspace(campaignIdValue: string): JsonObject {
     frontier: { candidates: [] },
     preparationLedger: { requirements: [], invalidations: [] },
     sceneKits: [],
+    sceneStoryDesigns: [],
+    storySatisfactionReceipts: [],
     npcSceneCards: [],
     npcReadiness: [],
     activeSceneKitRef: null,

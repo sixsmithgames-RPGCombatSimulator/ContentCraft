@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-09.1';
+export const OPERATION_REGISTRY_VERSION = '2026-08-09.2';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-08-09.1',
   '2026-08-08.9',
   '2026-08-08.7',
   '2026-08-08.6',
@@ -417,6 +418,37 @@ const storyDirectorSceneKit = {
   },
 } as const;
 
+const storyDirectorSceneDesign = {
+  type: 'object', additionalProperties: false,
+  required: ['schemaVersion', 'designId', 'revision', 'sceneKitRef', 'scenePromise', 'obligations', 'affordances', 'sourceRefs'],
+  properties: {
+    schemaVersion: { const: 'gmc.scene-story-design/1' },
+    designId: { type: 'string', minLength: 1, maxLength: 240 },
+    revision: { type: 'integer', minimum: 1 },
+    sceneKitRef: { type: 'object' },
+    scenePromise: { type: 'object' },
+    obligations: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'object' } },
+    affordances: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'object' } },
+    sourceRefs: storyDirectorProviderRefs,
+  },
+} as const;
+
+const storySatisfactionReceiptOutput = {
+  type: 'object', additionalProperties: false,
+  required: ['schemaVersion', 'obligationRef', 'storyNodeRef', 'contributionKind', 'factRefs', 'playerFacingEvidence', 'contributionSummary', 'obligationState', 'remainingQuestion'],
+  properties: {
+    schemaVersion: { const: 'gma.story-satisfaction-receipt/1' },
+    obligationRef: { type: 'string', minLength: 1, maxLength: 240 },
+    storyNodeRef: { type: 'string', minLength: 1, maxLength: 240 },
+    contributionKind: { enum: ['answer', 'confirmation', 'complication', 'consequence', 'decision'] },
+    factRefs: { type: 'array', maxItems: 16, items: { type: 'string', minLength: 1, maxLength: 240 } },
+    playerFacingEvidence: { type: 'string', minLength: 1, maxLength: 1000 },
+    contributionSummary: { type: 'string', minLength: 1, maxLength: 1000 },
+    obligationState: { enum: ['open', 'partially_satisfied', 'transformed', 'resolved'] },
+    remainingQuestion: { type: 'string', maxLength: 1000 },
+  },
+} as const;
+
 export const STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA = {
   type: ['object', 'null'], additionalProperties: false,
   required: [
@@ -525,7 +557,7 @@ export const STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA = {
 } as const;
 
 const actionDirectedStoryTurnOutput = {
-  schemaVersion: { const: 'gma.story-director-result/2' },
+  schemaVersion: { enum: ['gma.story-director-result/2', 'gma.story-director-result/3'] },
   proposal: {
     type: 'object', additionalProperties: false,
     required: [
@@ -543,6 +575,7 @@ const actionDirectedStoryTurnOutput = {
         properties: {
           mode: { type: 'string' }, candidateRef: { type: 'string' }, priorSceneExit: { type: 'string' },
           playerActionPreserved: { type: 'boolean' }, activeBeatRef: { type: 'string' }, sceneKit: storyDirectorSceneKit,
+          storyDesign: storyDirectorSceneDesign,
         },
       },
       openingNarration: { type: 'string' }, rollRequest: { type: ['object', 'null'] },
@@ -576,7 +609,7 @@ const actionDirectedStoryTurnOutput = {
 } as const;
 
 const actionDirectedCurrentSceneOutput = {
-  schemaVersion: { enum: ['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5'] },
+  schemaVersion: { enum: ['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6'] },
   responseMode: { const: 'in_character' },
   responseText: { type: 'string', minLength: 1, maxLength: 16_000 },
   rollRequest: { type: ['object', 'null'] },
@@ -597,6 +630,7 @@ const actionDirectedCurrentSceneOutput = {
             outcome: { type: 'string', minLength: 1, maxLength: 240 },
             effect: { enum: ['advance', 'complicate', 'resolve', 'reopen', 'retire'] },
             reason: { type: 'string', minLength: 1, maxLength: 1000 },
+            satisfactionReceipt: storySatisfactionReceiptOutput,
           },
         },
       },
@@ -780,13 +814,14 @@ const seeds: Seed[] = [
     id: 'story.turn.direct', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'proposal', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/3',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/4',
     outputProperties: actionDirectedStoryTurnOutput,
     systemInstruction: [
       'Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet.',
-      'Return exactly one JSON object matching gma.story-director-result/2. This is proposal-only; GMC remains Story and canon authority and VCS remains mechanics authority.',
+      'Return exactly one JSON object matching the requested gma.story-director-result version. This is proposal-only; GMC remains Story and canon authority and VCS remains mechanics authority.',
       'Preserve the exact declared action and fingerprint. Prefer an eligible prepared Scene kit; otherwise create only the minimum complete supported Scene kit.',
       'Establish one playable locus, one exact present cast, two to five beats with exactly one active beat, all four exit kinds, Story bindings, and potential impacts.',
+      'When the packet requests gma.story-director-result/3, include one gmc.scene-story-design/1 in handoff.storyDesign, bound to the exact proposed Scene-kit revision. Prepare one to four concrete dramatic questions and only action-capable affordances grounded in supplied fact, target, and Story-node references. Prepare possibilities, not a required player route.',
       'The active beat and opening narration must concretely pay off the declared action now or establish the precise position for one provisional VCS mechanic.',
       'Prepare a concrete fixed information fact or bounded absence for every central story-bearing target implied by the scene purpose, dramatic question, active beat, or established elements. A container label or a promise that contents will be revealed later is not an answer.',
       'When the supplied actionBoundReveal reports blocking scene-substance debt, replace the same Scene kit in place, add the minimum action-matched information row, and state any directly reached fact exactly in openingNarration before requesting a roll.',
@@ -803,14 +838,15 @@ const seeds: Seed[] = [
     id: 'story.current-scene.narrate', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/5',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/6',
     outputProperties: actionDirectedCurrentSceneOutput,
     systemInstruction: [
       'Narrate exactly one player action in the already-current GMC Scene kit from the supplied bounded GMA packet.',
-      'Return exactly one JSON object using the current-scene result schemaVersion requested by the bounded GMA packet: gma.current-scene-narration-result/5 for the current policy, or /4 only for an older compatible packet during ordered rollout. Do not propose, replace, move, or close the Scene kit.',
+      'Return exactly one JSON object using the current-scene result schemaVersion requested by the bounded GMA packet: gma.current-scene-narration-result/6 for the current Story-obligation policy, or /5 or /4 only for an older compatible packet during ordered rollout. Do not propose, replace, move, or close the Scene kit.',
       'Preserve the exact declared action. Use plainly available supplied facts plus only private facts explicitly authorized by actionBoundReveal, and keep mechanics provisional under VCS authority.',
       'When actionBoundReveal marks a fact requiredNow, state its exact factText in responseText before any roll. A roll may change completeness, time, danger, or interpretation, but not the fixed contents already reached by the action.',
       'For a provisional check on a story-bearing target, return all five prepared branches with gma.substantive-outcome/1. Each branch must state a concrete fact-bound finding, scope-limited negative, or specific barrier; process-only prose such as “the load is established” is not a result.',
+      'When storyAffordanceProjection is supplied, any claimed actualStoryImpact must reference a projected obligation, use an allowed contribution, and include gma.story-satisfaction-receipt/1. State the receipt’s concrete answer, confirmation, complication, consequence, or decision explicitly in responseText; metadata alone is never a result. Cite only supplied factRefs, use an effect-compatible obligationState, leave remainingQuestion empty only when resolved, and return no impact or receipt when no obligation changed.',
       'Return gma.scene-realization/1. Cover every requested responder or cohort member with exact prose evidence; describe a cohort collectively with all, each, both, or its known count, or use one observedCount 1 row with different evidence per member; account for requested concealment and every action-matched capability.',
       'Keep rules analysis out of responseText. Put the lived effect or non-effect in prose and an unsupported capability rule only in mechanicsNote.',
       'Make exposure or loss conditional on a failed, detected, conspicuous, delayed, or otherwise concrete risky course. Merely taking another action cannot fail the scene.',

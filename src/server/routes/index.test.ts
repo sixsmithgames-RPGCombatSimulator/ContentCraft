@@ -2,7 +2,10 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ACTION_DIRECTED_STORY_CAPABILITIES } from '../services/storyWorkspaceStore.js';
+import {
+  ACTION_DIRECTED_STORY_CAPABILITIES,
+  STORY_OBLIGATION_CAPABILITIES,
+} from '../services/storyWorkspaceStore.js';
 import { apiRouter } from './index.js';
 
 const servers: Server[] = [];
@@ -28,13 +31,23 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.9.18',
+      version: '1.9.19',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
           contracts: {
             migrationPreview: 'gmc.story-migration-preview/1',
             acceptedV1SceneSnapshot: 'gma.accepted-v1-scene-snapshot/1',
+          },
+          authority: 'gmc',
+          routeEnabled: false,
+        },
+        storyObligations: {
+          capabilities: STORY_OBLIGATION_CAPABILITIES,
+          contracts: {
+            sceneStoryDesign: 'gmc.scene-story-design/1',
+            storyAffordanceProjection: 'gma.story-affordance-projection/1',
+            storySatisfactionReceipt: 'gma.story-satisfaction-receipt/1',
           },
           authority: 'gmc',
           routeEnabled: false,

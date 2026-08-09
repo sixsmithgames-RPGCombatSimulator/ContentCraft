@@ -258,7 +258,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const currentScene = getOperationDefinition('story.current-scene.narrate');
     const repair = getOperationDefinition('story.turn.repair');
     const sceneKitRepair = getOperationDefinition('story.scene-kit.repair');
-    expect(turn.prompt.version).toBe('gma.story-director-policy/3');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/4');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
     expect(turn.prompt.systemInstruction).toMatch(/concretely pay off the declared action now/i);
@@ -269,6 +269,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(turn.prompt.systemInstruction).toMatch(/Merely taking another action cannot fail the scene/i);
     expect(turn.prompt.systemInstruction).toMatch(/concrete fixed information fact or bounded absence/i);
     expect(turn.prompt.systemInstruction).toMatch(/gma\.substantive-outcome\/1/i);
+    expect(turn.prompt.systemInstruction).toMatch(/gmc\.scene-story-design\/1/i);
+    expect(turn.prompt.systemInstruction).toMatch(/Prepare possibilities, not a required player route/i);
     expect(turn.provider.maxAttempts).toBe(1);
     expect(turn.provider.fallbackAllowed).toBe(false);
     expect(turn.outputSchema.schema.required).toEqual([
@@ -294,17 +296,20 @@ describe('provider-neutral LLM orchestrator', () => {
       type: 'object',
       required: ['schemaVersion', 'participantResponses', 'continuityResolutions', 'capabilityResolutions'],
     });
-    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/5');
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/6');
     expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/authorized by actionBoundReveal/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/gma\.story-satisfaction-receipt\/1/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/metadata alone is never a result/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/return no impact or receipt when no obligation changed/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/the load is established/i);
     expect(currentScene.outputSchema.schema.required).toEqual([
       'schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization',
       'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority',
     ]);
     expect((currentScene.outputSchema.schema.properties as any).schemaVersion.enum)
-      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5']);
+      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6']);
     expect(currentScene.provider.maxAttempts).toBe(1);
     expect(currentScene.provider.fallbackAllowed).toBe(false);
     expect(repair.prompt.version).toBe('gma.story-director-policy/3');

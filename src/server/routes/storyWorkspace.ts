@@ -38,9 +38,13 @@ import {
   PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
   SCENE_HANDOFF_PROPOSAL_CONTRACT_VERSION,
   SCENE_KIT_V2_CONTRACT_VERSION,
+  SCENE_STORY_DESIGN_CONTRACT_VERSION,
+  STORY_AFFORDANCE_PROJECTION_CONTRACT_VERSION,
   STORY_DELTA_V2_CONTRACT_VERSION,
   STORY_GRAPH_CONTRACT_VERSION,
   STORY_GRAPH_NODE_REFERENCE_CONTRACT_VERSION,
+  STORY_OBLIGATION_CAPABILITIES,
+  STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
 } from '../services/storyWorkspaceStore.js';
 
 export const storyWorkspaceRouter = Router({ mergeParams: true });
@@ -459,6 +463,14 @@ storyWorkspaceRouter.get('/contracts', (_req, res) => {
       playableSceneContext: PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
       storyDelta: STORY_DELTA_V2_CONTRACT_VERSION,
       capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
+      authority: 'gmc',
+      routeEnabled: false,
+    },
+    storyObligations: {
+      sceneStoryDesign: SCENE_STORY_DESIGN_CONTRACT_VERSION,
+      storyAffordanceProjection: STORY_AFFORDANCE_PROJECTION_CONTRACT_VERSION,
+      storySatisfactionReceipt: STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
+      capabilities: STORY_OBLIGATION_CAPABILITIES,
       authority: 'gmc',
       routeEnabled: false,
     },
