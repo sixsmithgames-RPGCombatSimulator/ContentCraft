@@ -132,6 +132,15 @@ export function shouldResolveNarrativeTransition(responseMode: string, sceneSegm
   return responseMode !== 'ooc' && sceneSegment !== null;
 }
 
+export function questMutationResponse(result: { record: unknown; mutationId?: unknown; duplicate?: unknown; duplicateReason?: unknown }) {
+  return {
+    quest: result.record,
+    mutationId: result.mutationId,
+    duplicate: Boolean(result.duplicate),
+    duplicateReason: result.duplicateReason,
+  };
+}
+
 const userId = (req: Request) => (req as IntegrationRequest).userId;
 const correlationId = (req: Request) => req.header('X-Sixsmith-Correlation-Id') || randomUUID();
 
@@ -895,7 +904,7 @@ gmcV1Router.get('/quests/:questId', asyncRoute(async (req, res) => {
 gmcV1Router.post('/campaigns/:campaignId/quests', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;
   const result = await createQuestMutation(userId(req), req.params.campaignId, req.body ?? {});
-  res.status(result.duplicate ? 200 : 201).json(result);
+  res.status(result.duplicate ? 200 : 201).json(questMutationResponse(result));
 }));
 
 gmcV1Router.patch('/quests/:questId', asyncRoute(async (req, res) => {
@@ -1658,37 +1667,53 @@ gmcV1Router.post('/ai/summarize-session', asyncRoute((req, res) => ai(req, res, 
 gmcV1Router.post('/ai/build-campaign-foundation', asyncRoute((req, res) => ai(req, res, `Build a rich but playable tabletop campaign foundation from the supplied Session 0 answers.
 Respect every stated line, veil, content limit, desired theme, rules preference, and play-mode choice. For solo play, create a strong protagonist-facing opening, preserve player agency, and give the GM system useful uncertainty without deciding the protagonist's choices.
 
+This is the first-pass policy for gmc.campaign-foundation/2. Every required section below must be present in the original response. A later completion pass may fill a missing or invalid section, but must not be the first place any requirement is taught.
+
 Build enough campaign structure for real play after Session 0, not a thin opening seed. Do not write a railroad or decide future player choices. Create flexible layers that can survive unexpected routes:
 - campaign spine: premise, central question, core conflict, antagonist pressure, win/loss shape, and why the campaign matters;
 - setting frame: where play begins, what the player-facing truths are, what is strange or unstable, and what ordinary life looks like before trouble escalates;
 - factions: at least three active groups with goals, methods, resources, relationships, and what they do if ignored;
-- antagonist map: BBEG or campaign-level pressure, lieutenants, henchmen, contacts, and minions as roles. Mark unrevealed identities as provisional roles, not scene-present NPCs;
-- arcs and sub-arcs: 3-5 major arcs plus 4-8 sub-arcs/side arcs with start triggers, completion signals, consequences, rewards, and impact on the campaign spine;
-- clue/secret network: important secrets, evidence paths, alternate clues, and how clues point to people, places, items, or next choices;
+- antagonist hierarchy: give the BBEG or campaign-level pressure, 2-4 lieutenants, operational contacts or henchmen, and 1-4 minion forces concrete person/creature kinds, motivations, current goals, methods, resources, relationships, knowledge of the protagonist, and reveal states. Prepare identities privately when useful; never make an unrevealed actor present;
+- arcs and sub-arcs: 3-5 major arcs plus 4-8 sub-arcs/side arcs with dramatic questions, pressures, parent relationships, start triggers, completion signals, consequences, rewards, and impact on the campaign spine;
+- clue/secret network: 4-8 important secrets with at least three independent access paths each. Prefer a person, place, object/document, timing anomaly, or faction reaction so one failed check or missed room cannot stall the campaign;
+- side quests: 4-8 optional but material quests with purpose, hook, target or pressure, at least two entry paths, consequences, rewards, and an explicit campaign, character, faction, or world-arc connection. A suspicious merchant may be an antagonist, victim, rival, witness, or patron; do not convert uncertainty into guilt;
+- calendar and living world: choose an explicit setting calendar date, season, day/tenday label, local time convention, ordinary city activity, current city pressures, nearby regional conditions, and source notes that distinguish published-setting lore from campaign inventions;
+- civic power map: 4-8 institutions or consequential leaders with purpose, motivation, methods, jurisdiction, knowledge of the antagonist operation, knowledge of the protagonist, stance, escalation trigger, and setting-source grounding;
 - locations: starting site plus several keyed locations that each have a purpose, pressure, secret, and reason to revisit;
-- scenes: opening scene must have where, when, who, objective, important beats, known details, doneWhen, rewards, exits, and arc impacts;
+- scenes: the opening scene has where, when, who, objective, 2-5 structured important beats, concrete known details and evidence, doneWhen, rewards, all four exit kinds, and arc impacts. Every central story-bearing target has prepared concrete content or a bounded meaningful absence before narration;
+- story bootstrap: provide a campaign question, up to five optional frontier situations, and one opening-scene story design. The design has 1-4 dramatic obligations and 1-12 action-capable affordances. It prepares possibilities and alternate access, never a required player route or guaranteed outcome;
 - progression: level/chapter rhythm, treasure/reward types, XP/milestone assumptions, downtime hooks, and escalating stakes;
 - coherence: recurring motifs, canon boundaries, flexible continuity rules, and what must remain true even if the player bypasses planned content.
 
 Use proven campaign composition lessons without copying any published adventure: strong central villain pressure and sense of place; readable early escalation; real faction procedures behind faction-heavy play; non-linear clue networks; linked sandbox locations; meaningful clocks and consequences. Keep future secrets labeled as GM-private/provisional. Established facts must be safe to store as canon; provisional plans must be clearly provisional.
 Return {
+  schemaVersion:'gmc.campaign-foundation/2',
   campaign:{title,tagline,pitch,tone,themes,campaignPillars,sixTruths,centralQuestion,settingFrame,intendedLevelRange,gmPrinciples},
   campaignStructure:{
     spine:{premise,centralConflict,bbeg,bbegWants,doomClock,winCondition,lossCondition,gmSecret},
-    arcs:[{title,tier:'campaign|chapter|side|character',premise,playerFacingHook,gmSecret,startTrigger,completionSignals,consequence,rewardKinds,scope,relatedNpcNames,relatedLocationNames}],
+    antagonistHierarchy:{bbeg:{name,role,personOrCreatureKind,motivation,currentGoal,methods,resources,relationships,knowledgeOfProtagonist,revealState},lieutenants:[{name,role,personOrCreatureKind,motivation,currentGoal,methods,resources,relationships,knowledgeOfProtagonist,revealState}],operators:[{name,role,personOrCreatureKind,motivation,currentGoal,methods,resources,relationships,knowledgeOfProtagonist,revealState}],minionForces:[{name,personOrCreatureKinds,role,motivation,currentGoal,methods,resources,revealState}]},
+    arcs:[{title,tier:'campaign|chapter|side|character',parentArcTitle,dramaticQuestion,pressures,premise,playerFacingHook,gmSecret,startTrigger,completionSignals,consequence,rewardKinds,scope,relatedNpcNames,relatedLocationNames}],
     coherenceMap:{recurringMotifs,tensionEscalation,flexibilityPrinciples,canonBoundaries}
   },
+  calendarFrame:{calendarName,year,month,day,dateLabel,season,tendayLabel,dayLabel,localTimeConvention,ordinaryActivity,weatherPattern,cityPressures,regionalConditions,settingSourceNotes,campaignInventions},
+  powerMap:[{name,kind,leaderName,purpose,motivation,methods,jurisdiction,knowledgeOfAntagonists,knowledgeOfProtagonist,stance,escalationTrigger,settingSourceNotes,revealState}],
+  secretNetwork:[{title,secret,importance,linkedArcTitles,linkedNpcNames,linkedLocationNames,accessPaths:[{kind:'person|place|object|document|time|faction_reaction|other',targetName,approach,whatItCanReveal,failureOrBypassPath}],consequenceIfIgnored,revealState}],
+  sideQuests:[{title,purpose,hook,objective,relatedArcTitle,targetNames,entryPaths,consequence,rewards,relationshipToSpine,truthState,priority}],
   progressionPlan:[{phase,levelRange,focus,unlockSignals,rewardAssumptions}],
   rewardPlan:[{rewardType,whenAwarded,examples,scaleNotes}],
   startingLocation:{name,description,atmosphere,features,secrets,hooks,tags},
   keyLocations:[{name,description,geographicTier,parentLocationName,purpose,pressure,secret,revisitHook,tags}],
-  openingScene:{name,description,where,when,objective,doneWhen,importantBeats,knownDetails,evidenceLedger,rewards,arcImpacts,playerExits,gmPrivateNotes,presentNpcNames},
+  openingScene:{name,description,where,when,objective,dramaticQuestion,doneWhen,importantBeats:[{kind:'discovery|decision|pressure|reaction|clock|resolution',trigger,changeSurface,potentialArcTitles}],knownDetails:[{summary,truthState}],evidenceLedger:[{factText,state:'plainly_visible|discoverable|hidden|conditional',accessVectors,critical}],rewards,arcImpacts,playerExits:[{kind:'completion|failure|abandonment|redirect',condition}],gmPrivateNotes,presentNpcNames},
   initialFactions:[{name,role,status,publicFace,secret,goal,methods,resources,relationshipToProtagonist,tags}],
   initialFacts:[{text,category,scope:{kind,tier,locationId,locationName,entityId,entityName},locked,secret}],
   initialNpcs:[{name,role,entityTier,presentInOpeningScene,motivation,personality_traits:[...],ideals:[...],bonds:[...],flaws:[...],secret,voice,relationshipToProtagonist,tags}],
   openThreads:[{title,description,deadlineDescription,consequence,scope:{kind,tier,locationId,locationName,entityId,entityName}}],
+  storyBootstrap:{campaignQuestion,frontier:[{title,preparationHorizon:'immediate|near|seeded',trigger,dramaticQuestion,stakes,pressures,storyNodeTitle,likelyCastNames,targetLocationNames,sourceFactTexts}],openingSceneDesign:{whyNow,meaningfulDevelopments:['answer|confirmation|complication|consequence|decision'],obligations:[{key,storyNodeTitle,question,allowedContributions:['answer|confirmation|complication|consequence|decision'],completionConditions,sourceFactTexts}],affordances:[{key,targetName,targetLabel,mode:'observe|interact|investigate|social|capability|wait',access,factTexts,changeDimensions:['knowledge|position|relationship|pressure|resources|options'],obligationKeys}]}},
   sessionZeroSummary:{summary,keyDecisions,safetyNotes,playStyleNotes}
-}. FACT scope tier must be geographic (world, city, district, site, room) or entity (bbeg, lieutenant, henchman, contact). NPC entityTier uses bbeg, lieutenant, henchman, or contact. Every initial NPC must have non-empty personality_traits, ideals, bonds, and flaws arrays; these are required character-defining material, not optional decoration. Every open thread is an EVENT: give it a meaningful trigger/deadline and a concrete consequence if it goes unaddressed. Generate at least 10 durable initial facts, 6-12 NPCs, 3-6 factions, 4-8 keyed locations, and 8-16 open threads unless Session 0 explicitly calls for a tiny campaign.`, ['campaign', 'campaignStructure', 'progressionPlan', 'rewardPlan', 'startingLocation', 'keyLocations', 'openingScene', 'initialFactions', 'initialFacts', 'initialNpcs', 'openThreads', 'sessionZeroSummary'])));
+}. FACT scope tier must be geographic (world, city, district, site, room) or entity (bbeg, lieutenant, henchman, contact). NPC entityTier uses bbeg, lieutenant, henchman, or contact. Every initial NPC must have non-empty personality_traits, ideals, bonds, and flaws arrays; these are required character-defining material, not optional decoration. Every open thread is an EVENT: give it a meaningful trigger/deadline and a concrete consequence if it goes unaddressed. Generate at least 10 durable initial facts, 6-12 NPCs, 3-6 factions, 4-8 keyed locations, and 8-16 open threads unless Session 0 explicitly calls for a tiny campaign.
+
+⚠️ CRITICAL OUTPUT REQUIREMENT
+Return ONLY valid JSON. No explanations. No markdown. No extra text.`, ['schemaVersion', 'campaign', 'campaignStructure', 'calendarFrame', 'powerMap', 'secretNetwork', 'sideQuests', 'progressionPlan', 'rewardPlan', 'startingLocation', 'keyLocations', 'openingScene', 'initialFactions', 'initialFacts', 'initialNpcs', 'openThreads', 'storyBootstrap', 'sessionZeroSummary'])));
 gmcV1Router.post('/ai/detect-encounter-transition', asyncRoute((req, res) => ai(
   req,
   res,

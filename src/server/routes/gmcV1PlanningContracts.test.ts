@@ -23,6 +23,7 @@ import {
   PLAN_CHARACTER_SHEET_MUTATION_INSTRUCTION,
   PLAN_CHARACTER_SHEET_MUTATION_REQUIRED_KEYS,
   SKILL_ENVELOPE_INSTRUCTION,
+  questMutationResponse,
   requestedSceneStoryContracts,
   shouldResolveNarrativeTransition,
   validateCompactAiInput,
@@ -38,6 +39,16 @@ import {
 } from '../services/gmcIntegrationStore.js';
 
 describe('GMC narrative transition validation contract', () => {
+  it('returns a named quest resource from canonical quest creation', () => {
+    const quest = { _id: 'quest-1', title: 'A prepared side quest' };
+    expect(questMutationResponse({ record: quest, mutationId: 'quest-create-1', duplicate: false })).toEqual({
+      quest,
+      mutationId: 'quest-create-1',
+      duplicate: false,
+      duplicateReason: undefined,
+    });
+  });
+
   it('validates every in-character scene segment against its resolved presence', () => {
     expect(shouldResolveNarrativeTransition('in_character', { status: 'completed' })).toBe(true);
     expect(shouldResolveNarrativeTransition('in_character', { status: 'future_terminal_status' })).toBe(true);

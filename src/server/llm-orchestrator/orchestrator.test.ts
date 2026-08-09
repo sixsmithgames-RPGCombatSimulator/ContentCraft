@@ -30,8 +30,8 @@ function outputFor(operation: string) {
   for (const key of required) {
     if (['valid', 'stateAdvanced', 'shouldAward', 'alreadyRewarded', 'requiresVcs', 'requiresGameMasterCraft'].includes(key)) output[key] = false;
     else if (['confidence', 'amount'].includes(key)) output[key] = 0;
-    else if (['proposedCanonChanges', 'proposedVcsExports', 'continuityNotes', 'issues', 'keyDecisions', 'npcUpdates', 'openThreads', 'resolvedThreads', 'progressionPlan', 'rewardPlan', 'keyLocations', 'initialFactions', 'initialFacts', 'initialNpcs'].includes(key)) output[key] = [];
-    else if (['structuredIntent', 'stakes'].includes(key)) output[key] = {};
+    else if (['proposedCanonChanges', 'proposedVcsExports', 'continuityNotes', 'issues', 'keyDecisions', 'npcUpdates', 'openThreads', 'resolvedThreads', 'progressionPlan', 'rewardPlan', 'keyLocations', 'initialFactions', 'initialFacts', 'initialNpcs', 'powerMap', 'secretNetwork', 'sideQuests'].includes(key)) output[key] = [];
+    else if (['structuredIntent', 'stakes', 'campaign', 'campaignStructure', 'calendarFrame', 'startingLocation', 'openingScene', 'storyBootstrap', 'sessionZeroSummary'].includes(key)) output[key] = {};
     else output[key] = '';
   }
   return output;

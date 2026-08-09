@@ -14,7 +14,7 @@
     {"family":"encounter_planning","operation":"encounter.plan","request":{"objective":"fixture"},"response":{"encounter":{},"combatants":[]}},
     {"family":"npc_turn_intent","operation":"combat.turn.plan","request":{"actorId":"fixture-actor"},"response":{"actorId":"fixture-actor","intent":"hold","actions":[]}},
     {"family":"entity_generation","operation":"entity.npc.generate","request":{"prompt":"sanitized"},"response":{"name":"Fixture NPC","draft":true}},
-    {"family":"campaign_foundation","operation":"campaign.foundation.build","request":{"answers":{"title":"Fixture"}},"response":{"campaign":{"title":"Fixture"}}},
+    {"family":"campaign_foundation","operation":"campaign.foundation.build","request":{"answers":{"title":"Fixture"}},"response":{"schemaVersion":"gmc.campaign-foundation/2","campaign":{"title":"Fixture"},"campaignStructure":{},"calendarFrame":{},"powerMap":[],"secretNetwork":[],"sideQuests":[],"progressionPlan":[],"rewardPlan":[],"startingLocation":{},"keyLocations":[],"openingScene":{},"initialFactions":[],"initialFacts":[],"initialNpcs":[],"openThreads":[],"storyBootstrap":{},"sessionZeroSummary":{}}},
     {"family":"workflow_stage","operation":"workflow.stage.execute","request":{"stageId":"fixture-stage"},"response":{"fixtureStage":{}}},
     {"family":"manual_mode","operation":"narration.generate","transport":"manual","request":{"sceneVersion":"scene-r1"},"response":{"narration":"Sanitized manual prose."}},
     {"family":"error","operation":"narration.generate","request":{"sceneVersion":"stale"},"response":{"status":"failed","error":{"code":"STALE_CONTEXT_REVISION","retryable":false}}}
