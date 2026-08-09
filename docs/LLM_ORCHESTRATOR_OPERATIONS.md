@@ -1,6 +1,6 @@
 # LLM orchestrator operations and security policy
 
-Version: 2026-08-04.1
+Version: 2026-08-08.9
 
 ## Living Story preparation operations
 
@@ -20,8 +20,13 @@ choices, or narration:
   pressures, access vectors, and completion/failure/abandonment/redirect exits.
 - `story.turn.direct` returns one fully shaped, proposal-only action-directed
   handoff and its opening narration. Its provider schema requires the nested
-  locus, cast, beats, exits, material claims, payoff, and agency audit rather
-  than accepting empty placeholder objects.
+  locus, cast, beats, exits, material claims, scene realization, payoff, and
+  agency audit rather than accepting empty placeholder objects.
+- `story.current-scene.narrate` returns only a ready-current-scene narration;
+  it cannot propose or replace a Scene kit. Its distinct `/4` result schema
+  prevents the ready-scene result from being routed through the incompatible
+  handoff provider schema. It shares the first-pass scene-realization, immersive
+  rules-note separation, conditional-risk, agency, and VCS authority rules.
 - `story.turn.repair` returns one bound correction ID, an optional structured
   Scene-kit replacement, and compact JSON-string patches for any remaining
   small fields allowed by GMA. A complete Scene kit is never double-encoded in

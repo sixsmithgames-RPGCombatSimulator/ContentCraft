@@ -273,3 +273,24 @@ service-authenticated LLM contract confirm GMC 1.9.0, registry `2026-08-07.1`,
 32 operations, and `story.turn.direct` with policy
 `gma.story-director-policy/1`. GMA gameplay routing remains disabled; D6 may
 begin only after separate authorization.
+
+## D9.1 provider-schema convergence addendum — 2026-08-08
+
+GMA ADR-005's Accepted D9.1 amendment keeps GMC's authority boundary unchanged
+while closing a model-provider schema split. Registry `2026-08-08.9` adds
+`story.current-scene.narrate` for `gma.current-scene-narration-result/4` and
+reserves `story.turn.direct` for `gma.story-director-result/2`. Both operations
+require `gma.scene-realization/1`: exact prose evidence for requested responder
+coverage, concealment continuity, and action-matched capability results, with
+unsupported rules explanations kept outside in-character prose. Both are
+single-attempt, proposal-only operations. The registered first-pass policies
+also require failure risk to be conditional on a concrete failed, detected,
+conspicuous, delayed, or otherwise risky course; merely taking another action
+cannot fail a scene.
+
+GMA selects the operation from the versioned packet task. GMC does not accept a
+ready-scene result through the handoff schema, and GMA does not fall back to
+that incompatible operation or to legacy narration. Existing Story workspaces,
+Scene kits, receipts, and accepted timeline history require no migration. The
+new operation cannot commit Story or mechanics; GMC scene handoff and VCS
+receipts remain the only corresponding authorities.

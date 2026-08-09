@@ -255,18 +255,22 @@ describe('provider-neutral LLM orchestrator', () => {
 
   it('registers the combined action-directed Story turn with the complete first-pass contract', () => {
     const turn = getOperationDefinition('story.turn.direct');
+    const currentScene = getOperationDefinition('story.current-scene.narrate');
     const repair = getOperationDefinition('story.turn.repair');
     const sceneKitRepair = getOperationDefinition('story.scene-kit.repair');
-    expect(turn.prompt.version).toBe('gma.story-director-policy/1');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/2');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
     expect(turn.prompt.systemInstruction).toMatch(/concretely pay off the declared action now/i);
     expect(turn.prompt.systemInstruction).toMatch(/Bind every material narrated fact/i);
     expect(turn.prompt.systemInstruction).toMatch(/Do not invent a player choice/i);
+    expect(turn.prompt.systemInstruction).toMatch(/gma\.scene-realization\/1/i);
+    expect(turn.prompt.systemInstruction).toMatch(/rules analysis out of openingNarration/i);
+    expect(turn.prompt.systemInstruction).toMatch(/Merely taking another action cannot fail the scene/i);
     expect(turn.provider.maxAttempts).toBe(1);
     expect(turn.provider.fallbackAllowed).toBe(false);
     expect(turn.outputSchema.schema.required).toEqual([
-      'schemaVersion', 'proposal', 'materialClaims', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority',
+      'schemaVersion', 'proposal', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority',
     ]);
     const properties = turn.outputSchema.schema.properties as any;
     expect(properties.materialClaims).toMatchObject({
@@ -284,7 +288,22 @@ describe('provider-neutral LLM orchestrator', () => {
       type: ['object', 'null'],
       required: expect.arrayContaining(['playableLocus', 'participants', 'beats', 'exitVectors']),
     });
-    expect(repair.prompt.version).toBe('gma.story-director-policy/1');
+    expect(properties.sceneRealization).toMatchObject({
+      type: 'object',
+      required: ['schemaVersion', 'participantResponses', 'continuityResolutions', 'capabilityResolutions'],
+    });
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/4');
+    expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
+    expect(currentScene.outputSchema.schema.required).toEqual([
+      'schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization',
+      'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority',
+    ]);
+    expect((currentScene.outputSchema.schema.properties as any).schemaVersion.const)
+      .toBe('gma.current-scene-narration-result/4');
+    expect(currentScene.provider.maxAttempts).toBe(1);
+    expect(currentScene.provider.fallbackAllowed).toBe(false);
+    expect(repair.prompt.version).toBe('gma.story-director-policy/2');
     expect(repair.prompt.systemInstruction).toMatch(/only the failed fields/i);
     expect(repair.prompt.systemInstruction).toMatch(/Do not return the complete Story Director result/i);
     expect(repair.outputSchema.schema.required).toEqual(['schemaVersion', 'correctionId', 'sceneKitPatch', 'patchesJson']);
@@ -315,9 +334,10 @@ describe('provider-neutral LLM orchestrator', () => {
   it('rejects empty nested Story output and accepts one compact field-scoped repair', async () => {
     const invalidTurn = request('story.turn.direct', 'nested-empty');
     const invalidProvider = new FakeProviderAdapter(() => ({
-      schemaVersion: 'gma.story-director-result/1',
+      schemaVersion: 'gma.story-director-result/2',
       proposal: {},
       materialClaims: [{}],
+      sceneRealization: {},
       declaredActionPayoff: {},
       agencyAudit: {},
       mechanicsAuthority: 'none',
@@ -340,6 +360,44 @@ describe('provider-neutral LLM orchestrator', () => {
       userId: 'user-1', store: new MemoryExecutionStore(), providers: [repairProvider],
     });
     expect(accepted.status).toBe('succeeded');
+  });
+
+  it('accepts ready-scene narration only through its dedicated result schema', async () => {
+    const responseText = 'All three cart crew stop at the wheel while you remain below their sightline.';
+    const output = {
+      schemaVersion: 'gma.current-scene-narration-result/4',
+      responseMode: 'in_character',
+      responseText,
+      rollRequest: null,
+      materialClaims: [{ claimId: 'claim:crew', claimText: 'All three cart crew stop at the wheel', sourceFactRefs: ['role:cart-crew'] }],
+      sceneRealization: {
+        schemaVersion: 'gma.scene-realization/1',
+        participantResponses: [{
+          participantRef: 'role:cart-crew', coverage: 'all_members', observedCount: 3,
+          immediateDecision: 'Stop at the wheel.', narrationEvidence: ['All three cart crew stop at the wheel'],
+        }],
+        continuityResolutions: [{
+          aspect: 'concealment', status: 'preserved', basis: 'The vantage remains concealed.',
+          narrationEvidence: ['you remain below their sightline'],
+        }],
+        capabilityResolutions: [],
+      },
+      declaredActionPayoff: { status: 'completed', summary: 'The crew pauses.', narrationEvidence: 'All three cart crew stop at the wheel' },
+      storyOutcome: { beatState: 'active', actualStoryImpacts: [] },
+      agencyAudit: { inventedPlayerChoice: false, guaranteedOutcome: false },
+      mechanicsAuthority: 'none',
+    };
+    const currentProvider = new FakeProviderAdapter(() => output);
+    const accepted = await executeLlmOperation(request('story.current-scene.narrate', 'current-scene'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [currentProvider],
+    });
+    expect(accepted.status).toBe('succeeded');
+
+    const handoffProvider = new FakeProviderAdapter(() => output);
+    const rejected = await executeLlmOperation(request('story.turn.direct', 'wrong-shape'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [handoffProvider],
+    });
+    expect(rejected.status).toBe('review_required');
   });
 
   it('accepts a complete flat Scene-kit repair without provider-hostile nesting', async () => {
