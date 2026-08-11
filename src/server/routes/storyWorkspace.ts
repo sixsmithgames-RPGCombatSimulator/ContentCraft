@@ -28,7 +28,9 @@ import {
   createCompoundActionArtifact,
   readActiveCompoundActionArtifact,
   resolveCompoundActionRequirements,
+  readStagedCompoundActionInstruction,
   rewindCompoundActionArtifacts,
+  stageCompoundActionInstruction,
   tombstoneCompoundActionArtifact,
   type CompoundActionRequirement,
 } from '../services/compoundActionArtifactStore.js';
@@ -375,6 +377,29 @@ storyWorkspaceRouter.post('/interaction-artifacts', requireServiceIntegration, a
     timelineAnchor: body.timelineAnchor,
   });
   res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.post('/interaction-instructions', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await stageCompoundActionInstruction({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+    instruction: body.instruction,
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.get('/interaction-instructions/:interactionId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await readStagedCompoundActionInstruction({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    interactionId: req.params.interactionId,
+  });
+  if (!result) { res.status(404).json({ error: { code: 'COMPOUND_ACTION_INSTRUCTION_NOT_FOUND', message: 'The staged player instruction was not found.' } }); return; }
+  res.json(result);
 }));
 
 storyWorkspaceRouter.post('/interaction-artifacts/requirements', requireServiceIntegration, asyncRoute(async (req, res) => {

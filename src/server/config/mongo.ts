@@ -232,6 +232,14 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, programId: 1, revision: -1 },
     { unique: true, name: 'unique_gmc_compound_action_artifact_revision' },
   );
+  await database.collection('gmc_compound_action_instructions').createIndex(
+    { userId: 1, campaignId: 1, interactionId: 1 },
+    { unique: true, name: 'unique_gmc_compound_action_instruction' },
+  );
+  await database.collection('gmc_compound_action_instructions').createIndex(
+    { userId: 1, campaignId: 1, idempotencyKey: 1 },
+    { unique: true, name: 'unique_gmc_compound_action_instruction_idempotency' },
+  );
   await database.collection('gmc_compound_action_artifact_revisions').createIndex(
     { userId: 1, campaignId: 1, idempotencyKey: 1 },
     { unique: true, name: 'unique_gmc_compound_action_artifact_idempotency' },

@@ -253,6 +253,36 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(portfolio.authority.commit).toBe('proposal_only');
   });
 
+  it('registers compound-action interpretation, narration, and typed repair requirements in the first pass', () => {
+    const interpretation = getOperationDefinition('action.program.interpret');
+    const narration = getOperationDefinition('action.slice.narrate');
+    const repair = getOperationDefinition('action.slice.repair');
+
+    expect(interpretation.prompt.version).toBe('gma.semantic-action-planner-policy/2');
+    expect(interpretation.prompt.systemInstruction).toMatch(/every action supported by exact UTF-8 evidence spans/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/Do not narrate, adjudicate, create canon, resolve mechanics/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/dialogue location subject into travel/i);
+    expect(interpretation.provider.maxAttempts).toBe(1);
+    expect(interpretation.provider.fallbackAllowed).toBe(false);
+
+    expect(narration.prompt.version).toBe('gma.compound-action-execution-policy/1');
+    expect(narration.prompt.systemInstruction).toMatch(/every observable result and immediate NPC decision explicitly/i);
+    expect(narration.prompt.systemInstruction).toMatch(/story-bearing target must yield its prepared concrete fact, bounded absence, or specific barrier now/i);
+    expect(narration.prompt.systemInstruction).toMatch(/Do not repeat or reinterpret completed nodes/i);
+    expect((narration.outputSchema.schema.properties as any).nodeResults.items.required)
+      .toContain('narrationEvidence');
+    expect(narration.provider.maxAttempts).toBe(1);
+    expect(narration.provider.fallbackAllowed).toBe(false);
+
+    expect(repair.prompt.version).toBe('gma.compound-action-repair-policy/4');
+    expect(repair.prompt.systemInstruction).toMatch(/exactly the typed carrier requested/i);
+    expect(repair.prompt.systemInstruction).toMatch(/Do not use patchesJson, valueJson, JSON encoded in strings/i);
+    expect(repair.prompt.systemInstruction).toMatch(/positive first-pass requirement supplied for the failed field/i);
+    expect(repair.outputSchema.schema.required).not.toContain('patchesJson');
+    expect(repair.provider.maxAttempts).toBe(1);
+    expect(repair.provider.fallbackAllowed).toBe(false);
+  });
+
   it('registers the combined action-directed Story turn with the complete first-pass contract', () => {
     const turn = getOperationDefinition('story.turn.direct');
     const currentScene = getOperationDefinition('story.current-scene.narrate');

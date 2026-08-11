@@ -74,6 +74,21 @@ export interface CompoundActionArtifactRevisionDocument {
 
 export type CompoundActionArtifactCollection = Collection<CompoundActionArtifactRevisionDocument>;
 
+export interface CompoundActionInstructionDocument {
+  userId: string;
+  campaignId: string;
+  interactionId: string;
+  instructionRef: string;
+  instructionFingerprint: string;
+  utf8Bytes: number;
+  instruction: JsonObject;
+  idempotencyKey: string;
+  requestHash: string;
+  createdAt: Date;
+}
+
+export type CompoundActionInstructionCollection = Collection<CompoundActionInstructionDocument>;
+
 export interface CompoundActionRequirement {
   requirementId?: string;
   dimension: RequirementDimension;
@@ -94,6 +109,10 @@ export interface CompoundActionRequirementResult {
 
 function artifactCollection(): CompoundActionArtifactCollection {
   return getDb().collection<CompoundActionArtifactRevisionDocument>('gmc_compound_action_artifact_revisions');
+}
+
+function instructionCollection(): CompoundActionInstructionCollection {
+  return getDb().collection<CompoundActionInstructionDocument>('gmc_compound_action_instructions');
 }
 
 function isObject(value: unknown): value is JsonObject {
@@ -143,6 +162,62 @@ function validateInstruction(instruction: unknown): asserts instruction is JsonO
     || instruction.instructionFingerprint !== sha256(exactText)) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_INSTRUCTION_INVALID', 'The player instruction bytes do not match their fingerprint.', {});
   }
+}
+
+/**
+ * Persists the immutable player bytes before semantic interpretation. This
+ * staging record is deliberately separate from the program/cursor artifact so
+ * a planner timeout can never erase or rewrite the submitted instruction.
+ * date_of_change: 2026-08-11
+ */
+export async function stageCompoundActionInstruction(input: {
+  userId: string;
+  campaignId: string;
+  idempotencyKey: string;
+  instruction: JsonObject;
+}, records: CompoundActionInstructionCollection = instructionCollection()) {
+  requiredString(input.userId, 'userId');
+  requiredString(input.campaignId, 'campaignId');
+  requiredString(input.idempotencyKey, 'idempotencyKey');
+  validateInstruction(input.instruction);
+  const requestHash = sha256(canonicalJson(input.instruction));
+  const existing = await records.findOne({ userId: input.userId, campaignId: input.campaignId, idempotencyKey: input.idempotencyKey });
+  if (existing) {
+    if (existing.requestHash !== requestHash) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_IDEMPOTENCY_CONFLICT', 'The instruction staging key was already used for different player bytes.', {});
+    return { instructionRef: existing.instructionRef, instructionFingerprint: existing.instructionFingerprint, utf8Bytes: existing.utf8Bytes, duplicate: true };
+  }
+  const document: CompoundActionInstructionDocument = {
+    userId: input.userId,
+    campaignId: input.campaignId,
+    interactionId: String(input.instruction.interactionId),
+    instructionRef: String(input.instruction.instructionRef),
+    instructionFingerprint: String(input.instruction.instructionFingerprint),
+    utf8Bytes: Number(input.instruction.utf8Bytes),
+    instruction: structuredClone(input.instruction),
+    idempotencyKey: input.idempotencyKey,
+    requestHash,
+    createdAt: new Date(),
+  };
+  try {
+    await records.insertOne(document);
+  } catch (error: unknown) {
+    if ((error as { code?: number }).code === 11000) {
+      const replay = await records.findOne({ userId: input.userId, campaignId: input.campaignId, idempotencyKey: input.idempotencyKey });
+      if (replay?.requestHash === requestHash) return { instructionRef: replay.instructionRef, instructionFingerprint: replay.instructionFingerprint, utf8Bytes: replay.utf8Bytes, duplicate: true };
+      throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_INSTRUCTION_CONFLICT', 'The player instruction changed before it could be staged.', {});
+    }
+    throw error;
+  }
+  return { instructionRef: document.instructionRef, instructionFingerprint: document.instructionFingerprint, utf8Bytes: document.utf8Bytes, duplicate: false };
+}
+
+export async function readStagedCompoundActionInstruction(input: {
+  userId: string;
+  campaignId: string;
+  interactionId: string;
+}, records: CompoundActionInstructionCollection = instructionCollection()) {
+  const document = await records.findOne({ userId: input.userId, campaignId: input.campaignId, interactionId: input.interactionId });
+  return document ? { instruction: structuredClone(document.instruction), stagedAt: document.createdAt } : null;
 }
 
 function validateProgram(program: unknown, instruction: JsonObject): asserts program is JsonObject {

@@ -6,8 +6,11 @@ import {
   compileCompoundActionRequirementProjection,
   createCompoundActionArtifact,
   readActiveCompoundActionArtifact,
+  readStagedCompoundActionInstruction,
   rewindCompoundActionArtifacts,
+  stageCompoundActionInstruction,
   type CompoundActionArtifactRevisionDocument,
+  type CompoundActionInstructionDocument,
 } from './compoundActionArtifactStore.js';
 import { StoryWorkspaceStoreError } from './storyWorkspaceStore.js';
 
@@ -71,6 +74,26 @@ function memoryCollection() {
   return { records: api as unknown as Collection<CompoundActionArtifactRevisionDocument>, documents };
 }
 
+function instructionMemoryCollection() {
+  const documents: CompoundActionInstructionDocument[] = [];
+  const records = {
+    async findOne(filter: Filter<CompoundActionInstructionDocument>) {
+      return structuredClone(documents.find((document) => Object.entries(filter).every(([key, wanted]) => (
+        valueAt(document as unknown as Record<string, unknown>, key) === wanted
+      ))) ?? null);
+    },
+    async insertOne(document: CompoundActionInstructionDocument) {
+      const duplicate = documents.some((candidate) => candidate.userId === document.userId
+        && candidate.campaignId === document.campaignId
+        && (candidate.interactionId === document.interactionId || candidate.idempotencyKey === document.idempotencyKey));
+      if (duplicate) throw Object.assign(new Error('duplicate'), { code: 11000 });
+      documents.push(structuredClone(document));
+      return { acknowledged: true };
+    },
+  };
+  return { records: records as unknown as Collection<CompoundActionInstructionDocument>, documents };
+}
+
 function instruction(exactText = 'I hide, distract the cart crew, then search the cart if they leave.') {
   return {
     schemaVersion: 'gma.player-instruction-artifact/1',
@@ -124,6 +147,23 @@ function createInput() {
 }
 
 describe('GMC compound-action private artifact store', () => {
+  it('stages exact instruction bytes idempotently before semantic planning', async () => {
+    const store = instructionMemoryCollection();
+    const staged = await stageCompoundActionInstruction({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'stage:turn-42', instruction: instruction(),
+    }, store.records);
+    const replay = await stageCompoundActionInstruction({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'stage:turn-42', instruction: instruction(),
+    }, store.records);
+    expect(staged.duplicate).toBe(false);
+    expect(replay.duplicate).toBe(true);
+    expect((await readStagedCompoundActionInstruction({
+      userId: 'tenant-a', campaignId: 'campaign-a', interactionId: 'interaction:turn-42',
+    }, store.records))?.instruction).toEqual(instruction());
+    await expect(stageCompoundActionInstruction({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'stage:turn-42', instruction: instruction('changed'),
+    }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_IDEMPOTENCY_CONFLICT' });
+  });
   it('persists an exact instruction once, returns only a reference on write, and isolates owners', async () => {
     const store = memoryCollection();
     const first = await createCompoundActionArtifact(createInput(), store.records);
