@@ -6,6 +6,7 @@ import {
   ACTION_DIRECTED_STORY_CAPABILITIES,
   STORY_OBLIGATION_CAPABILITIES,
 } from '../services/storyWorkspaceStore.js';
+import { COMPOUND_ACTION_CAPABILITIES, COMPOUND_ACTION_CONTRACTS } from '../services/compoundActionArtifactStore.js';
 import { apiRouter } from './index.js';
 
 const servers: Server[] = [];
@@ -31,7 +32,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.9.19',
+      version: '1.10.0',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -50,6 +51,16 @@ describe('API health', () => {
             storySatisfactionReceipt: 'gma.story-satisfaction-receipt/1',
           },
           authority: 'gmc',
+          routeEnabled: false,
+        },
+        compoundActions: {
+          capabilities: COMPOUND_ACTION_CAPABILITIES,
+          contracts: COMPOUND_ACTION_CONTRACTS,
+          artifactStoreContractVersion: 'gmc.compound-action-artifact-store/1',
+          requirementProjectionContractVersion: 'gmc.compound-action-requirement-projection/1',
+          authority: 'gmc',
+          persistence: 'non_canonical_interaction',
+          access: 'service_only',
           routeEnabled: false,
         },
       },

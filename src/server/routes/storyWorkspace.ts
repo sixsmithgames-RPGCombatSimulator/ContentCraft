@@ -17,6 +17,21 @@ import {
   STORY_WORKSPACE_CONTRACT_VERSION,
   StoryWorkspaceStoreError,
 } from '../services/storyWorkspaceStore.js';
+import {
+  advanceCompoundActionArtifact,
+  COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION,
+  COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
+  COMPOUND_ACTION_CAPABILITIES,
+  COMPOUND_ACTION_CONTRACTS,
+  COMPOUND_ACTION_LIMITS,
+  COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION,
+  createCompoundActionArtifact,
+  readActiveCompoundActionArtifact,
+  resolveCompoundActionRequirements,
+  rewindCompoundActionArtifacts,
+  tombstoneCompoundActionArtifact,
+  type CompoundActionRequirement,
+} from '../services/compoundActionArtifactStore.js';
 import { GMA_SCENE_PLAN_SCHEMA_ALLOWLIST, readActiveScenePlan, readLatestActiveScenePlan } from '../services/gmaScenePlanStore.js';
 import { collections } from '../services/gmcIntegrationStore.js';
 import {
@@ -347,6 +362,96 @@ storyWorkspaceRouter.get('/scene-context', requireServiceIntegration, asyncRoute
   res.json(result);
 }));
 
+storyWorkspaceRouter.post('/interaction-artifacts', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await createCompoundActionArtifact({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+    instruction: body.instruction,
+    program: body.program,
+    cursor: body.cursor,
+    timelineAnchor: body.timelineAnchor,
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.post('/interaction-artifacts/requirements', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  res.json(await resolveCompoundActionRequirements({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    programId: body.programId,
+    nodeId: body.nodeId,
+    requirements: body.requirements as CompoundActionRequirement[],
+    expectedAuthority: body.expectedAuthority,
+  }));
+}));
+
+storyWorkspaceRouter.post('/interaction-artifacts/rewind', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await rewindCompoundActionArtifacts({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    boundarySequence: req.body?.boundarySequence,
+    rewindId: req.body?.rewindId,
+  }));
+}));
+
+storyWorkspaceRouter.get('/interaction-artifacts/:programId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await readActiveCompoundActionArtifact({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    programId: req.params.programId,
+  });
+  if (!result) {
+    res.status(404).json({
+      error: {
+        code: 'COMPOUND_ACTION_ARTIFACT_NOT_FOUND',
+        message: 'No active interaction artifact was found for this program.',
+        correlationId: correlationId(req),
+        details: {},
+      },
+    });
+    return;
+  }
+  res.json(result);
+}));
+
+storyWorkspaceRouter.put('/interaction-artifacts/:programId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await advanceCompoundActionArtifact({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    programId: req.params.programId,
+    expectedRevision: body.expectedRevision,
+    idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+    program: body.program,
+    cursor: body.cursor,
+    appendReceipts: body.appendReceipts,
+    clarifications: body.clarifications,
+    rootFailure: body.rootFailure,
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.post('/interaction-artifacts/:programId/tombstone', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await tombstoneCompoundActionArtifact({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    programId: req.params.programId,
+    expectedRevision: body.expectedRevision,
+    idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
 storyWorkspaceRouter.get('/history', asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   res.json(await listStoryWorkspaceHistory({
@@ -472,6 +577,18 @@ storyWorkspaceRouter.get('/contracts', (_req, res) => {
       storySatisfactionReceipt: STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
       capabilities: STORY_OBLIGATION_CAPABILITIES,
       authority: 'gmc',
+      routeEnabled: false,
+    },
+    compoundActions: {
+      artifactStore: COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
+      artifactReference: COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION,
+      requirementProjection: COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION,
+      contracts: COMPOUND_ACTION_CONTRACTS,
+      capabilities: COMPOUND_ACTION_CAPABILITIES,
+      limits: COMPOUND_ACTION_LIMITS,
+      authority: 'gmc',
+      persistence: 'non_canonical_interaction',
+      access: 'service_only',
       routeEnabled: false,
     },
   });

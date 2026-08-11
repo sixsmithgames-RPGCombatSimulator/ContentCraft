@@ -225,6 +225,29 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, supersededByRewindId: 1 },
     { name: 'gmc_story_workspace_rewind_replay' },
   );
+  // Exact player instructions and resumable action programs are private,
+  // non-canonical interaction artifacts. They are revisioned independently
+  // from Story so an incomplete compound action cannot leak into campaign canon.
+  await database.collection('gmc_compound_action_artifact_revisions').createIndex(
+    { userId: 1, campaignId: 1, programId: 1, revision: -1 },
+    { unique: true, name: 'unique_gmc_compound_action_artifact_revision' },
+  );
+  await database.collection('gmc_compound_action_artifact_revisions').createIndex(
+    { userId: 1, campaignId: 1, idempotencyKey: 1 },
+    { unique: true, name: 'unique_gmc_compound_action_artifact_idempotency' },
+  );
+  await database.collection('gmc_compound_action_artifact_revisions').createIndex(
+    { userId: 1, campaignId: 1, programId: 1, status: 1, revision: -1 },
+    { name: 'gmc_compound_action_artifact_active_lookup' },
+  );
+  await database.collection('gmc_compound_action_artifact_revisions').createIndex(
+    { userId: 1, campaignId: 1, 'timelineAnchor.sequence': 1, status: 1 },
+    { name: 'gmc_compound_action_artifact_rewind_boundary' },
+  );
+  await database.collection('gmc_compound_action_artifact_revisions').createIndex(
+    { userId: 1, campaignId: 1, supersededByRewindId: 1 },
+    { name: 'gmc_compound_action_artifact_rewind_replay' },
+  );
   await database.collection('llm_generation_workflows').createIndex(
     { userId: 1, workflowId: 1 },
     { unique: true, name: 'unique_llm_generation_workflow' },

@@ -36,6 +36,12 @@ describe('D2 Story authority routes', () => {
       ['POST', '/migration-preview'],
       ['POST', '/scene-handoffs'],
       ['GET', '/scene-context'],
+      ['POST', '/interaction-artifacts'],
+      ['POST', '/interaction-artifacts/requirements'],
+      ['POST', '/interaction-artifacts/rewind'],
+      ['GET', '/interaction-artifacts/program-1'],
+      ['PUT', '/interaction-artifacts/program-1'],
+      ['POST', '/interaction-artifacts/program-1/tombstone'],
     ] as const) {
       const response = await fetch(`${baseUrl}${path}`, {
         method,

@@ -3465,4 +3465,5 @@ export const collections = {
   quests: () => getDb().collection<any>('gmc_quests'),
   sessions: () => getDb().collection<any>('gmc_sessions'),
   actorWorkflows: () => getDb().collection<any>('gmc_actor_workflows'),
+  merchantOffers: () => getDb().collection<any>('gmc_merchant_offers'),
 };

@@ -55,6 +55,14 @@ import {
   ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION,
   STORY_MIGRATION_PREVIEW_CONTRACT_VERSION,
 } from '../services/actionDirectedStoryStore.js';
+import {
+  COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION,
+  COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
+  COMPOUND_ACTION_CAPABILITIES,
+  COMPOUND_ACTION_CONTRACTS,
+  COMPOUND_ACTION_LIMITS,
+  COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION,
+} from '../services/compoundActionArtifactStore.js';
 
 export const apiRouter = Router();
 
@@ -132,6 +140,18 @@ apiRouter.get('/health', (_req, res) => {
           storySatisfactionReceipt: STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
         },
         authority: 'gmc',
+        routeEnabled: false,
+      },
+      compoundActions: {
+        capabilities: COMPOUND_ACTION_CAPABILITIES,
+        contracts: COMPOUND_ACTION_CONTRACTS,
+        artifactStoreContractVersion: COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
+        artifactReferenceContractVersion: COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION,
+        requirementProjectionContractVersion: COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION,
+        limits: COMPOUND_ACTION_LIMITS,
+        authority: 'gmc',
+        persistence: 'non_canonical_interaction',
+        access: 'service_only',
         routeEnabled: false,
       },
     },
