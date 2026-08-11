@@ -166,8 +166,9 @@ describe('GMC compound-action private artifact store', () => {
   });
   it('persists an exact instruction once, returns only a reference on write, and isolates owners', async () => {
     const store = memoryCollection();
-    const first = await createCompoundActionArtifact(createInput(), store.records);
-    const replay = await createCompoundActionArtifact(createInput(), store.records);
+    const seeded = { ...createInput(), clarifications: [{ kind: 'provider_operation_ledger', total: 1, sinceCheckpoint: 1, checkpoint: 0 }] };
+    const first = await createCompoundActionArtifact(seeded, store.records);
+    const replay = await createCompoundActionArtifact(seeded, store.records);
     expect(first).toMatchObject({ duplicate: false, artifactRef: { revision: 1, status: 'available' } });
     expect(first).not.toHaveProperty('artifact.instruction.exactText');
     expect(replay).toEqual({ ...first, duplicate: true });
@@ -175,6 +176,8 @@ describe('GMC compound-action private artifact store', () => {
     expect(store.documents[0].redactedAudit).not.toHaveProperty('exactText');
     expect((await readActiveCompoundActionArtifact({ userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42' }, store.records))?.artifact.instruction)
       .toMatchObject({ exactText: createInput().instruction.exactText });
+    expect((await readActiveCompoundActionArtifact({ userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42' }, store.records))?.artifact.clarifications)
+      .toEqual(seeded.clarifications);
     expect(await readActiveCompoundActionArtifact({ userId: 'tenant-b', campaignId: 'campaign-a', programId: 'program:turn-42' }, store.records)).toBeNull();
   });
 

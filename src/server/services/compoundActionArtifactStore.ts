@@ -368,6 +368,7 @@ export async function createCompoundActionArtifact(input: {
   instruction: JsonObject;
   program: JsonObject;
   cursor: JsonObject;
+  clarifications?: JsonObject[];
   timelineAnchor?: { messageId: string; sequence: number } | null;
 }, records: CompoundActionArtifactCollection = artifactCollection()) {
   requiredString(input.userId, 'userId');
@@ -376,12 +377,16 @@ export async function createCompoundActionArtifact(input: {
   validateInstruction(input.instruction);
   validateProgram(input.program, input.instruction);
   validateCursor(input.cursor, input.program, 1);
+  const clarifications = input.clarifications ?? [];
+  if (!Array.isArray(clarifications) || clarifications.length > COMPOUND_ACTION_LIMITS.clarificationMaximum || clarifications.some((value) => !isObject(value))) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_CLARIFICATION_INVALID', 'The interaction clarification state is invalid.', {});
+  }
   const timelineAnchor = validateTimelineAnchor(input.timelineAnchor);
   const draft = {
     instruction: structuredClone(input.instruction),
     program: structuredClone(input.program),
     cursor: structuredClone(input.cursor),
-    receipts: [] as JsonObject[], clarifications: [] as JsonObject[], rootFailure: null, timelineAnchor,
+    receipts: [] as JsonObject[], clarifications: structuredClone(clarifications), rootFailure: null, timelineAnchor,
   };
   const requestHash = sha256(canonicalJson(draft));
   const duplicate = await duplicateForKey(records, input.userId, input.campaignId, input.idempotencyKey, requestHash);

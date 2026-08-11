@@ -374,6 +374,7 @@ storyWorkspaceRouter.post('/interaction-artifacts', requireServiceIntegration, a
     instruction: body.instruction,
     program: body.program,
     cursor: body.cursor,
+    clarifications: body.clarifications,
     timelineAnchor: body.timelineAnchor,
   });
   res.status(result.duplicate ? 200 : 201).json(result);
