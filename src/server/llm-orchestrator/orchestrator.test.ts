@@ -258,10 +258,16 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-action-planner-policy/2');
+    expect(interpretation.prompt.version).toBe('gma.semantic-action-planner-policy/3');
     expect(interpretation.prompt.systemInstruction).toMatch(/every action supported by exact UTF-8 evidence spans/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Do not narrate, adjudicate, create canon, resolve mechanics/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/dialogue location subject into travel/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/exact action kinds, completion boundaries/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/Movement performed stealthily is one move node/i);
+    expect((interpretation.outputSchema.schema.properties as any).nodes.items.properties.kind.enum)
+      .toContain('mechanical_action');
+    expect((interpretation.outputSchema.schema.properties as any).nodes.items.properties.completionBoundary.enum)
+      .toEqual(['immediate_result', 'arrival', 'immediate_npc_decision', 'investigation_result']);
     expect(interpretation.provider.maxAttempts).toBe(1);
     expect(interpretation.provider.fallbackAllowed).toBe(false);
 

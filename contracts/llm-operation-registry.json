@@ -15,8 +15,8 @@
       },
       "prompt": {
         "id": "action.program.interpret.prompt",
-        "systemInstruction": "Interpret one exact player instruction into one bounded gma.semantic-action-program/2 JSON object. Return only that object. Preserve every action supported by exact UTF-8 evidence spans, including sequence, parallel work, conditions, alternatives, and completion boundaries. Never silently omit an overflow action. Do not narrate, adjudicate, create canon, resolve mechanics, choose a materially ambiguous player method, or turn a dialogue location subject into travel. Keep completed, succeeded, failed, impossible, declined, interrupted, and selected predicates distinct. A failed attempt is not impossible. Use only typed who, what, where, when, and how requirements. If one consequential meaning is ambiguous, keep the other nodes and return clarification for only that node. Copy program identity, instruction binding, and authorityBase exactly from the request. Return at most eight nodes, twelve edges, depth six, two alternatives per node, eight clarification options, and sixteen requirements.",
-        "version": "gma.semantic-action-planner-policy/2"
+        "systemInstruction": "Interpret one exact player instruction into one bounded gma.semantic-action-program/2 JSON object. Return only that object. Preserve every action supported by exact UTF-8 evidence spans, including sequence, parallel work, conditions, alternatives, and completion boundaries. Never silently omit an overflow action. Do not narrate, adjudicate, create canon, resolve mechanics, choose a materially ambiguous player method, or turn a dialogue location subject into travel. Keep completed, succeeded, failed, impossible, declined, interrupted, and selected predicates distinct. A failed attempt is not impossible. Use only typed who, what, where, when, and how requirements. If one consequential meaning is ambiguous, keep the other nodes and return clarification for only that node. Use only the exact action kinds, completion boundaries, conditions, authorities, dimensions, requirement kinds, and lifecycle values supplied in the request allowedVocabulary and output schema. Do not create synonymous labels. When a declared method modifies a main action, keep it in that action node. Movement performed stealthily is one move node with both movement and capability requirements, not an unprotected move followed by a hide node. Copy program identity, instruction binding, and authorityBase exactly from the request. Return at most eight nodes, twelve edges, depth six, two alternatives per node, eight clarification options, and sixteen requirements.",
+        "version": "gma.semantic-action-planner-policy/3"
       },
       "outputSchema": {
         "id": "action.program.interpret.result",
@@ -112,7 +112,7 @@
                   "const": "minimal_semantic_model"
                 },
                 "policyVersion": {
-                  "const": "gma.semantic-action-planner-policy/2"
+                  "const": "gma.semantic-action-planner-policy/3"
                 },
                 "confidence": {
                   "type": "number",
@@ -154,9 +154,20 @@
                     "maximum": 8
                   },
                   "kind": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 80
+                    "enum": [
+                      "communicate",
+                      "deliberate",
+                      "interact",
+                      "investigate",
+                      "mechanical_action",
+                      "move",
+                      "observe",
+                      "purchase",
+                      "resource_change",
+                      "rest",
+                      "wait",
+                      "other"
+                    ]
                   },
                   "summary": {
                     "type": "string",
@@ -284,9 +295,12 @@
                     }
                   },
                   "completionBoundary": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
+                    "enum": [
+                      "immediate_result",
+                      "arrival",
+                      "immediate_npc_decision",
+                      "investigation_result"
+                    ]
                   },
                   "lifecycle": {
                     "const": "queued"
