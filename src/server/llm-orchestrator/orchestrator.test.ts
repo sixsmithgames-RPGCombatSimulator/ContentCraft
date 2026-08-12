@@ -254,22 +254,25 @@ describe('provider-neutral LLM orchestrator', () => {
   });
 
   it('registers compound-action interpretation, narration, and typed repair requirements in the first pass', () => {
-    const interpretation = getOperationDefinition('action.program.interpret');
+    const interpretation = getOperationDefinition('action.intent.interpret');
+    const legacyInterpretation = getOperationDefinition('action.program.interpret');
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-action-planner-policy/3');
-    expect(interpretation.prompt.systemInstruction).toMatch(/every action supported by exact UTF-8 evidence spans/i);
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/1');
+    expect(interpretation.prompt.systemInstruction).toMatch(/every player-supported goal, target, declared method/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/Asking where someone came from is exchange_information/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/only declared transit or arrival is relocate_actor/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/Movement performed stealthily is one relocate_actor intent/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Do not narrate, adjudicate, create canon, resolve mechanics/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/dialogue location subject into travel/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/exact action kinds, completion boundaries/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/Movement performed stealthily is one move node/i);
-    expect((interpretation.outputSchema.schema.properties as any).nodes.items.properties.kind.enum)
-      .toContain('mechanical_action');
-    expect((interpretation.outputSchema.schema.properties as any).nodes.items.properties.completionBoundary.enum)
-      .toEqual(['immediate_result', 'arrival', 'immediate_npc_decision', 'investigation_result']);
+    expect(interpretation.prompt.systemInstruction).not.toMatch(/completion boundaries|authorityRequirements|dataRequirements/i);
+    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.purpose.enum)
+      .toContain('exchange_information');
+    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.methods.items.properties.kind.enum)
+      .toEqual(['approach', 'capability', 'spell', 'item', 'tool', 'other']);
     expect(interpretation.provider.maxAttempts).toBe(1);
     expect(interpretation.provider.fallbackAllowed).toBe(false);
+    expect(legacyInterpretation.prompt.version).toBe('gma.semantic-action-planner-policy/3');
 
     expect(narration.prompt.version).toBe('gma.compound-action-execution-policy/1');
     expect(narration.prompt.systemInstruction).toMatch(/every observable result and immediate NPC decision explicitly/i);
@@ -280,11 +283,12 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(narration.provider.maxAttempts).toBe(1);
     expect(narration.provider.fallbackAllowed).toBe(false);
 
-    expect(repair.prompt.version).toBe('gma.compound-action-repair-policy/4');
+    expect(repair.prompt.version).toBe('gma.compound-action-repair-policy/5');
     expect(repair.prompt.systemInstruction).toMatch(/exactly the typed carrier requested/i);
     expect(repair.prompt.systemInstruction).toMatch(/Do not use patchesJson, valueJson, JSON encoded in strings/i);
     expect(repair.prompt.systemInstruction).toMatch(/positive first-pass requirement supplied for the failed field/i);
     expect(repair.outputSchema.schema.required).not.toContain('patchesJson');
+    expect(repair.outputSchema.schema.required).toContain('semanticIntentPatch');
     expect(repair.provider.maxAttempts).toBe(1);
     expect(repair.provider.fallbackAllowed).toBe(false);
   });

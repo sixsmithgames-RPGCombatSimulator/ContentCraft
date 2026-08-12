@@ -4,6 +4,399 @@
   "modelPolicyVersion": "2026-08-01.1",
   "operations": [
     {
+      "id": "action.intent.interpret",
+      "version": "1",
+      "operationClass": "reasoning_high",
+      "capabilityTier": "reasoning",
+      "authority": {
+        "canon": "GMC",
+        "mechanics": "none",
+        "commit": "proposal_only"
+      },
+      "prompt": {
+        "id": "action.intent.interpret.prompt",
+        "systemInstruction": "Interpret one exact player instruction into one bounded gma.semantic-intent-ir/1 JSON object. Return only that object. Preserve every player-supported goal, target, declared method, requested outcome, sequence, parallel relationship, condition, and alternative. Cite exact unique phrases copied from the immutable instruction for every intent. Never silently omit overflow meaning. Choose purpose from meaning, not vocabulary. Asking where someone came from is exchange_information; only declared transit or arrival is relocate_actor. A location discussed as history, dialogue, or a fact to learn is a subject, not a destination. Choose method kind by the declared method: named skill or feature is capability, named magic is spell, an item is item, a tool is tool, an ordinary tactic is approach, and other is only for a supported method outside those meanings. Keep a method with the goal it modifies. Movement performed stealthily is one relocate_actor intent with a capability method, not two sequential intents. Keep completed, succeeded, failed, impossible, declined, interrupted, and selected distinct. A failed attempt is not impossible. Do not narrate, adjudicate, create canon, resolve mechanics, choose application routing, authority, retrieval, lifecycle, or stopping labels, or invent a materially ambiguous player method. If one consequential meaning is ambiguous, preserve all unaffected intents and return one focused ambiguity for only the affected intent. Return at most eight intents, twelve relationships, and eight ambiguity options.",
+        "version": "gma.semantic-intent-policy/1"
+      },
+      "outputSchema": {
+        "id": "action.intent.interpret.result",
+        "version": "1",
+        "schema": {
+          "$id": "action.intent.interpret.result/1",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "interactionId",
+            "instructionRef",
+            "instructionFingerprint",
+            "confidence",
+            "intents",
+            "ambiguities",
+            "coverage"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "gma.semantic-intent-ir/1"
+            },
+            "interactionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "instructionRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "instructionFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "intents": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "intentId",
+                  "summary",
+                  "evidenceQuotes",
+                  "goal",
+                  "purpose",
+                  "targets",
+                  "methods",
+                  "requestedOutcomes",
+                  "relation"
+                ],
+                "properties": {
+                  "intentId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "evidenceQuotes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1000
+                    }
+                  },
+                  "goal": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "purpose": {
+                    "enum": [
+                      "relocate_actor",
+                      "exchange_information",
+                      "influence_actor",
+                      "discover_information",
+                      "observe_situation",
+                      "manipulate_object",
+                      "apply_capability",
+                      "make_purchase",
+                      "change_resource",
+                      "recover",
+                      "wait_for_change",
+                      "choose_course",
+                      "other"
+                    ]
+                  },
+                  "targets": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "role",
+                        "description"
+                      ],
+                      "properties": {
+                        "role": {
+                          "enum": [
+                            "actor",
+                            "recipient",
+                            "subject",
+                            "object",
+                            "origin",
+                            "destination",
+                            "area"
+                          ]
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      }
+                    }
+                  },
+                  "methods": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "kind",
+                        "description",
+                        "capabilityHint"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "approach",
+                            "capability",
+                            "spell",
+                            "item",
+                            "tool",
+                            "other"
+                          ]
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "capabilityHint": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 160
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "requestedOutcomes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  },
+                  "relation": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "after",
+                      "parallelWith",
+                      "condition"
+                    ],
+                    "properties": {
+                      "after": {
+                        "type": "array",
+                        "maxItems": 12,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        }
+                      },
+                      "parallelWith": {
+                        "type": "array",
+                        "maxItems": 12,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        }
+                      },
+                      "condition": {
+                        "anyOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "predicate",
+                              "intentRef",
+                              "description"
+                            ],
+                            "properties": {
+                              "predicate": {
+                                "enum": [
+                                  "completed",
+                                  "succeeded",
+                                  "failed",
+                                  "impossible",
+                                  "declined",
+                                  "interrupted",
+                                  "selected"
+                                ]
+                              },
+                              "intentRef": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "description": {
+                                "anyOf": [
+                                  {
+                                    "type": "null"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 280
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "ambiguities": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "ambiguityId",
+                  "question",
+                  "relatedIntentIds",
+                  "options"
+                ],
+                "properties": {
+                  "ambiguityId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "question": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "relatedIntentIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  },
+                  "options": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 280
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "coverage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "fullyRepresented",
+                "unrepresentedEvidenceQuotes",
+                "overflow"
+              ],
+              "properties": {
+                "fullyRepresented": {
+                  "type": "boolean"
+                },
+                "unrepresentedEvidenceQuotes": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "overflow": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "validators": [
+        "authority-boundary"
+      ],
+      "context": {
+        "allowedKeys": [
+          "policy",
+          "campaign",
+          "canon",
+          "scene",
+          "turn",
+          "input",
+          "mechanics",
+          "workflow",
+          "priorResult"
+        ],
+        "inputTargetBytes": 8000,
+        "inputHardLimitBytes": 12000,
+        "requiredReferenceRevisions": []
+      },
+      "provider": {
+        "temperature": 0.1,
+        "thinkingLevel": "medium",
+        "maxOutputTokens": 2000,
+        "timeoutMs": 180000,
+        "maxAttempts": 1,
+        "fallbackAllowed": false,
+        "premiumAllowed": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttlMs": 900000
+      }
+    },
+    {
       "id": "action.program.interpret",
       "version": "1",
       "operationClass": "reasoning_high",
@@ -619,8 +1012,8 @@
       },
       "prompt": {
         "id": "action.slice.repair.prompt",
-        "systemInstruction": "Repair exactly one named compound-action root failure and return only one gma.action-directed-story-repair/4 object. Populate exactly the typed carrier requested by the packet and set every other carrier to null. Do not use patchesJson, valueJson, JSON encoded in strings, markdown, or commentary. Preserve immutable instruction identity, program identity, accepted receipts, rolls, choices, current authority revisions, and unrelated accepted fields. Apply the positive first-pass requirement supplied for the failed field. Do not broaden the correction or rerun settled work.",
-        "version": "gma.compound-action-repair-policy/4"
+        "systemInstruction": "Repair exactly one named compound-action root failure and return only one gma.action-directed-story-repair/4 object. Populate exactly the typed carrier requested by the packet and set every other carrier to null. Do not use patchesJson, valueJson, JSON encoded in strings, markdown, or commentary. A semanticIntentPatch repairs only the inert meaning result. It must preserve exact instruction identity and must not contain executable action, authority, requirement, lifecycle, or completion labels. Preserve immutable instruction identity, program identity, accepted receipts, rolls, choices, current authority revisions, and unrelated accepted fields. Apply the positive first-pass requirement supplied for the failed field. Do not broaden the correction or rerun settled work.",
+        "version": "gma.compound-action-repair-policy/5"
       },
       "outputSchema": {
         "id": "action.slice.repair.result",
@@ -633,6 +1026,7 @@
             "schemaVersion",
             "correctionId",
             "transportPatch",
+            "semanticIntentPatch",
             "programPatch",
             "feasibilityPatch",
             "sceneKitPatch",
@@ -650,6 +1044,16 @@
               "maxLength": 240
             },
             "transportPatch": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "semanticIntentPatch": {
               "anyOf": [
                 {
                   "type": "null"
