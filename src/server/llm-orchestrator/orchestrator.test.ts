@@ -321,7 +321,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const currentScene = getOperationDefinition('story.current-scene.narrate');
     const repair = getOperationDefinition('story.turn.repair');
     const sceneKitRepair = getOperationDefinition('story.scene-kit.repair');
-    expect(turn.prompt.version).toBe('gma.story-director-policy/6');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/7');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
     expect(turn.prompt.systemInstruction).toMatch(/concretely pay off the declared action now/i);
@@ -367,7 +367,7 @@ describe('provider-neutral LLM orchestrator', () => {
       type: ['object', 'null'],
       required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
     });
-    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/7');
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/8');
     expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/authorized by actionBoundReveal/i);

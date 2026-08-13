@@ -1037,7 +1037,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'proposal', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority'],
     optional: ['proposedTimeAdvance'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/6',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/7',
     outputProperties: actionDirectedStoryTurnOutput,
     systemInstruction: [
       'Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet.',
@@ -1064,7 +1064,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority'],
     optional: ['proposedTimeAdvance'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/7',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/8',
     outputProperties: actionDirectedCurrentSceneOutput,
     systemInstruction: [
       'Narrate exactly one player action in the already-current GMC Scene kit from the supplied bounded GMA packet.',
