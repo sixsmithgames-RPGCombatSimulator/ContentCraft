@@ -1,6 +1,6 @@
 {
   "schemaVersion": "gma-gmc.llm-registry-artifact/1",
-  "registryVersion": "2026-08-12.2",
+  "registryVersion": "2026-08-13.1",
   "modelPolicyVersion": "2026-08-01.1",
   "operations": [
     {
@@ -810,8 +810,8 @@
       },
       "prompt": {
         "id": "action.slice.narrate.prompt",
-        "systemInstruction": "Execute and narrate exactly one supplied gma.action-execution-slice/1. Return only one gma.compound-action-slice-result/1 object with the exact programId, sliceId, and node set. Use only the supplied current Scene, prepared Story substance, settled receipts, and structured mechanics evidence. Do not repeat or reinterpret completed nodes. State every observable result and immediate NPC decision explicitly in player-facing responseText. Metadata, attitude, or uncertainty alone is not a result. When a mechanic is pending, establish the exact fictional posture without resolving it. Keep a rules explanation in rulesNote, outside in-character prose. A directly reached story-bearing target must yield its prepared concrete fact, bounded absence, or specific barrier now. Never substitute process-only prose. End at the next meaningful decision. Do not invent canon, movement, cast, time, XP, resources, a player choice, or completion of deferred NPC work. Ordinary prose should use roughly 250–600 tokens and an important beat 600–1,200; spend them on lived story rather than repeated locked metadata.",
-        "version": "gma.compound-action-execution-policy/1"
+        "systemInstruction": "Execute and narrate exactly one supplied gma.action-execution-slice/1. Return only one gma.compound-action-slice-result/1 object with the exact programId, sliceId, and node set. Use only the supplied current Scene, prepared Story substance, settled receipts, and structured mechanics evidence. Do not repeat or reinterpret completed nodes. State every observable result and immediate NPC decision explicitly in player-facing responseText. Metadata, attitude, or uncertainty alone is not a result. When a mechanic is pending, establish the exact fictional posture without resolving it. Keep a rules explanation in rulesNote, outside in-character prose. A directly reached story-bearing target must yield its prepared concrete fact, bounded absence, or specific barrier now. Never substitute process-only prose. Write each material claim as { claimId, claimText, sourceFactRefs }. claimText must be an exact excerpt from responseText, and sourceFactRefs must be a non-empty array of exact fact or authority-receipt IDs copied from the request context. Do not invent or paraphrase IDs. Legacy sourceRefs and singular sourceRef fields are compatibility inputs, not the requested output shape. End at the next meaningful decision. Do not invent canon, movement, cast, time, XP, resources, a player choice, or completion of deferred NPC work. Ordinary prose should use roughly 250–600 tokens and an important beat 600–1,200; spend them on lived story rather than repeated locked metadata.",
+        "version": "gma.compound-action-execution-policy/2"
       },
       "outputSchema": {
         "id": "action.slice.narrate.result",
@@ -1012,8 +1012,8 @@
       },
       "prompt": {
         "id": "action.slice.repair.prompt",
-        "systemInstruction": "Repair exactly one named compound-action root failure and return only one gma.action-directed-story-repair/4 object. Populate exactly the typed carrier requested by the packet and set every other carrier to null. Do not use patchesJson, valueJson, JSON encoded in strings, markdown, or commentary. A semanticIntentPatch repairs only the inert meaning result. It must preserve exact instruction identity and must not contain executable action, authority, requirement, lifecycle, or completion labels. Preserve immutable instruction identity, program identity, accepted receipts, rolls, choices, current authority revisions, and unrelated accepted fields. Apply the positive first-pass requirement supplied for the failed field. Do not broaden the correction or rerun settled work.",
-        "version": "gma.compound-action-repair-policy/5"
+        "systemInstruction": "Repair exactly one named compound-action root failure and return only one gma.action-directed-story-repair/4 object. Populate exactly the typed carrier requested by the packet and set every other carrier to null. Do not use patchesJson, valueJson, JSON encoded in strings, markdown, or commentary. A semanticIntentPatch repairs only the inert meaning result. It must preserve exact instruction identity and must not contain executable action, authority, requirement, lifecycle, or completion labels. Preserve immutable instruction identity, program identity, accepted receipts, rolls, choices, current authority revisions, and unrelated accepted fields. Apply the positive first-pass requirement supplied for the failed field. Do not broaden the correction or rerun settled work. When repairing presentation material claims, use claimText copied exactly from responseText and a non-empty sourceFactRefs array containing only exact IDs copied from the packet authoritativeContext or acceptedReceiptSummaries.",
+        "version": "gma.compound-action-repair-policy/6"
       },
       "outputSchema": {
         "id": "action.slice.repair.result",

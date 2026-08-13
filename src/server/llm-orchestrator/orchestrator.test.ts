@@ -274,19 +274,23 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.provider.fallbackAllowed).toBe(false);
     expect(legacyInterpretation.prompt.version).toBe('gma.semantic-action-planner-policy/3');
 
-    expect(narration.prompt.version).toBe('gma.compound-action-execution-policy/1');
+    expect(narration.prompt.version).toBe('gma.compound-action-execution-policy/2');
     expect(narration.prompt.systemInstruction).toMatch(/every observable result and immediate NPC decision explicitly/i);
     expect(narration.prompt.systemInstruction).toMatch(/story-bearing target must yield its prepared concrete fact, bounded absence, or specific barrier now/i);
+    expect(narration.prompt.systemInstruction).toMatch(/claimId, claimText, sourceFactRefs/i);
+    expect(narration.prompt.systemInstruction).toMatch(/non-empty array of exact fact or authority-receipt IDs/i);
     expect(narration.prompt.systemInstruction).toMatch(/Do not repeat or reinterpret completed nodes/i);
     expect((narration.outputSchema.schema.properties as any).nodeResults.items.required)
       .toContain('narrationEvidence');
     expect(narration.provider.maxAttempts).toBe(1);
     expect(narration.provider.fallbackAllowed).toBe(false);
 
-    expect(repair.prompt.version).toBe('gma.compound-action-repair-policy/5');
+    expect(repair.prompt.version).toBe('gma.compound-action-repair-policy/6');
     expect(repair.prompt.systemInstruction).toMatch(/exactly the typed carrier requested/i);
     expect(repair.prompt.systemInstruction).toMatch(/Do not use patchesJson, valueJson, JSON encoded in strings/i);
     expect(repair.prompt.systemInstruction).toMatch(/positive first-pass requirement supplied for the failed field/i);
+    expect(repair.prompt.systemInstruction).toMatch(/presentation material claims/i);
+    expect(repair.prompt.systemInstruction).toMatch(/non-empty sourceFactRefs array/i);
     expect(repair.outputSchema.schema.required).not.toContain('patchesJson');
     expect(repair.outputSchema.schema.required).toContain('semanticIntentPatch');
     expect(repair.provider.maxAttempts).toBe(1);

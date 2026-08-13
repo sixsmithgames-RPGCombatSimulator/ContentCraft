@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-12.2';
+export const OPERATION_REGISTRY_VERSION = '2026-08-13.1';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-08-12.2',
   '2026-08-09.2',
   '2026-08-09.1',
   '2026-08-08.9',
@@ -853,7 +854,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'programId', 'sliceId', 'responseText', 'nodeResults', 'rollRequest', 'materialClaims', 'rulesNote'],
     targetBytes: 14_000, hardLimitBytes: 16_384, maxOutputTokens: 4_500,
     temperature: 0.45, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.compound-action-execution-policy/1',
+    promptVersion: 'gma.compound-action-execution-policy/2',
     outputProperties: {
       schemaVersion: { const: 'gma.compound-action-slice-result/1' },
       programId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -879,6 +880,7 @@ const seeds: Seed[] = [
       'State every observable result and immediate NPC decision explicitly in player-facing responseText. Metadata, attitude, or uncertainty alone is not a result.',
       'When a mechanic is pending, establish the exact fictional posture without resolving it. Keep a rules explanation in rulesNote, outside in-character prose.',
       'A directly reached story-bearing target must yield its prepared concrete fact, bounded absence, or specific barrier now. Never substitute process-only prose.',
+      'Write each material claim as { claimId, claimText, sourceFactRefs }. claimText must be an exact excerpt from responseText, and sourceFactRefs must be a non-empty array of exact fact or authority-receipt IDs copied from the request context. Do not invent or paraphrase IDs. Legacy sourceRefs and singular sourceRef fields are compatibility inputs, not the requested output shape.',
       'End at the next meaningful decision. Do not invent canon, movement, cast, time, XP, resources, a player choice, or completion of deferred NPC work.',
       'Ordinary prose should use roughly 250–600 tokens and an important beat 600–1,200; spend them on lived story rather than repeated locked metadata.',
     ].join(' '),
@@ -888,7 +890,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'correctionId', 'transportPatch', 'semanticIntentPatch', 'programPatch', 'feasibilityPatch', 'sceneKitPatch', 'storyDesignPatch', 'mechanicsPatch', 'presentationPatch'],
     targetBytes: 8_000, hardLimitBytes: 16_384, maxOutputTokens: 2_500,
     temperature: 0.1, thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.compound-action-repair-policy/5',
+    promptVersion: 'gma.compound-action-repair-policy/6',
     outputProperties: {
       schemaVersion: { const: 'gma.action-directed-story-repair/4' },
       correctionId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -907,6 +909,7 @@ const seeds: Seed[] = [
       'A semanticIntentPatch repairs only the inert meaning result. It must preserve exact instruction identity and must not contain executable action, authority, requirement, lifecycle, or completion labels.',
       'Preserve immutable instruction identity, program identity, accepted receipts, rolls, choices, current authority revisions, and unrelated accepted fields.',
       'Apply the positive first-pass requirement supplied for the failed field. Do not broaden the correction or rerun settled work.',
+      'When repairing presentation material claims, use claimText copied exactly from responseText and a non-empty sourceFactRefs array containing only exact IDs copied from the packet authoritativeContext or acceptedReceiptSummaries.',
     ].join(' '),
   },
   { id: 'narration.generate', operationClass: 'narrative', tier: 'narrative', required: ['narration', 'proposedCanonChanges', 'proposedVcsExports', 'riskLevel', 'syncNotes'], optional: ['interactionResolution', 'proposedSheetMutation', 'npcDialogue', 'requiresVcsResolution', 'proposedTimeAdvance', 'sceneSegmentUpdate', 'gmPrivateNotes'], validators: ['narrative-fidelity', 'chronology', 'inventory', 'scene-presence'], maxOutputTokens: 6000, targetBytes: 48_000, hardLimitBytes: 96_000, thinkingLevel: 'low' },
