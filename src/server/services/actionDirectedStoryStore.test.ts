@@ -15,6 +15,7 @@ import {
   readCurrentSceneContexts,
   readStoryGraphV2,
   replaceStoryGraphV2,
+  STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES,
   type SceneHandoffAuthorityEnvelope,
   type StoryDeltaV2,
 } from './actionDirectedStoryStore.js';
@@ -355,8 +356,31 @@ describe('D2 action-directed Story authority', () => {
         expect.objectContaining({ sourceRef: 'gmc:pc:kerrigan', authority: 'gmc', status: 'committed' }),
         expect.objectContaining({ sourceRef: 'gmc:location:flintwake', authority: 'gmc', status: 'committed' }),
         expect.objectContaining({ sourceRef: 'gmc:lead:matched-cart-route', authority: 'gmc', status: 'committed' }),
+        expect.objectContaining({ sourceRef: 'beat:cart-arrival', authority: 'gmc', status: 'committed' }),
+        expect.objectContaining({ sourceRef: 'element:cart', authority: 'gmc', status: 'committed' }),
+        expect.objectContaining({ sourceRef: 'information:cart-cargo', authority: 'gmc', status: 'committed' }),
+        expect.objectContaining({ sourceRef: 'role:cart-driver', authority: 'gmc', status: 'committed' }),
       ]),
     });
+
+    const crowdedWorkspace = structuredClone(active);
+    const currentSceneKitId = String((crowdedWorkspace.activeSceneKitRef as JsonObject).sceneKitId);
+    const currentSceneKit = (crowdedWorkspace.sceneKits as JsonObject[])
+      .find((kit) => kit.sceneKitId === currentSceneKitId)!;
+    crowdedWorkspace.sceneKits = [
+      ...Array.from({ length: 220 }, (_entry, index) => ({
+        ...structuredClone(currentSceneKit),
+        sceneKitId: `scene-kit:000-history-${String(index).padStart(3, '0')}`,
+      })),
+      currentSceneKit,
+    ];
+    const crowdedCatalog = buildStoryAuthorityReceiptCatalog(crowdedWorkspace);
+    expect(crowdedCatalog.receipts).toHaveLength(STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES);
+    expect(crowdedCatalog.receipts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceRef: currentSceneKitId }),
+      expect.objectContaining({ sourceRef: 'beat:cart-arrival' }),
+      expect.objectContaining({ sourceRef: 'gmc:pc:kerrigan' }),
+    ]));
   });
 
   it('commits a scene story design atomically and applies a concrete satisfaction receipt', async () => {
@@ -369,6 +393,13 @@ describe('D2 action-directed Story authority', () => {
       privateSceneContext: { sceneStoryDesign: { designId: 'scene-design:cart-interception' } },
     });
     expect(JSON.stringify(committed.playableSceneContext)).not.toContain('obligation:cart-cargo');
+    const contexts = await readCurrentSceneContexts({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    expect(contexts?.authorityReceiptCatalog.receipts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceRef: 'scene-design:cart-interception' }),
+      expect.objectContaining({ sourceRef: 'obligation:cart-cargo' }),
+      expect.objectContaining({ sourceRef: 'affordance:search-cart' }),
+      expect.objectContaining({ sourceRef: 'information:cart-cargo' }),
+    ]));
     expect(JSON.stringify(committed.playableSceneContext)).not.toContain('Six sealed crates of lamp oil');
 
     const delta: StoryDeltaV2 = {
@@ -750,8 +781,11 @@ describe('D2 action-directed Story authority', () => {
     });
     expect(preview.sceneContext.authorityReceiptCatalog.receipts).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceRef: 'location-flintwake', status: 'committed' }),
+      expect.objectContaining({ sourceRef: 'kerrigan-brynn', status: 'committed' }),
+      expect.objectContaining({ sourceRef: 'kerrigans-familiar', status: 'committed' }),
       expect.objectContaining({ sourceRef: 'gma:timeline:turn-1:transit', status: 'committed' }),
       expect.objectContaining({ sourceRef: 'gma:timeline:message-2:scene-segment', status: 'committed' }),
+      expect.objectContaining({ sourceRef: expect.stringMatching(/^beat:/), status: 'committed' }),
     ]));
   });
 

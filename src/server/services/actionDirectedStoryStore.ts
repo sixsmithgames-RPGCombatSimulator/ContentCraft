@@ -1008,39 +1008,78 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
 }
 
 function committedStorySourceRefs(workspace: JsonObject): string[] {
-  const refs = new Set<string>();
-  const add = (value: unknown) => {
+  const currentRefs = new Set<string>();
+  const otherRefs = new Set<string>();
+  const addTo = (refs: Set<string>, value: unknown) => {
     if (typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,239}$/.test(value)) refs.add(value);
   };
-  const addList = (value: unknown) => {
-    if (Array.isArray(value)) value.forEach(add);
+  const addListTo = (refs: Set<string>, value: unknown) => {
+    if (Array.isArray(value)) value.forEach((entry) => addTo(refs, entry));
   };
-  for (const node of graphNodes(projectStoryGraphV2(workspace))) {
-    add(node.nodeId); add(node.primaryParentRef); addList(node.relatedNodeRefs); addList(node.sourceRefs);
-  }
-  for (const kit of sceneKits(workspace)) {
-    const projected = kit.schemaVersion === SCENE_KIT_V2_CONTRACT_VERSION ? kit : projectLegacySceneKitV2(kit, projectStoryGraphV2(workspace));
-    add(projected.sceneKitId); addList(projected.sourceRefs); addList(projected.storyBindings);
+  const addSceneKitRefs = (refs: Set<string>, projected: JsonObject) => {
+    addTo(refs, projected.sceneKitId); addListTo(refs, projected.sourceRefs); addListTo(refs, projected.storyBindings);
     if (isObject(projected.playableLocus)) {
-      add(projected.playableLocus.canonicalAnchorRef); addList(projected.playableLocus.sourceRefs);
+      addTo(refs, projected.playableLocus.canonicalAnchorRef); addListTo(refs, projected.playableLocus.sourceRefs);
     }
     if (isObject(projected.participants)) {
-      addList(projected.participants.present); addList(projected.participants.anticipated);
+      addListTo(refs, projected.participants.present); addListTo(refs, projected.participants.anticipated);
+      for (const role of (Array.isArray(projected.participants.sceneLocalRoles) ? projected.participants.sceneLocalRoles : [])) {
+        if (isObject(role)) addTo(refs, role.roleId);
+      }
+    }
+    for (const element of (Array.isArray(projected.establishedElements) ? projected.establishedElements : [])) {
+      if (isObject(element)) addTo(refs, element.elementId);
+    }
+    for (const information of (Array.isArray(projected.information) ? projected.information : [])) {
+      if (isObject(information)) addTo(refs, information.informationId);
+    }
+    for (const beat of (Array.isArray(projected.beats) ? projected.beats : [])) {
+      if (isObject(beat)) addTo(refs, beat.beatId);
+    }
+  };
+  const graph = projectStoryGraphV2(workspace);
+  const activeKitId = isObject(workspace.activeSceneKitRef) ? String(workspace.activeSceneKitRef.sceneKitId ?? '') : '';
+  const kits = sceneKits(workspace).map((kit) => (
+    kit.schemaVersion === SCENE_KIT_V2_CONTRACT_VERSION ? kit : projectLegacySceneKitV2(kit, graph)
+  ));
+  const currentKit = kits.find((kit) => String(kit.sceneKitId) === activeKitId) ?? null;
+  if (currentKit) {
+    addSceneKitRefs(currentRefs, currentKit);
+    const design = activeSceneStoryDesign(workspace, currentKit);
+    if (design) {
+      addTo(currentRefs, design.designId); addListTo(currentRefs, design.sourceRefs);
+      for (const obligation of (Array.isArray(design.obligations) ? design.obligations : [])) {
+        if (!isObject(obligation)) continue;
+        addTo(currentRefs, obligation.obligationId); addTo(currentRefs, obligation.storyNodeRef); addListTo(currentRefs, obligation.sourceRefs);
+      }
+      for (const affordance of (Array.isArray(design.affordances) ? design.affordances : [])) {
+        if (!isObject(affordance)) continue;
+        addTo(currentRefs, affordance.affordanceId); addTo(currentRefs, affordance.targetRef);
+        addListTo(currentRefs, affordance.factRefs); addListTo(currentRefs, affordance.obligationRefs);
+      }
     }
   }
+  for (const node of graphNodes(projectStoryGraphV2(workspace))) {
+    addTo(otherRefs, node.nodeId); addTo(otherRefs, node.primaryParentRef);
+    addListTo(otherRefs, node.relatedNodeRefs); addListTo(otherRefs, node.sourceRefs);
+  }
+  for (const kit of kits) if (kit !== currentKit) addSceneKitRefs(otherRefs, kit);
   const frontier = isObject(workspace.frontier) && Array.isArray(workspace.frontier.candidates)
     ? workspace.frontier.candidates as JsonObject[]
     : [];
   frontier.forEach((candidate) => {
-    add(candidate.candidateId); add(candidate.situationId); addList(candidate.sourceRefs); addList(candidate.likelyCastRefs);
+    addTo(otherRefs, candidate.candidateId); addTo(otherRefs, candidate.situationId);
+    addListTo(otherRefs, candidate.sourceRefs); addListTo(otherRefs, candidate.likelyCastRefs);
   });
   const requirements = isObject(workspace.preparationLedger) && Array.isArray(workspace.preparationLedger.requirements)
     ? workspace.preparationLedger.requirements as JsonObject[]
     : [];
   requirements.forEach((requirement) => {
-    add(requirement.requirementId); add(requirement.targetRef); addList(requirement.sourceRefs);
+    addTo(otherRefs, requirement.requirementId); addTo(otherRefs, requirement.targetRef); addListTo(otherRefs, requirement.sourceRefs);
   });
-  return [...refs].sort().slice(0, STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES);
+  const prioritized = [...currentRefs].sort();
+  const remaining = [...otherRefs].filter((ref) => !currentRefs.has(ref)).sort();
+  return [...prioritized, ...remaining].slice(0, STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES);
 }
 
 /** Mints bounded receipts for identifiers read from one committed GMC Story revision. */
