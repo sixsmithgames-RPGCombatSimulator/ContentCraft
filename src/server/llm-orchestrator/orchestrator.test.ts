@@ -10,6 +10,7 @@ import {
   bindOperationRuntime,
   getOperationDefinition,
   listOperationDefinitions,
+  validateOperationOutput,
 } from './operationRegistry.js';
 import {
   createUniversalRequest,
@@ -274,27 +275,45 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.provider.fallbackAllowed).toBe(false);
     expect(legacyInterpretation.prompt.version).toBe('gma.semantic-action-planner-policy/3');
 
-    expect(narration.prompt.version).toBe('gma.compound-action-execution-policy/2');
+    expect(narration.prompt.version).toBe('gma.compound-action-execution-policy/3');
     expect(narration.prompt.systemInstruction).toMatch(/every observable result and immediate NPC decision explicitly/i);
     expect(narration.prompt.systemInstruction).toMatch(/story-bearing target must yield its prepared concrete fact, bounded absence, or specific barrier now/i);
     expect(narration.prompt.systemInstruction).toMatch(/claimId, claimText, sourceFactRefs/i);
     expect(narration.prompt.systemInstruction).toMatch(/non-empty array of exact fact or authority-receipt IDs/i);
+    expect(narration.prompt.systemInstruction).toMatch(/Every completed observe or investigate node must include substantiveOutcome/i);
     expect(narration.prompt.systemInstruction).toMatch(/Do not repeat or reinterpret completed nodes/i);
     expect((narration.outputSchema.schema.properties as any).nodeResults.items.required)
       .toContain('narrationEvidence');
+    expect((narration.outputSchema.schema.properties as any).nodeResults.items.properties.substantiveOutcome)
+      .toBeDefined();
+    expect(narration.context.inputHardLimitBytes).toBe(24_576);
     expect(narration.provider.maxAttempts).toBe(1);
     expect(narration.provider.fallbackAllowed).toBe(false);
 
-    expect(repair.prompt.version).toBe('gma.compound-action-repair-policy/6');
+    expect(repair.prompt.version).toBe('gma.compound-action-repair-policy/7');
     expect(repair.prompt.systemInstruction).toMatch(/exactly the typed carrier requested/i);
     expect(repair.prompt.systemInstruction).toMatch(/Do not use patchesJson, valueJson, JSON encoded in strings/i);
     expect(repair.prompt.systemInstruction).toMatch(/positive first-pass requirement supplied for the failed field/i);
     expect(repair.prompt.systemInstruction).toMatch(/presentation material claims/i);
     expect(repair.prompt.systemInstruction).toMatch(/non-empty sourceFactRefs array/i);
+    expect(repair.prompt.systemInstruction).toMatch(/completed observe or investigate result/i);
+    expect(repair.context.inputHardLimitBytes).toBe(40_960);
     expect(repair.outputSchema.schema.required).not.toContain('patchesJson');
     expect(repair.outputSchema.schema.required).toContain('semanticIntentPatch');
     expect(repair.provider.maxAttempts).toBe(1);
     expect(repair.provider.fallbackAllowed).toBe(false);
+
+    expect(validateOperationOutput('action.slice.narrate', {
+      schemaVersion: 'gma.compound-action-slice-result/1',
+      programId: 'program:1', sliceId: 'slice:1', responseText: 'No carts are visible in the yard.',
+      nodeResults: [{
+        nodeId: 'observe', result: 'completed', observableFacts: ['No carts are visible in the yard.'],
+        deferredEffects: [], narrationConstraints: [], narrationEvidence: 'No carts are visible in the yard.',
+        substantiveOutcome: { kind: 'bounded_negative', narrationEvidence: 'No carts are visible in the yard.' },
+        timeAdvanceSeconds: 60, authorityReceipts: [],
+      }],
+      rollRequest: null, materialClaims: [], rulesNote: null,
+    }).valid).toBe(true);
   });
 
   it('registers the combined action-directed Story turn with the complete first-pass contract', () => {
