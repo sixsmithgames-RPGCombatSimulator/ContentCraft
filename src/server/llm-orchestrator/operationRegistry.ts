@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-12.1';
+export const OPERATION_REGISTRY_VERSION = '2026-08-12.2';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-09.2',
@@ -1012,7 +1012,7 @@ const seeds: Seed[] = [
     id: 'story.turn.direct', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'proposal', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/4',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/5',
     outputProperties: actionDirectedStoryTurnOutput,
     systemInstruction: [
       'Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet.',
@@ -1022,7 +1022,7 @@ const seeds: Seed[] = [
       'When the packet requests gma.story-director-result/3, include one gmc.scene-story-design/1 in handoff.storyDesign, bound to the exact proposed Scene-kit revision. Prepare one to four concrete dramatic questions and only action-capable affordances grounded in supplied fact, target, and Story-node references. Prepare possibilities, not a required player route.',
       'The active beat and opening narration must concretely pay off the declared action now or establish the precise position for one provisional VCS mechanic.',
       'Prepare a concrete fixed information fact or bounded absence for every central story-bearing target implied by the scene purpose, dramatic question, active beat, or established elements. A container label or a promise that contents will be revealed later is not an answer.',
-      'When the supplied actionBoundReveal reports blocking scene-substance debt, replace the same Scene kit in place, add the minimum action-matched information row, and state any directly reached fact exactly in openingNarration before requesting a roll.',
+      'When the supplied actionBoundReveal reports blocking scene-substance debt, replace the same Scene kit in place and add the minimum action-matched information row. A row is action-matched only when its factText or an accessVector repeats the declared or semantic action\'s target or method terms; name the exact target instead of relying only on a synonym. State any directly reached fact exactly in openingNarration before requesting a roll.',
       'For a provisional check on a story-bearing target, prepare all five outcome branches with gma.substantive-outcome/1: a fact-bound finding, scope-limited negative, or specific barrier. Fixed contents cannot change between outcome bands.',
       'Bind every material narrated fact, presence, and reveal to supplied fact IDs or IDs created in the proposed Scene kit. Do not reveal concealed or undetermined preparation.',
       'Return gma.scene-realization/1. Cover every requested responder or cohort member with exact prose evidence; describe a cohort collectively with all, each, both, or its known count, or use one observedCount 1 row with different evidence per member; account for requested concealment and every action-matched capability.',

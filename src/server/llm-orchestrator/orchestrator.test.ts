@@ -298,10 +298,12 @@ describe('provider-neutral LLM orchestrator', () => {
     const currentScene = getOperationDefinition('story.current-scene.narrate');
     const repair = getOperationDefinition('story.turn.repair');
     const sceneKitRepair = getOperationDefinition('story.scene-kit.repair');
-    expect(turn.prompt.version).toBe('gma.story-director-policy/4');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/5');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
     expect(turn.prompt.systemInstruction).toMatch(/concretely pay off the declared action now/i);
+    expect(turn.prompt.systemInstruction).toMatch(/factText or an accessVector repeats the declared or semantic action's target or method terms/i);
+    expect(turn.prompt.systemInstruction).toMatch(/name the exact target instead of relying only on a synonym/i);
     expect(turn.prompt.systemInstruction).toMatch(/Bind every material narrated fact/i);
     expect(turn.prompt.systemInstruction).toMatch(/Do not invent a player choice/i);
     expect(turn.prompt.systemInstruction).toMatch(/gma\.scene-realization\/1/i);
