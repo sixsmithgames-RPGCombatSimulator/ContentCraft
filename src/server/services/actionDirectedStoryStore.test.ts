@@ -16,6 +16,7 @@ import {
   readStoryGraphV2,
   replaceStoryGraphV2,
   STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES,
+  STORY_SCENE_HANDOFF_SOURCE_RECEIPT_MAX_ENTRIES,
   type SceneHandoffAuthorityEnvelope,
   type StoryDeltaV2,
 } from './actionDirectedStoryStore.js';
@@ -381,6 +382,81 @@ describe('D2 action-directed Story authority', () => {
       expect.objectContaining({ sourceRef: 'beat:cart-arrival' }),
       expect.objectContaining({ sourceRef: 'gmc:pc:kerrigan' }),
     ]));
+
+    const designedWorkspace = structuredClone(active);
+    const designedKit = (designedWorkspace.sceneKits as JsonObject[])
+      .find((kit) => kit.sceneKitId === currentSceneKitId)!;
+    const present = Array.from({ length: 32 }, (_entry, index) => `zzz:actor:present:${index}`);
+    const anticipated = Array.from({ length: 16 }, (_entry, index) => `zzz:actor:anticipated:${index}`);
+    const roles = Array.from({ length: 16 }, (_entry, index) => ({
+      roleId: `zzz:role:${index}`, label: `Role ${index}`, count: 1, objective: 'Remain available.',
+    }));
+    const elements = Array.from({ length: 32 }, (_entry, index) => ({
+      elementId: `zzz:element:${index}`, truthState: 'scene_local_established', summary: `Element ${index} is established.`,
+    }));
+    const information = Array.from({ length: 24 }, (_entry, index) => ({
+      informationId: `zzz:information:${index}`, state: 'concealed', factText: `Prepared fact ${index} remains concealed.`, accessVectors: [`inspect fact ${index}`],
+    }));
+    const beats = Array.from({ length: 5 }, (_entry, index) => ({
+      beatId: `zzz:beat:${index}`, kind: `beat-kind-${index}`, state: index === 0 ? 'active' : 'available',
+      trigger: `Beat ${index} becomes relevant.`, changeSurface: `Beat ${index} can change.`,
+      potentialImpacts: [{ storyNodeRef: 'story:arc:flintwake', outcome: `outcome-${index}`, effect: 'advance' }],
+    }));
+    const kitSources = Array.from({ length: 24 }, (_entry, index) => `zzz:kit-source:${index}`);
+    const locusSources = Array.from({ length: 24 }, (_entry, index) => `zzz:locus-source:${index}`);
+    Object.assign(designedKit, {
+      playableLocus: { ...designedKit.playableLocus as JsonObject, canonicalAnchorRef: 'zzz:location:anchor', sourceRefs: locusSources },
+      participants: { present, anticipated, sceneLocalRoles: roles },
+      establishedElements: elements,
+      information,
+      beats,
+      sourceRefs: kitSources,
+    });
+    designedWorkspace.activeBeatRef = beats[0].beatId;
+    designedWorkspace.sceneStoryDesigns = [{
+      ...cartStoryDesign(),
+      designId: 'aaa:design:maximal',
+      sceneKitRef: { sceneKitId: currentSceneKitId, sceneKitRevision: designedKit.revision },
+      sourceRefs: Array.from({ length: 24 }, (_entry, index) => `aaa:design-source:${index}`),
+    }];
+    const designedCatalog = buildStoryAuthorityReceiptCatalog(designedWorkspace);
+    const designedRefs = new Set((designedCatalog.receipts as JsonObject[]).map((receipt) => receipt.sourceRef));
+    for (const sourceRef of [
+      currentSceneKitId, 'zzz:location:anchor', ...kitSources, ...locusSources,
+      ...present, ...anticipated, ...roles.map((role) => role.roleId),
+      ...elements.map((element) => element.elementId), ...information.map((entry) => entry.informationId),
+      ...beats.map((beat) => beat.beatId),
+    ]) expect(designedRefs.has(sourceRef), sourceRef).toBe(true);
+  });
+
+  it('accepts the schema-maximum 73 required handoff sources and rejects envelopes over 80', async () => {
+    const acceptedStore = await preparedStore();
+    const accepted = handoffEnvelope();
+    const proposalSources = Array.from({ length: 24 }, (_entry, index) => `gmc:source:${index}`);
+    const present = Array.from({ length: 32 }, (_entry, index) => `gmc:actor:present:${index}`);
+    const anticipated = Array.from({ length: 16 }, (_entry, index) => `gmc:actor:anticipated:${index}`);
+    const kit = (accepted.proposal.handoff as JsonObject).sceneKit as JsonObject;
+    accepted.proposal.sourceRefs = proposalSources;
+    kit.sourceRefs = proposalSources;
+    (kit.playableLocus as JsonObject).sourceRefs = proposalSources;
+    kit.participants = { present, anticipated, sceneLocalRoles: [] };
+    accepted.sourceReceipts = [...proposalSources, ...present, ...anticipated, 'gmc:location:flintwake'].map((sourceRef) => ({
+      sourceRef, receiptRef: `receipt:${sourceRef}`, authority: 'gmc' as const, status: 'committed' as const,
+    }));
+    expect(accepted.sourceReceipts).toHaveLength(73);
+    await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: accepted }, acceptedStore.records))
+      .resolves.toMatchObject({ status: 'applied' });
+
+    const rejectedStore = await preparedStore();
+    const rejected = handoffEnvelope();
+    rejected.sourceReceipts.push(...Array.from({ length: STORY_SCENE_HANDOFF_SOURCE_RECEIPT_MAX_ENTRIES }, (_entry, index) => ({
+      sourceRef: `gmc:extra:${index}`, receiptRef: `gmc:extra-receipt:${index}`,
+      authority: 'gmc' as const, status: 'committed' as const,
+    })));
+    expect(rejected.sourceReceipts.length).toBeGreaterThan(STORY_SCENE_HANDOFF_SOURCE_RECEIPT_MAX_ENTRIES);
+    await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: rejected }, rejectedStore.records))
+      .rejects.toMatchObject({ code: 'STORY_SOURCE_RECEIPTS_INVALID' });
+    expect(rejectedStore.documents).toHaveLength(2);
   });
 
   it('commits a scene story design atomically and applies a concrete satisfaction receipt', async () => {

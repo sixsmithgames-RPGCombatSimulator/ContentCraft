@@ -40,6 +40,7 @@ export const PRIVATE_SCENE_CONTEXT_CONTRACT_VERSION = 'gmc.scene-director-contex
 export const PRIVATE_SCENE_CONTEXT_MAX_BYTES = 32_768;
 export const STORY_AUTHORITY_RECEIPT_CATALOG_CONTRACT_VERSION = 'gmc.story-authority-receipt-catalog/1';
 export const STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES = 192;
+export const STORY_SCENE_HANDOFF_SOURCE_RECEIPT_MAX_ENTRIES = 80;
 export const SCENE_HANDOFF_AUTHORITY_ENVELOPE_MAX_BYTES = 98_304;
 
 type HandoffMode = 'reuse' | 'select' | 'create' | 'replace';
@@ -1008,7 +1009,8 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
 }
 
 function committedStorySourceRefs(workspace: JsonObject): string[] {
-  const currentRefs = new Set<string>();
+  const currentSceneRefs = new Set<string>();
+  const currentDesignRefs = new Set<string>();
   const otherRefs = new Set<string>();
   const addTo = (refs: Set<string>, value: unknown) => {
     if (typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,239}$/.test(value)) refs.add(value);
@@ -1044,18 +1046,18 @@ function committedStorySourceRefs(workspace: JsonObject): string[] {
   ));
   const currentKit = kits.find((kit) => String(kit.sceneKitId) === activeKitId) ?? null;
   if (currentKit) {
-    addSceneKitRefs(currentRefs, currentKit);
+    addSceneKitRefs(currentSceneRefs, currentKit);
     const design = activeSceneStoryDesign(workspace, currentKit);
     if (design) {
-      addTo(currentRefs, design.designId); addListTo(currentRefs, design.sourceRefs);
+      addTo(currentDesignRefs, design.designId); addListTo(currentDesignRefs, design.sourceRefs);
       for (const obligation of (Array.isArray(design.obligations) ? design.obligations : [])) {
         if (!isObject(obligation)) continue;
-        addTo(currentRefs, obligation.obligationId); addTo(currentRefs, obligation.storyNodeRef); addListTo(currentRefs, obligation.sourceRefs);
+        addTo(currentDesignRefs, obligation.obligationId); addTo(currentDesignRefs, obligation.storyNodeRef); addListTo(currentDesignRefs, obligation.sourceRefs);
       }
       for (const affordance of (Array.isArray(design.affordances) ? design.affordances : [])) {
         if (!isObject(affordance)) continue;
-        addTo(currentRefs, affordance.affordanceId); addTo(currentRefs, affordance.targetRef);
-        addListTo(currentRefs, affordance.factRefs); addListTo(currentRefs, affordance.obligationRefs);
+        addTo(currentDesignRefs, affordance.affordanceId); addTo(currentDesignRefs, affordance.targetRef);
+        addListTo(currentDesignRefs, affordance.factRefs); addListTo(currentDesignRefs, affordance.obligationRefs);
       }
     }
   }
@@ -1077,9 +1079,11 @@ function committedStorySourceRefs(workspace: JsonObject): string[] {
   requirements.forEach((requirement) => {
     addTo(otherRefs, requirement.requirementId); addTo(otherRefs, requirement.targetRef); addListTo(otherRefs, requirement.sourceRefs);
   });
-  const prioritized = [...currentRefs].sort();
-  const remaining = [...otherRefs].filter((ref) => !currentRefs.has(ref)).sort();
-  return [...prioritized, ...remaining].slice(0, STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES);
+  const playable = [...currentSceneRefs].sort();
+  const designed = [...currentDesignRefs].filter((ref) => !currentSceneRefs.has(ref)).sort();
+  const remaining = [...otherRefs]
+    .filter((ref) => !currentSceneRefs.has(ref) && !currentDesignRefs.has(ref)).sort();
+  return [...playable, ...designed, ...remaining].slice(0, STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES);
 }
 
 /** Mints bounded receipts for identifiers read from one committed GMC Story revision. */
@@ -1109,7 +1113,8 @@ function validateAuthorityReceipts(envelope: SceneHandoffAuthorityEnvelope, prop
   }
   requireExactKeys(player, 'playerActionReceipt', ['receiptRef', 'interactionId', 'playerActionFingerprint', 'status']);
   stableId(player.receiptRef, 'playerActionReceipt.receiptRef');
-  if (!Array.isArray(envelope.sourceReceipts) || envelope.sourceReceipts.length > 24) {
+  if (!Array.isArray(envelope.sourceReceipts)
+    || envelope.sourceReceipts.length > STORY_SCENE_HANDOFF_SOURCE_RECEIPT_MAX_ENTRIES) {
     throw new StoryWorkspaceStoreError(422, 'STORY_SOURCE_RECEIPTS_INVALID', 'The handoff source receipts are invalid.', { field: 'sourceReceipts' });
   }
   const receipts = new Map<string, SourceAuthorityReceipt>();
