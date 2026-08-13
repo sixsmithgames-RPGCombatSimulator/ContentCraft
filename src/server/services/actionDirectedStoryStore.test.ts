@@ -651,6 +651,15 @@ describe('D2 action-directed Story authority', () => {
       .rejects.toMatchObject({ code: 'STORY_PLAYER_ACTION_RECEIPT_INVALID' });
     expect(store.documents).toHaveLength(2);
 
+    const unboundLocusSource = handoffEnvelope();
+    (((unboundLocusSource.proposal.handoff as JsonObject).sceneKit as JsonObject).playableLocus as JsonObject).sourceRefs = [
+      'gmc:lead:matched-cart-route',
+      'gma:location-mention:unbound-locus',
+    ];
+    await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: unboundLocusSource }, store.records))
+      .rejects.toMatchObject({ code: 'STORY_SCENE_SOURCE_UNBOUND', details: { sourceRef: 'gma:location-mention:unbound-locus' } });
+    expect(store.documents).toHaveLength(2);
+
     const missingPresence = handoffEnvelope();
     missingPresence.sourceReceipts = missingPresence.sourceReceipts.filter((receipt) => receipt.sourceRef !== 'gmc:pc:kerrigan');
     await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: missingPresence }, store.records))
