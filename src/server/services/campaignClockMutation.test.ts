@@ -3,6 +3,7 @@ import {
   applyCampaignClockMutation,
   campaignClockMutationFingerprint,
   campaignClockMutationKey,
+  campaignClockReceiptState,
   CampaignClockMutationError,
   durableClockSnapshot,
 } from './campaignClockMutation.js';
@@ -48,6 +49,18 @@ function fakeStateCollection(initial: Record<string, any> | null = null) {
 }
 
 describe('campaign clock mutation', () => {
+  it('projects a compact confirmation receipt without returning the mutation ledger', () => {
+    expect(campaignClockReceiptState({
+      gameClock: { day: 5, hour: 5, minute: 35 },
+      gameClockRevision: 135,
+      timeMutationLedger: { enormous: { mutationId: 'gma-time:old' } },
+      unrelatedCampaignState: 'must not cross the time endpoint',
+    })).toEqual({
+      gameClock: { day: 5, hour: 5, minute: 35 },
+      gameClockRevision: 135,
+    });
+  });
+
   it('removes volatile timestamps from the durable clock fingerprint', () => {
     const first = { day: 3, hour: 10, minute: 30, elapsedSeconds: 210600, updatedAt: 'first' };
     const second = { day: 3, hour: 10, minute: 30, elapsedSeconds: 210600, updatedAt: 'second' };

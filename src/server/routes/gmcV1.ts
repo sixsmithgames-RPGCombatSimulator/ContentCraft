@@ -53,7 +53,7 @@ import {
 import { synchronizeNpcIdentityPromotionToStory } from '../services/storyWorkspaceStore.js';
 import { generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
 import { ensureCampaignActor } from '../services/actorEnsureWorkflow.js';
-import { applyCampaignClockMutation } from '../services/campaignClockMutation.js';
+import { applyCampaignClockMutation, campaignClockReceiptState } from '../services/campaignClockMutation.js';
 import { createCampaignMutation } from '../services/campaignCreateMutation.js';
 import {
   confirmCharacterSheetAuthorityMutation,
@@ -418,7 +418,8 @@ gmcV1Router.get('/campaigns/:campaignId/time', asyncRoute(async (req, res) => {
   if (!await campaign(req, res)) return;
   const uid = userId(req); const id = req.params.campaignId;
   const state = await collections.state().findOne({ userId: uid, campaignId: id });
-  res.json({ gameClock: state?.gameClock ?? null, campaignState: state ?? null });
+  const receiptState = campaignClockReceiptState(state);
+  res.json({ ...receiptState, campaignState: receiptState });
 }));
 
 gmcV1Router.patch('/campaigns/:campaignId/time', asyncRoute(async (req, res) => {
@@ -436,13 +437,14 @@ gmcV1Router.patch('/campaigns/:campaignId/time', asyncRoute(async (req, res) => 
       req.body?.gameClock === null ? null : normalizeGameClock(req.body ?? {}, (previousGameClock as Record<string, any>) ?? {})
     ),
   });
+  const receiptState = campaignClockReceiptState(result.state);
   res.json({
     mutationId: result.mutationId,
     duplicate: result.duplicate,
     previousGameClock: result.previousGameClock,
     gameClock: result.gameClock,
     gameClockRevision: result.gameClockRevision,
-    campaignState: result.state,
+    campaignState: receiptState,
   });
 }));
 

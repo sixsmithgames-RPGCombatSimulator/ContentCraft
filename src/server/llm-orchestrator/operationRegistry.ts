@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-13.2';
+export const OPERATION_REGISTRY_VERSION = '2026-08-13.3';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-08-13.2',
   '2026-08-12.2',
   '2026-08-09.2',
   '2026-08-09.1',
@@ -563,8 +564,21 @@ export const STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA = {
   },
 } as const;
 
+const actionDirectedTimeProposalOutput = {
+  type: ['object', 'null'],
+  additionalProperties: false,
+  required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
+  properties: {
+    shouldAdvance: { const: true },
+    seconds: { type: 'integer', minimum: 1, maximum: 604_800 },
+    reason: { type: 'string', minLength: 1, maxLength: 500 },
+    activity: { enum: ['travel', 'wait', 'search', 'rest', 'conversation', 'ritual', 'combat', 'downtime', 'other'] },
+  },
+} as const;
+
 const actionDirectedStoryTurnOutput = {
-  schemaVersion: { enum: ['gma.story-director-result/2', 'gma.story-director-result/3'] },
+  schemaVersion: { enum: ['gma.story-director-result/2', 'gma.story-director-result/3', 'gma.story-director-result/4'] },
+  proposedTimeAdvance: actionDirectedTimeProposalOutput,
   proposal: {
     type: 'object', additionalProperties: false,
     required: [
@@ -616,7 +630,8 @@ const actionDirectedStoryTurnOutput = {
 } as const;
 
 const actionDirectedCurrentSceneOutput = {
-  schemaVersion: { enum: ['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6'] },
+  schemaVersion: { enum: ['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7'] },
+  proposedTimeAdvance: actionDirectedTimeProposalOutput,
   responseMode: { const: 'in_character' },
   responseText: { type: 'string', minLength: 1, maxLength: 16_000 },
   rollRequest: { type: ['object', 'null'] },
@@ -1020,15 +1035,18 @@ const seeds: Seed[] = [
   {
     id: 'story.turn.direct', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'proposal', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority'],
+    optional: ['proposedTimeAdvance'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/5',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/6',
     outputProperties: actionDirectedStoryTurnOutput,
     systemInstruction: [
       'Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet.',
       'Return exactly one JSON object matching the requested gma.story-director-result version. This is proposal-only; GMC remains Story and canon authority and VCS remains mechanics authority.',
       'Preserve the exact declared action and fingerprint. Prefer an eligible prepared Scene kit; otherwise create only the minimum complete supported Scene kit.',
       'Establish one playable locus, one exact present cast, two to five beats with exactly one active beat, all four exit kinds, Story bindings, and potential impacts.',
-      'When the packet requests gma.story-director-result/3, include one gmc.scene-story-design/1 in handoff.storyDesign, bound to the exact proposed Scene-kit revision. Prepare one to four concrete dramatic questions and only action-capable affordances grounded in supplied fact, target, and Story-node references. Prepare possibilities, not a required player route.',
+      'When the packet requests gma.story-director-result/3 or /4, include one gmc.scene-story-design/1 in handoff.storyDesign, bound to the exact proposed Scene-kit revision. Prepare one to four concrete dramatic questions and only action-capable affordances grounded in supplied fact, target, and Story-node references. Prepare possibilities, not a required player route.',
+      'Obey the supplied temporalRequirement in the first result. Required means proposedTimeAdvance has shouldAdvance true, positive whole seconds no greater than seven days, the exact required activity, and a concrete reason; forbidden means null. This is only a proposal for GMC campaign-time authority.',
+      'For wait_for_trigger, replace the same Scene kit in the same locus, supersede the prior situation, advance its revision once, and establish a concrete changed active beat. Repeating the same observation or beat is invalid.',
       'The active beat and opening narration must concretely pay off the declared action now or establish the precise position for one provisional VCS mechanic.',
       'Prepare a concrete fixed information fact or bounded absence for every central story-bearing target implied by the scene purpose, dramatic question, active beat, or established elements. A container label or a promise that contents will be revealed later is not an answer.',
       'When the supplied actionBoundReveal reports blocking scene-substance debt, replace the same Scene kit in place and add the minimum action-matched information row. A row is action-matched only when its factText or an accessVector repeats the declared or semantic action\'s target or method terms; name the exact target instead of relying only on a synonym. State any directly reached fact exactly in openingNarration before requesting a roll.',
@@ -1044,12 +1062,14 @@ const seeds: Seed[] = [
   {
     id: 'story.current-scene.narrate', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority'],
+    optional: ['proposedTimeAdvance'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/6',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/7',
     outputProperties: actionDirectedCurrentSceneOutput,
     systemInstruction: [
       'Narrate exactly one player action in the already-current GMC Scene kit from the supplied bounded GMA packet.',
-      'Return exactly one JSON object using the current-scene result schemaVersion requested by the bounded GMA packet: gma.current-scene-narration-result/6 for the current Story-obligation policy, or /5 or /4 only for an older compatible packet during ordered rollout. Do not propose, replace, move, or close the Scene kit.',
+      'Return exactly one JSON object using the current-scene result schemaVersion requested by the bounded GMA packet: gma.current-scene-narration-result/7 for the current elapsed-time policy, or /6, /5, or /4 only for an older compatible packet during ordered rollout. Do not propose, replace, move, or close the Scene kit.',
+      'Obey the supplied temporalRequirement in the first result. Required means proposedTimeAdvance has shouldAdvance true, positive whole seconds no greater than seven days, the exact required activity, and a concrete reason; forbidden means null. This is only a proposal for GMC campaign-time authority.',
       'Preserve the exact declared action. Use plainly available supplied facts plus only private facts explicitly authorized by actionBoundReveal, and keep mechanics provisional under VCS authority.',
       'When actionBoundReveal marks a fact requiredNow, state its exact factText in responseText before any roll. A roll may change completeness, time, danger, or interpretation, but not the fixed contents already reached by the action.',
       'For a provisional check on a story-bearing target, return all five prepared branches with gma.substantive-outcome/1. Each branch must state a concrete fact-bound finding, scope-limited negative, or specific barrier; process-only prose such as “the load is established” is not a result.',
@@ -1057,7 +1077,7 @@ const seeds: Seed[] = [
       'Return gma.scene-realization/1. Cover every requested responder or cohort member with exact prose evidence; describe a cohort collectively with all, each, both, or its known count, or use one observedCount 1 row with different evidence per member; account for requested concealment and every action-matched capability.',
       'Keep rules analysis out of responseText. Put the lived effect or non-effect in prose and an unsupported capability rule only in mechanicsNote.',
       'Make exposure or loss conditional on a failed, detected, conspicuous, delayed, or otherwise concrete risky course. Merely taking another action cannot fail the scene.',
-      'Do not invent a player choice, durable canon, movement, resolved mechanic, resource change, time change, or XP. Return only the registered JSON output.',
+      'Do not invent a player choice, durable canon, movement, resolved mechanic, resource change, authoritative time write, or XP. Return only the registered JSON output.',
     ].join(' '),
   },
   {

@@ -321,7 +321,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const currentScene = getOperationDefinition('story.current-scene.narrate');
     const repair = getOperationDefinition('story.turn.repair');
     const sceneKitRepair = getOperationDefinition('story.scene-kit.repair');
-    expect(turn.prompt.version).toBe('gma.story-director-policy/5');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/6');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
     expect(turn.prompt.systemInstruction).toMatch(/concretely pay off the declared action now/i);
@@ -336,6 +336,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(turn.prompt.systemInstruction).toMatch(/gma\.substantive-outcome\/1/i);
     expect(turn.prompt.systemInstruction).toMatch(/gmc\.scene-story-design\/1/i);
     expect(turn.prompt.systemInstruction).toMatch(/Prepare possibilities, not a required player route/i);
+    expect(turn.prompt.systemInstruction).toMatch(/temporalRequirement.*first result/i);
+    expect(turn.prompt.systemInstruction).toMatch(/wait_for_trigger.*changed active beat/i);
     expect(turn.provider.maxAttempts).toBe(1);
     expect(turn.provider.fallbackAllowed).toBe(false);
     expect(turn.outputSchema.schema.required).toEqual([
@@ -361,7 +363,11 @@ describe('provider-neutral LLM orchestrator', () => {
       type: 'object',
       required: ['schemaVersion', 'participantResponses', 'continuityResolutions', 'capabilityResolutions'],
     });
-    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/6');
+    expect(properties.proposedTimeAdvance).toMatchObject({
+      type: ['object', 'null'],
+      required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
+    });
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/7');
     expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/authorized by actionBoundReveal/i);
@@ -369,12 +375,17 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(currentScene.prompt.systemInstruction).toMatch(/metadata alone is never a result/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/return no impact or receipt when no obligation changed/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/the load is established/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/temporalRequirement.*first result/i);
     expect(currentScene.outputSchema.schema.required).toEqual([
       'schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization',
       'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority',
     ]);
     expect((currentScene.outputSchema.schema.properties as any).schemaVersion.enum)
-      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6']);
+      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7']);
+    expect((currentScene.outputSchema.schema.properties as any).proposedTimeAdvance).toMatchObject({
+      type: ['object', 'null'],
+      required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
+    });
     expect(currentScene.provider.maxAttempts).toBe(1);
     expect(currentScene.provider.fallbackAllowed).toBe(false);
     expect(repair.prompt.version).toBe('gma.story-director-policy/3');
@@ -439,7 +450,8 @@ describe('provider-neutral LLM orchestrator', () => {
   it('accepts ready-scene narration only through its dedicated result schema', async () => {
     const responseText = 'All three cart crew stop at the wheel while you remain below their sightline.';
     const output = {
-      schemaVersion: 'gma.current-scene-narration-result/5',
+      schemaVersion: 'gma.current-scene-narration-result/7',
+      proposedTimeAdvance: { shouldAdvance: true, seconds: 300, reason: 'Kerrigan watches the cart crew for five minutes.', activity: 'wait' },
       responseMode: 'in_character',
       responseText,
       rollRequest: null,
@@ -472,6 +484,17 @@ describe('provider-neutral LLM orchestrator', () => {
       userId: 'user-1', store: new MemoryExecutionStore(), providers: [legacyProvider],
     });
     expect(legacyAccepted.status).toBe('succeeded');
+
+    const invalidTimeProvider = new FakeProviderAdapter(() => ({
+      ...output,
+      proposedTimeAdvance: { ...output.proposedTimeAdvance, seconds: 0 },
+    }));
+    const invalidTime = await executeLlmOperation(request('story.current-scene.narrate', 'invalid-current-scene-time'), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [invalidTimeProvider],
+    });
+    expect(invalidTime.status).toBe('review_required');
+    expect(invalidTime.validation.flatMap((entry) => entry.issues).map((issue) => issue.path))
+      .toContain('/proposedTimeAdvance/seconds');
 
     const handoffProvider = new FakeProviderAdapter(() => output);
     const rejected = await executeLlmOperation(request('story.turn.direct', 'wrong-shape'), {

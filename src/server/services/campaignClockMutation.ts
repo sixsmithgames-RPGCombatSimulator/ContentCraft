@@ -41,6 +41,13 @@ export function durableClockSnapshot(clock: unknown) {
   };
 }
 
+export function campaignClockReceiptState(state: Record<string, any> | null | undefined) {
+  return {
+    gameClock: state?.gameClock ?? null,
+    gameClockRevision: Math.max(0, Number(state?.gameClockRevision ?? 0) || 0),
+  };
+}
+
 function sha256(value: string) {
   return createHash('sha256').update(value).digest('hex');
 }
