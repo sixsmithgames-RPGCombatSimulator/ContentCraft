@@ -27,6 +27,7 @@ import {
   rewindStoryWorkspace,
   type JsonObject,
   type StoryWorkspaceRevisionDocument,
+  validateSceneHandoffProposal,
   validateStoryGraphV2,
 } from './storyWorkspaceStore.js';
 
@@ -248,6 +249,46 @@ async function preparedStore() {
 }
 
 describe('D2 action-directed Story authority', () => {
+  it('rejects unsupported fields at every exact Scene-handoff object boundary', () => {
+    const base = structuredClone(handoffEnvelope().proposal) as JsonObject;
+    const baseHandoff = base.handoff as JsonObject;
+    baseHandoff.storyDesign = cartStoryDesign();
+    const child = (parent: JsonObject, key: string) => parent[key] as JsonObject;
+    const first = (parent: JsonObject, key: string) => (parent[key] as JsonObject[])[0];
+    const cases: Array<{ field: string; target: (proposal: JsonObject) => JsonObject }> = [
+      { field: 'proposal.unsupportedField', target: (proposal) => proposal },
+      { field: 'proposal.handoff.unsupportedField', target: (proposal) => child(proposal, 'handoff') },
+      { field: 'sceneKit.unsupportedField', target: (proposal) => child(child(proposal, 'handoff'), 'sceneKit') },
+      { field: 'sceneKit.playableLocus.unsupportedField', target: (proposal) => child(child(child(proposal, 'handoff'), 'sceneKit'), 'playableLocus') },
+      { field: 'sceneKit.participants.unsupportedField', target: (proposal) => child(child(child(proposal, 'handoff'), 'sceneKit'), 'participants') },
+      { field: 'sceneKit.participants.sceneLocalRoles[0].unsupportedField', target: (proposal) => first(child(child(child(proposal, 'handoff'), 'sceneKit'), 'participants'), 'sceneLocalRoles') },
+      { field: 'sceneKit.establishedElements[0].unsupportedField', target: (proposal) => first(child(child(proposal, 'handoff'), 'sceneKit'), 'establishedElements') },
+      { field: 'sceneKit.information[0].unsupportedField', target: (proposal) => first(child(child(proposal, 'handoff'), 'sceneKit'), 'information') },
+      { field: 'sceneKit.beats[0].unsupportedField', target: (proposal) => first(child(child(proposal, 'handoff'), 'sceneKit'), 'beats') },
+      { field: 'sceneKit.beats[0].potentialImpacts[0].unsupportedField', target: (proposal) => first(first(child(child(proposal, 'handoff'), 'sceneKit'), 'beats'), 'potentialImpacts') },
+      { field: 'sceneKit.exitVectors[0].unsupportedField', target: (proposal) => first(child(child(proposal, 'handoff'), 'sceneKit'), 'exitVectors') },
+      { field: 'storyDesign.unsupportedField', target: (proposal) => child(child(proposal, 'handoff'), 'storyDesign') },
+      { field: 'storyDesign.sceneKitRef.unsupportedField', target: (proposal) => child(child(child(proposal, 'handoff'), 'storyDesign'), 'sceneKitRef') },
+      { field: 'storyDesign.scenePromise.unsupportedField', target: (proposal) => child(child(child(proposal, 'handoff'), 'storyDesign'), 'scenePromise') },
+      { field: 'storyDesign.obligations[0].unsupportedField', target: (proposal) => first(child(child(proposal, 'handoff'), 'storyDesign'), 'obligations') },
+      { field: 'storyDesign.affordances[0].unsupportedField', target: (proposal) => first(child(child(proposal, 'handoff'), 'storyDesign'), 'affordances') },
+    ];
+
+    for (const entry of cases) {
+      const proposal = structuredClone(base) as JsonObject;
+      entry.target(proposal).unsupportedField = true;
+      try {
+        validateSceneHandoffProposal(proposal);
+        throw new Error(`Expected ${entry.field} to be rejected.`);
+      } catch (error) {
+        expect(error).toMatchObject({
+          code: 'STORY_CONTRACT_FIELD_UNSUPPORTED',
+          details: { field: entry.field },
+        });
+      }
+    }
+  });
+
   it('projects and migrates legacy arcs and Scene kits deterministically without invented hierarchy or cast', async () => {
     const legacy = legacyWorkspace();
     const first = compileStoryWorkspaceV2Migration(legacy);
