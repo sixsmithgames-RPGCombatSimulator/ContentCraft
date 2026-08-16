@@ -332,3 +332,56 @@ The D9.3 GMC implementation completed its automated release gate on 2026-08-09:
 provider and generated-contract guards, type checking, lint, 686 tests, and the
 production server/client build passed. Production human replay of the retained
 cart scene remains the final acceptance gate.
+
+## Accepted D9.4.26 typed-observation authority addendum — 2026-08-16
+
+The governing GMA ADR-005 D9.4.26 and matching Studio ADR-005 amendment are
+accepted here by reference following repository-owner direction to implement
+the reviewed first-class observation plan and prevent split-brain state.
+
+GMC remains the sole mutable authority for current Scene observable truth.
+`gmc.scene-kit/3` adds typed `observables` and `obstructions` beside the existing
+Story `information` collection. They are stored, projected, rewound, and
+replaced only as part of the same expected-revision, idempotent, atomic Story
+workspace transaction as the Scene-kit reference, playable locus, cast, active
+beat, and Story design. GMC never accepts an observation-only patch outside that
+transaction.
+
+Each observable has a stable ID, subject ref, facet, discriminated typed value,
+concrete player-facing statement, perceptible modalities/access condition,
+epistemic state, and authority-backed source refs. Each obstruction has a stable
+ID, subject/area scope, affected facets and modalities, mobility effect,
+concrete player-facing statement, and source refs. Apparent classification is
+separate from canonical identity. Undetermined or missing truth is not a
+terminal observation result.
+
+GMA may submit a `story.observation.prepare` proposal containing an exact
+observation-request fingerprint and expected GMC Story/Scene revisions. GMC
+validates the full Scene-kit-v3 replacement and returns one authority receipt.
+GMA must then reload the committed GMC projection before resolving or
+narrating; the staged proposal or model output is never authority. Duplicate
+delivery with the same idempotency key returns the original receipt, a changed
+payload under the same key fails, and a timeout is recovered by querying the
+original operation rather than issuing a new write.
+
+`gma.playable-scene-context/3` projects the exact current Scene ref, revision,
+player-safe observable subset, and private service-only observable/obstruction
+catalog from one immutable workspace snapshot. It never merges another cache,
+receipt, narration, or display-name match. GMA observation requests and
+resolutions are request-local orchestration artifacts; immutable GMA receipts
+are historical evidence and cannot update GMC state. VCS remains mechanics and
+live capability authority and does not own Scene observables.
+
+GMC readers accept Scene-kit v2 and v3. Version 2 produces no typed observable
+authority and therefore requires an expected-revision v3 replacement before a
+fresh typed request can narrate; GMC does not infer typed facts from legacy
+`factText` or `accessVectors`. New writing and capability advertisement are
+all-or-none and remain disabled until Studio and GMA readers are deployed.
+Rollback disables new writes but preserves v3 readers and committed revisions.
+
+Release requires exact-key and discriminated-value validation, source and
+visibility enforcement, atomic replacement, duplicate/idempotent replay, stale
+revision, out-of-order, timeout recovery, partial-result rejection, rewind,
+player/private projection, no display-name joins, no observation-only mutation,
+cross-service compatibility, full checks/build, exact production health, and
+zero split-brain signals during the selected-campaign canary.

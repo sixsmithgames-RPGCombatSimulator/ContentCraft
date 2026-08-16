@@ -6,12 +6,15 @@ import {
   type JsonValue,
   PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
   PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES,
+  PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,
+  PLAYABLE_SCENE_CONTEXT_MAX_BYTES,
   readActiveStoryWorkspace,
   readStoryWorkspaceRevision,
   replaceStoryWorkspace,
   SCENE_HANDOFF_RECEIPT_CONTRACT_VERSION,
   SCENE_STORY_DESIGN_CONTRACT_VERSION,
   SCENE_KIT_V2_CONTRACT_VERSION,
+  SCENE_KIT_CONTRACT_VERSION,
   STORY_DELTA_MAX_BYTES,
   STORY_DELTA_V2_CONTRACT_VERSION,
   STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
@@ -26,6 +29,7 @@ import {
   emptyStoryWorkspace,
   validateSceneHandoffProposal,
   validateSceneKitV2,
+  validateSceneKit,
   validateSceneStoryDesign,
   validateStorySatisfactionReceipt,
   validateStoryGraphV2,
@@ -416,8 +420,8 @@ function legacyExits(kit: JsonObject): JsonObject[] {
 
 /** Converts one legacy Scene kit without inventing cast, Story bindings, or outcomes. */
 export function projectLegacySceneKitV2(legacy: JsonObject, graph: JsonObject): JsonObject {
-  if (legacy.schemaVersion === SCENE_KIT_V2_CONTRACT_VERSION) {
-    validateSceneKitV2(legacy);
+  if ([SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(legacy.schemaVersion))) {
+    validateSceneKit(legacy);
     return clone(legacy);
   }
   const sceneKitId = stableId(legacy.sceneKitId, 'sceneKit.sceneKitId');
@@ -835,10 +839,10 @@ function activeV2SceneKit(workspace: JsonObject): JsonObject | null {
   const activeId = String(workspace.activeSceneKitRef.sceneKitId ?? '');
   const kit = sceneKits(workspace).find((candidate) => candidate.sceneKitId === activeId);
   if (!kit) return null;
-  if (kit.schemaVersion !== SCENE_KIT_V2_CONTRACT_VERSION) {
+  if (![SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(kit.schemaVersion))) {
     return projectLegacySceneKitV2(kit, projectStoryGraphV2(workspace));
   }
-  validateSceneKitV2(kit);
+  validateSceneKit(kit);
   return kit;
 }
 
@@ -871,7 +875,7 @@ function findForbiddenProjectionField(value: unknown, path = '$'): string | null
   return null;
 }
 
-/** Derives the bounded GMA scene context from the one active version 2 Scene kit. */
+/** Derives the bounded GMA scene context from the one active versioned Scene kit. */
 export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
   const kit = activeV2SceneKit(workspace);
   if (!kit) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_UNAVAILABLE', 'No version 2 current Scene kit is available.', {});
@@ -884,8 +888,9 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
     ?? beats[0];
   const availableBeats = beats.filter((beat) => beat.beatId !== activeBeat.beatId && beat.state === 'available').slice(0, 4);
   const participants = kit.participants as JsonObject;
+  const typedObservationAuthority = kit.schemaVersion === SCENE_KIT_CONTRACT_VERSION;
   const context: JsonObject = {
-    schemaVersion: PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
+    schemaVersion: typedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION : PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
     sceneKitRef: sceneKitReference(String(workspace.campaignId), kit),
     playableLocus: clone(kit.playableLocus as JsonObject),
     presentActors: clone(participants.present as JsonValue[]),
@@ -906,6 +911,10 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
       }
       return projected;
     }),
+    ...(typedObservationAuthority ? {
+      observables: clone((kit.observables as JsonValue[]).slice(0, 24)),
+      obstructions: clone((kit.obstructions as JsonValue[]).slice(0, 16)),
+    } : {}),
     storyNodeSummaries: (kit.storyBindings as string[]).slice(0, 8).map((nodeId) => nodesById.get(nodeId)).filter((node): node is JsonObject => Boolean(node)).map((node) => ({
       nodeId: node.nodeId,
       title: node.title,
@@ -923,7 +932,8 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
   };
   const forbidden = findForbiddenProjectionField(context);
   if (forbidden) throw new StoryWorkspaceStoreError(500, 'STORY_PLAYABLE_CONTEXT_PRIVATE_LEAK', 'The playable scene context contains a private field.', { field: forbidden });
-  if (bytes(context) > PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_PLAYABLE_CONTEXT_TOO_LARGE', 'The playable scene context exceeds its prompt bound.', { maximumBytes: PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES });
+  const maximumBytes = typedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_MAX_BYTES : PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES;
+  if (bytes(context) > maximumBytes) throw new StoryWorkspaceStoreError(413, 'STORY_PLAYABLE_CONTEXT_TOO_LARGE', 'The playable scene context exceeds its prompt bound.', { maximumBytes });
   return context;
 }
 
@@ -1038,11 +1048,29 @@ function committedStorySourceRefs(workspace: JsonObject): string[] {
     for (const beat of (Array.isArray(projected.beats) ? projected.beats : [])) {
       if (isObject(beat)) addTo(refs, beat.beatId);
     }
+    if (projected.schemaVersion === SCENE_KIT_CONTRACT_VERSION) {
+      for (const observable of (Array.isArray(projected.observables) ? projected.observables : [])) {
+        if (!isObject(observable)) continue;
+        addTo(refs, observable.observableId); addTo(refs, observable.subjectRef); addListTo(refs, observable.sourceRefs);
+        if (isObject(observable.perceptibility)) {
+          addListTo(refs, observable.perceptibility.observerRefs);
+          addListTo(refs, observable.perceptibility.methodRefs);
+          addTo(refs, observable.perceptibility.mechanicRef);
+        }
+      }
+      for (const obstruction of (Array.isArray(projected.obstructions) ? projected.obstructions : [])) {
+        if (!isObject(obstruction)) continue;
+        addTo(refs, obstruction.obstructionId); addListTo(refs, obstruction.subjectRefs); addListTo(refs, obstruction.sourceRefs);
+        addListTo(refs, obstruction.observerRefs); addListTo(refs, obstruction.methodRefs);
+      }
+    }
   };
   const graph = projectStoryGraphV2(workspace);
   const activeKitId = isObject(workspace.activeSceneKitRef) ? String(workspace.activeSceneKitRef.sceneKitId ?? '') : '';
   const kits = sceneKits(workspace).map((kit) => (
-    kit.schemaVersion === SCENE_KIT_V2_CONTRACT_VERSION ? kit : projectLegacySceneKitV2(kit, graph)
+    [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(kit.schemaVersion))
+      ? kit
+      : projectLegacySceneKitV2(kit, graph)
   ));
   const currentKit = kits.find((kit) => String(kit.sceneKitId) === activeKitId) ?? null;
   if (currentKit) {
@@ -1159,6 +1187,39 @@ function assertSceneKitAuthority(proposal: JsonObject, graph: JsonObject, source
       if (!nodeIds.has(String(impact.storyNodeRef))) throw new StoryWorkspaceStoreError(422, 'STORY_GRAPH_REFERENCE_INVALID', 'A potential Story impact does not resolve.', { nodeId: impact.storyNodeRef, beatId: beat.beatId });
     }
   }
+  if (kit.schemaVersion === SCENE_KIT_CONTRACT_VERSION) {
+    const locallyEstablishedRefs = new Set<string>([
+      String(kit.sceneKitId),
+      ...participants.present as string[],
+      ...participants.anticipated as string[],
+      ...(participants.sceneLocalRoles as JsonObject[]).map((role) => String(role.roleId)),
+      ...(kit.establishedElements as JsonObject[]).map((element) => String(element.elementId)),
+      ...(locus.canonicalAnchorRef === null ? [] : [String(locus.canonicalAnchorRef)]),
+    ]);
+    const requireGroundedRef = (ref: unknown, field: string) => {
+      if (!locallyEstablishedRefs.has(String(ref)) && !sourceReceipts.has(String(ref))) {
+        throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_OBSERVATION_SOURCE_UNBOUND', 'A typed Scene observation references a subject without exact scene or authority evidence.', { field, sourceRef: ref });
+      }
+    };
+    for (const [index, observable] of (kit.observables as JsonObject[]).entries()) {
+      requireGroundedRef(observable.subjectRef, `proposal.handoff.sceneKit.observables[${index}].subjectRef`);
+      for (const [sourceIndex, sourceRef] of (observable.sourceRefs as string[]).entries()) {
+        requireGroundedRef(sourceRef, `proposal.handoff.sceneKit.observables[${index}].sourceRefs[${sourceIndex}]`);
+      }
+      const perceptibility = observable.perceptibility as JsonObject;
+      (perceptibility.observerRefs as string[]).forEach((ref, refIndex) => requireGroundedRef(ref, `proposal.handoff.sceneKit.observables[${index}].perceptibility.observerRefs[${refIndex}]`));
+      (perceptibility.methodRefs as string[]).forEach((ref, refIndex) => requireGroundedRef(ref, `proposal.handoff.sceneKit.observables[${index}].perceptibility.methodRefs[${refIndex}]`));
+      if (perceptibility.mechanicRef !== null && perceptibility.mechanicRef !== undefined) {
+        requireGroundedRef(perceptibility.mechanicRef, `proposal.handoff.sceneKit.observables[${index}].perceptibility.mechanicRef`);
+      }
+    }
+    for (const [index, obstruction] of (kit.obstructions as JsonObject[]).entries()) {
+      (obstruction.subjectRefs as string[]).forEach((ref, subjectIndex) => requireGroundedRef(ref, `proposal.handoff.sceneKit.obstructions[${index}].subjectRefs[${subjectIndex}]`));
+      (obstruction.sourceRefs as string[]).forEach((ref, sourceIndex) => requireGroundedRef(ref, `proposal.handoff.sceneKit.obstructions[${index}].sourceRefs[${sourceIndex}]`));
+      (obstruction.observerRefs as string[]).forEach((ref, refIndex) => requireGroundedRef(ref, `proposal.handoff.sceneKit.obstructions[${index}].observerRefs[${refIndex}]`));
+      (obstruction.methodRefs as string[]).forEach((ref, refIndex) => requireGroundedRef(ref, `proposal.handoff.sceneKit.obstructions[${index}].methodRefs[${refIndex}]`));
+    }
+  }
 }
 
 function assertSceneStoryDesignAuthority(
@@ -1188,6 +1249,10 @@ function assertSceneStoryDesignAuthority(
   (participants.sceneLocalRoles as JsonObject[]).forEach((role) => allowedRefs.add(String(role.roleId)));
   (kit.establishedElements as JsonObject[]).forEach((element) => allowedRefs.add(String(element.elementId)));
   (kit.information as JsonObject[]).forEach((information) => allowedRefs.add(String(information.informationId)));
+  if (kit.schemaVersion === SCENE_KIT_CONTRACT_VERSION) {
+    (kit.observables as JsonObject[]).forEach((observable) => allowedRefs.add(String(observable.observableId)));
+    (kit.obstructions as JsonObject[]).forEach((obstruction) => allowedRefs.add(String(obstruction.obstructionId)));
+  }
   const requireAllowed = (ref: unknown, field: string) => {
     if (!allowedRefs.has(String(ref))) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_SOURCE_UNBOUND', 'The story design contains a fact or target without GMC authority evidence.', { field, sourceRef: ref });
   };
@@ -1311,7 +1376,7 @@ export async function commitSceneHandoff(
   assertSceneKitAuthority(proposal, graph, authorityReceipts.sources);
   const proposedDesign = isObject(handoff.storyDesign) ? clone(handoff.storyDesign as JsonObject) : null;
   if (proposedDesign) assertSceneStoryDesignAuthority(proposedDesign, proposedKit, graph, authorityReceipts.sources);
-  const kits = sceneKits(workspace).map((kit) => kit.schemaVersion === SCENE_KIT_V2_CONTRACT_VERSION ? clone(kit) : projectLegacySceneKitV2(kit, graph));
+  const kits = sceneKits(workspace).map((kit) => [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(kit.schemaVersion)) ? clone(kit) : projectLegacySceneKitV2(kit, graph));
   const existingIndex = kits.findIndex((kit) => kit.sceneKitId === proposedKit.sceneKitId);
   const existing = existingIndex >= 0 ? kits[existingIndex] : null;
   validateHandoffMode(String(handoff.mode) as HandoffMode, proposedKit, current, existing);

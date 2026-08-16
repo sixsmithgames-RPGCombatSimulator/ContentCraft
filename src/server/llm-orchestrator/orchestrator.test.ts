@@ -318,10 +318,11 @@ describe('provider-neutral LLM orchestrator', () => {
 
   it('registers the combined action-directed Story turn with the complete first-pass contract', () => {
     const turn = getOperationDefinition('story.turn.direct');
+    const observationPreparation = getOperationDefinition('story.observation.prepare');
     const currentScene = getOperationDefinition('story.current-scene.narrate');
     const repair = getOperationDefinition('story.turn.repair');
     const sceneKitRepair = getOperationDefinition('story.scene-kit.repair');
-    expect(turn.prompt.version).toBe('gma.story-director-policy/7');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/8');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
     expect(turn.prompt.systemInstruction).toMatch(/concretely pay off the declared action now/i);
@@ -333,7 +334,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(turn.prompt.systemInstruction).toMatch(/rules analysis out of openingNarration/i);
     expect(turn.prompt.systemInstruction).toMatch(/Merely taking another action cannot fail the scene/i);
     expect(turn.prompt.systemInstruction).toMatch(/concrete fixed information fact or bounded absence/i);
-    expect(turn.prompt.systemInstruction).toMatch(/gma\.substantive-outcome\/1/i);
+    expect(turn.prompt.systemInstruction).toMatch(/gma\.substantive-outcome\/2/i);
+    expect(turn.prompt.systemInstruction).toMatch(/exact observables and scoped obstructions/i);
     expect(turn.prompt.systemInstruction).toMatch(/gmc\.scene-story-design\/1/i);
     expect(turn.prompt.systemInstruction).toMatch(/Prepare possibilities, not a required player route/i);
     expect(turn.prompt.systemInstruction).toMatch(/temporalRequirement.*first result/i);
@@ -367,7 +369,15 @@ describe('provider-neutral LLM orchestrator', () => {
       type: ['object', 'null'],
       required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
     });
-    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/8');
+    expect(observationPreparation.prompt.version).toBe('gma.story-director-policy/8');
+    expect(observationPreparation.prompt.systemInstruction).toMatch(/before any player-facing narration runs/i);
+    expect(observationPreparation.prompt.systemInstruction).toMatch(/sole mutable Scene and observation authority/i);
+    expect(observationPreparation.prompt.systemInstruction).toMatch(/Never join by labels, names, prose similarity/i);
+    expect(observationPreparation.outputSchema.schema.required).toEqual(['schemaVersion', 'proposal']);
+    expect(Object.keys(observationPreparation.outputSchema.schema.properties as Record<string, unknown>)).toEqual(['schemaVersion', 'proposal']);
+    expect(observationPreparation.provider.maxAttempts).toBe(1);
+    expect(observationPreparation.provider.fallbackAllowed).toBe(false);
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/9');
     expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/authorized by actionBoundReveal/i);
@@ -376,6 +386,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(currentScene.prompt.systemInstruction).toMatch(/return no impact or receipt when no obligation changed/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/the load is established/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/temporalRequirement.*first result/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/complete observation authority for that exact Scene revision/i);
     expect(currentScene.outputSchema.schema.required).toEqual([
       'schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization',
       'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority',
@@ -388,7 +399,7 @@ describe('provider-neutral LLM orchestrator', () => {
     });
     expect(currentScene.provider.maxAttempts).toBe(1);
     expect(currentScene.provider.fallbackAllowed).toBe(false);
-    expect(repair.prompt.version).toBe('gma.story-director-policy/3');
+    expect(repair.prompt.version).toBe('gma.story-director-policy/8');
     expect(repair.prompt.systemInstruction).toMatch(/only the failed fields/i);
     expect(repair.prompt.systemInstruction).toMatch(/Do not return the complete Story Director result/i);
     expect(repair.outputSchema.schema.required).toEqual(['schemaVersion', 'correctionId', 'sceneKitPatch', 'patchesJson']);
@@ -402,11 +413,11 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(sceneKitRepair.prompt.systemInstruction).toMatch(/completion, failure, abandonment, and redirect/i);
     expect(sceneKitRepair.outputSchema.schema.required)
       .toEqual(['schemaVersion', 'correctionId', 'fields', 'patchesJson']);
-    expect(sceneRepairProperties.fields.minItems).toBe(22);
-    expect(sceneRepairProperties.fields.maxItems).toBe(22);
+    expect(sceneRepairProperties.fields.minItems).toBe(24);
+    expect(sceneRepairProperties.fields.maxItems).toBe(24);
     expect(sceneRepairProperties.fields.items.required).toEqual(['key', 'valueJson']);
     expect(sceneRepairProperties.fields.items.properties.key.enum).toEqual(expect.arrayContaining([
-      'locusKind', 'presentActorRefs', 'sceneLocalRoles', 'informationAccess', 'beats', 'beatImpacts', 'exitVectors',
+      'locusKind', 'presentActorRefs', 'sceneLocalRoles', 'informationAccess', 'observables', 'obstructions', 'beats', 'beatImpacts', 'exitVectors',
     ]));
     expect(sceneKitRepair.validators).toContain('story-scene-kit-repair-rows');
     expect(sceneKitRepair.provider.maxAttempts).toBe(1);
@@ -506,7 +517,7 @@ describe('provider-neutral LLM orchestrator', () => {
   it('accepts a complete flat Scene-kit repair without provider-hostile nesting', async () => {
     const sceneKitRepairRequest = request('story.scene-kit.repair', 'flat-scene-kit-repair');
     const fieldValues = {
-      sceneKitSchemaVersion: 'gmc.scene-kit/2', sceneKitId: 'scene-kit:cart-interception', revision: 1, planningState: 'active',
+      sceneKitSchemaVersion: 'gmc.scene-kit/3', sceneKitId: 'scene-kit:cart-interception', revision: 1, planningState: 'active',
       locusKind: 'directional_target', locusLabel: 'The inbound cart route ahead of Flintwake',
       canonicalAnchorRef: 'gmc:location:flintwake', locusSourceRefs: ['gmc:lead:cart-route'],
       purpose: 'Put Kerrigan at the cart with a concrete cast and activity.',
@@ -516,6 +527,8 @@ describe('provider-neutral LLM orchestrator', () => {
       establishedElements: [{ elementId: 'element:covered-cart', truthState: 'scene_local_established', summary: 'A covered cart has stopped on the inbound route.' }],
       information: [{ informationId: 'info:cart-cargo', state: 'concealed', factText: 'The cart carries six sealed crates packed beneath rough canvas.' }],
       informationAccess: [{ informationId: 'info:cart-cargo', accessVector: 'Inspect the cart cover.' }],
+      observables: [],
+      obstructions: [],
       beats: [
         { beatId: 'beat:inspect', kind: 'investigation', state: 'active', trigger: 'Kerrigan reaches the cart.', changeSurface: 'The cargo can be investigated.' },
         { beatId: 'beat:crew-reacts', kind: 'reaction', state: 'available', trigger: 'The crew notices interference.', changeSurface: 'The crew responds.' },

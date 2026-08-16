@@ -28,6 +28,7 @@ import {
   type JsonObject,
   type StoryWorkspaceRevisionDocument,
   validateSceneHandoffProposal,
+  validateSceneKitV3,
   validateStoryGraphV2,
 } from './storyWorkspaceStore.js';
 
@@ -169,6 +170,34 @@ function cartSceneKit(): JsonObject {
     ],
     storyBindings: ['story:arc:flintwake'],
     sourceRefs: ['gmc:lead:matched-cart-route', 'gma:direction:turn-2'],
+  };
+}
+
+function typedCartSceneKit(): JsonObject {
+  return {
+    ...cartSceneKit(),
+    schemaVersion: 'gmc.scene-kit/3',
+    observables: [
+      {
+        observableId: 'observable:driver-appearance', subjectRef: 'role:cart-driver', facet: 'surface_description',
+        resultKind: 'observed', value: { kind: 'description', text: 'A lean driver in a patched blue coat and tarred gloves.' },
+        playerFacingStatement: 'The driver is lean, wearing a patched blue coat and tarred gloves.',
+        perceptibility: { modalities: ['visual'], accessCondition: 'ordinary_view', observerRefs: [], methodRefs: [] },
+        epistemicState: 'scene_local_established', sourceRefs: ['role:cart-driver'],
+      },
+      {
+        observableId: 'observable:cart-distance', subjectRef: 'element:cart', facet: 'spatial_relation',
+        resultKind: 'observed', value: { kind: 'measurement_range', minimum: 25, maximum: 35, unit: 'feet' },
+        playerFacingStatement: 'The cart is roughly thirty feet from Kerrigan’s cover.',
+        perceptibility: { modalities: ['visual'], accessCondition: 'ordinary_view', observerRefs: [], methodRefs: [] },
+        epistemicState: 'scene_local_established', sourceRefs: ['element:cart'],
+      },
+    ],
+    obstructions: [{
+      obstructionId: 'obstruction:cart-cover', subjectRefs: ['element:cart'], affectedFacets: ['contents'],
+      affectedModalities: ['visual'], mobilityEffect: 'none', observerRefs: [], methodRefs: [],
+      playerFacingStatement: 'The tied cover blocks a view of the cargo until it is removed.', sourceRefs: ['element:cart'],
+    }],
   };
 }
 
@@ -498,6 +527,84 @@ describe('D2 action-directed Story authority', () => {
     await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: rejected }, rejectedStore.records))
       .rejects.toMatchObject({ code: 'STORY_SOURCE_RECEIPTS_INVALID' });
     expect(rejectedStore.documents).toHaveLength(2);
+  });
+
+  it('commits typed observables with the Scene revision atomically and never leaves a split authority after rejection', async () => {
+    const store = await preparedStore();
+    const envelope = handoffEnvelope();
+    const typedKit = typedCartSceneKit();
+    const declaredPerceptibility = ((typedKit.observables as JsonObject[])[0].perceptibility as JsonObject);
+    declaredPerceptibility.accessCondition = 'declared_method';
+    declaredPerceptibility.observerRefs = ['gmc:pc:kerrigan'];
+    declaredPerceptibility.methodRefs = ['vcs:method:close-look'];
+    (envelope.proposal.sourceRefs as string[]).push('vcs:method:close-look');
+    envelope.sourceReceipts.push({
+      sourceRef: 'vcs:method:close-look', receiptRef: 'vcs:method-receipt:close-look',
+      authority: 'vcs', status: 'committed',
+    });
+    (envelope.proposal.handoff as JsonObject).sceneKit = typedKit;
+    expect(() => validateSceneKitV3((envelope.proposal.handoff as JsonObject).sceneKit)).not.toThrow();
+
+    const first = await commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope }, store.records);
+    expect(first).toMatchObject({
+      storyWorkspaceRef: { revision: 3 },
+      playableSceneContext: {
+        schemaVersion: 'gma.playable-scene-context/3',
+        sceneKitRef: { sceneKitId: 'scene-kit:cart-interception', revision: 1 },
+        observables: expect.arrayContaining([expect.objectContaining({ observableId: 'observable:driver-appearance', subjectRef: 'role:cart-driver' })]),
+        obstructions: expect.arrayContaining([expect.objectContaining({ obstructionId: 'obstruction:cart-cover' })]),
+      },
+    });
+    const activeAfterCommit = await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    expect((activeAfterCommit!.workspace.sceneKits as JsonObject[]).find((kit) => kit.sceneKitId === 'scene-kit:cart-interception')).toMatchObject({
+      schemaVersion: 'gmc.scene-kit/3', revision: 1,
+      observables: expect.arrayContaining([expect.objectContaining({ observableId: 'observable:driver-appearance' })]),
+    });
+    const receiptCatalog = buildStoryAuthorityReceiptCatalog(activeAfterCommit!.workspace);
+    expect(receiptCatalog.receipts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceRef: 'gmc:pc:kerrigan', status: 'committed' }),
+      expect.objectContaining({ sourceRef: 'vcs:method:close-look', status: 'committed' }),
+    ]));
+
+    const unboundMethod = structuredClone(envelope);
+    unboundMethod.proposal.interactionId = 'turn-unbound-method';
+    unboundMethod.proposal.idempotencyKey = 'scene-handoff:turn-unbound-method';
+    unboundMethod.proposal.expectedWorkspaceRevision = 3;
+    unboundMethod.proposal.expectedCurrentSceneRevision = 1;
+    unboundMethod.playerActionReceipt.interactionId = 'turn-unbound-method';
+    (unboundMethod.proposal.handoff as JsonObject).mode = 'replace';
+    const unboundKit = (unboundMethod.proposal.handoff as JsonObject).sceneKit as JsonObject;
+    unboundKit.revision = 2;
+    const unboundPerceptibility = ((unboundKit.observables as JsonObject[])[0].perceptibility as JsonObject);
+    unboundPerceptibility.accessCondition = 'declared_method';
+    unboundPerceptibility.methodRefs = ['vcs:method:unbound'];
+    await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: unboundMethod }, store.records))
+      .rejects.toMatchObject({ code: 'STORY_SCENE_OBSERVATION_SOURCE_UNBOUND' });
+    expect((await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records))!.storyWorkspaceRef.revision).toBe(3);
+
+    const rejected = structuredClone(envelope);
+    rejected.proposal.interactionId = 'turn-3';
+    rejected.proposal.idempotencyKey = 'scene-handoff:turn-3';
+    rejected.proposal.expectedWorkspaceRevision = 3;
+    rejected.proposal.expectedCurrentSceneRevision = 1;
+    rejected.playerActionReceipt.interactionId = 'turn-3';
+    (rejected.proposal.handoff as JsonObject).mode = 'replace';
+    const rejectedKit = (rejected.proposal.handoff as JsonObject).sceneKit as JsonObject;
+    rejectedKit.revision = 2;
+    (rejectedKit.observables as JsonObject[]).push(structuredClone((rejectedKit.observables as JsonObject[])[0]));
+    await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: rejected }, store.records))
+      .rejects.toMatchObject({ code: 'STORY_SCENE_OBSERVATION_DUPLICATE' });
+
+    const activeAfterReject = await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    expect(activeAfterReject!.storyWorkspaceRef.revision).toBe(3);
+    expect(store.documents).toHaveLength(3);
+    expect((activeAfterReject!.workspace.sceneKits as JsonObject[]).find((kit) => kit.sceneKitId === 'scene-kit:cart-interception')).toMatchObject({
+      revision: 1,
+      observables: [
+        expect.objectContaining({ observableId: 'observable:driver-appearance' }),
+        expect.objectContaining({ observableId: 'observable:cart-distance' }),
+      ],
+    });
   });
 
   it('commits a scene story design atomically and applies a concrete satisfaction receipt', async () => {
