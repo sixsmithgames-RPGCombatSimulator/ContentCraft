@@ -254,31 +254,31 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(portfolio.authority.commit).toBe('proposal_only');
   });
 
-  it('registers compound-action interpretation, narration, and typed repair requirements in the first pass', () => {
+  it('registers accepted compound-action interpretation, narration, and typed repair requirements in the first pass', () => {
     const interpretation = getOperationDefinition('action.intent.interpret');
     const legacyInterpretation = getOperationDefinition('action.program.interpret');
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/4');
-    expect((interpretation.outputSchema.schema.properties as any).schemaVersion.const).toBe('gma.semantic-intent-ir/2');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/3');
+    expect((interpretation.outputSchema.schema.properties as any).schemaVersion.const).toBe('gma.semantic-intent-ir/1');
     expect(interpretation.prompt.systemInstruction).toMatch(/every player-supported goal, target, declared method/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Asking where someone came from is exchange_information/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/only declared transit or arrival is relocate_actor/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Movement performed stealthily is one relocate_actor intent/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Do not narrate, adjudicate, create canon, resolve mechanics/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/one typed requestedOutcomes object per separately requested answer/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/familiar/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/Never invent an authority ref, join by a label/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/preserve each separately requested answer as its own requestedOutcomes string/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/appearance.*ancestry or species.*identity.*distance.*contents.*activity.*presence.*quantity/i);
+    expect(interpretation.prompt.systemInstruction).not.toMatch(/authority ref|observerTargetId|observation outcome object/i);
     expect(interpretation.prompt.systemInstruction).not.toMatch(/completion boundaries|authorityRequirements|dataRequirements/i);
     expect((interpretation.outputSchema.schema.properties as any).intents.items.required)
-      .toContain('observerTargetId');
+      .not.toContain('observerTargetId');
     expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.targets.items.required)
-      .toEqual(['targetId', 'role', 'description', 'authorityRef']);
+      .toEqual(['role', 'description']);
     expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.methods.items.required)
-      .toEqual(['methodId', 'kind', 'description', 'capabilityHint', 'authorityRef']);
-    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.requestedOutcomes.items.anyOf[1].required)
-      .toEqual(['outcomeId', 'targetRef', 'facet', 'valueKind', 'requestedPrecision', 'evidenceQuotes']);
+      .toEqual(['kind', 'description', 'capabilityHint']);
+    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.requestedOutcomes.items.type)
+      .toBe('string');
     expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.purpose.enum)
       .toContain('exchange_information');
     expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.methods.items.properties.kind.enum)

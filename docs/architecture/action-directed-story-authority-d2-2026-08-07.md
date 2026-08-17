@@ -400,3 +400,11 @@ the established four-capability action-directed Story bundle with
 rewritten or deleted. No fresh typed-observation writer may be advertised until
 the matching GMC owner decision is Accepted and deployed conformance proves the
 complete successor bundle. This containment changes no canonical Scene data.
+
+GMC 1.10.6 closes the compound-path omission discovered after that release.
+The active compound interpreter again emits Accepted semantic IR1 under policy
+3, matching the program-2 artifact store and the GMC/VCS/Studio health bundle.
+It retains the non-collapsing observation-outcome rule as ordinary strings,
+while fresh typed observation requests remain stopped in GMA before model or
+authority work. This is containment under the Accepted D9.4 baseline; it does
+not accept or implement Proposed ADR-007.

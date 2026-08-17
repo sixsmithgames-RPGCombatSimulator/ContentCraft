@@ -39,6 +39,24 @@ Fresh writer advertisement may return only as the complete versioned bundle
 defined by an Accepted cross-service owner decision. A source build, generated
 artifact, or model-operation registration alone is not conformance evidence.
 
+### Compound-path containment correction
+
+The first containment release removed the Action Directed Story writer flags
+but left `action.intent.interpret` on Proposed IR2/policy 4 while GMC's
+compound-action health surface still advertised the Accepted program-2 bundle.
+That was a split-brain contract even though neither side performed a canonical
+write. GMC 1.10.6 restores the active interpreter to semantic IR1/policy 3 and
+keeps the positive first-pass rule that appearance, apparent ancestry or
+species, identity, distance, contents, activity, presence, and quantity remain
+separate requested outcomes. The IR2 operation shape remains design history,
+not an active writer contract.
+
+GMA must advertise the same exact four-capability program-2 bundle as GMC,
+VCS, and Studio, and must contain a fresh compound observation before this
+interpreter, authority retrieval, instruction staging, or artifact creation.
+The cross-repository alignment check compares all four bundles plus this
+operation's active prompt and result schema.
+
 ## Stop conditions
 
 Stop rollout on any observation-only mutation, owner/revision mismatch,
