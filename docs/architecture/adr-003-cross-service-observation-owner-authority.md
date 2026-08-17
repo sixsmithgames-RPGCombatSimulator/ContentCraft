@@ -119,7 +119,7 @@ preexisting provenance for blockers. At most one field-scoped repair may alter
 failed proposal fields; it cannot repair bindings or authority state.
 
 The integrated `action.intent.interpret` first pass uses
-`gma.semantic-intent-policy/8`. It positively requires the same discriminated
+`gma.semantic-intent-policy/9`. It positively requires the same discriminated
 IR `/3` shapes used by Manual transport: string outcomes for non-information
 prerequisites, typed outcomes and complete same-intent local-ID groups for
 information, contextual surface-error interpretation with exact typo evidence,
@@ -144,6 +144,15 @@ complete same-version rebuild with the rejected proposal excluded. GMC's
 integrated operation publishes the identical positive identity requirement and
 policy version as Manual GMA; a version or instruction mismatch is a
 cross-service release stop.
+
+Policy `/9` retains the `/8` identity requirements and adds the positive
+evidence-partition rule required by GMA's deterministic validator. Separate
+intents must cite unique, non-overlapping exact instruction subphrases. When a
+compound clause expresses movement followed by its observation purpose, the
+integrated prompt gives the same concrete movement/observation partition as
+Manual GMA. Typed outcome evidence may repeat a phrase only inside its owning
+information intent. GMC and GMA publishing different semantic policy versions
+is a release stop before model work.
 
 Fresh observation program `/4` uses GMA compiler policy `/7`. An explicit
 observation group is the sole compiled binding record for its observer,
