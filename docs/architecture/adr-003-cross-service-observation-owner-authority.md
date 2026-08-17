@@ -119,7 +119,7 @@ preexisting provenance for blockers. At most one field-scoped repair may alter
 failed proposal fields; it cannot repair bindings or authority state.
 
 The integrated `action.intent.interpret` first pass uses
-`gma.semantic-intent-policy/5`. It positively requires the same discriminated
+`gma.semantic-intent-policy/6`. It positively requires the same discriminated
 IR `/3` shapes used by Manual transport: string outcomes for non-information
 prerequisites, typed outcomes and complete same-intent local-ID groups for
 information, contextual surface-error interpretation with exact typo evidence,
@@ -135,6 +135,12 @@ tokens; GMA independently fixes the accepted response version and byte budget
 from its immutable request. GMC's operation schema retains older IRs for
 historical calls, but a fresh typed-observation request selects `/3` and cannot
 downgrade through model output.
+
+The first-pass response contract and integrated instruction also publish the
+complete facet, value-kind, and precision vocabularies. They positively map a
+distance request to `spatial_relation` plus a compatible relation or
+measurement value kind and require the local stated relation origin, preventing
+models from inventing `distance` enum members.
 
 ## Lifetimes, recovery, and privacy
 

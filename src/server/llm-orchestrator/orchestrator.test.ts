@@ -260,7 +260,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/5');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/6');
     expect(interpretation.context.inputTargetBytes).toBe(12_000);
     expect(interpretation.context.inputHardLimitBytes).toBe(16_384);
     expect(interpretation.provider.maxOutputTokens).toBe(4_000);
@@ -283,6 +283,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.prompt.systemInstruction).toMatch(/information intent must redeclare.*observer, subject, optional form, and method.*same intent/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/familiar is an observerKind, never a method kind/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/intentShapeExamples.*legal-shape guidance.*Do not return intentShapeExamples.*placeholder/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/Distance is facet spatial_relation.*never use distance as a facet or value kind/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/relationOriginTargetId.*local target.*stated origin/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Do not repeat or wrap the request task/i);
     expect(interpretation.prompt.systemInstruction).not.toMatch(/completion boundaries|authorityRequirements|dataRequirements/i);
     expect((interpretation.outputSchema.schema.properties as any).intents.items.required)

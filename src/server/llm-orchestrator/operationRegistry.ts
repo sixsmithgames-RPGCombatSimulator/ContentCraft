@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-17.2';
+export const OPERATION_REGISTRY_VERSION = '2026-08-17.3';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-13.3',
@@ -896,7 +896,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'confidence', 'intents', 'ambiguities', 'coverage'],
     targetBytes: 12_000, hardLimitBytes: 16_384, maxOutputTokens: 4_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/5',
+    promptVersion: 'gma.semantic-intent-policy/6',
     outputProperties: {
       schemaVersion: { enum: ['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3'] },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -959,6 +959,7 @@ const seeds: Seed[] = [
       'For semantic-intent-ir/3 observation instructions, return IR /3 as the top-level result within 16384 UTF-8 JSON bytes. Separate summon or form activation, movement, mechanics, and observation prerequisites. Every non-information intent must carry one to eight short ordinary-language requestedOutcomes strings and no observation groups.',
       'Use requestedOutcomes as the only outcome collection field name. Never emit typedOutcomes, typedOutcomeCs, outcomeCs, outcomes, or another alias. Every relation must contain after, parallelWith, and condition; use empty arrays and null when none apply.',
       'For every requested information answer in /3, return one typed outcome. Keep appearance, apparent classification or species, identity, activity, distance, extent, presence, quantity, and contents separate. Apparent classification is not identity.',
+      'Use only the facet, valueKind, and requestedPrecision vocabulary in responseContract. Distance is facet spatial_relation with valueKind measurement, measurement_range, measurement_or_relation, or relation; never use distance as a facet or value kind. Set relationOriginTargetId to the local target for the stated origin of a relation such as the observing player character.',
       'An unqualified closer or better look at a visible actor requests both surface_description and apparent_classification, not canonical identity. Keep answers from the same observation act in the fewest information intents compatible with distinct observers, methods, prerequisites, and relation origins.',
       'Partition every /3 outcome into exactly one explicit observation group with observerKind, observerTargetId, methodId, optional formTargetId, and viewpointBinding. Every information intent must redeclare its observer, subject, optional form, and method as local rows in that same intent; a row in an earlier intent does not count. Every target, observer, method, form, and relation-origin ID must be one of those local IDs. Put an exact authorityRef only on the matching local target or method when copied from the supplied reference catalog; otherwise use null. familiar is an observerKind, never a method kind. Never combine the player character viewpoint with a familiar, sensor, ally, or moved observer viewpoint.',
       'After “my rat” is established, “use my rate” in the same local construction reuses that rat familiar unless another meaning remains materially plausible; keep the literal token only in evidence and do not create a rate method or ambiguity.',
