@@ -37,7 +37,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.11.5',
+      version: '1.11.6',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -87,5 +87,6 @@ describe('API health', () => {
     ]);
     expect(ACTION_DIRECTED_STORY_CAPABILITIES).not.toContain('typed-observation-authority/1');
     expect(ACTION_DIRECTED_STORY_CAPABILITIES).not.toContain('atomic-observation-scene-write/1');
+    expect(OBSERVATION_SAGA_SHARED_CONTRACTS.semanticActionCompilerPolicy).toBe('gma.semantic-action-compiler-policy/7');
   });
 });

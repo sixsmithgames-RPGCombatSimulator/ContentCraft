@@ -314,6 +314,49 @@ describe('GMC compound-action private artifact store', () => {
     }, memoryCollection().records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_TOO_LARGE' });
   });
 
+  it('accepts a policy-7 observation program with five outcomes after lossless binding compaction and rejects post-normalization overflow', async () => {
+    const exact = instruction();
+    const base = program(exact);
+    const outcomes = ['drain-contents', 'drain-presence', 'worker-surface', 'worker-class', 'worker-distance'];
+    const compactProgram = {
+      ...base,
+      schemaVersion: 'gma.semantic-action-program/4',
+      planner: {
+        source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/7', confidence: 1,
+        evidenceAnchorNormalizationCount: 0, parallelInformationGroupCount: 0, observationBindingCompactionCount: 10,
+      },
+      nodes: base.nodes.map((node, index) => index === 0 ? {
+        ...node,
+        dataRequirements: Array.from({ length: 7 }, (_, requirementIndex) => ({
+          dimension: 'how', kind: 'character_capability', query: `preserved prerequisite ${requirementIndex + 1}`,
+        })),
+      } : {
+        ...node,
+        dataRequirements: outcomes.map((outcomeId) => ({
+          dimension: outcomeId === 'worker-distance' ? 'where' : 'what', kind: 'observation', query: outcomeId,
+          observation: { outcomeId },
+        })),
+        observationGroups: [
+          { groupId: 'group:rat', outcomeIds: outcomes.slice(0, 4) },
+          { groupId: 'group:player', outcomeIds: outcomes.slice(4) },
+        ],
+      }),
+    };
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:policy-7-compact',
+      instruction: exact, program: compactProgram, cursor: cursor(1), saga: saga(1, 'unsettled'),
+    }, memoryCollection().records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
+
+    const overbound = structuredClone(compactProgram);
+    (overbound.nodes[0].dataRequirements as JsonObject[]).push(...Array.from({ length: 5 }, (_, index) => ({
+      dimension: 'how', kind: 'character_capability', query: `overflow ${index + 1}`,
+    })));
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:policy-7-overbound',
+      instruction: exact, program: overbound, cursor: cursor(1), saga: saga(1, 'unsettled'),
+    }, memoryCollection().records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_TOO_LARGE' });
+  });
+
   it('rewinds later interaction revisions and restores the latest revision at the boundary', async () => {
     const store = memoryCollection();
     await createCompoundActionArtifact(createInput(), store.records);

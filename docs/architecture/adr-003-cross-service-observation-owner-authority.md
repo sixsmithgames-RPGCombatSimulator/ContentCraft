@@ -145,6 +145,17 @@ integrated operation publishes the identical positive identity requirement and
 policy version as Manual GMA; a version or instruction mismatch is a
 cross-service release stop.
 
+Fresh observation program `/4` uses GMA compiler policy `/7`. An explicit
+observation group is the sole compiled binding record for its observer,
+method, optional form, and viewpoint, so an observation node carries one typed
+data requirement per requested outcome without duplicating those bindings as
+generic presence, canonical-reference, continuity, or capability rows.
+Prerequisite nodes retain their complete requirements. GMC remains the
+independent storage-boundary enforcer: it accepts the losslessly normalized
+program only when every outcome and group is present and the total remains at
+or below sixteen, and it rejects any overbound or silently truncated program.
+GMC does not reinterpret or re-expand the compiler-owned binding rows.
+
 The first-pass response contract and integrated instruction also publish the
 complete facet, value-kind, and precision vocabularies. They positively map a
 distance request to `spatial_relation` plus a compatible relation or
