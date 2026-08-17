@@ -118,6 +118,19 @@ bounded-negative scope, typed access, unchanged unrelated Scene data, and
 preexisting provenance for blockers. At most one field-scoped repair may alter
 failed proposal fields; it cannot repair bindings or authority state.
 
+The integrated `action.intent.interpret` first pass uses
+`gma.semantic-intent-policy/4`. It positively requires the same discriminated
+IR `/3` shapes used by Manual transport: string outcomes for non-information
+prerequisites, typed outcomes and complete same-intent local-ID groups for
+information, contextual surface-error interpretation with exact typo evidence,
+and surface description plus apparent classification for an unqualified closer
+look at a visible actor. It returns only the requested result root, never an
+echoed packet. GMC allows a 16,384-byte semantic input envelope and 4,000 output
+tokens; GMA independently fixes the accepted response version and byte budget
+from its immutable request. GMC's operation schema retains older IRs for
+historical calls, but a fresh typed-observation request selects `/3` and cannot
+downgrade through model output.
+
 ## Lifetimes, recovery, and privacy
 
 Scene-kit `/4` and accepted bindings live with workspace revision history.

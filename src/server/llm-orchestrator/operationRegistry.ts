@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-16.2';
+export const OPERATION_REGISTRY_VERSION = '2026-08-17.1';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-13.3',
@@ -894,9 +894,9 @@ const seeds: Seed[] = [
   {
     id: 'action.intent.interpret', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'confidence', 'intents', 'ambiguities', 'coverage'],
-    targetBytes: 8_000, hardLimitBytes: 12_000, maxOutputTokens: 2_000,
+    targetBytes: 12_000, hardLimitBytes: 16_384, maxOutputTokens: 4_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/3',
+    promptVersion: 'gma.semantic-intent-policy/4',
     outputProperties: {
       schemaVersion: { enum: ['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3'] },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -953,15 +953,17 @@ const seeds: Seed[] = [
       } },
     },
     systemInstruction: [
-      'Interpret one exact player instruction into the bounded semantic-intent version requested by responseContract. Return only that object.',
+      'Interpret one exact player instruction into the bounded semantic-intent version requested by responseContract. Return only that result object. Do not repeat or wrap the request task, policy, immutable instruction, Scene frame, response contract, or another request-envelope field.',
       'Preserve every player-supported goal, target, declared method, requested outcome, sequence, parallel relationship, condition, and alternative. Cite exact unique phrases copied from the immutable instruction for every intent. Never silently omit overflow meaning.',
-      'For semantic-intent-ir/3 observation instructions, preserve stable local targetId and methodId values, exact authorityRef values only when copied from the supplied reference catalog, and null otherwise. Separate summon or form activation, movement, mechanics, and observation prerequisites.',
+      'When a malformed token is a close spelling error for an immediately established referent or method and local grammar clearly reuses that referent, preserve the literal spelling in evidence but use the established meaning in semantic fields. Ask an ambiguity only when a distinct meaning remains materially plausible.',
+      'For semantic-intent-ir/3 observation instructions, return IR /3 as the top-level result within 16384 UTF-8 JSON bytes. Separate summon or form activation, movement, mechanics, and observation prerequisites. Every non-information intent must carry one to eight short ordinary-language requestedOutcomes strings and no observation groups.',
       'For every requested information answer in /3, return one typed outcome. Keep appearance, apparent classification or species, identity, activity, distance, extent, presence, quantity, and contents separate. Apparent classification is not identity.',
-      'Partition every /3 outcome into exactly one explicit observation group with observerKind, observerTargetId, methodId, optional formTargetId, and viewpointBinding. Never combine the player character viewpoint with a familiar, sensor, ally, or moved observer viewpoint.',
+      'An unqualified closer or better look at a visible actor requests both surface_description and apparent_classification, not canonical identity. Keep answers from the same observation act in the fewest information intents compatible with distinct observers, methods, prerequisites, and relation origins.',
+      'Partition every /3 outcome into exactly one explicit observation group with observerKind, observerTargetId, methodId, optional formTargetId, and viewpointBinding. Every target, observer, method, form, and relation-origin ID must be a local ID declared in that same information intent. Put an exact authorityRef only on the matching local target or method when copied from the supplied reference catalog; otherwise use null. Never combine the player character viewpoint with a familiar, sensor, ally, or moved observer viewpoint.',
       'Choose purpose from meaning, not vocabulary. Asking where someone came from is exchange_information; only declared transit or arrival is relocate_actor. A location discussed as history, dialogue, or a fact to learn is a subject, not a destination.',
       'Choose method kind by the declared method: named skill or feature is capability, named magic is spell, an item is item, a tool is tool, an ordinary tactic is approach, and other is only for a supported method outside those meanings.',
       'Keep a method with the goal it modifies. Movement performed stealthily is one relocate_actor intent with a capability method, not two sequential intents.',
-      'For discover_information or observe_situation, preserve each separately requested answer as its own requestedOutcomes string. Appearance, apparent ancestry or species, identity, distance, contents, activity, presence, and quantity are different outcomes and must not be collapsed into one generic observation.',
+      'Every intent must contain one to eight requested outcomes. In semantic-intent-ir/1, preserve each separately requested answer as its own requestedOutcomes string. Appearance, apparent ancestry or species, identity, distance, contents, activity, presence, and quantity are different outcomes and must not be collapsed into one generic observation.',
       'Keep completed, succeeded, failed, impossible, declined, interrupted, and selected distinct. A failed attempt is not impossible.',
       'Do not narrate, adjudicate, create canon, resolve mechanics, choose application routing, authority, retrieval, lifecycle, or stopping labels, or invent a materially ambiguous player method.',
       'If one consequential meaning is ambiguous, preserve all unaffected intents and return one focused ambiguity for only the affected intent. Return at most eight intents, twelve relationships, and eight ambiguity options.',

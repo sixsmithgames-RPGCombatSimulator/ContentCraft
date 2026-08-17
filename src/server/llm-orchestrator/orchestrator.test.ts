@@ -260,7 +260,10 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/3');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/4');
+    expect(interpretation.context.inputTargetBytes).toBe(12_000);
+    expect(interpretation.context.inputHardLimitBytes).toBe(16_384);
+    expect(interpretation.provider.maxOutputTokens).toBe(4_000);
     expect((interpretation.outputSchema.schema.properties as any).schemaVersion.enum)
       .toEqual(['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3']);
     expect(interpretation.prompt.systemInstruction).toMatch(/every player-supported goal, target, declared method/i);
@@ -271,6 +274,11 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.prompt.systemInstruction).toMatch(/every requested information answer in \/3.*one typed outcome/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/appearance.*ancestry or species.*identity.*distance.*contents.*activity.*presence.*quantity/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Partition every \/3 outcome into exactly one explicit observation group with observerKind/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/non-information intent.*requestedOutcomes strings/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/close spelling error.*immediately established referent/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/closer or better look.*surface_description.*apparent_classification/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/local ID declared in that same information intent/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/Do not repeat or wrap the request task/i);
     expect(interpretation.prompt.systemInstruction).not.toMatch(/completion boundaries|authorityRequirements|dataRequirements/i);
     expect((interpretation.outputSchema.schema.properties as any).intents.items.required)
       .not.toContain('observerTargetId');
