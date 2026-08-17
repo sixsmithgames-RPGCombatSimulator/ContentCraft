@@ -225,6 +225,10 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, supersededByRewindId: 1 },
     { name: 'gmc_story_workspace_rewind_replay' },
   );
+  await database.collection('gmc_story_workspace_revisions').createIndex(
+    { userId: 1, campaignId: 1, 'workspace.sceneKits.sceneKitId': 1, revision: -1 },
+    { name: 'gmc_story_workspace_scene_kit_lookup' },
+  );
   // Exact player instructions and resumable action programs are private,
   // non-canonical interaction artifacts. They are revisioned independently
   // from Story so an incomplete compound action cannot leak into campaign canon.
@@ -255,6 +259,23 @@ async function createIndexes(database: Db): Promise<void> {
   await database.collection('gmc_compound_action_artifact_revisions').createIndex(
     { userId: 1, campaignId: 1, supersededByRewindId: 1 },
     { name: 'gmc_compound_action_artifact_rewind_replay' },
+  );
+  // One immutable saga operation intentionally appears in several artifact
+  // revisions while its disposition advances. Exactly-once enforcement lives
+  // at the owner and in each artifact write's unique idempotency key; a unique
+  // multikey index here would prevent checkpoint -> committed reconciliation.
+  try {
+    await database.collection('gmc_compound_action_artifact_revisions').dropIndex('unique_gmc_action_saga_operation_idempotency');
+  } catch (error: unknown) {
+    if (![26, 27].includes(Number((error as { code?: number })?.code))) throw error;
+  }
+  await database.collection('gmc_compound_action_artifact_revisions').createIndex(
+    { userId: 1, campaignId: 1, programId: 1, 'saga.operations.idempotencyKey': 1, revision: -1 },
+    { sparse: true, name: 'gmc_action_saga_operation_idempotency_lookup' },
+  );
+  await database.collection('gmc_compound_action_artifact_revisions').createIndex(
+    { userId: 1, campaignId: 1, 'saga.operations.operationId': 1, revision: -1 },
+    { sparse: true, name: 'gmc_action_saga_operation_lookup' },
   );
   await database.collection('llm_generation_workflows').createIndex(
     { userId: 1, workflowId: 1 },

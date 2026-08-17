@@ -8,11 +8,12 @@ import {
   readActiveCompoundActionArtifact,
   readStagedCompoundActionInstruction,
   rewindCompoundActionArtifacts,
+  settleCompoundActionArtifact,
   stageCompoundActionInstruction,
   type CompoundActionArtifactRevisionDocument,
   type CompoundActionInstructionDocument,
 } from './compoundActionArtifactStore.js';
-import { StoryWorkspaceStoreError } from './storyWorkspaceStore.js';
+import { type JsonObject, StoryWorkspaceStoreError } from './storyWorkspaceStore.js';
 
 function valueAt(record: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((value, key) => (
@@ -146,6 +147,38 @@ function createInput() {
   };
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function saga(revision: number, state: 'unsettled' | 'settled', receiptRef: string | null = null, settlementDisposition: 'checkpointed' | 'committed' | null = null): JsonObject {
+  return {
+    schemaVersion: 'gma.action-saga/1', sagaId: 'saga:turn-42', programId: 'program:turn-42', interactionId: 'interaction:turn-42',
+    instructionFingerprint: instruction().instructionFingerprint, artifactRevision: revision, cursorRevision: revision,
+    rewindLineageId: 'rewind-lineage:turn-42', foregroundModelOperationCount: 2,
+    operations: [{
+      operationId: 'operation:vcs:rat-form', owner: 'vcs', operationKind: 'activate_familiar_form',
+      idempotencyKey: 'operation-key:vcs:rat-form', expectedOwnerRevision: 7, requestFingerprint: 'a'.repeat(64),
+      disposition: 'committed', receiptRef: 'vcs:receipt:rat-form', resultingRevision: 8, attemptCount: 1, reconciliationCount: 0,
+      statusLookupMethod: 'vcs_observation_operation_get', dependencyReceiptRefs: [],
+    }, ...(settlementDisposition ? [{
+      operationId: 'operation:gmc:settle-presentation', owner: 'gmc', operationKind: 'settle_observation_presentation',
+      idempotencyKey: 'settle:v4:turn-42', expectedOwnerRevision: 2, requestFingerprint: 'b'.repeat(64),
+      disposition: settlementDisposition, receiptRef: settlementDisposition === 'committed' ? receiptRef : null,
+      resultingRevision: settlementDisposition === 'committed' ? 3 : null, attemptCount: settlementDisposition === 'committed' ? 1 : 0,
+      reconciliationCount: settlementDisposition === 'committed' ? 1 : 0,
+      statusLookupMethod: 'gmc_action_saga_operation_get', dependencyReceiptRefs: ['vcs:receipt:rat-form'],
+    }] : [])],
+    acceptedOwnerReceiptRefs: ['vcs:receipt:rat-form'], acceptedModelCandidateRefs: [],
+    presentationSettlement: { state, receiptRef }, normalizedFailureLineage: null,
+  };
+}
+
 describe('GMC compound-action private artifact store', () => {
   it('stages exact instruction bytes idempotently before semantic planning', async () => {
     const store = instructionMemoryCollection();
@@ -208,6 +241,77 @@ describe('GMC compound-action private artifact store', () => {
       idempotencyKey: 'advance:mutated-receipt', cursor: cursor(3, ['node:hide']),
       appendReceipts: [{ ...receipt, result: 'failed' }],
     }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_RECEIPT_CONFLICT' });
+  });
+
+  it('stores program /4 saga checkpoints and atomically settles receipt /2 with the cursor', async () => {
+    const store = memoryCollection();
+    const exact = instruction();
+    const v4Program = { ...program(exact), schemaVersion: 'gma.semantic-action-program/4' };
+    await createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:v4:turn-42',
+      instruction: exact, program: v4Program, cursor: cursor(1), saga: saga(1, 'unsettled'),
+    }, store.records);
+    const receipt = {
+      schemaVersion: 'gma.action-execution-receipt/2', receiptId: 'receipt:presentation:hide', programId: 'program:turn-42',
+      nodeId: 'node:hide', lifecycle: 'settled', result: 'succeeded', authorityReceipts: ['vcs:receipt:rat-form'],
+      observationGroups: [], outcomeBindings: [], finalAuthorityHeads: { vcs: 8, gmc: 7 },
+      presentationBindings: [{ outcomeId: 'outcome:hide', claimRef: 'claim:hide' }], idempotencyLineage: ['operation-key:vcs:rat-form'],
+    };
+    await advanceCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
+      idempotencyKey: 'checkpoint:settlement:v4:turn-42', cursor: cursor(2),
+      saga: saga(2, 'unsettled', null, 'checkpointed'),
+    }, store.records);
+    const settledSaga = saga(3, 'settled', receipt.receiptId, 'committed');
+    const settled = await settleCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 2,
+      idempotencyKey: 'settle:v4:turn-42', cursor: cursor(3, ['node:hide']), executionReceipt: receipt, saga: settledSaga,
+    }, store.records);
+    expect(settled).toMatchObject({ duplicate: false, artifactRef: { revision: 3 } });
+    const active = await readActiveCompoundActionArtifact({ userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42' }, store.records);
+    expect(active?.artifact).toMatchObject({ cursor: { revision: 3 }, receipts: [{ receiptId: receipt.receiptId }], saga: { presentationSettlement: { state: 'settled' } } });
+    await expect(settleCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 3,
+      idempotencyKey: 'settle:v4:bad', cursor: cursor(4, ['node:hide']), executionReceipt: receipt,
+      saga: saga(4, 'unsettled'),
+    }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_SETTLEMENT_INVALID' });
+  });
+
+  it('stores one fingerprint-bound accepted model candidate and rejects candidate drift', async () => {
+    const exact = instruction();
+    const candidate = { schemaVersion: 'gma.current-scene-narration-result/8', responseText: 'The worker is visibly human.' };
+    const candidateFingerprint = createHash('sha256').update(canonicalJson(candidate), 'utf8').digest('hex');
+    const candidateSaga = saga(1, 'unsettled');
+    candidateSaga.acceptedModelCandidateRefs = [candidateFingerprint];
+    candidateSaga.pendingModelCandidate = {
+      schemaVersion: 'gma.accepted-model-candidate/1', kind: 'observation_narration', operationKey: 'narration:turn-42',
+      inputFingerprint: 'c'.repeat(64), candidateFingerprint, candidate,
+    };
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:candidate:turn-42',
+      instruction: exact, program: { ...program(exact), schemaVersion: 'gma.semantic-action-program/4' }, cursor: cursor(1), saga: candidateSaga,
+    }, memoryCollection().records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
+
+    const tampered = structuredClone(candidateSaga);
+    ((tampered.pendingModelCandidate as Record<string, unknown>).candidate as Record<string, unknown>).responseText = 'Different text.';
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:tampered-candidate:turn-42',
+      instruction: exact, program: { ...program(exact), schemaVersion: 'gma.semantic-action-program/4' }, cursor: cursor(1), saga: tampered,
+    }, memoryCollection().records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_SAGA_INVALID' });
+  });
+
+  it('uses the shared 24 KiB observation-program bound without widening legacy programs', async () => {
+    const exact = instruction();
+    const padding = 'x'.repeat(17_000);
+    const observationProgram = { ...program(exact), schemaVersion: 'gma.semantic-action-program/4', observationContractPadding: padding };
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:bounded-v4:turn-42',
+      instruction: exact, program: observationProgram, cursor: cursor(1), saga: saga(1, 'unsettled'),
+    }, memoryCollection().records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:oversized-v2:turn-42',
+      instruction: exact, program: { ...program(exact), observationContractPadding: padding }, cursor: cursor(1),
+    }, memoryCollection().records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_TOO_LARGE' });
   });
 
   it('rewinds later interaction revisions and restores the latest revision at the boundary', async () => {

@@ -36,11 +36,16 @@ describe('D2 Story authority routes', () => {
       ['POST', '/migration-preview'],
       ['POST', '/scene-handoffs'],
       ['GET', '/scene-context'],
+      ['GET', '/observation-authority'],
+      ['POST', '/observation-authority/commit'],
+      ['GET', '/observation-authority/operations/operation-1'],
       ['POST', '/interaction-artifacts'],
       ['POST', '/interaction-artifacts/requirements'],
       ['POST', '/interaction-artifacts/rewind'],
       ['GET', '/interaction-artifacts/program-1'],
       ['PUT', '/interaction-artifacts/program-1'],
+      ['POST', '/interaction-artifacts/program-1/settle'],
+      ['GET', '/interaction-artifacts/program-1/operations/operation-1'],
       ['POST', '/interaction-artifacts/program-1/tombstone'],
     ] as const) {
       const response = await fetch(`${baseUrl}${path}`, {

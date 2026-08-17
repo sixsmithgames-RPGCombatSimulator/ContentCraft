@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-16.1';
+export const OPERATION_REGISTRY_VERSION = '2026-08-16.2';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-13.3',
@@ -634,8 +634,24 @@ const actionDirectedStoryTurnOutput = {
   mechanicsAuthority: { enum: ['none', 'provisional_vcs'] },
 } as const;
 
+const observationValueOutput = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['kind'],
+  properties: {
+    kind: { enum: ['description', 'classification', 'identity_ref', 'measurement', 'measurement_range', 'relation', 'boolean', 'count', 'set', 'statement'] },
+    text: { type: 'string', minLength: 1, maxLength: 800 },
+    ref: { type: 'string', minLength: 1, maxLength: 240 },
+    value: { anyOf: [{ type: 'number' }, { type: 'boolean' }] },
+    minimum: { type: 'number' },
+    maximum: { type: 'number' },
+    unit: { type: 'string', minLength: 1, maxLength: 40 },
+    values: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'string', minLength: 1, maxLength: 240 } },
+  },
+} as const;
+
 const observationPreparationOutput = {
-  schemaVersion: { const: 'gma.observation-preparation-result/1' },
+  schemaVersion: { enum: ['gma.observation-preparation-result/1', 'gma.observation-authority-preparation-candidate/1'] },
   proposal: {
     type: 'object', additionalProperties: false,
     required: [
@@ -657,15 +673,111 @@ const observationPreparationOutput = {
       },
     },
   },
+  programId: { type: 'string', minLength: 1, maxLength: 240 },
+  nodeId: { type: 'string', minLength: 1, maxLength: 240 },
+  preparationFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+  groupPreparations: {
+    type: 'array', minItems: 1, maxItems: 8, items: {
+      type: 'object', additionalProperties: false,
+      required: ['groupId', 'originViewpointRef', 'candidateViewpointRef', 'accessMode', 'pathRef', 'availableModalities', 'playerFacingStatement'],
+      properties: {
+        groupId: { type: 'string', minLength: 1, maxLength: 240 },
+        originViewpointRef: { type: 'string', minLength: 1, maxLength: 240 },
+        candidateViewpointRef: { type: 'string', minLength: 1, maxLength: 240 },
+        accessMode: { enum: ['stationary', 'traverse', 'remote_sensor'] },
+        pathRef: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 240 }] },
+        availableModalities: { type: 'array', minItems: 1, maxItems: 6, uniqueItems: true, items: { enum: ['visual', 'auditory', 'olfactory', 'tactile', 'magical', 'mixed'] } },
+        playerFacingStatement: { type: 'string', minLength: 1, maxLength: 800 },
+      },
+    },
+  },
+  outcomePreparations: {
+    type: 'array', minItems: 1, maxItems: 8, items: {
+      type: 'object', additionalProperties: false,
+      required: ['outcomeId', 'resultKind', 'value', 'playerFacingStatement', 'modality', 'supportedPrecision', 'accessCondition', 'mechanicRef'],
+      properties: {
+        outcomeId: { type: 'string', minLength: 1, maxLength: 240 },
+        resultKind: { enum: ['observed', 'bounded_negative'] },
+        value: observationValueOutput,
+        playerFacingStatement: { type: 'string', minLength: 1, maxLength: 800 },
+        modality: { enum: ['visual', 'auditory', 'olfactory', 'tactile', 'magical', 'mixed'] },
+        supportedPrecision: { enum: ['ordinary', 'approximate', 'exact'] },
+        accessCondition: { enum: ['ordinary_view', 'ordinary_hearing', 'ordinary_scent', 'touch', 'declared_method'] },
+        mechanicRef: { type: 'null' },
+      },
+    },
+  },
+  existingObservableUpgrades: {
+    type: 'array', maxItems: 24, items: {
+      type: 'object', additionalProperties: false,
+      required: ['observableId', 'supportedPrecision', 'modality', 'viewpointRef'],
+      properties: {
+        observableId: { type: 'string', minLength: 1, maxLength: 240 }, supportedPrecision: { enum: ['ordinary', 'approximate', 'exact'] },
+        modality: { enum: ['visual', 'auditory', 'olfactory', 'tactile', 'magical', 'mixed'] }, viewpointRef: { type: 'string', minLength: 1, maxLength: 240 },
+      },
+    },
+  },
+  existingObstructionUpgrades: {
+    type: 'array', maxItems: 16, items: {
+      type: 'object', additionalProperties: false,
+      required: ['obstructionId', 'affectedAccessRefs', 'pathRefs', 'viewpointRefs', 'formRefs', 'provenanceReceiptRefs'],
+      properties: {
+        obstructionId: { type: 'string', minLength: 1, maxLength: 240 },
+        affectedAccessRefs: { type: 'array', maxItems: 24, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        pathRefs: { type: 'array', maxItems: 24, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        viewpointRefs: { type: 'array', maxItems: 24, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        formRefs: { type: 'array', maxItems: 24, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        provenanceReceiptRefs: { type: 'array', minItems: 1, maxItems: 16, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 240 } },
+      },
+    },
+  },
+  obstructions: {
+    type: 'array', maxItems: 16, items: {
+      type: 'object', additionalProperties: false,
+      required: ['obstructionId', 'subjectRefs', 'affectedFacets', 'affectedModalities', 'affectedAccessRefs', 'pathRefs', 'viewpointRefs', 'mobilityEffect', 'observerRefs', 'formRefs', 'methodRefs', 'sourceRefs', 'provenanceReceiptRefs', 'playerFacingStatement'],
+      properties: {
+        obstructionId: { type: 'string', minLength: 1, maxLength: 240 },
+        subjectRefs: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        affectedFacets: { type: 'array', minItems: 1, maxItems: 12, uniqueItems: true, items: { enum: ['surface_description', 'apparent_classification', 'identity', 'spatial_relation', 'contents', 'activity', 'presence', 'quantity', 'extent', 'condition', 'signal', 'other_observable'] } },
+        affectedModalities: { type: 'array', minItems: 1, maxItems: 6, uniqueItems: true, items: { enum: ['visual', 'auditory', 'olfactory', 'tactile', 'magical', 'mixed'] } },
+        affectedAccessRefs: { type: 'array', maxItems: 24, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        pathRefs: { type: 'array', maxItems: 24, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        viewpointRefs: { type: 'array', maxItems: 24, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        mobilityEffect: { enum: ['none', 'blocks_passage', 'limits_reach'] },
+        observerRefs: { type: 'array', maxItems: 24, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        formRefs: { type: 'array', maxItems: 24, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        methodRefs: { type: 'array', maxItems: 24, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        sourceRefs: { type: 'array', minItems: 1, maxItems: 24, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        provenanceReceiptRefs: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        playerFacingStatement: { type: 'string', minLength: 1, maxLength: 800 },
+      },
+    },
+  },
 } as const;
 
 const actionDirectedCurrentSceneOutput = {
-  schemaVersion: { enum: ['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7'] },
+  schemaVersion: { enum: ['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7', 'gma.current-scene-narration-result/8'] },
+  programId: { type: 'string', minLength: 1, maxLength: 240 },
+  nodeId: { type: 'string', minLength: 1, maxLength: 240 },
+  presentationFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
   proposedTimeAdvance: actionDirectedTimeProposalOutput,
   responseMode: { const: 'in_character' },
-  responseText: { type: 'string', minLength: 1, maxLength: 16_000 },
+  responseText: { type: 'string', minLength: 1, maxLength: 12_000 },
   rollRequest: { type: ['object', 'null'] },
-  materialClaims: actionDirectedStoryTurnOutput.materialClaims,
+  materialClaims: { anyOf: [
+    actionDirectedStoryTurnOutput.materialClaims,
+    {
+      type: 'array', minItems: 1, maxItems: 8, items: {
+        type: 'object', additionalProperties: false,
+        required: ['outcomeId', 'claimText', 'sourceRefs'],
+        properties: {
+          outcomeId: { type: 'string', minLength: 1, maxLength: 240 },
+          claimText: { type: 'string', minLength: 1, maxLength: 800 },
+          sourceRefs: { type: 'array', minItems: 1, maxItems: 16, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        },
+      },
+    },
+  ] },
   sceneRealization: sceneRealizationOutput,
   declaredActionPayoff: actionDirectedStoryTurnOutput.declaredActionPayoff,
   storyOutcome: {
@@ -690,6 +802,16 @@ const actionDirectedCurrentSceneOutput = {
   },
   agencyAudit: actionDirectedStoryTurnOutput.agencyAudit,
   mechanicsAuthority: actionDirectedStoryTurnOutput.mechanicsAuthority,
+  presentationBindings: {
+    type: 'array', minItems: 1, maxItems: 8, items: {
+      type: 'object', additionalProperties: false,
+      required: ['outcomeId', 'permittedStatement', 'narrationEvidence'],
+      properties: {
+        outcomeId: { type: 'string', minLength: 1, maxLength: 240 }, permittedStatement: { type: 'string', minLength: 1, maxLength: 800 }, narrationEvidence: { type: 'string', minLength: 1, maxLength: 2_000 },
+      },
+    },
+  },
+  rulesNote: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 2_000 }] },
 } as const;
 
 const actionDirectedStoryRepairOutput = {
@@ -776,7 +898,7 @@ const seeds: Seed[] = [
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
     promptVersion: 'gma.semantic-intent-policy/3',
     outputProperties: {
-      schemaVersion: { const: 'gma.semantic-intent-ir/1' },
+      schemaVersion: { enum: ['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3'] },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
       instructionRef: { type: 'string', minLength: 1, maxLength: 240 },
       instructionFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
@@ -792,9 +914,24 @@ const seeds: Seed[] = [
             evidenceQuotes: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 1_000 } },
             goal: { type: 'string', minLength: 1, maxLength: 500 },
             purpose: { enum: ['relocate_actor', 'exchange_information', 'influence_actor', 'discover_information', 'observe_situation', 'manipulate_object', 'apply_capability', 'make_purchase', 'change_resource', 'recover', 'wait_for_change', 'choose_course', 'other'] },
-            targets: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['role', 'description'], properties: { role: { enum: ['actor', 'recipient', 'subject', 'object', 'origin', 'destination', 'area'] }, description: { type: 'string', minLength: 1, maxLength: 500 } } } },
-            methods: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['kind', 'description', 'capabilityHint'], properties: { kind: { enum: ['approach', 'capability', 'spell', 'item', 'tool', 'other'] }, description: { type: 'string', minLength: 1, maxLength: 500 }, capabilityHint: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 160 }] } } } },
-            requestedOutcomes: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 500 } },
+            targets: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['role', 'description'], properties: { targetId: { type: 'string', minLength: 1, maxLength: 240 }, role: { enum: ['actor', 'recipient', 'subject', 'object', 'origin', 'destination', 'area'] }, description: { type: 'string', minLength: 1, maxLength: 500 }, authorityRef: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 240 }] } } } },
+            methods: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['kind', 'description', 'capabilityHint'], properties: { methodId: { type: 'string', minLength: 1, maxLength: 240 }, kind: { enum: ['approach', 'capability', 'spell', 'item', 'tool', 'other'] }, description: { type: 'string', minLength: 1, maxLength: 500 }, capabilityHint: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 160 }] }, authorityRef: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 240 }] } } } },
+            requestedOutcomes: { type: 'array', minItems: 1, maxItems: 8, items: { anyOf: [
+              { type: 'string', minLength: 1, maxLength: 500 },
+              { type: 'object', additionalProperties: false, required: ['outcomeId', 'targetId', 'facet', 'valueKind', 'requestedPrecision', 'relationOriginTargetId', 'evidenceQuotes'], properties: {
+                outcomeId: { type: 'string', minLength: 1, maxLength: 240 }, targetId: { type: 'string', minLength: 1, maxLength: 240 },
+                facet: { enum: ['surface_description', 'apparent_classification', 'identity', 'spatial_relation', 'contents', 'activity', 'presence', 'quantity', 'extent', 'condition', 'signal', 'other_observable'] },
+                valueKind: { enum: ['description', 'classification', 'identity_ref', 'measurement', 'measurement_range', 'measurement_or_relation', 'relation', 'boolean', 'count', 'set', 'statement'] },
+                requestedPrecision: { enum: ['ordinary', 'bounded', 'exact'] }, relationOriginTargetId: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 240 }] },
+                evidenceQuotes: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 1_000 } },
+              } },
+            ] } },
+            observerTargetId: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 240 }] },
+            observationGroups: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['groupId', 'observerTargetId', 'observerKind', 'methodId', 'formTargetId', 'viewpointBinding', 'outcomeIds'], properties: {
+              groupId: { type: 'string', minLength: 1, maxLength: 240 }, observerTargetId: { type: 'string', minLength: 1, maxLength: 240 }, observerKind: { enum: ['character', 'familiar', 'sensor', 'ally'] },
+              methodId: { type: 'string', minLength: 1, maxLength: 240 }, formTargetId: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 240 }] },
+              viewpointBinding: { type: 'string', minLength: 1, maxLength: 240 }, outcomeIds: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 240 } },
+            } } },
             relation: { type: 'object', additionalProperties: false, required: ['after', 'parallelWith', 'condition'], properties: {
               after: { type: 'array', maxItems: 12, items: { type: 'string', minLength: 1, maxLength: 240 } },
               parallelWith: { type: 'array', maxItems: 12, items: { type: 'string', minLength: 1, maxLength: 240 } },
@@ -816,8 +953,11 @@ const seeds: Seed[] = [
       } },
     },
     systemInstruction: [
-      'Interpret one exact player instruction into one bounded gma.semantic-intent-ir/1 JSON object. Return only that object.',
+      'Interpret one exact player instruction into the bounded semantic-intent version requested by responseContract. Return only that object.',
       'Preserve every player-supported goal, target, declared method, requested outcome, sequence, parallel relationship, condition, and alternative. Cite exact unique phrases copied from the immutable instruction for every intent. Never silently omit overflow meaning.',
+      'For semantic-intent-ir/3 observation instructions, preserve stable local targetId and methodId values, exact authorityRef values only when copied from the supplied reference catalog, and null otherwise. Separate summon or form activation, movement, mechanics, and observation prerequisites.',
+      'For every requested information answer in /3, return one typed outcome. Keep appearance, apparent classification or species, identity, activity, distance, extent, presence, quantity, and contents separate. Apparent classification is not identity.',
+      'Partition every /3 outcome into exactly one explicit observation group with observerKind, observerTargetId, methodId, optional formTargetId, and viewpointBinding. Never combine the player character viewpoint with a familiar, sensor, ally, or moved observer viewpoint.',
       'Choose purpose from meaning, not vocabulary. Asking where someone came from is exchange_information; only declared transit or arrival is relocate_actor. A location discussed as history, dialogue, or a fact to learn is a subject, not a destination.',
       'Choose method kind by the declared method: named skill or feature is capability, named magic is spell, an item is item, a tool is tool, an ordinary tactic is approach, and other is only for a supported method outside those meanings.',
       'Keep a method with the goal it modifies. Movement performed stealthily is one relocate_actor intent with a capability method, not two sequential intents.',
@@ -1065,19 +1205,25 @@ const seeds: Seed[] = [
   },
   {
     id: 'story.observation.prepare', operationClass: 'reasoning_high', tier: 'reasoning',
-    required: ['schemaVersion', 'proposal'],
-    temperature: 0.25, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/8',
+    required: ['schemaVersion'],
+    optional: ['proposal', 'programId', 'nodeId', 'preparationFingerprint', 'groupPreparations', 'outcomePreparations', 'existingObservableUpgrades', 'existingObstructionUpgrades', 'obstructions'],
+    validators: ['observation-preparation-contract'],
+    temperature: 0.25, maxOutputTokens: 5000, targetBytes: 18_432, hardLimitBytes: 20_480,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.observation-authority-preparation-policy/1',
     outputProperties: observationPreparationOutput,
     systemInstruction: [
       'Prepare structured typed observation authority for one exact pending action before any player-facing narration runs.',
-      'Return exactly one gma.observation-preparation-result/1 JSON object containing only schemaVersion and proposal. Do not return narration, a roll request, a time proposal, material claims, an action payoff, or a resolved outcome.',
-      'Copy the immutable interaction ID, player-action fingerprint, workspace revision, current Scene revision, and grounded source refs from the bounded GMA packet.',
-      'Replace the current same-locus Scene kit in place as gmc.scene-kit/3, preserving its identity and advancing its revision exactly once. GMC is the sole mutable Scene and observation authority; this output remains proposal-only until GMC atomically commits it.',
-      'For every typed observation requirement, prepare one exact targetRef plus facet result as a typed observable, a facet-scoped concrete obstruction, or a genuinely mechanics-required observable with an exact VCS mechanicRef. Appearance, apparent classification, distance, contents, activity, presence, and other requested facets are independent outcomes.',
-      'Bind observables and obstructions only by exact subject, observer, method, modality, facet, source, and mechanic refs. Never join by labels, names, prose similarity, nearby information rows, or narrator guesswork.',
+      'Return exactly the schemaVersion requested by responseContract. For gma.observation-authority-preparation-candidate/1, copy programId, nodeId, and preparationFingerprint exactly and return every required array; for an older compatible packet, return gma.observation-preparation-result/1 with only schemaVersion and proposal.',
+      'For every supplied group, return exactly one groupPreparation using only its confirmed modalities. Preserve a familiar, sensor, ally, or moved observer as its own viewpoint; use remote_sensor for a familiar or sensor instead of reusing the player character sightline.',
+      'For every supplied outcome, return exactly one concrete outcomePreparation. Routine visible or otherwise perceivable details must be established now: absent prior prose detail is preparation debt, not grounds for unknown, unclear, indistinct, or cannot-reliably-establish prose.',
+      'Keep surface description, apparent classification, and identity separate. Apparent classification reports what the observer can reasonably classify from appearance and never invents canonical identity. Give spatial relations from the supplied relation origin at useful ordinary or approximate precision unless exact precision is both requested and established.',
+      'Use bounded_negative only for an established absence inside a named observed scope. An obstruction is valid only when all of its evidence refs are copied from the supplied current Scene; never invent darkness, distance, cover, a corner, a wall, or a missing sense to avoid an answer.',
+      'Return required upgrade metadata for every supplied legacy observable and obstruction without changing its fact, targets, statement, or sources.',
+      'Keep the complete JSON result at or below twenty KiB and use concise statements while still preparing every supplied group and outcome.',
+      'For the legacy result only, copy its immutable interaction ID, player-action fingerprint, workspace revision, current Scene revision, and grounded source refs and replace its same-locus Scene kit in place as gmc.scene-kit/3. For the current candidate, do not output a Scene kit; GMA deterministically compiles the accepted candidate into gmc.scene-kit/4 and GMC alone may commit it.',
+      'Bind each candidate result and obstruction only by the supplied group, outcome, subject, observer, method, modality, facet, source, and mechanic refs. Never join by labels, names, prose similarity, nearby information rows, or narrator guesswork.',
       'A sightline obstruction does not block a mobile scout after it changes viewpoint, and an interior obstruction does not hide a visible subject’s surface description or apparent classification. Use scope-limited blockers only.',
-      'Preserve still-valid locus, cast, beats, Story bindings, information, source grounding, player agency, conditional risk, and any exact Story design. Do not create a second observation truth in prose or metadata.',
+      'Preserve still-valid locus, cast, beats, Story bindings, information, source grounding, player agency, conditional risk, and exact Story design. GMC remains the sole mutable Scene and observation authority; this output is proposal-only and must not create a second observation truth in prose or metadata.',
       'Return only the registered JSON output.',
     ].join(' '),
   },
@@ -1111,14 +1257,18 @@ const seeds: Seed[] = [
   },
   {
     id: 'story.current-scene.narrate', operationClass: 'reasoning_high', tier: 'reasoning',
-    required: ['schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority'],
-    optional: ['proposedTimeAdvance'],
-    temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/9',
+    required: ['schemaVersion', 'responseText'],
+    optional: ['programId', 'nodeId', 'presentationFingerprint', 'presentationBindings', 'materialClaims', 'rulesNote', 'responseMode', 'rollRequest', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority', 'proposedTimeAdvance'],
+    validators: ['observation-narration-contract'],
+    temperature: 0.45, maxOutputTokens: 5000, targetBytes: 18_432, hardLimitBytes: 20_480,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/10',
     outputProperties: actionDirectedCurrentSceneOutput,
     systemInstruction: [
       'Narrate exactly one player action in the already-current GMC Scene kit from the supplied bounded GMA packet.',
-      'Return exactly one JSON object using the current-scene result schemaVersion requested by the bounded GMA packet: gma.current-scene-narration-result/7 for the current typed-observation and Story-obligation policy, or /6, /5, or /4 only for an older compatible packet during ordered rollout. Do not propose, replace, move, or close the Scene kit.',
+      'Return exactly one JSON object using the current-scene result schemaVersion requested by the bounded GMA packet: gma.current-scene-narration-result/8 for a settled typed-observation packet, gma.current-scene-narration-result/7 for the prior Story-obligation policy, or /6, /5, or /4 only for an older compatible packet during ordered rollout. Do not propose, replace, move, or close the Scene kit.',
+      'For gma.current-scene-narration-result/8, copy programId, nodeId, and presentationFingerprint exactly. Use every permitted statement verbatim in responseText, bind every outcome exactly once in presentationBindings, and return exactly one matching material claim with unchanged source refs for every outcome. Add only connective prose that creates no material fact.',
+      'A /8 result must answer appearance, apparent classification, distance, contents, activity, presence, and every other supplied outcome explicitly. Do not weaken a concrete answer into unknown, unclear, indistinct, or cannot-reliably-establish language. Keep apparent classification distinct from identity and preserve each remote observer viewpoint.',
+      'For /8, keep responseText at or below twelve thousand characters and the complete JSON result at or below twenty KiB; use concise connective prose while preserving every required statement and binding.',
       'Obey the supplied temporalRequirement in the first result. Required means proposedTimeAdvance has shouldAdvance true, positive whole seconds no greater than seven days, the exact required activity, and a concrete reason; forbidden means null. This is only a proposal for GMC campaign-time authority.',
       'Preserve the exact declared action. Use plainly available supplied facts plus only private facts explicitly authorized by actionBoundReveal, and keep mechanics provisional under VCS authority.',
       'When actionBoundReveal marks a fact requiredNow, state its exact factText in responseText before any roll. A roll may change completeness, time, danger, or interpretation, but not the fixed contents already reached by the action.',

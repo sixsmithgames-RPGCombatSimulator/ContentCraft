@@ -18,6 +18,9 @@ export const SCENE_KIT_V2_CONTRACT_VERSION = 'gmc.scene-kit/2';
 export const PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION = 'gma.playable-scene-context/2';
 export const SCENE_KIT_CONTRACT_VERSION = 'gmc.scene-kit/3';
 export const PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION = 'gma.playable-scene-context/3';
+export const SCENE_KIT_V4_CONTRACT_VERSION = 'gmc.scene-kit/4';
+export const PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION = 'gma.playable-scene-context/4';
+export const ACTOR_MECHANICS_BINDING_CONTRACT_VERSION = 'gmc.actor-mechanics-binding/1';
 export const STORY_DELTA_V2_CONTRACT_VERSION = 'studio.story-delta/2';
 export const SCENE_STORY_DESIGN_CONTRACT_VERSION = 'gmc.scene-story-design/1';
 export const STORY_AFFORDANCE_PROJECTION_CONTRACT_VERSION = 'gma.story-affordance-projection/1';
@@ -107,7 +110,7 @@ export interface StoryWorkspaceRevisionDocument {
   status: 'available' | 'superseded';
   workspace: JsonObject;
   source: 'studio_manual' | 'story_delta' | 'story_delta_v2' | 'story_graph' | 'scene_handoff'
-    | 'migration' | 'gmc' | 'npc_identity_promotion' | 'npc_identity_reveal';
+    | 'migration' | 'gmc' | 'npc_identity_promotion' | 'npc_identity_reveal' | 'observation_authority';
   deltaId: string | null;
   idempotencyKey: string;
   timelineAnchor: { messageId: string; sequence: number } | null;
@@ -427,6 +430,74 @@ function validateSceneObstruction(value: unknown, field: string): string {
   return obstructionId;
 }
 
+function validateActorMechanicsBinding(value: unknown, field: string): string {
+  if (!plainObject(value)) throw new StoryWorkspaceStoreError(422, 'STORY_ACTOR_MECHANICS_BINDING_INVALID', 'An actor mechanics binding must be an object.', { field });
+  exactKeys(value, field, ['schemaVersion', 'bindingRef', 'campaignRef', 'actorRef', 'actorRecordRef', 'actorRecordRevision', 'mechanicsSubjectRef', 'vcsOwnerRef', 'vcsRevision', 'provenanceReceiptRefs', 'visibility', 'state']);
+  if (value.schemaVersion !== ACTOR_MECHANICS_BINDING_CONTRACT_VERSION) throw new StoryWorkspaceStoreError(422, 'STORY_ACTOR_MECHANICS_BINDING_INVALID', 'The actor mechanics binding version is not supported.', { field: `${field}.schemaVersion` });
+  const bindingRef = identifier(value.bindingRef, `${field}.bindingRef`);
+  identifier(value.campaignRef, `${field}.campaignRef`);
+  identifier(value.actorRef, `${field}.actorRef`);
+  identifier(value.actorRecordRef, `${field}.actorRecordRef`);
+  positiveInteger(value.actorRecordRevision, `${field}.actorRecordRevision`);
+  identifier(value.mechanicsSubjectRef, `${field}.mechanicsSubjectRef`);
+  identifier(value.vcsOwnerRef, `${field}.vcsOwnerRef`);
+  identifier(value.vcsRevision, `${field}.vcsRevision`);
+  identifierArray(value.provenanceReceiptRefs, `${field}.provenanceReceiptRefs`, 12, 1);
+  if (value.visibility !== 'gm_only') throw new StoryWorkspaceStoreError(422, 'STORY_ACTOR_MECHANICS_BINDING_INVALID', 'An actor mechanics binding must remain GM-only.', { field: `${field}.visibility` });
+  observationEnum(value.state, `${field}.state`, ['active', 'retired']);
+  return bindingRef;
+}
+
+function validateObservationAccess(value: unknown, field: string): string {
+  if (!plainObject(value)) throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_ACCESS_INVALID', 'An observation access relation must be an object.', { field });
+  exactKeys(value, field, ['accessId', 'originViewpointRef', 'candidateViewpointRef', 'accessMode', 'pathRef', 'requiredCapabilityRefs', 'availableModalities', 'subjectRefs', 'facets', 'epistemicState', 'sourceRefs', 'playerFacingStatement']);
+  const accessId = identifier(value.accessId, `${field}.accessId`);
+  identifier(value.originViewpointRef, `${field}.originViewpointRef`);
+  identifier(value.candidateViewpointRef, `${field}.candidateViewpointRef`);
+  observationEnum(value.accessMode, `${field}.accessMode`, ['stationary', 'traverse', 'remote_sensor']);
+  if (value.pathRef !== null) identifier(value.pathRef, `${field}.pathRef`);
+  identifierArray(value.requiredCapabilityRefs, `${field}.requiredCapabilityRefs`, 12);
+  enumArray(value.availableModalities, `${field}.availableModalities`, OBSERVATION_MODALITIES, 6, 1);
+  identifierArray(value.subjectRefs, `${field}.subjectRefs`, 24, 1);
+  enumArray(value.facets, `${field}.facets`, OBSERVATION_FACETS, 12, 1);
+  observationEnum(value.epistemicState, `${field}.epistemicState`, ['canonical_private', 'scene_local_established']);
+  identifierArray(value.sourceRefs, `${field}.sourceRefs`, 24, 1);
+  narrativeText(value.playerFacingStatement, `${field}.playerFacingStatement`, 800);
+  return accessId;
+}
+
+function validateSceneObservableV4(value: unknown, field: string): string {
+  if (!plainObject(value)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_OBSERVATION_INVALID', 'A version 4 Scene observable must be an object.', { field });
+  exactKeys(value, field, ['observableId', 'subjectRef', 'facet', 'resultKind', 'value', 'playerFacingStatement', 'perceptibility', 'supportedPrecision', 'modality', 'viewpointRef', 'epistemicState', 'sourceRefs']);
+  const legacy = clone(value as JsonObject);
+  delete legacy.supportedPrecision;
+  delete legacy.modality;
+  delete legacy.viewpointRef;
+  const id = validateSceneObservable(legacy, field);
+  observationEnum(value.supportedPrecision, `${field}.supportedPrecision`, ['ordinary', 'approximate', 'exact']);
+  observationEnum(value.modality, `${field}.modality`, OBSERVATION_MODALITIES);
+  identifier(value.viewpointRef, `${field}.viewpointRef`);
+  return id;
+}
+
+function validateSceneObstructionV4(value: unknown, field: string): string {
+  if (!plainObject(value)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_OBSERVATION_INVALID', 'A version 4 Scene obstruction must be an object.', { field });
+  exactKeys(value, field, ['obstructionId', 'subjectRefs', 'affectedFacets', 'affectedModalities', 'affectedAccessRefs', 'pathRefs', 'viewpointRefs', 'mobilityEffect', 'observerRefs', 'formRefs', 'methodRefs', 'playerFacingStatement', 'sourceRefs', 'provenanceReceiptRefs']);
+  const legacy = clone(value as JsonObject);
+  delete legacy.affectedAccessRefs;
+  delete legacy.pathRefs;
+  delete legacy.viewpointRefs;
+  delete legacy.formRefs;
+  delete legacy.provenanceReceiptRefs;
+  const id = validateSceneObstruction(legacy, field);
+  identifierArray(value.affectedAccessRefs, `${field}.affectedAccessRefs`, 24);
+  identifierArray(value.pathRefs, `${field}.pathRefs`, 16);
+  identifierArray(value.viewpointRefs, `${field}.viewpointRefs`, 16);
+  identifierArray(value.formRefs, `${field}.formRefs`, 16);
+  identifierArray(value.provenanceReceiptRefs, `${field}.provenanceReceiptRefs`, 16, 1);
+  return id;
+}
+
 function validatePotentialStoryImpact(value: unknown, field: string): void {
   if (!plainObject(value)) throw new StoryWorkspaceStoreError(422, 'STORY_POTENTIAL_IMPACT_INVALID', 'A potential Story impact must be an object.', { field });
   exactKeys(value, field, ['storyNodeRef', 'outcome', 'effect']);
@@ -598,8 +669,70 @@ export function validateSceneKitV3(input: unknown): asserts input is JsonObject 
   if (byteLength(input as JsonObject) > STORY_SCENE_KIT_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_KIT_TOO_LARGE', 'A Scene kit exceeds its storage bound.', { maximumBytes: STORY_SCENE_KIT_MAX_BYTES });
 }
 
+/** Validates the owner-authored access and reciprocal binding authority in `gmc.scene-kit/4`. */
+export function validateSceneKitV4(input: unknown): asserts input is JsonObject {
+  if (!plainObject(input)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'The version 4 Scene kit must be an object.', { field: 'sceneKit' });
+  exactKeys(input, 'sceneKit', ['schemaVersion', 'sceneKitId', 'revision', 'planningState', 'playableLocus', 'purpose', 'dramaticQuestion', 'participants', 'establishedElements', 'information', 'actorMechanicsBindings', 'observationAccess', 'observables', 'obstructions', 'beats', 'pressures', 'exitVectors', 'storyBindings', 'sourceRefs']);
+  if (input.schemaVersion !== SCENE_KIT_V4_CONTRACT_VERSION) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'The observation-authority Scene-kit version is not supported.', { field: 'sceneKit.schemaVersion' });
+  if (!Array.isArray(input.observables) || input.observables.length > 24) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Scene observables exceed their bound.', { field: 'sceneKit.observables' });
+  if (!Array.isArray(input.obstructions) || input.obstructions.length > 16) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Scene obstructions exceed their bound.', { field: 'sceneKit.obstructions' });
+  if (!Array.isArray(input.actorMechanicsBindings) || input.actorMechanicsBindings.length > 32) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Actor mechanics bindings exceed their bound.', { field: 'sceneKit.actorMechanicsBindings' });
+  if (!Array.isArray(input.observationAccess) || input.observationAccess.length > 24) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Observation access relations exceed their bound.', { field: 'sceneKit.observationAccess' });
+  const typedShape = clone(input as JsonObject);
+  typedShape.schemaVersion = SCENE_KIT_CONTRACT_VERSION;
+  delete typedShape.actorMechanicsBindings;
+  delete typedShape.observationAccess;
+  typedShape.observables = (typedShape.observables as JsonObject[]).map((entry) => {
+    const legacy = clone(entry);
+    delete legacy.supportedPrecision;
+    delete legacy.modality;
+    delete legacy.viewpointRef;
+    return legacy;
+  });
+  typedShape.obstructions = (typedShape.obstructions as JsonObject[]).map((entry) => {
+    const legacy = clone(entry);
+    delete legacy.affectedAccessRefs;
+    delete legacy.pathRefs;
+    delete legacy.viewpointRefs;
+    delete legacy.formRefs;
+    delete legacy.provenanceReceiptRefs;
+    return legacy;
+  });
+  validateSceneKitV3(typedShape);
+  const bindingRefs = new Set<string>();
+  const actorRefs = new Set<string>();
+  input.actorMechanicsBindings.forEach((entry, index) => {
+    const ref = validateActorMechanicsBinding(entry, `sceneKit.actorMechanicsBindings[${index}]`);
+    if (bindingRefs.has(ref)) throw new StoryWorkspaceStoreError(409, 'STORY_ACTOR_MECHANICS_BINDING_DUPLICATE', 'The Scene kit contains a duplicate actor mechanics binding.', { bindingRef: ref });
+    bindingRefs.add(ref);
+    const binding = entry as JsonObject;
+    const activeActor = `${String(binding.actorRef)}:${String(binding.state)}`;
+    if (binding.state === 'active' && actorRefs.has(activeActor)) throw new StoryWorkspaceStoreError(409, 'STORY_ACTOR_MECHANICS_BINDING_DUPLICATE', 'An actor has more than one active mechanics binding.', { actorRef: binding.actorRef });
+    actorRefs.add(activeActor);
+  });
+  const accessRefs = new Set<string>();
+  input.observationAccess.forEach((entry, index) => {
+    const ref = validateObservationAccess(entry, `sceneKit.observationAccess[${index}]`);
+    if (accessRefs.has(ref)) throw new StoryWorkspaceStoreError(409, 'STORY_OBSERVATION_ACCESS_DUPLICATE', 'The Scene kit contains a duplicate observation access relation.', { accessId: ref });
+    accessRefs.add(ref);
+  });
+  const authorityRefs = new Set<string>([
+    ...input.observationAccess.map((entry) => String((entry as JsonObject).accessId)),
+    ...input.observables.map((entry) => String((entry as JsonObject).observableId)),
+    ...input.obstructions.map((entry) => String((entry as JsonObject).obstructionId)),
+  ]);
+  input.observables.forEach((entry, index) => validateSceneObservableV4(entry, `sceneKit.observables[${index}]`));
+  input.obstructions.forEach((entry, index) => {
+    validateSceneObstructionV4(entry, `sceneKit.obstructions[${index}]`);
+    const obstruction = entry as JsonObject;
+    for (const ref of obstruction.affectedAccessRefs as string[]) if (!authorityRefs.has(ref)) throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_ACCESS_REFERENCE_INVALID', 'An obstruction cites an access relation outside this Scene kit.', { obstructionId: obstruction.obstructionId, accessId: ref });
+  });
+  if (byteLength(input as JsonObject) > STORY_SCENE_KIT_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_KIT_TOO_LARGE', 'A Scene kit exceeds its storage bound.', { maximumBytes: STORY_SCENE_KIT_MAX_BYTES });
+}
+
 export function validateSceneKit(input: unknown): asserts input is JsonObject {
-  if (plainObject(input) && input.schemaVersion === SCENE_KIT_CONTRACT_VERSION) validateSceneKitV3(input);
+  if (plainObject(input) && input.schemaVersion === SCENE_KIT_V4_CONTRACT_VERSION) validateSceneKitV4(input);
+  else if (plainObject(input) && input.schemaVersion === SCENE_KIT_CONTRACT_VERSION) validateSceneKitV3(input);
   else validateSceneKitV2(input);
 }
 
@@ -816,7 +949,7 @@ function normalizeSceneKitCollection(
     const sceneKitId = identifier(source.sceneKitId, `sceneKits[${index}].sceneKitId`);
     if (seen.has(sceneKitId)) throw new StoryWorkspaceStoreError(409, 'STORY_RECORD_DUPLICATE', 'sceneKits contains a duplicate record.', { recordId: sceneKitId });
     seen.add(sceneKitId);
-    const isVersionedSceneKit = [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(source.schemaVersion));
+    const isVersionedSceneKit = [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(source.schemaVersion));
     if (!isVersionedSceneKit) {
       return normalizeRecordCollection([source], prior.has(sceneKitId) ? [prior.get(sceneKitId)!] : [], 'sceneKitId', `sceneKits[${index}]`)[0];
     }
@@ -824,7 +957,7 @@ function normalizeSceneKitCollection(
     const next = clone(source as JsonObject);
     const current = prior.get(sceneKitId);
     const currentRevision = current
-      ? ([SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(current.schemaVersion))
+      ? ([SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(current.schemaVersion))
         ? positiveInteger(current.revision, `sceneKits[${index}].previousRevision`)
         : recordRevision(current.recordRevision))
       : 0;
@@ -839,7 +972,7 @@ function normalizeSceneKitCollection(
       delete priorComparable.revision;
       delete priorComparable.recordRevision;
       const changed = canonicalJson(comparable) !== canonicalJson(priorComparable);
-      const expectedRevisions = changed && ![SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(current.schemaVersion))
+      const expectedRevisions = changed && ![SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(current.schemaVersion))
         ? [currentRevision, currentRevision + 1]
         : [changed ? currentRevision + 1 : currentRevision];
       if (!expectedRevisions.includes(nextRevision)) {
@@ -1064,7 +1197,7 @@ function validateNormalizedWorkspace(workspace: Record<string, JsonValue>) {
       throw new StoryWorkspaceStoreError(422, 'STORY_RECORD_BOUND_EXCEEDED', `${recordType} exceeds its record bound.`, { recordType, maximum });
     }
     records.forEach((record, index) => {
-      if (recordType === 'scene_kit' && [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(record.schemaVersion))) {
+      if (recordType === 'scene_kit' && [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(record.schemaVersion))) {
         validateSceneKit(record);
       } else {
         storyState(record, `${descriptor.path.join('.')}[${index}]`);
@@ -1114,7 +1247,7 @@ function validateSceneKitReadiness(workspace: Record<string, JsonValue>) {
   const readinessById = new Map(readinessRecords.map((record) => [String(record.readinessId), record]));
   const requirements = recordArray(workspace, recordDescriptors.preparation_requirement);
   for (const kit of recordArray(workspace, recordDescriptors.scene_kit)) {
-    if ([SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(kit.schemaVersion))) continue;
+    if ([SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(kit.schemaVersion))) continue;
     const runnable = ['prepared', 'active'].includes(String(kit.planningState));
     const participants = plainObject(kit.participants) ? kit.participants : {};
     const rows = [
@@ -1188,7 +1321,7 @@ function refreshActiveSceneKitReference(workspace: Record<string, JsonValue>, ca
   const kits = recordArray(workspace, recordDescriptors.scene_kit);
   const kit = kits.find((candidate) => candidate.sceneKitId === sceneKitId);
   if (!kit) throw new StoryWorkspaceStoreError(422, 'STORY_ACTIVE_SCENE_KIT_NOT_FOUND', 'The active scene-kit reference does not resolve in this workspace.', { sceneKitId });
-  const versionedSceneKit = [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(kit.schemaVersion));
+  const versionedSceneKit = [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(kit.schemaVersion));
   const sceneId = versionedSceneKit
     ? sceneKitId
     : identifier(kit.sceneId, 'sceneKits.sceneId');
@@ -1317,6 +1450,32 @@ export async function readStoryWorkspaceRevision(
   };
 }
 
+/** Reads an immutable owner operation receipt without treating a timeout as a safe retry. */
+export async function readStoryWorkspaceOperation(
+  input: { userId: string; campaignId: string; operationId: string },
+  records: RevisionCollection = collection(),
+) {
+  const userId = text(input.userId, 'userId', 254);
+  const campaignId = identifier(input.campaignId, 'campaignId');
+  const operationId = identifier(input.operationId, 'operationId');
+  const record = await records.findOne({
+    userId,
+    campaignId,
+    workspaceId: `story-workspace:${campaignId}`,
+    deltaId: operationId,
+    source: 'observation_authority',
+  });
+  if (!record) return null;
+  return {
+    contractVersion: 'gmc.observation-operation-status/1',
+    operationId,
+    disposition: 'committed',
+    receiptRef: `gmc:observation-receipt:${record.requestHash}`,
+    storyWorkspaceRef: workspaceRef(record),
+    requestFingerprint: record.requestHash,
+  };
+}
+
 export async function replaceStoryWorkspace(
   input: {
     userId: string;
@@ -1337,6 +1496,21 @@ export async function replaceStoryWorkspace(
   const expectedRevision = nonNegativeInteger(input.expectedRevision, 'expectedRevision');
   const idempotencyKey = identifier(input.idempotencyKey, 'idempotencyKey');
   const prior = await activeRecord(records, { userId, campaignId });
+  const proposedKits: JsonObject[] = Array.isArray(input.workspace.sceneKits) ? input.workspace.sceneKits.filter(plainObject) as JsonObject[] : [];
+  const priorKits: JsonObject[] = prior && Array.isArray(prior.workspace.sceneKits) ? prior.workspace.sceneKits.filter(plainObject) as JsonObject[] : [];
+  if (input.source !== 'observation_authority') {
+    for (const proposed of proposedKits.filter((kit) => kit.schemaVersion === SCENE_KIT_V4_CONTRACT_VERSION)) {
+      const current = priorKits.find((kit) => kit.sceneKitId === proposed.sceneKitId);
+      if (!current || current.schemaVersion !== SCENE_KIT_V4_CONTRACT_VERSION) {
+        throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_AUTHORITY_ROUTE_REQUIRED', 'A version 4 Scene kit must be created through the reciprocal observation-authority route.', { sceneKitId: proposed.sceneKitId });
+      }
+      for (const field of ['actorMechanicsBindings', 'observationAccess', 'observables', 'obstructions'] as const) {
+        if (canonicalJson(proposed[field] as JsonValue) !== canonicalJson(current[field] as JsonValue)) {
+          throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_AUTHORITY_ROUTE_REQUIRED', 'Observation authority fields can change only through the reciprocal observation-authority route.', { sceneKitId: proposed.sceneKitId, field });
+        }
+      }
+    }
+  }
   const currentRevision = prior?.revision ?? 0;
   const requestHash = input.requestHashOverride ?? sha256(canonicalJson({
     campaignId, expectedRevision, workspace: input.workspace, source: input.source ?? 'studio_manual', deltaId: input.deltaId ?? null,
@@ -1797,7 +1971,7 @@ export function buildPublicStoryProjection(workspace: JsonObject) {
     : null;
   const readinessLabels = new Map(recordArray(workspace, recordDescriptors.npc_readiness)
     .map((record) => [String(record.npcRef ?? ''), boundedText(record.publicLabel, 200)]));
-  const activeKitVersioned = activeKit && [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(activeKit.schemaVersion));
+  const activeKitVersioned = activeKit && [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(activeKit.schemaVersion));
   const present = activeKit && plainObject(activeKit.participants) && Array.isArray(activeKit.participants.present)
     ? activeKitVersioned
       ? (activeKit.participants.present as string[]).slice(0, 30).map((participantRef) => ({
@@ -1849,7 +2023,7 @@ export function buildPlayableStoryProjection(workspace: JsonObject, requestedSce
     } as JsonObject;
   }
   const participants = plainObject(kit.participants) ? kit.participants : {};
-  const isVersioned = [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(kit.schemaVersion));
+  const isVersioned = [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(kit.schemaVersion));
   const participantRows = isVersioned ? [] : [
     ...(Array.isArray(participants.present) ? participants.present : []),
     ...(Array.isArray(participants.anticipated) ? participants.anticipated : []),

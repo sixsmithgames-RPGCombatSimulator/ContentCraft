@@ -38,7 +38,7 @@ function outputFor(operation: string) {
   return output;
 }
 
-function request(operation = 'experience.evaluate', suffix = '1') {
+function request(operation = 'experience.evaluate', suffix = '1', input: unknown = { instruction: 'test' }) {
   bindOperationRuntime({
     id: operation,
     systemInstruction: `Test ${operation}`,
@@ -51,7 +51,7 @@ function request(operation = 'experience.evaluate', suffix = '1') {
     idempotencyKey: `idem-${suffix}`,
     references: { campaignId: 'campaign-1', canonVersion: 'canon-1' },
     context: {
-      input: { label: 'user_text', value: { instruction: 'test' } },
+      input: { label: 'user_text', value: input },
       campaign: { label: 'retrieved_authority_data', revision: 'canon-1', value: { title: 'Test' } },
     },
   });
@@ -261,15 +261,16 @@ describe('provider-neutral LLM orchestrator', () => {
     const repair = getOperationDefinition('action.slice.repair');
 
     expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/3');
-    expect((interpretation.outputSchema.schema.properties as any).schemaVersion.const).toBe('gma.semantic-intent-ir/1');
+    expect((interpretation.outputSchema.schema.properties as any).schemaVersion.enum)
+      .toEqual(['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3']);
     expect(interpretation.prompt.systemInstruction).toMatch(/every player-supported goal, target, declared method/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Asking where someone came from is exchange_information/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/only declared transit or arrival is relocate_actor/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Movement performed stealthily is one relocate_actor intent/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Do not narrate, adjudicate, create canon, resolve mechanics/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/preserve each separately requested answer as its own requestedOutcomes string/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/every requested information answer in \/3.*one typed outcome/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/appearance.*ancestry or species.*identity.*distance.*contents.*activity.*presence.*quantity/i);
-    expect(interpretation.prompt.systemInstruction).not.toMatch(/authority ref|observerTargetId|observation outcome object/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/Partition every \/3 outcome into exactly one explicit observation group with observerKind/i);
     expect(interpretation.prompt.systemInstruction).not.toMatch(/completion boundaries|authorityRequirements|dataRequirements/i);
     expect((interpretation.outputSchema.schema.properties as any).intents.items.required)
       .not.toContain('observerTargetId');
@@ -277,8 +278,8 @@ describe('provider-neutral LLM orchestrator', () => {
       .toEqual(['role', 'description']);
     expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.methods.items.required)
       .toEqual(['kind', 'description', 'capabilityHint']);
-    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.requestedOutcomes.items.type)
-      .toBe('string');
+    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.requestedOutcomes.items.anyOf)
+      .toHaveLength(2);
     expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.purpose.enum)
       .toContain('exchange_information');
     expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.methods.items.properties.kind.enum)
@@ -381,15 +382,19 @@ describe('provider-neutral LLM orchestrator', () => {
       type: ['object', 'null'],
       required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
     });
-    expect(observationPreparation.prompt.version).toBe('gma.story-director-policy/8');
+    expect(observationPreparation.prompt.version).toBe('gma.observation-authority-preparation-policy/1');
     expect(observationPreparation.prompt.systemInstruction).toMatch(/before any player-facing narration runs/i);
+    expect(observationPreparation.prompt.systemInstruction).toMatch(/Routine visible or otherwise perceivable details must be established now/i);
+    expect(observationPreparation.prompt.systemInstruction).toMatch(/Apparent classification reports what the observer can reasonably classify/i);
+    expect(observationPreparation.prompt.systemInstruction).toMatch(/remote_sensor for a familiar or sensor/i);
     expect(observationPreparation.prompt.systemInstruction).toMatch(/sole mutable Scene and observation authority/i);
     expect(observationPreparation.prompt.systemInstruction).toMatch(/Never join by labels, names, prose similarity/i);
-    expect(observationPreparation.outputSchema.schema.required).toEqual(['schemaVersion', 'proposal']);
-    expect(Object.keys(observationPreparation.outputSchema.schema.properties as Record<string, unknown>)).toEqual(['schemaVersion', 'proposal']);
+    expect(observationPreparation.outputSchema.schema.required).toEqual(['schemaVersion']);
+    expect(Object.keys(observationPreparation.outputSchema.schema.properties as Record<string, unknown>))
+      .toEqual(expect.arrayContaining(['schemaVersion', 'proposal', 'programId', 'nodeId', 'groupPreparations', 'outcomePreparations', 'obstructions']));
     expect(observationPreparation.provider.maxAttempts).toBe(1);
     expect(observationPreparation.provider.fallbackAllowed).toBe(false);
-    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/9');
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/10');
     expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/authorized by actionBoundReveal/i);
@@ -399,12 +404,10 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(currentScene.prompt.systemInstruction).toMatch(/the load is established/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/temporalRequirement.*first result/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/complete observation authority for that exact Scene revision/i);
-    expect(currentScene.outputSchema.schema.required).toEqual([
-      'schemaVersion', 'responseMode', 'responseText', 'rollRequest', 'materialClaims', 'sceneRealization',
-      'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority',
-    ]);
+    expect(currentScene.prompt.systemInstruction).toMatch(/Use every permitted statement verbatim/i);
+    expect(currentScene.outputSchema.schema.required).toEqual(['schemaVersion', 'responseText']);
     expect((currentScene.outputSchema.schema.properties as any).schemaVersion.enum)
-      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7']);
+      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7', 'gma.current-scene-narration-result/8']);
     expect((currentScene.outputSchema.schema.properties as any).proposedTimeAdvance).toMatchObject({
       type: ['object', 'null'],
       required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
@@ -524,6 +527,97 @@ describe('provider-neutral LLM orchestrator', () => {
       userId: 'user-1', store: new MemoryExecutionStore(), providers: [handoffProvider],
     });
     expect(rejected.status).toBe('review_required');
+  });
+
+  it('accepts the typed observation preparation and narration contracts and rejects evasive first-pass answers', async () => {
+    const preparationPacket = {
+      schemaVersion: 'gma.observation-authority-preparation-packet/1',
+      immutable: { programId: 'program:observe', nodeId: 'node:observe', preparationFingerprint: 'a'.repeat(64) },
+      currentScene: { sourceRefs: ['scene:second-mouth'], existingObservables: [], existingObstructions: [] },
+      groups: [{
+        groupId: 'group:familiar', observer: { actorKind: 'familiar' }, availableModalities: ['visual', 'olfactory'],
+        outcomes: [
+          { outcomeId: 'outcome:appearance', facet: 'surface_description' },
+          { outcomeId: 'outcome:species', facet: 'apparent_classification' },
+        ],
+      }],
+    };
+    const candidate = {
+      schemaVersion: 'gma.observation-authority-preparation-candidate/1', programId: 'program:observe', nodeId: 'node:observe', preparationFingerprint: 'a'.repeat(64),
+      groupPreparations: [{
+        groupId: 'group:familiar', originViewpointRef: 'viewpoint:cover', candidateViewpointRef: 'viewpoint:rat-near-worker',
+        accessMode: 'remote_sensor', pathRef: 'path:apron', availableModalities: ['visual', 'olfactory'],
+        playerFacingStatement: 'Through the rat, the drain worker is plainly visible from nearby.',
+      }],
+      outcomePreparations: [
+        { outcomeId: 'outcome:appearance', resultKind: 'observed', value: { kind: 'description', text: 'A broad-shouldered worker in an oilskin coat.' }, playerFacingStatement: 'The worker is broad-shouldered and wears a dark oilskin coat.', modality: 'visual', supportedPrecision: 'ordinary', accessCondition: 'ordinary_view', mechanicRef: null },
+        { outcomeId: 'outcome:species', resultKind: 'observed', value: { kind: 'classification', text: 'apparently human' }, playerFacingStatement: 'By appearance, the worker is human.', modality: 'visual', supportedPrecision: 'ordinary', accessCondition: 'ordinary_view', mechanicRef: null },
+      ],
+      existingObservableUpgrades: [], existingObstructionUpgrades: [], obstructions: [],
+    };
+    const acceptedPreparation = await executeLlmOperation(request('story.observation.prepare', 'typed-observation-preparation', preparationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => candidate)],
+    });
+    expect(acceptedPreparation.status).toBe('succeeded');
+
+    const evasiveCandidate = structuredClone(candidate);
+    evasiveCandidate.outcomePreparations[1].playerFacingStatement = 'The worker species cannot be reliably established.';
+    const rejectedPreparation = await executeLlmOperation(request('story.observation.prepare', 'typed-observation-evasive', preparationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => evasiveCandidate)],
+    });
+    expect(rejectedPreparation.status).toBe('review_required');
+    expect(rejectedPreparation.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_PREPARATION_EVASIVE_ANSWER');
+
+    const staleCandidate = { ...candidate, preparationFingerprint: 'c'.repeat(64) };
+    const rejectedStalePreparation = await executeLlmOperation(request('story.observation.prepare', 'typed-observation-stale-preparation', preparationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => staleCandidate)],
+    });
+    expect(rejectedStalePreparation.status).toBe('review_required');
+    expect(rejectedStalePreparation.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_PREPARATION_FINGERPRINT_MISMATCH');
+
+    const narrationPacket = {
+      schemaVersion: 'gma.current-scene-narration-packet/8',
+      immutable: { programId: 'program:observe', nodeId: 'node:observe', presentationFingerprint: 'b'.repeat(64) },
+      permittedStatements: [
+        { outcomeId: 'outcome:appearance', statement: 'The worker is broad-shouldered and wears a dark oilskin coat.', sourceRefs: ['observable:appearance'] },
+        { outcomeId: 'outcome:species', statement: 'By appearance, the worker is human.', sourceRefs: ['observable:species'] },
+      ],
+    };
+    const responseText = 'Through the rat’s eyes. The worker is broad-shouldered and wears a dark oilskin coat. By appearance, the worker is human.';
+    const narration = {
+      schemaVersion: 'gma.current-scene-narration-result/8', programId: 'program:observe', nodeId: 'node:observe', presentationFingerprint: 'b'.repeat(64), responseText,
+      presentationBindings: [
+        { outcomeId: 'outcome:appearance', permittedStatement: 'The worker is broad-shouldered and wears a dark oilskin coat.', narrationEvidence: 'The worker is broad-shouldered and wears a dark oilskin coat.' },
+        { outcomeId: 'outcome:species', permittedStatement: 'By appearance, the worker is human.', narrationEvidence: 'By appearance, the worker is human.' },
+      ],
+      materialClaims: [
+        { outcomeId: 'outcome:appearance', claimText: 'The worker is broad-shouldered and wears a dark oilskin coat.', sourceRefs: ['observable:appearance'] },
+        { outcomeId: 'outcome:species', claimText: 'By appearance, the worker is human.', sourceRefs: ['observable:species'] },
+      ],
+      rulesNote: null,
+    };
+    const acceptedNarration = await executeLlmOperation(request('story.current-scene.narrate', 'typed-observation-narration', narrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => narration)],
+    });
+    expect(acceptedNarration.status).toBe('succeeded');
+
+    const missingStatement = { ...narration, responseText: 'The rat moves closer.' };
+    const rejectedNarration = await executeLlmOperation(request('story.current-scene.narrate', 'typed-observation-narration-missing', narrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => missingStatement)],
+    });
+    expect(rejectedNarration.status).toBe('review_required');
+    expect(rejectedNarration.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_NARRATION_STATEMENT_MISMATCH');
+
+    const staleNarration = { ...narration, presentationFingerprint: 'd'.repeat(64) };
+    const rejectedStaleNarration = await executeLlmOperation(request('story.current-scene.narrate', 'typed-observation-narration-stale', narrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => staleNarration)],
+    });
+    expect(rejectedStaleNarration.status).toBe('review_required');
+    expect(rejectedStaleNarration.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_NARRATION_FINGERPRINT_MISMATCH');
   });
 
   it('accepts a complete flat Scene-kit repair without provider-hostile nesting', async () => {

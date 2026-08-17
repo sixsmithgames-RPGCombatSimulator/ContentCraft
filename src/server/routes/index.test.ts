@@ -7,6 +7,11 @@ import {
   STORY_OBLIGATION_CAPABILITIES,
 } from '../services/storyWorkspaceStore.js';
 import { COMPOUND_ACTION_CAPABILITIES, COMPOUND_ACTION_CONTRACTS } from '../services/compoundActionArtifactStore.js';
+import {
+  OBSERVATION_SAGA_CAPABILITIES,
+  OBSERVATION_SAGA_SHARED_CONTRACTS,
+  OBSERVATION_SAGA_SHARED_WRITER_BUNDLE_VERSION,
+} from '../services/observationAuthorityService.js';
 import { apiRouter } from './index.js';
 
 const servers: Server[] = [];
@@ -32,7 +37,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.10.6',
+      version: '1.11.0',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -62,6 +67,15 @@ describe('API health', () => {
           persistence: 'non_canonical_interaction',
           access: 'service_only',
           routeEnabled: false,
+        },
+        observationSaga: {
+          sharedWriterBundle: OBSERVATION_SAGA_SHARED_WRITER_BUNDLE_VERSION,
+          capabilities: OBSERVATION_SAGA_CAPABILITIES,
+          sharedContracts: OBSERVATION_SAGA_SHARED_CONTRACTS,
+          authority: 'gmc',
+          access: 'service_only',
+          routeEnabled: true,
+          conformance: true,
         },
       },
     });

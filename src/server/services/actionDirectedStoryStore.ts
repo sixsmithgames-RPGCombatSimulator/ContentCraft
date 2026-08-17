@@ -7,6 +7,7 @@ import {
   PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
   PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES,
   PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,
+  PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION,
   PLAYABLE_SCENE_CONTEXT_MAX_BYTES,
   readActiveStoryWorkspace,
   readStoryWorkspaceRevision,
@@ -15,6 +16,7 @@ import {
   SCENE_STORY_DESIGN_CONTRACT_VERSION,
   SCENE_KIT_V2_CONTRACT_VERSION,
   SCENE_KIT_CONTRACT_VERSION,
+  SCENE_KIT_V4_CONTRACT_VERSION,
   STORY_DELTA_MAX_BYTES,
   STORY_DELTA_V2_CONTRACT_VERSION,
   STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
@@ -420,7 +422,7 @@ function legacyExits(kit: JsonObject): JsonObject[] {
 
 /** Converts one legacy Scene kit without inventing cast, Story bindings, or outcomes. */
 export function projectLegacySceneKitV2(legacy: JsonObject, graph: JsonObject): JsonObject {
-  if ([SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(legacy.schemaVersion))) {
+  if ([SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(legacy.schemaVersion))) {
     validateSceneKit(legacy);
     return clone(legacy);
   }
@@ -839,7 +841,7 @@ function activeV2SceneKit(workspace: JsonObject): JsonObject | null {
   const activeId = String(workspace.activeSceneKitRef.sceneKitId ?? '');
   const kit = sceneKits(workspace).find((candidate) => candidate.sceneKitId === activeId);
   if (!kit) return null;
-  if (![SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(kit.schemaVersion))) {
+  if (![SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(kit.schemaVersion))) {
     return projectLegacySceneKitV2(kit, projectStoryGraphV2(workspace));
   }
   validateSceneKit(kit);
@@ -888,9 +890,11 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
     ?? beats[0];
   const availableBeats = beats.filter((beat) => beat.beatId !== activeBeat.beatId && beat.state === 'available').slice(0, 4);
   const participants = kit.participants as JsonObject;
-  const typedObservationAuthority = kit.schemaVersion === SCENE_KIT_CONTRACT_VERSION;
+  const typedObservationAuthority = [SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(kit.schemaVersion));
+  const boundedObservationAuthority = kit.schemaVersion === SCENE_KIT_V4_CONTRACT_VERSION;
   const context: JsonObject = {
-    schemaVersion: typedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION : PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
+    schemaVersion: boundedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION
+      : typedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION : PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
     sceneKitRef: sceneKitReference(String(workspace.campaignId), kit),
     playableLocus: clone(kit.playableLocus as JsonObject),
     presentActors: clone(participants.present as JsonValue[]),
@@ -914,6 +918,9 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
     ...(typedObservationAuthority ? {
       observables: clone((kit.observables as JsonValue[]).slice(0, 24)),
       obstructions: clone((kit.obstructions as JsonValue[]).slice(0, 16)),
+    } : {}),
+    ...(boundedObservationAuthority ? {
+      observationAccess: clone((kit.observationAccess as JsonValue[]).slice(0, 24)),
     } : {}),
     storyNodeSummaries: (kit.storyBindings as string[]).slice(0, 8).map((nodeId) => nodesById.get(nodeId)).filter((node): node is JsonObject => Boolean(node)).map((node) => ({
       nodeId: node.nodeId,
@@ -1048,7 +1055,7 @@ function committedStorySourceRefs(workspace: JsonObject): string[] {
     for (const beat of (Array.isArray(projected.beats) ? projected.beats : [])) {
       if (isObject(beat)) addTo(refs, beat.beatId);
     }
-    if (projected.schemaVersion === SCENE_KIT_CONTRACT_VERSION) {
+    if ([SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(projected.schemaVersion))) {
       for (const observable of (Array.isArray(projected.observables) ? projected.observables : [])) {
         if (!isObject(observable)) continue;
         addTo(refs, observable.observableId); addTo(refs, observable.subjectRef); addListTo(refs, observable.sourceRefs);
@@ -1063,12 +1070,19 @@ function committedStorySourceRefs(workspace: JsonObject): string[] {
         addTo(refs, obstruction.obstructionId); addListTo(refs, obstruction.subjectRefs); addListTo(refs, obstruction.sourceRefs);
         addListTo(refs, obstruction.observerRefs); addListTo(refs, obstruction.methodRefs);
       }
+      if (projected.schemaVersion === SCENE_KIT_V4_CONTRACT_VERSION) {
+        for (const access of (Array.isArray(projected.observationAccess) ? projected.observationAccess : [])) {
+          if (!isObject(access)) continue;
+          addTo(refs, access.accessId); addTo(refs, access.originViewpointRef); addTo(refs, access.candidateViewpointRef);
+          addTo(refs, access.pathRef); addListTo(refs, access.requiredCapabilityRefs); addListTo(refs, access.subjectRefs); addListTo(refs, access.sourceRefs);
+        }
+      }
     }
   };
   const graph = projectStoryGraphV2(workspace);
   const activeKitId = isObject(workspace.activeSceneKitRef) ? String(workspace.activeSceneKitRef.sceneKitId ?? '') : '';
   const kits = sceneKits(workspace).map((kit) => (
-    [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(kit.schemaVersion))
+    [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(kit.schemaVersion))
       ? kit
       : projectLegacySceneKitV2(kit, graph)
   ));
@@ -1165,6 +1179,9 @@ function validateAuthorityReceipts(envelope: SceneHandoffAuthorityEnvelope, prop
 function assertSceneKitAuthority(proposal: JsonObject, graph: JsonObject, sourceReceipts: Map<string, SourceAuthorityReceipt>): void {
   const handoff = proposal.handoff as JsonObject;
   const kit = handoff.sceneKit as JsonObject;
+  if (kit.schemaVersion === SCENE_KIT_V4_CONTRACT_VERSION) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_AUTHORITY_ROUTE_REQUIRED', 'A version 4 Scene kit requires the reciprocal observation-authority commit route.', {});
+  }
   if (kit.planningState !== 'active') throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_NOT_ACTIVE', 'An accepted handoff must establish an active Scene kit.', { field: 'proposal.handoff.sceneKit.planningState' });
   const proposalSources = new Set(proposal.sourceRefs as string[]);
   const locus = kit.playableLocus as JsonObject;
@@ -1376,7 +1393,7 @@ export async function commitSceneHandoff(
   assertSceneKitAuthority(proposal, graph, authorityReceipts.sources);
   const proposedDesign = isObject(handoff.storyDesign) ? clone(handoff.storyDesign as JsonObject) : null;
   if (proposedDesign) assertSceneStoryDesignAuthority(proposedDesign, proposedKit, graph, authorityReceipts.sources);
-  const kits = sceneKits(workspace).map((kit) => [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION].includes(String(kit.schemaVersion)) ? clone(kit) : projectLegacySceneKitV2(kit, graph));
+  const kits = sceneKits(workspace).map((kit) => [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(kit.schemaVersion)) ? clone(kit) : projectLegacySceneKitV2(kit, graph));
   const existingIndex = kits.findIndex((kit) => kit.sceneKitId === proposedKit.sceneKitId);
   const existing = existingIndex >= 0 ? kits[existingIndex] : null;
   validateHandoffMode(String(handoff.mode) as HandoffMode, proposedKit, current, existing);

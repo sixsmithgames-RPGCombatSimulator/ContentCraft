@@ -17,9 +17,12 @@ export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
 export const COMPOUND_ACTION_CONTRACTS = Object.freeze({
   playerInstructionArtifact: 'gma.player-instruction-artifact/1',
   semanticActionProgram: 'gma.semantic-action-program/2',
+  semanticActionProgramV4: 'gma.semantic-action-program/4',
   actionFeasibility: 'gma.action-feasibility/1',
   actionExecutionSlice: 'gma.action-execution-slice/1',
   actionExecutionReceipt: 'gma.action-execution-receipt/1',
+  actionExecutionReceiptV2: 'gma.action-execution-receipt/2',
+  actionSaga: 'gma.action-saga/1',
   actionProgramCursor: 'gma.action-program-cursor/1',
   actionDirectedStoryRepair: 'gma.action-directed-story-repair/4',
 });
@@ -29,8 +32,10 @@ export const COMPOUND_ACTION_LIMITS = Object.freeze({
   dependencyMaximum: 12,
   dataRequirementMaximum: 16,
   programMaximumBytes: 16_384,
+  observationProgramMaximumBytes: 24_576,
   cursorMaximumBytes: 16_384,
   receiptMaximumBytes: 4_096,
+  observationReceiptMaximumBytes: 24_576,
   receiptMaximum: 16,
   clarificationMaximum: 8,
 });
@@ -58,6 +63,7 @@ export interface CompoundActionArtifactRevisionDocument {
   receipts: JsonObject[];
   clarifications: JsonObject[];
   rootFailure: JsonObject | null;
+  saga?: JsonObject | null;
   timelineAnchor: { messageId: string; sequence: number } | null;
   createdAt: Date;
   supersededAt?: Date;
@@ -164,6 +170,11 @@ function validateInstruction(instruction: unknown): asserts instruction is JsonO
   }
 }
 
+function requiredOwnerRevision(value: unknown, field: string): number | string {
+  if (Number.isSafeInteger(value) && Number(value) >= 0) return Number(value);
+  return requiredString(value, field, 240);
+}
+
 /**
  * Persists the immutable player bytes before semantic interpretation. This
  * staging record is deliberately separate from the program/cursor artifact so
@@ -221,7 +232,7 @@ export async function readStagedCompoundActionInstruction(input: {
 }
 
 function validateProgram(program: unknown, instruction: JsonObject): asserts program is JsonObject {
-  if (!isObject(program) || program.schemaVersion !== COMPOUND_ACTION_CONTRACTS.semanticActionProgram) {
+  if (!isObject(program) || ![COMPOUND_ACTION_CONTRACTS.semanticActionProgram, COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4].includes(String(program.schemaVersion) as typeof COMPOUND_ACTION_CONTRACTS.semanticActionProgram)) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The semantic action program is invalid.', {});
   }
   requiredString(program.programId, 'program.programId');
@@ -236,6 +247,7 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The semantic action program node count is outside its bound.', {});
   }
   const seen = new Set<string>();
+  const nodesById = new Map<string, JsonObject>();
   let dependencies = 0;
   let requirements = 0;
   for (const [index, nodeValue] of nodes.entries()) {
@@ -250,12 +262,116 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
     }
     dependencies += dependsOn.length;
     requirements += Array.isArray(nodeValue.dataRequirements) ? nodeValue.dataRequirements.length : 0;
+    nodesById.set(nodeId, nodeValue);
     seen.add(nodeId);
   }
+  if (program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4) {
+    const dependsTransitively = (node: JsonObject, ancestorRef: string, visiting = new Set<string>()): boolean => {
+      const nodeId = String(node.nodeId);
+      if (visiting.has(nodeId)) return false;
+      visiting.add(nodeId);
+      const direct = Array.isArray(node.dependsOn) ? node.dependsOn.map(String) : [];
+      return direct.includes(ancestorRef) || direct.some((ref) => {
+        const parent = nodesById.get(ref);
+        return parent ? dependsTransitively(parent, ancestorRef, visiting) : false;
+      });
+    };
+    for (const [nodeId, node] of nodesById) {
+      if (node.observationPrerequisite === undefined || node.observationPrerequisite === null) continue;
+      const prerequisite = node.observationPrerequisite;
+      if (!isObject(prerequisite) || prerequisite.schemaVersion !== 'gma.observation-prerequisite/1'
+        || !['gmc', 'vcs'].includes(String(prerequisite.owner))
+        || ![['gmc', 'establish_observer_viewpoint'], ['vcs', 'activate_familiar_form']]
+          .some(([owner, operation]) => prerequisite.owner === owner && prerequisite.operationKind === operation)) {
+        throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An observation prerequisite has an unsupported owner operation.', { nodeId });
+      }
+      const dependentRefs = Array.isArray(prerequisite.dependentObservationNodeRefs) ? prerequisite.dependentObservationNodeRefs : [];
+      const groupRefs = Array.isArray(prerequisite.groupRefs) ? prerequisite.groupRefs : [];
+      if (!dependentRefs.length || !groupRefs.length || dependentRefs.some((ref) => typeof ref !== 'string') || groupRefs.some((ref) => typeof ref !== 'string')) {
+        throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An observation prerequisite must bind dependent observation nodes and groups.', { nodeId });
+      }
+      for (const dependentRef of dependentRefs) {
+        const dependent = nodesById.get(String(dependentRef));
+        const groups = Array.isArray(dependent?.observationGroups) ? dependent.observationGroups : [];
+        const availableGroups = new Set(groups.filter(isObject).map((group) => String(group.groupId)));
+        if (!dependent || !dependsTransitively(dependent, nodeId) || groupRefs.some((ref) => !availableGroups.has(String(ref)))) {
+          throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An observation prerequisite must bind real downstream observation groups.', { nodeId, dependentRef });
+        }
+      }
+    }
+  }
+  const programMaximumBytes = program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4
+    ? COMPOUND_ACTION_LIMITS.observationProgramMaximumBytes
+    : COMPOUND_ACTION_LIMITS.programMaximumBytes;
   if (dependencies > COMPOUND_ACTION_LIMITS.dependencyMaximum || requirements > COMPOUND_ACTION_LIMITS.dataRequirementMaximum
-    || byteLength(program) > COMPOUND_ACTION_LIMITS.programMaximumBytes) {
+    || byteLength(program) > programMaximumBytes) {
     throw new StoryWorkspaceStoreError(413, 'COMPOUND_ACTION_PROGRAM_TOO_LARGE', 'The semantic action program exceeds its bounded storage contract.', {});
   }
+}
+
+function validateSaga(saga: unknown, instruction: JsonObject, program: JsonObject, cursor: JsonObject): JsonObject | null {
+  const v4 = program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4;
+  if (!v4 && (saga === undefined || saga === null)) return null;
+  if (!isObject(saga) || saga.schemaVersion !== COMPOUND_ACTION_CONTRACTS.actionSaga
+    || saga.programId !== program.programId || saga.interactionId !== instruction.interactionId
+    || saga.instructionFingerprint !== instruction.instructionFingerprint) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The action saga is not bound to this exact interaction.', {});
+  }
+  requiredString(saga.sagaId, 'saga.sagaId');
+  requiredString(saga.rewindLineageId, 'saga.rewindLineageId');
+  const artifactRevision = requiredRevision(saga.artifactRevision, 'saga.artifactRevision');
+  const cursorRevision = requiredRevision(saga.cursorRevision, 'saga.cursorRevision');
+  if (artifactRevision !== cursor.revision || cursorRevision !== cursor.revision) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_SAGA_REVISION_CONFLICT', 'The action saga and cursor revisions must settle together.', {});
+  const foreground = requiredRevision(saga.foregroundModelOperationCount, 'saga.foregroundModelOperationCount');
+  if (foreground > 4) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_MODEL_OPERATION_LIMIT', 'The action saga exceeded its foreground model-operation limit.', {});
+  const operations = Array.isArray(saga.operations) ? saga.operations : [];
+  if (operations.length > 32) throw new StoryWorkspaceStoreError(413, 'COMPOUND_ACTION_SAGA_TOO_LARGE', 'The action saga contains too many owner operations.', {});
+  const operationIds = new Set<string>();
+  const operationKeys = new Set<string>();
+  for (const [index, operation] of operations.entries()) {
+    if (!isObject(operation)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'An action saga operation is invalid.', { index });
+    const operationId = requiredString(operation.operationId, `saga.operations.${index}.operationId`);
+    const operationKey = requiredString(operation.idempotencyKey, `saga.operations.${index}.idempotencyKey`);
+    const requestFingerprint = requiredString(operation.requestFingerprint, `saga.operations.${index}.requestFingerprint`, 64);
+    if (!/^[a-f0-9]{64}$/.test(requestFingerprint)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'An action saga request fingerprint must be SHA-256.', { index });
+    if (!['gmc', 'vcs'].includes(String(operation.owner))) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'An action saga operation owner is unsupported.', { index });
+    requiredString(operation.operationKind, `saga.operations.${index}.operationKind`, 80);
+    requiredOwnerRevision(operation.expectedOwnerRevision, `saga.operations.${index}.expectedOwnerRevision`);
+    requiredRevision(operation.attemptCount, `saga.operations.${index}.attemptCount`);
+    requiredRevision(operation.reconciliationCount, `saga.operations.${index}.reconciliationCount`);
+    if (!['checkpointed', 'dispatching', 'outcome_unknown', 'committed', 'confirmed_absent', 'failed'].includes(String(operation.disposition))) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'An action saga operation has an unsupported disposition.', { index });
+    requiredString(operation.statusLookupMethod, `saga.operations.${index}.statusLookupMethod`, 80);
+    if (!Array.isArray(operation.dependencyReceiptRefs) || operation.dependencyReceiptRefs.length > 32) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'An action saga operation has invalid dependency receipts.', { index });
+    for (const [receiptIndex, receiptRef] of operation.dependencyReceiptRefs.entries()) requiredString(receiptRef, `saga.operations.${index}.dependencyReceiptRefs.${receiptIndex}`);
+    if (operation.receiptRef !== null && operation.receiptRef !== undefined) requiredString(operation.receiptRef, `saga.operations.${index}.receiptRef`);
+    if (operation.resultingRevision !== null && operation.resultingRevision !== undefined) requiredOwnerRevision(operation.resultingRevision, `saga.operations.${index}.resultingRevision`);
+    if (operation.disposition === 'committed' && (operation.receiptRef == null || operation.resultingRevision == null)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'A committed action saga operation requires its owner receipt and resulting revision.', { index });
+    if (operationIds.has(operationId) || operationKeys.has(operationKey)) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_SAGA_OPERATION_DUPLICATE', 'Action saga operation identifiers and idempotency keys must be unique.', { index });
+    operationIds.add(operationId); operationKeys.add(operationKey);
+  }
+  for (const field of ['acceptedOwnerReceiptRefs', 'acceptedModelCandidateRefs']) {
+    if (!Array.isArray(saga[field]) || saga[field].length > 64 || saga[field].some((value) => typeof value !== 'string')) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The action saga contains an invalid bounded reference set.', { field });
+  }
+  if (saga.pendingModelCandidate !== null && saga.pendingModelCandidate !== undefined) {
+    const pending = saga.pendingModelCandidate;
+    if (!isObject(pending) || pending.schemaVersion !== 'gma.accepted-model-candidate/1'
+      || !['observation_preparation', 'observation_narration'].includes(String(pending.kind))
+      || !isObject(pending.candidate)) {
+      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The pending accepted model candidate is invalid.', {});
+    }
+    requiredString(pending.operationKey, 'saga.pendingModelCandidate.operationKey');
+    const inputFingerprint = requiredString(pending.inputFingerprint, 'saga.pendingModelCandidate.inputFingerprint', 64);
+    const candidateFingerprint = requiredString(pending.candidateFingerprint, 'saga.pendingModelCandidate.candidateFingerprint', 64);
+    if (!/^[a-f0-9]{64}$/.test(inputFingerprint) || !/^[a-f0-9]{64}$/.test(candidateFingerprint)
+      || candidateFingerprint !== sha256(canonicalJson(pending.candidate))
+      || !(saga.acceptedModelCandidateRefs as JsonValue[]).includes(candidateFingerprint)
+      || byteLength(pending) > 20_480) {
+      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The pending accepted model candidate does not match its durable fingerprint.', {});
+    }
+  }
+  if (!isObject(saga.presentationSettlement) || !['unsettled', 'settled'].includes(String(saga.presentationSettlement.state))) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The action saga presentation settlement is invalid.', {});
+  if (byteLength(saga) > 32_768) throw new StoryWorkspaceStoreError(413, 'COMPOUND_ACTION_SAGA_TOO_LARGE', 'The action saga exceeds its bounded storage contract.', {});
+  return structuredClone(saga);
 }
 
 function validateCursor(cursor: unknown, program: JsonObject, expectedRevision?: number): asserts cursor is JsonObject {
@@ -294,12 +410,16 @@ function validateReceipts(receipts: unknown[], program: JsonObject): JsonObject[
   const nodeIds = new Set((program.nodes as JsonObject[]).map((node) => String(node.nodeId)));
   const receiptIds = new Set<string>();
   return receipts.map((receiptValue) => {
-    if (!isObject(receiptValue) || receiptValue.schemaVersion !== COMPOUND_ACTION_CONTRACTS.actionExecutionReceipt
+    const expectedReceiptVersion = program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4
+      ? COMPOUND_ACTION_CONTRACTS.actionExecutionReceiptV2 : COMPOUND_ACTION_CONTRACTS.actionExecutionReceipt;
+    if (!isObject(receiptValue) || receiptValue.schemaVersion !== expectedReceiptVersion
       || receiptValue.programId !== program.programId || !nodeIds.has(String(receiptValue.nodeId))) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_RECEIPT_INVALID', 'An action execution receipt is invalid for this program.', {});
     }
     const receiptId = requiredString(receiptValue.receiptId, 'receipt.receiptId');
-    if (receiptIds.has(receiptId) || byteLength(receiptValue) > COMPOUND_ACTION_LIMITS.receiptMaximumBytes) {
+    const receiptMaximumBytes = expectedReceiptVersion === COMPOUND_ACTION_CONTRACTS.actionExecutionReceiptV2
+      ? COMPOUND_ACTION_LIMITS.observationReceiptMaximumBytes : COMPOUND_ACTION_LIMITS.receiptMaximumBytes;
+    if (receiptIds.has(receiptId) || byteLength(receiptValue) > receiptMaximumBytes) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_RECEIPT_INVALID', 'Action execution receipts must be unique and bounded.', { receiptId });
     }
     receiptIds.add(receiptId);
@@ -329,7 +449,7 @@ function reference(document: CompoundActionArtifactRevisionDocument) {
 }
 
 function payload(document: Pick<CompoundActionArtifactRevisionDocument,
-  'instruction' | 'program' | 'cursor' | 'receipts' | 'clarifications' | 'rootFailure' | 'timelineAnchor'>): JsonObject {
+  'instruction' | 'program' | 'cursor' | 'receipts' | 'clarifications' | 'rootFailure' | 'timelineAnchor' | 'saga'>): JsonObject {
   return {
     instruction: document.instruction,
     program: document.program,
@@ -337,6 +457,7 @@ function payload(document: Pick<CompoundActionArtifactRevisionDocument,
     receipts: document.receipts,
     clarifications: document.clarifications,
     rootFailure: document.rootFailure,
+    saga: document.saga ?? null,
     timelineAnchor: document.timelineAnchor,
   };
 }
@@ -369,6 +490,7 @@ export async function createCompoundActionArtifact(input: {
   program: JsonObject;
   cursor: JsonObject;
   clarifications?: JsonObject[];
+  saga?: JsonObject;
   timelineAnchor?: { messageId: string; sequence: number } | null;
 }, records: CompoundActionArtifactCollection = artifactCollection()) {
   requiredString(input.userId, 'userId');
@@ -382,11 +504,12 @@ export async function createCompoundActionArtifact(input: {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_CLARIFICATION_INVALID', 'The interaction clarification state is invalid.', {});
   }
   const timelineAnchor = validateTimelineAnchor(input.timelineAnchor);
+  const saga = validateSaga(input.saga, input.instruction, input.program, input.cursor);
   const draft = {
     instruction: structuredClone(input.instruction),
     program: structuredClone(input.program),
     cursor: structuredClone(input.cursor),
-    receipts: [] as JsonObject[], clarifications: structuredClone(clarifications), rootFailure: null, timelineAnchor,
+    receipts: [] as JsonObject[], clarifications: structuredClone(clarifications), rootFailure: null, saga, timelineAnchor,
   };
   const requestHash = sha256(canonicalJson(draft));
   const duplicate = await duplicateForKey(records, input.userId, input.campaignId, input.idempotencyKey, requestHash);
@@ -426,6 +549,7 @@ export async function advanceCompoundActionArtifact(input: {
   appendReceipts?: JsonObject[];
   clarifications?: JsonObject[];
   rootFailure?: JsonObject | null;
+  saga?: JsonObject;
 }, records: CompoundActionArtifactCollection = artifactCollection()) {
   const priorReplay = await records.findOne({ userId: input.userId, campaignId: input.campaignId, idempotencyKey: input.idempotencyKey });
   if (priorReplay) {
@@ -436,6 +560,7 @@ export async function advanceCompoundActionArtifact(input: {
       && (input.program === undefined || canonicalJson(priorReplay.program) === canonicalJson(input.program))
       && (input.clarifications === undefined || canonicalJson(priorReplay.clarifications) === canonicalJson(input.clarifications))
       && (input.rootFailure === undefined || canonicalJson(priorReplay.rootFailure) === canonicalJson(input.rootFailure))
+      && (input.saga === undefined || canonicalJson(priorReplay.saga ?? null) === canonicalJson(input.saga))
       && receiptsMatch;
     if (!matches) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_IDEMPOTENCY_CONFLICT', 'The idempotency key was already used for a different interaction artifact write.', {});
     return { artifactRef: reference(priorReplay), duplicate: true };
@@ -462,9 +587,11 @@ export async function advanceCompoundActionArtifact(input: {
   if (!Array.isArray(clarifications) || clarifications.length > COMPOUND_ACTION_LIMITS.clarificationMaximum || clarifications.some((value) => !isObject(value))) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_CLARIFICATION_INVALID', 'The interaction clarification state is invalid.', {});
   }
+  const saga = validateSaga(input.saga === undefined ? active.saga : input.saga, active.instruction, program, input.cursor);
   const draft = {
     instruction: active.instruction, program: structuredClone(program), cursor: structuredClone(input.cursor), receipts,
     clarifications: structuredClone(clarifications), rootFailure: input.rootFailure === undefined ? active.rootFailure : input.rootFailure,
+    saga,
     timelineAnchor: active.timelineAnchor,
   };
   const requestHash = sha256(canonicalJson({ expectedRevision: input.expectedRevision, ...draft }));
@@ -489,6 +616,86 @@ export async function advanceCompoundActionArtifact(input: {
     $set: { status: 'superseded', supersededAt: new Date() },
   });
   return { artifactRef: reference(document), duplicate: false };
+}
+
+/** Atomically stores the final execution receipt, saga settlement, and cursor advance. */
+export async function settleCompoundActionArtifact(input: {
+  userId: string;
+  campaignId: string;
+  programId: string;
+  expectedRevision: number;
+  idempotencyKey: string;
+  cursor: JsonObject;
+  executionReceipt: JsonObject;
+  saga: JsonObject;
+}, records: CompoundActionArtifactCollection = artifactCollection()) {
+  if (input.executionReceipt.schemaVersion !== COMPOUND_ACTION_CONTRACTS.actionExecutionReceiptV2
+    || input.saga.schemaVersion !== COMPOUND_ACTION_CONTRACTS.actionSaga
+    || !isObject(input.saga.presentationSettlement)
+    || input.saga.presentationSettlement.state !== 'settled') {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SETTLEMENT_INVALID', 'The presentation receipt and action saga are not ready to settle together.', {});
+  }
+  if (input.executionReceipt.programId !== input.programId
+    || input.saga.programId !== input.programId
+    || input.saga.presentationSettlement.receiptRef !== input.executionReceipt.receiptId) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SETTLEMENT_INVALID', 'The presentation settlement is not bound to this execution receipt.', {});
+  }
+  const settlementOperations = Array.isArray(input.saga.operations)
+    ? input.saga.operations.filter((operation) => isObject(operation) && operation.operationKind === 'settle_observation_presentation')
+    : [];
+  const settlementOperation = settlementOperations[0];
+  if (settlementOperations.length !== 1 || !isObject(settlementOperation)
+    || settlementOperation.owner !== 'gmc'
+    || settlementOperation.disposition !== 'committed'
+    || settlementOperation.idempotencyKey !== input.idempotencyKey
+    || settlementOperation.receiptRef !== input.executionReceipt.receiptId
+    || Number(settlementOperation.expectedOwnerRevision) !== input.expectedRevision
+    || Number(settlementOperation.resultingRevision) !== Number(input.cursor.revision)) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SETTLEMENT_INVALID', 'The presentation settlement is missing its exact committed artifact operation.', {});
+  }
+  return advanceCompoundActionArtifact({
+    userId: input.userId,
+    campaignId: input.campaignId,
+    programId: input.programId,
+    expectedRevision: input.expectedRevision,
+    idempotencyKey: input.idempotencyKey,
+    cursor: input.cursor,
+    appendReceipts: [input.executionReceipt],
+    saga: input.saga,
+  }, records);
+}
+
+export async function readCompoundActionOperationStatus(input: {
+  userId: string;
+  campaignId: string;
+  programId: string;
+  operationId: string;
+}, records: CompoundActionArtifactCollection = artifactCollection()) {
+  const operationId = requiredString(input.operationId, 'operationId');
+  const document = await records.findOne({
+    userId: input.userId,
+    campaignId: input.campaignId,
+    programId: input.programId,
+    'saga.operations.operationId': operationId,
+  } as Filter<CompoundActionArtifactRevisionDocument>, { sort: { revision: -1 } });
+  const operation = document?.saga && Array.isArray(document.saga.operations)
+    ? document.saga.operations.find((candidate) => isObject(candidate) && candidate.operationId === operationId)
+    : null;
+  return operation && isObject(operation) ? {
+    schemaVersion: 'gmc.action-saga-operation-status/1',
+    programId: input.programId,
+    operationId,
+    artifactRevision: document?.revision,
+    disposition: operation.disposition,
+    receiptRef: operation.receiptRef ?? null,
+    resultingRevision: operation.resultingRevision ?? null,
+    requestFingerprint: operation.requestFingerprint,
+  } : {
+    schemaVersion: 'gmc.action-saga-operation-status/1',
+    programId: input.programId,
+    operationId,
+    disposition: 'unresolved',
+  };
 }
 
 export async function tombstoneCompoundActionArtifact(input: {

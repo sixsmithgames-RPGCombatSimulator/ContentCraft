@@ -248,6 +248,135 @@ registerSemanticValidator('story-scene-readiness', ({ output }) => {
   return result('story-scene-readiness', issues);
 });
 
+function sameStringSet(actual: unknown, expected: unknown): boolean {
+  if (!Array.isArray(actual) || !Array.isArray(expected)) return false;
+  const left = [...new Set(actual.map(String))].sort();
+  const right = [...new Set(expected.map(String))].sort();
+  return left.length === actual.length && JSON.stringify(left) === JSON.stringify(right);
+}
+
+registerSemanticValidator('observation-preparation-contract', ({ request, output }) => {
+  const issues: Array<{ code: string; message: string; path?: string }> = [];
+  const packet = request.context?.input?.value as any;
+  if (output?.schemaVersion === 'gma.observation-preparation-result/1') {
+    if (!output?.proposal) issues.push({ code: 'OBSERVATION_PREPARATION_PROPOSAL_REQUIRED', message: 'The legacy observation preparation result requires a proposal.', path: '/proposal' });
+    return result('observation-preparation-contract', issues);
+  }
+  if (output?.schemaVersion !== 'gma.observation-authority-preparation-candidate/1') {
+    issues.push({ code: 'OBSERVATION_PREPARATION_VERSION_UNSUPPORTED', message: 'The observation preparation result version is unsupported.', path: '/schemaVersion' });
+    return result('observation-preparation-contract', issues);
+  }
+  if (packet?.schemaVersion !== 'gma.observation-authority-preparation-packet/1') {
+    issues.push({ code: 'OBSERVATION_PREPARATION_PACKET_MISMATCH', message: 'The candidate requires the matching typed observation preparation packet.' });
+    return result('observation-preparation-contract', issues);
+  }
+  if (String(output?.programId ?? '') !== String(packet?.immutable?.programId ?? '') || String(output?.nodeId ?? '') !== String(packet?.immutable?.nodeId ?? '')) {
+    issues.push({ code: 'OBSERVATION_PREPARATION_SCOPE_MISMATCH', message: 'The candidate changed the saved program or node identity.', path: '/programId' });
+  }
+  if (String(output?.preparationFingerprint ?? '') !== String(packet?.immutable?.preparationFingerprint ?? '')) {
+    issues.push({ code: 'OBSERVATION_PREPARATION_FINGERPRINT_MISMATCH', message: 'The candidate does not belong to this exact owner snapshot.', path: '/preparationFingerprint' });
+  }
+  const expectedGroups = new Map((Array.isArray(packet?.groups) ? packet.groups : []).map((entry: any) => [String(entry?.groupId ?? ''), entry]));
+  const groupRows = Array.isArray(output?.groupPreparations) ? output.groupPreparations : [];
+  if (!sameStringSet(groupRows.map((entry: any) => entry?.groupId), [...expectedGroups.keys()])) {
+    issues.push({ code: 'OBSERVATION_PREPARATION_GROUP_COVERAGE', message: 'The candidate must prepare every supplied observer group exactly once.', path: '/groupPreparations' });
+  }
+  const groupById = new Map(groupRows.map((entry: any) => [String(entry?.groupId ?? ''), entry]));
+  for (const [groupId, expected] of expectedGroups.entries()) {
+    const row = groupById.get(groupId) as any;
+    const allowedModalities = (expected as any)?.availableModalities ?? [];
+    if (row && (!sameStringSet(row.availableModalities, row.availableModalities) || row.availableModalities.some((entry: any) => !allowedModalities.includes(entry)))) {
+      issues.push({ code: 'OBSERVATION_PREPARATION_MODALITY_MISMATCH', message: 'A group used a modality not confirmed for that observer.', path: '/groupPreparations' });
+    }
+    if (row && ['familiar', 'sensor'].includes(String((expected as any)?.observer?.actorKind ?? '')) && row.accessMode !== 'remote_sensor') {
+      issues.push({ code: 'OBSERVATION_PREPARATION_VIEWPOINT_MISMATCH', message: 'A familiar or sensor must retain its remote viewpoint.', path: '/groupPreparations' });
+    }
+  }
+  const expectedOutcomes = new Map((Array.isArray(packet?.groups) ? packet.groups : []).flatMap((group: any) => (group?.outcomes ?? []).map((entry: any) => [String(entry?.outcomeId ?? ''), { ...entry, groupId: group.groupId }])));
+  const outcomeRows = Array.isArray(output?.outcomePreparations) ? output.outcomePreparations : [];
+  if (!sameStringSet(outcomeRows.map((entry: any) => entry?.outcomeId), [...expectedOutcomes.keys()])) {
+    issues.push({ code: 'OBSERVATION_PREPARATION_OUTCOME_COVERAGE', message: 'The candidate must answer every supplied outcome exactly once.', path: '/outcomePreparations' });
+  }
+  const evasive = /\b(?:cannot|can't|could not|unable|unclear|unknown|undetermined|not reliably|cannot reliably|too indistinct)\b/i;
+  for (const [index, row] of outcomeRows.entries()) {
+    const expected = expectedOutcomes.get(String(row?.outcomeId ?? '')) as any;
+    if (row?.resultKind === 'observed' && evasive.test(String(row?.playerFacingStatement ?? ''))) {
+      issues.push({ code: 'OBSERVATION_PREPARATION_EVASIVE_ANSWER', message: 'An observed outcome must state the concrete perceivable answer.', path: `/outcomePreparations/${index}/playerFacingStatement` });
+    }
+    if (expected?.facet === 'apparent_classification' && row?.value?.kind !== 'classification') {
+      issues.push({ code: 'OBSERVATION_PREPARATION_CLASSIFICATION_MISMATCH', message: 'Apparent classification must remain distinct from identity.', path: `/outcomePreparations/${index}/value/kind` });
+    }
+    if (row?.mechanicRef !== null || row?.accessCondition === 'mechanics_required') {
+      issues.push({ code: 'OBSERVATION_PREPARATION_MECHANICS_FORBIDDEN', message: 'A preparation proposal cannot select or create a mechanic.', path: `/outcomePreparations/${index}/mechanicRef` });
+    }
+    const group = groupById.get(String(expected?.groupId ?? '')) as any;
+    if (group && !group.availableModalities?.includes(row?.modality)) {
+      issues.push({ code: 'OBSERVATION_PREPARATION_OUTCOME_MODALITY_MISMATCH', message: 'An outcome used a modality outside its observer group.', path: `/outcomePreparations/${index}/modality` });
+    }
+  }
+  const expectedObservableUpgrades = (packet?.currentScene?.existingObservables ?? []).filter((entry: any) => entry?.hasV4Fields !== true).map((entry: any) => entry?.observableId);
+  if (!sameStringSet((output?.existingObservableUpgrades ?? []).map((entry: any) => entry?.observableId), expectedObservableUpgrades)) {
+    issues.push({ code: 'OBSERVATION_PREPARATION_OBSERVABLE_UPGRADE_COVERAGE', message: 'Every supplied legacy observable must be upgraded exactly once.', path: '/existingObservableUpgrades' });
+  }
+  const expectedObstructionUpgrades = (packet?.currentScene?.existingObstructions ?? []).filter((entry: any) => entry?.hasV4Fields !== true).map((entry: any) => entry?.obstructionId);
+  if (!sameStringSet((output?.existingObstructionUpgrades ?? []).map((entry: any) => entry?.obstructionId), expectedObstructionUpgrades)) {
+    issues.push({ code: 'OBSERVATION_PREPARATION_OBSTRUCTION_UPGRADE_COVERAGE', message: 'Every supplied legacy obstruction must be upgraded exactly once.', path: '/existingObstructionUpgrades' });
+  }
+  const allowedSourceRefs = new Set((packet?.currentScene?.sourceRefs ?? []).map(String));
+  for (const [index, row] of (Array.isArray(output?.obstructions) ? output.obstructions : []).entries()) {
+    const evidence = [...(row?.sourceRefs ?? []), ...(row?.provenanceReceiptRefs ?? [])].map(String);
+    if (!evidence.length || evidence.some((entry) => !allowedSourceRefs.has(entry))) {
+      issues.push({ code: 'OBSERVATION_PREPARATION_OBSTRUCTION_UNGROUNDED', message: 'A blocker must cite only preexisting current-Scene evidence.', path: `/obstructions/${index}` });
+    }
+  }
+  return result('observation-preparation-contract', issues);
+});
+
+registerSemanticValidator('observation-narration-contract', ({ request, output }) => {
+  const issues: Array<{ code: string; message: string; path?: string }> = [];
+  const packet = request.context?.input?.value as any;
+  if (output?.schemaVersion !== 'gma.current-scene-narration-result/8') {
+    const required = ['responseMode', 'rollRequest', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority'];
+    for (const field of required) if (!Object.prototype.hasOwnProperty.call(output ?? {}, field)) {
+      issues.push({ code: 'CURRENT_SCENE_LEGACY_FIELD_REQUIRED', message: `The compatible current-scene result requires '${field}'.`, path: `/${field}` });
+    }
+    return result('observation-narration-contract', issues);
+  }
+  if (packet?.schemaVersion !== 'gma.current-scene-narration-packet/8') {
+    issues.push({ code: 'OBSERVATION_NARRATION_PACKET_MISMATCH', message: 'The narration result requires the matching settled-observation packet.' });
+    return result('observation-narration-contract', issues);
+  }
+  if (String(output?.programId ?? '') !== String(packet?.immutable?.programId ?? '') || String(output?.nodeId ?? '') !== String(packet?.immutable?.nodeId ?? '')) {
+    issues.push({ code: 'OBSERVATION_NARRATION_SCOPE_MISMATCH', message: 'The narration changed the saved program or node identity.', path: '/programId' });
+  }
+  if (String(output?.presentationFingerprint ?? '') !== String(packet?.immutable?.presentationFingerprint ?? '')) {
+    issues.push({ code: 'OBSERVATION_NARRATION_FINGERPRINT_MISMATCH', message: 'The narration does not belong to this exact settled owner read set.', path: '/presentationFingerprint' });
+  }
+  const permitted = new Map((packet?.permittedStatements ?? []).map((entry: any) => [String(entry?.outcomeId ?? ''), entry]));
+  const bindings = Array.isArray(output?.presentationBindings) ? output.presentationBindings : [];
+  if (!sameStringSet(bindings.map((entry: any) => entry?.outcomeId), [...permitted.keys()])) {
+    issues.push({ code: 'OBSERVATION_NARRATION_BINDING_COVERAGE', message: 'The narration must bind every resolved outcome exactly once.', path: '/presentationBindings' });
+  }
+  const responseText = String(output?.responseText ?? '');
+  for (const [index, binding] of bindings.entries()) {
+    const expected = permitted.get(String(binding?.outcomeId ?? '')) as any;
+    if (!expected || binding?.permittedStatement !== expected.statement || !responseText.includes(String(binding?.permittedStatement ?? '')) || !String(binding?.narrationEvidence ?? '').includes(String(binding?.permittedStatement ?? '')) || !responseText.includes(String(binding?.narrationEvidence ?? ''))) {
+      issues.push({ code: 'OBSERVATION_NARRATION_STATEMENT_MISMATCH', message: 'The player response must contain the exact permitted statement for each outcome.', path: `/presentationBindings/${index}` });
+    }
+  }
+  const claims = Array.isArray(output?.materialClaims) ? output.materialClaims : [];
+  if (!sameStringSet(claims.map((entry: any) => entry?.outcomeId), [...permitted.keys()])) {
+    issues.push({ code: 'OBSERVATION_NARRATION_CLAIM_COVERAGE', message: 'The narration must return one exact material claim per outcome.', path: '/materialClaims' });
+  }
+  for (const [index, claim] of claims.entries()) {
+    const expected = permitted.get(String(claim?.outcomeId ?? '')) as any;
+    if (!expected || claim?.claimText !== expected.statement || !responseText.includes(String(claim?.claimText ?? '')) || !sameStringSet(claim?.sourceRefs, expected?.sourceRefs)) {
+      issues.push({ code: 'OBSERVATION_NARRATION_CLAIM_MISMATCH', message: 'A material claim must reproduce only the exact settled statement and source refs.', path: `/materialClaims/${index}` });
+    }
+  }
+  return result('observation-narration-contract', issues);
+});
+
 const validateStorySceneKitRepair = new Ajv({ allErrors: true, strict: false })
   .compile(STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA);
 

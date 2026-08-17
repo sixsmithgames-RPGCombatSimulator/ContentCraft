@@ -18,6 +18,19 @@ import {
   StoryWorkspaceStoreError,
 } from '../services/storyWorkspaceStore.js';
 import {
+  commitObservationAuthority,
+  OBSERVATION_AUTHORITY_COMMIT_CONTRACT_VERSION,
+  OBSERVATION_AUTHORITY_PROJECTION_CONTRACT_VERSION,
+  OBSERVATION_AUTHORITY_READER_BUNDLE_VERSION,
+  OBSERVATION_AUTHORITY_RECEIPT_CONTRACT_VERSION,
+  OBSERVATION_AUTHORITY_WRITER_BUNDLE_VERSION,
+  OBSERVATION_SAGA_CAPABILITIES,
+  OBSERVATION_SAGA_SHARED_CONTRACTS,
+  OBSERVATION_SAGA_SHARED_WRITER_BUNDLE_VERSION,
+  readObservationAuthority,
+  readObservationAuthorityOperation,
+} from '../services/observationAuthorityService.js';
+import {
   advanceCompoundActionArtifact,
   COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION,
   COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
@@ -27,10 +40,12 @@ import {
   COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION,
   createCompoundActionArtifact,
   readActiveCompoundActionArtifact,
+  readCompoundActionOperationStatus,
   resolveCompoundActionRequirements,
   readStagedCompoundActionInstruction,
   rewindCompoundActionArtifacts,
   stageCompoundActionInstruction,
+  settleCompoundActionArtifact,
   tombstoneCompoundActionArtifact,
   type CompoundActionRequirement,
 } from '../services/compoundActionArtifactStore.js';
@@ -54,9 +69,11 @@ import {
   ACTION_DIRECTED_STORY_CAPABILITIES,
   PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
   PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,
+  PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION,
   SCENE_HANDOFF_PROPOSAL_CONTRACT_VERSION,
   SCENE_KIT_V2_CONTRACT_VERSION,
   SCENE_KIT_CONTRACT_VERSION,
+  SCENE_KIT_V4_CONTRACT_VERSION,
   SCENE_STORY_DESIGN_CONTRACT_VERSION,
   STORY_AFFORDANCE_PROJECTION_CONTRACT_VERSION,
   STORY_DELTA_V2_CONTRACT_VERSION,
@@ -366,6 +383,57 @@ storyWorkspaceRouter.get('/scene-context', requireServiceIntegration, asyncRoute
   res.json(result);
 }));
 
+function queryRefs(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap((entry) => String(entry).split(',')).map((entry) => entry.trim()).filter(Boolean);
+  return value === undefined ? [] : String(value).split(',').map((entry) => entry.trim()).filter(Boolean);
+}
+
+storyWorkspaceRouter.get('/observation-authority', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const derivedSubject = req.query.derivedParentActorRef || req.query.derivedMechanicsSubjectRef || req.query.derivedSubjectKind
+    ? {
+        parentActorRef: String(req.query.derivedParentActorRef ?? ''),
+        mechanicsSubjectRef: String(req.query.derivedMechanicsSubjectRef ?? ''),
+        subjectKind: String(req.query.derivedSubjectKind ?? ''),
+      }
+    : null;
+  res.json(await readObservationAuthority({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    actorRefs: queryRefs(req.query.actorRef),
+    subjectRefs: queryRefs(req.query.subjectRef),
+    derivedSubject,
+  }));
+}));
+
+storyWorkspaceRouter.post('/observation-authority/commit', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await commitObservationAuthority({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    expectedWorkspaceRevision: body.expectedWorkspaceRevision,
+    expectedSceneRevision: body.expectedSceneRevision,
+    operationId: body.operationId,
+    idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+    requestFingerprint: body.requestFingerprint,
+    sceneKit: body.sceneKit,
+    vcsBindings: body.vcsBindings ?? [],
+    sourceReceiptRefs: body.sourceReceiptRefs ?? [],
+    derivedActorEvidence: body.derivedActorEvidence ?? [],
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.get('/observation-authority/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await readObservationAuthorityOperation({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    operationId: req.params.operationId,
+  }));
+}));
+
 storyWorkspaceRouter.post('/interaction-artifacts', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   const body = req.body ?? {};
@@ -377,6 +445,7 @@ storyWorkspaceRouter.post('/interaction-artifacts', requireServiceIntegration, a
     program: body.program,
     cursor: body.cursor,
     clarifications: body.clarifications,
+    saga: body.saga,
     timelineAnchor: body.timelineAnchor,
   });
   res.status(result.duplicate ? 200 : 201).json(result);
@@ -463,8 +532,35 @@ storyWorkspaceRouter.put('/interaction-artifacts/:programId', requireServiceInte
     appendReceipts: body.appendReceipts,
     clarifications: body.clarifications,
     rootFailure: body.rootFailure,
+    saga: body.saga,
   });
   res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.post('/interaction-artifacts/:programId/settle', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await settleCompoundActionArtifact({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    programId: req.params.programId,
+    expectedRevision: body.expectedRevision,
+    idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+    cursor: body.cursor,
+    executionReceipt: body.executionReceipt,
+    saga: body.saga,
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.get('/interaction-artifacts/:programId/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await readCompoundActionOperationStatus({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    programId: req.params.programId,
+    operationId: req.params.operationId,
+  }));
 }));
 
 storyWorkspaceRouter.post('/interaction-artifacts/:programId/tombstone', requireServiceIntegration, asyncRoute(async (req, res) => {
@@ -593,13 +689,26 @@ storyWorkspaceRouter.get('/contracts', (_req, res) => {
       storyNodeRef: STORY_GRAPH_NODE_REFERENCE_CONTRACT_VERSION,
       sceneHandoffProposal: SCENE_HANDOFF_PROPOSAL_CONTRACT_VERSION,
       sceneKit: SCENE_KIT_CONTRACT_VERSION,
-      sceneKitReadVersions: [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION],
+      sceneKitReadVersions: [SCENE_KIT_V2_CONTRACT_VERSION, SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION],
       playableSceneContext: PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,
-      playableSceneContextReadVersions: [PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION, PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION],
+      playableSceneContextReadVersions: [PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION, PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION, PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION],
       storyDelta: STORY_DELTA_V2_CONTRACT_VERSION,
       capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
       authority: 'gmc',
       routeEnabled: false,
+    },
+    observationSaga: {
+      projection: OBSERVATION_AUTHORITY_PROJECTION_CONTRACT_VERSION,
+      commit: OBSERVATION_AUTHORITY_COMMIT_CONTRACT_VERSION,
+      receipt: OBSERVATION_AUTHORITY_RECEIPT_CONTRACT_VERSION,
+      readerBundle: OBSERVATION_AUTHORITY_READER_BUNDLE_VERSION,
+      writerBundle: OBSERVATION_AUTHORITY_WRITER_BUNDLE_VERSION,
+      sharedWriterBundle: OBSERVATION_SAGA_SHARED_WRITER_BUNDLE_VERSION,
+      capabilities: OBSERVATION_SAGA_CAPABILITIES,
+      sharedContracts: OBSERVATION_SAGA_SHARED_CONTRACTS,
+      authority: 'gmc',
+      routeEnabled: true,
+      conformance: true,
     },
     storyObligations: {
       sceneStoryDesign: SCENE_STORY_DESIGN_CONTRACT_VERSION,
