@@ -32,8 +32,6 @@ export const ACTION_DIRECTED_STORY_CAPABILITIES = Object.freeze([
   'nested-story-graph/1',
   'single-playable-scene-authority/1',
   'combined-manual-story-turn/1',
-  'typed-observation-authority/1',
-  'atomic-observation-scene-write/1',
 ] as const);
 /** D2 storage and projection limits from ADR-005. */
 export const STORY_WORKSPACE_MAX_BYTES = 524_288;

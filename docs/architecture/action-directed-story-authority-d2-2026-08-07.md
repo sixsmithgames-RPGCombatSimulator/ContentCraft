@@ -385,3 +385,18 @@ revision, out-of-order, timeout recovery, partial-result rejection, rewind,
 player/private projection, no display-name joins, no observation-only mutation,
 cross-service compatibility, full checks/build, exact production health, and
 zero split-brain signals during the selected-campaign canary.
+
+## Proposed D9.4.27 containment and successor — 2026-08-16
+
+A system-of-systems review found that the D9.4.26 capability claim could be
+present without the complete temporal GMA/GMC/VCS join, reciprocal bindings,
+revision-consistent read set, and distributed settlement required for first-
+class observation. Proposed GMA ADR-007 therefore supersedes D9.4.26 for fresh
+writer enablement while preserving GMC's accepted storage and reader history.
+
+GMC 1.10.5 withdraws the two fresh-writer capabilities and continues to expose
+the established four-capability action-directed Story bundle with
+`routeEnabled: false`. Existing Scene-kit `/3` records and readers are not
+rewritten or deleted. No fresh typed-observation writer may be advertised until
+the matching GMC owner decision is Accepted and deployed conformance proves the
+complete successor bundle. This containment changes no canonical Scene data.

@@ -32,7 +32,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.10.4',
+      version: '1.10.5',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -65,5 +65,13 @@ describe('API health', () => {
         },
       },
     });
+    expect(ACTION_DIRECTED_STORY_CAPABILITIES).toEqual([
+      'action-directed-scene-handoff/1',
+      'nested-story-graph/1',
+      'single-playable-scene-authority/1',
+      'combined-manual-story-turn/1',
+    ]);
+    expect(ACTION_DIRECTED_STORY_CAPABILITIES).not.toContain('typed-observation-authority/1');
+    expect(ACTION_DIRECTED_STORY_CAPABILITIES).not.toContain('atomic-observation-scene-write/1');
   });
 });
