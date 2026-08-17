@@ -154,6 +154,17 @@ Manual GMA. Typed outcome evidence may repeat a phrase only inside its owning
 information intent. GMC and GMA publishing different semantic policy versions
 is a release stop before model work.
 
+Production-browser correction, 2026-08-17: both semantic transports advance
+to `gma.semantic-intent-policy/10`. A policy `/9` reply correctly partitioned
+intent evidence but treated introductory “use familiar” wording as its own
+action and split one summon-with-form clause into two actions, producing
+seventeen compiled authority rows against the unchanged sixteen-row bound.
+Policy `/10` positively requires semantic minimality in the original pass:
+represent one action once, fold a meaning-free carrier into the concrete act it
+introduces, and keep a summon with its specified form as one activation unless
+the player orders distinct state changes or independent outcomes. The compiler
+still rejects true overflow and never truncates requirements.
+
 Fresh observation program `/4` uses GMA compiler policy `/7`. An explicit
 observation group is the sole compiled binding record for its observer,
 method, optional form, and viewpoint, so an observation node carries one typed

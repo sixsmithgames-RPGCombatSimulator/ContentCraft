@@ -260,7 +260,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/9');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/10');
     expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*top-level result/i);
     expect(interpretation.context.inputTargetBytes).toBe(12_000);
     expect(interpretation.context.inputHardLimitBytes).toBe(16_384);
@@ -269,6 +269,7 @@ describe('provider-neutral LLM orchestrator', () => {
       .toEqual(['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3']);
     expect(interpretation.prompt.systemInstruction).toMatch(/every player-supported goal, target, declared method/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/every separate intent.*unique, non-overlapping exact evidence subphrase.*send it toward the drain.*to see what's there/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/represent each semantic action exactly once.*introductory carrier wording.*I use my familiar.*I summon it as a rat.*one familiar-activation intent.*five intents/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Asking where someone came from is exchange_information/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/only declared transit or arrival is relocate_actor/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Movement performed stealthily is one relocate_actor intent/i);
