@@ -260,7 +260,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/4');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/5');
     expect(interpretation.context.inputTargetBytes).toBe(12_000);
     expect(interpretation.context.inputHardLimitBytes).toBe(16_384);
     expect(interpretation.provider.maxOutputTokens).toBe(4_000);
@@ -277,7 +277,12 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.prompt.systemInstruction).toMatch(/non-information intent.*requestedOutcomes strings/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/close spelling error.*immediately established referent/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/closer or better look.*surface_description.*apparent_classification/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/local ID declared in that same information intent/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/information intent must redeclare.*local rows in that same intent/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/requestedOutcomes.*only outcome collection field.*typedOutcomeCs/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/relation must contain after, parallelWith, and condition/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/information intent must redeclare.*observer, subject, optional form, and method.*same intent/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/familiar is an observerKind, never a method kind/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/intentShapeExamples.*legal-shape guidance.*Do not return intentShapeExamples.*placeholder/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Do not repeat or wrap the request task/i);
     expect(interpretation.prompt.systemInstruction).not.toMatch(/completion boundaries|authorityRequirements|dataRequirements/i);
     expect((interpretation.outputSchema.schema.properties as any).intents.items.required)

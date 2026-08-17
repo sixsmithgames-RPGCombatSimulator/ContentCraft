@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-17.1';
+export const OPERATION_REGISTRY_VERSION = '2026-08-17.2';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-13.3',
@@ -896,7 +896,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'confidence', 'intents', 'ambiguities', 'coverage'],
     targetBytes: 12_000, hardLimitBytes: 16_384, maxOutputTokens: 4_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/4',
+    promptVersion: 'gma.semantic-intent-policy/5',
     outputProperties: {
       schemaVersion: { enum: ['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3'] },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -957,9 +957,12 @@ const seeds: Seed[] = [
       'Preserve every player-supported goal, target, declared method, requested outcome, sequence, parallel relationship, condition, and alternative. Cite exact unique phrases copied from the immutable instruction for every intent. Never silently omit overflow meaning.',
       'When a malformed token is a close spelling error for an immediately established referent or method and local grammar clearly reuses that referent, preserve the literal spelling in evidence but use the established meaning in semantic fields. Ask an ambiguity only when a distinct meaning remains materially plausible.',
       'For semantic-intent-ir/3 observation instructions, return IR /3 as the top-level result within 16384 UTF-8 JSON bytes. Separate summon or form activation, movement, mechanics, and observation prerequisites. Every non-information intent must carry one to eight short ordinary-language requestedOutcomes strings and no observation groups.',
+      'Use requestedOutcomes as the only outcome collection field name. Never emit typedOutcomes, typedOutcomeCs, outcomeCs, outcomes, or another alias. Every relation must contain after, parallelWith, and condition; use empty arrays and null when none apply.',
       'For every requested information answer in /3, return one typed outcome. Keep appearance, apparent classification or species, identity, activity, distance, extent, presence, quantity, and contents separate. Apparent classification is not identity.',
       'An unqualified closer or better look at a visible actor requests both surface_description and apparent_classification, not canonical identity. Keep answers from the same observation act in the fewest information intents compatible with distinct observers, methods, prerequisites, and relation origins.',
-      'Partition every /3 outcome into exactly one explicit observation group with observerKind, observerTargetId, methodId, optional formTargetId, and viewpointBinding. Every target, observer, method, form, and relation-origin ID must be a local ID declared in that same information intent. Put an exact authorityRef only on the matching local target or method when copied from the supplied reference catalog; otherwise use null. Never combine the player character viewpoint with a familiar, sensor, ally, or moved observer viewpoint.',
+      'Partition every /3 outcome into exactly one explicit observation group with observerKind, observerTargetId, methodId, optional formTargetId, and viewpointBinding. Every information intent must redeclare its observer, subject, optional form, and method as local rows in that same intent; a row in an earlier intent does not count. Every target, observer, method, form, and relation-origin ID must be one of those local IDs. Put an exact authorityRef only on the matching local target or method when copied from the supplied reference catalog; otherwise use null. familiar is an observerKind, never a method kind. Never combine the player character viewpoint with a familiar, sensor, ally, or moved observer viewpoint.',
+      'After “my rat” is established, “use my rate” in the same local construction reuses that rat familiar unless another meaning remains materially plausible; keep the literal token only in evidence and do not create a rate method or ambiguity.',
+      'When responseContract supplies intentShapeExamples, use them only as concrete legal-shape guidance. Do not return intentShapeExamples, copy placeholder strings, or add helper-derived fields; return actual intents with exact instruction evidence.',
       'Choose purpose from meaning, not vocabulary. Asking where someone came from is exchange_information; only declared transit or arrival is relocate_actor. A location discussed as history, dialogue, or a fact to learn is a subject, not a destination.',
       'Choose method kind by the declared method: named skill or feature is capability, named magic is spell, an item is item, a tool is tool, an ordinary tactic is approach, and other is only for a supported method outside those meanings.',
       'Keep a method with the goal it modifies. Movement performed stealthily is one relocate_actor intent with a capability method, not two sequential intents.',

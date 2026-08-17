@@ -3,7 +3,8 @@
 - Governing decisions: GMA ADR-005 D9.4.26, Studio ADR-005 D9.4.26, and the
   Accepted GMC D9.4.26 addendum in
   `docs/architecture/action-directed-story-authority-d2-2026-08-07.md`.
-- Status: Contained and superseded for fresh writes by Proposed GMA ADR-007.
+- Status: Historical v3 plan; fresh writes are implemented by Accepted GMA
+  ADR-007 and GMC ADR-003.
 - Owner: GMC for mutable Scene observable truth; GMA for transient requests and
   immutable orchestration receipts; VCS for mechanics; Studio for presentation.
 
