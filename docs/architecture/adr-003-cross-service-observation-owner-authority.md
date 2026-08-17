@@ -119,7 +119,7 @@ preexisting provenance for blockers. At most one field-scoped repair may alter
 failed proposal fields; it cannot repair bindings or authority state.
 
 The integrated `action.intent.interpret` first pass uses
-`gma.semantic-intent-policy/7`. It positively requires the same discriminated
+`gma.semantic-intent-policy/8`. It positively requires the same discriminated
 IR `/3` shapes used by Manual transport: string outcomes for non-information
 prerequisites, typed outcomes and complete same-intent local-ID groups for
 information, contextual surface-error interpretation with exact typo evidence,
@@ -135,6 +135,15 @@ tokens; GMA independently fixes the accepted response version and byte budget
 from its immutable request. GMC's operation schema retains older IRs for
 historical calls, but a fresh typed-observation request selects `/3` and cannot
 downgrade through model output.
+
+Policy `/8` also requires the result root to copy `interactionId`,
+`instructionRef`, and `instructionFingerprint` exactly from the response
+contract. Missing or mismatched semantic identity is not eligible for a typed
+field repair: GMA discards the whole uncommitted proposal and may issue one
+complete same-version rebuild with the rejected proposal excluded. GMC's
+integrated operation publishes the identical positive identity requirement and
+policy version as Manual GMA; a version or instruction mismatch is a
+cross-service release stop.
 
 The first-pass response contract and integrated instruction also publish the
 complete facet, value-kind, and precision vocabularies. They positively map a

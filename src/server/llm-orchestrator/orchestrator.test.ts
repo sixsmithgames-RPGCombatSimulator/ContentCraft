@@ -260,7 +260,8 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/7');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/8');
+    expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*top-level result/i);
     expect(interpretation.context.inputTargetBytes).toBe(12_000);
     expect(interpretation.context.inputHardLimitBytes).toBe(16_384);
     expect(interpretation.provider.maxOutputTokens).toBe(4_000);

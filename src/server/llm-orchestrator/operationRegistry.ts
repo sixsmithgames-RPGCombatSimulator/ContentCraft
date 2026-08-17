@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-17.4';
+export const OPERATION_REGISTRY_VERSION = '2026-08-17.5';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-13.3',
@@ -896,7 +896,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'confidence', 'intents', 'ambiguities', 'coverage'],
     targetBytes: 12_000, hardLimitBytes: 16_384, maxOutputTokens: 4_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/7',
+    promptVersion: 'gma.semantic-intent-policy/8',
     outputProperties: {
       schemaVersion: { enum: ['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3'] },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -954,6 +954,7 @@ const seeds: Seed[] = [
     },
     systemInstruction: [
       'Interpret one exact player instruction into the bounded semantic-intent version requested by responseContract. Return only that result object. Do not repeat or wrap the request task, policy, immutable instruction, Scene frame, response contract, or another request-envelope field.',
+      'Copy responseContract.interactionId, responseContract.instructionRef, and responseContract.instructionFingerprint byte-for-byte into the top-level result. All three identity fields are required even when repeated elsewhere in the request; never omit, shorten, recompute, or alter them.',
       'Preserve every player-supported goal, target, declared method, requested outcome, sequence, parallel relationship, condition, and alternative. Cite exact unique phrases copied from the immutable instruction for every intent. Never silently omit overflow meaning.',
       'When a malformed token is a close spelling error for an immediately established referent or method and local grammar clearly reuses that referent, preserve the literal spelling in evidence but use the established meaning in semantic fields. Ask an ambiguity only when a distinct meaning remains materially plausible.',
       'For semantic-intent-ir/3 observation instructions, return IR /3 as the top-level result within 16384 UTF-8 JSON bytes. Separate summon or form activation, movement, mechanics, and observation prerequisites. Every non-information intent must carry one to eight short ordinary-language requestedOutcomes strings and no observation groups.',
