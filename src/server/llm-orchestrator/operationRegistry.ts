@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-17.3';
+export const OPERATION_REGISTRY_VERSION = '2026-08-17.4';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-13.3',
@@ -896,7 +896,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'confidence', 'intents', 'ambiguities', 'coverage'],
     targetBytes: 12_000, hardLimitBytes: 16_384, maxOutputTokens: 4_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/6',
+    promptVersion: 'gma.semantic-intent-policy/7',
     outputProperties: {
       schemaVersion: { enum: ['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3'] },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -961,6 +961,7 @@ const seeds: Seed[] = [
       'For every requested information answer in /3, return one typed outcome. Keep appearance, apparent classification or species, identity, activity, distance, extent, presence, quantity, and contents separate. Apparent classification is not identity.',
       'Use only the facet, valueKind, and requestedPrecision vocabulary in responseContract. Distance is facet spatial_relation with valueKind measurement, measurement_range, measurement_or_relation, or relation; never use distance as a facet or value kind. Set relationOriginTargetId to the local target for the stated origin of a relation such as the observing player character.',
       'An unqualified closer or better look at a visible actor requests both surface_description and apparent_classification, not canonical identity. Keep answers from the same observation act in the fewest information intents compatible with distinct observers, methods, prerequisites, and relation origins.',
+      'When one evidence phrase requests multiple outcomes that share observer, method, viewpoint, prerequisites, and relation origin, put all of those requestedOutcomes in one information intent and one observation group. Those outcomes may repeat the exact phrase inside that intent; never assign the same phrase to separate intents.',
       'Partition every /3 outcome into exactly one explicit observation group with observerKind, observerTargetId, methodId, optional formTargetId, and viewpointBinding. Every information intent must redeclare its observer, subject, optional form, and method as local rows in that same intent; a row in an earlier intent does not count. Every target, observer, method, form, and relation-origin ID must be one of those local IDs. Put an exact authorityRef only on the matching local target or method when copied from the supplied reference catalog; otherwise use null. familiar is an observerKind, never a method kind. Never combine the player character viewpoint with a familiar, sensor, ally, or moved observer viewpoint.',
       'After “my rat” is established, “use my rate” in the same local construction reuses that rat familiar unless another meaning remains materially plausible; keep the literal token only in evidence and do not create a rate method or ambiguity.',
       'When responseContract supplies intentShapeExamples, use them only as concrete legal-shape guidance. Do not return intentShapeExamples, copy placeholder strings, or add helper-derived fields; return actual intents with exact instruction evidence.',
