@@ -562,14 +562,18 @@ duplicate effect and Gemini remaining 181.
 
 GMC accepts GMA ADR-005 D9.4.43 and Studio ADR-005 D9.4.43 by reference. The
 hosted failure occurred before GMC could prepare the missing SECOND MOUTH Story
-detail: GMA selected the observation node from a newly persisted prepared cursor
-but validated it against the older cursor read from the source artifact.
+detail: GMA selected a travel node with unresolved destination/approach facts
+from a newly persisted `scene_preparation` cursor but validated it against the
+older cursor and an observation-only boundary predicate.
 
 GMC's contract and ownership do not change. It continues to accept one
 canonical action-directed Story request bound to an interaction, semantic
 action, current Story/Scene head, and optional compound program/node/slice. GMA
 must derive that node and slice from one prepared boundary snapshot before
-calling GMC. The LLM cannot choose or repair a cursor. GMC must continue to fail
+calling GMC. An exact prepared `scene_preparation` wait is sufficient to route
+its node to GMC even when the node is movement and the missing facts are
+`destination_location` or `current_location`; the executor has already assigned
+those requirements to GMC. The LLM cannot choose or repair a cursor. GMC must continue to fail
 closed on stale request identity or owner revision and must never infer a node
 from prose.
 
