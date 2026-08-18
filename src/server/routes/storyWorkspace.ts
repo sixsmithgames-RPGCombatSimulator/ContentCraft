@@ -592,6 +592,7 @@ storyWorkspaceRouter.post('/rewind', asyncRoute(async (req, res) => {
     expectedRevision: req.body?.expectedRevision,
     boundarySequence: req.body?.boundarySequence,
     rewindId: req.body?.rewindId,
+    restoreStoryWorkspaceRef: req.body?.restoreStoryWorkspaceRef ?? null,
   }));
 }));
 

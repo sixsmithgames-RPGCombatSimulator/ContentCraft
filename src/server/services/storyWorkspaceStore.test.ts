@@ -363,12 +363,58 @@ describe('GMC Story workspace authority store', () => {
     const rewind = await rewindStoryWorkspace({
       userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 2, boundarySequence: 208, rewindId: 'rewind:209',
     }, records);
-    expect(rewind).toMatchObject({ supersededCount: 1, restoredStoryWorkspaceRef: { revision: 1 } });
+    expect(rewind).toMatchObject({ restoreMode: 'timeline_boundary', supersededCount: 1, restoredStoryWorkspaceRef: { revision: 1 } });
 
     const history = await listStoryWorkspaceHistory({ userId: 'tenant-a', campaignId: 'campaign-a' }, records);
     expect(history.revisions).toHaveLength(2);
     expect(JSON.stringify(history)).not.toContain('hidden ledger');
     expect(history.revisions[0].redactedAudit.changedRecordRefs).toEqual(['npc_scene_card:card:dorrik']);
+  });
+
+  it('restores one exact immutable Story predecessor even when later timeline anchors are unusable', async () => {
+    const { records } = memoryCollection();
+    const predecessor = await replaceStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 0, idempotencyKey: 'story-exact-predecessor',
+      timelineAnchor: { messageId: 'surviving-message', sequence: 208 }, workspace: flintwakeWorkspace(),
+    }, records);
+    await applyStoryDelta({ userId: 'tenant-a', campaignId: 'campaign-a', delta: delta() }, records);
+
+    const rewind = await rewindStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 2,
+      boundarySequence: 999, rewindId: 'rewind:exact-predecessor',
+      restoreStoryWorkspaceRef: predecessor.storyWorkspaceRef,
+    }, records);
+    expect(rewind).toMatchObject({
+      duplicate: false, restoreMode: 'exact_ref', supersededCount: 1,
+      restoredStoryWorkspaceRef: predecessor.storyWorkspaceRef,
+    });
+
+    const duplicate = await rewindStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 2,
+      boundarySequence: 999, rewindId: 'rewind:exact-predecessor',
+      restoreStoryWorkspaceRef: predecessor.storyWorkspaceRef,
+    }, records);
+    expect(duplicate).toMatchObject({
+      duplicate: true, restoreMode: 'exact_ref', supersededCount: 0,
+      restoredStoryWorkspaceRef: predecessor.storyWorkspaceRef,
+    });
+  });
+
+  it('rejects an exact Story predecessor with a different hash without changing the active head', async () => {
+    const { records } = memoryCollection();
+    const predecessor = await replaceStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 0, idempotencyKey: 'story-invalid-predecessor',
+      timelineAnchor: { messageId: 'surviving-message', sequence: 208 }, workspace: flintwakeWorkspace(),
+    }, records);
+    await applyStoryDelta({ userId: 'tenant-a', campaignId: 'campaign-a', delta: delta() }, records);
+
+    await expect(rewindStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 2,
+      boundarySequence: 0, rewindId: 'rewind:wrong-hash',
+      restoreStoryWorkspaceRef: { ...predecessor.storyWorkspaceRef, payloadHash: 'f'.repeat(64) },
+    }, records)).rejects.toMatchObject({ code: 'STORY_REWIND_RESTORE_REF_UNAVAILABLE' });
+    await expect(readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, records))
+      .resolves.toMatchObject({ storyWorkspaceRef: { revision: 2 } });
   });
 
   it('reports validation failures without echoing private workspace content', async () => {

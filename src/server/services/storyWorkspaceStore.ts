@@ -1827,7 +1827,14 @@ export async function listStoryWorkspaceHistory(
 }
 
 export async function rewindStoryWorkspace(
-  input: { userId: string; campaignId: string; expectedRevision: number; boundarySequence: number; rewindId: string },
+  input: {
+    userId: string;
+    campaignId: string;
+    expectedRevision: number;
+    boundarySequence: number;
+    rewindId: string;
+    restoreStoryWorkspaceRef?: StoryWorkspaceReference | null;
+  },
   records: RevisionCollection = collection(),
 ) {
   const normalized = {
@@ -1837,6 +1844,25 @@ export async function rewindStoryWorkspace(
     boundarySequence: nonNegativeInteger(input.boundarySequence, 'boundarySequence'),
     rewindId: identifier(input.rewindId, 'rewindId'),
   };
+  const restoreRef = input.restoreStoryWorkspaceRef == null ? null : (() => {
+    const value = input.restoreStoryWorkspaceRef;
+    if (!plainObject(value)
+      || value.contractVersion !== STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION
+      || value.campaignId !== normalized.campaignId
+      || value.workspaceId !== `story-workspace:${normalized.campaignId}`
+      || !Number.isSafeInteger(Number(value.revision))
+      || Number(value.revision) < 1
+      || !/^[a-f0-9]{64}$/i.test(String(value.payloadHash ?? ''))) {
+      throw new StoryWorkspaceStoreError(422, 'STORY_REWIND_RESTORE_REF_INVALID', 'The exact Story restore reference is invalid.', {});
+    }
+    return {
+      contractVersion: STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION,
+      campaignId: normalized.campaignId,
+      workspaceId: `story-workspace:${normalized.campaignId}`,
+      revision: Number(value.revision),
+      payloadHash: String(value.payloadHash).toLowerCase(),
+    } satisfies StoryWorkspaceReference;
+  })();
   const active = await activeRecord(records, normalized);
   const currentRevision = active?.revision ?? 0;
   if (currentRevision !== normalized.expectedRevision) {
@@ -1847,30 +1873,59 @@ export async function rewindStoryWorkspace(
       expectedRevision: normalized.expectedRevision, actualRevision: currentRevision,
     });
     const restoredReplay = await activeRecord(records, normalized);
+    if (restoreRef && (!restoredReplay
+      || restoredReplay.revision !== restoreRef.revision
+      || restoredReplay.payloadHash !== restoreRef.payloadHash)) {
+      throw new StoryWorkspaceStoreError(409, 'STORY_REWIND_RESTORE_REF_CONFLICT', 'The completed rewind restored a different Story revision.', {});
+    }
     return {
       contractVersion: STORY_WORKSPACE_CONTRACT_VERSION,
       duplicate: true,
       rewindId: normalized.rewindId,
       supersededCount: 0,
       restoredStoryWorkspaceRef: restoredReplay ? workspaceRef(restoredReplay) : null,
+      restoreMode: restoreRef ? 'exact_ref' : 'timeline_boundary',
     };
+  }
+  if (restoreRef) {
+    if (restoreRef.revision > currentRevision) {
+      throw new StoryWorkspaceStoreError(409, 'STORY_REWIND_RESTORE_REF_CONFLICT', 'The exact Story restore revision is newer than the current Story head.', {});
+    }
+    const target = await records.findOne({
+      userId: normalized.userId,
+      campaignId: normalized.campaignId,
+      workspaceId: restoreRef.workspaceId,
+      revision: restoreRef.revision,
+      status: 'available',
+    });
+    if (!target || target.payloadHash !== restoreRef.payloadHash) {
+      throw new StoryWorkspaceStoreError(409, 'STORY_REWIND_RESTORE_REF_UNAVAILABLE', 'The exact Story restore revision is not available.', {});
+    }
   }
   const updated = await records.updateMany({
     userId: normalized.userId,
     campaignId: normalized.campaignId,
     workspaceId: `story-workspace:${normalized.campaignId}`,
     status: 'available',
-    'timelineAnchor.sequence': { $gt: normalized.boundarySequence },
+    ...(restoreRef
+      ? { revision: { $gt: restoreRef.revision } }
+      : { 'timelineAnchor.sequence': { $gt: normalized.boundarySequence } }),
   }, {
     $set: { status: 'superseded', supersededAt: new Date(), supersededByRewindId: normalized.rewindId },
   });
   const restored = await activeRecord(records, normalized);
+  if (restoreRef && (!restored
+    || restored.revision !== restoreRef.revision
+    || restored.payloadHash !== restoreRef.payloadHash)) {
+    throw new StoryWorkspaceStoreError(409, 'STORY_REWIND_RESTORE_REF_CONFLICT', 'The exact Story restore did not select the requested revision.', {});
+  }
   return {
     contractVersion: STORY_WORKSPACE_CONTRACT_VERSION,
     duplicate: false,
     rewindId: normalized.rewindId,
     supersededCount: updated.modifiedCount,
     restoredStoryWorkspaceRef: restored ? workspaceRef(restored) : null,
+    restoreMode: restoreRef ? 'exact_ref' : 'timeline_boundary',
   };
 }
 
