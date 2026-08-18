@@ -4,6 +4,7 @@ import { getDb } from '../config/mongo.js';
 import { readCurrentSceneContexts } from './actionDirectedStoryStore.js';
 import { collections } from './gmcIntegrationStore.js';
 import {
+  readActiveStoryWorkspace,
   readStoryWorkspaceRevision,
   StoryWorkspaceStoreError,
   type JsonObject,
@@ -15,6 +16,7 @@ export const COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION = 'gmc.compound-act
 export const COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION = 'gmc.compound-action-artifact-ref/1';
 export const COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION = 'gmc.compound-action-requirement-projection/1';
 export const COMPOUND_REPLAY_STORY_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/1';
+export const COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-action-origin-checkpoint/1';
 export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'compound-action-program/2',
   'compound-action-artifact-store/1',
@@ -97,6 +99,15 @@ export interface CompoundActionInstructionDocument {
   instruction: JsonObject;
   idempotencyKey: string;
   requestHash: string;
+  originCheckpoint?: {
+    contractVersion: typeof COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONTRACT_VERSION;
+    storyWorkspaceRef: StoryWorkspaceReference;
+    replayLineageId: string;
+    messageId: string;
+    timelineSequence: number;
+    interactionId: string;
+    instructionFingerprint: string;
+  };
   createdAt: Date;
 }
 
@@ -177,6 +188,32 @@ function validateInstruction(instruction: unknown): asserts instruction is JsonO
   }
 }
 
+function exactStoryWorkspaceRef(value: unknown, campaignId: string, field = 'expectedStoryWorkspaceRef'): StoryWorkspaceReference {
+  if (!isObject(value)
+    || value.contractVersion !== 'gmc.story-workspace-ref/1'
+    || value.campaignId !== campaignId
+    || value.workspaceId !== `story-workspace:${campaignId}`
+    || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1
+    || !/^[a-f0-9]{64}$/.test(String(value.payloadHash ?? '').toLowerCase())) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_ORIGIN_CHECKPOINT_INVALID', 'The saved-plan origin checkpoint is invalid.', { field });
+  }
+  return {
+    contractVersion: 'gmc.story-workspace-ref/1',
+    campaignId,
+    workspaceId: String(value.workspaceId),
+    revision: Number(value.revision),
+    payloadHash: String(value.payloadHash).toLowerCase(),
+  };
+}
+
+function sameExactStoryWorkspaceRef(left: StoryWorkspaceReference, right: StoryWorkspaceReference): boolean {
+  return left.contractVersion === right.contractVersion
+    && left.campaignId === right.campaignId
+    && left.workspaceId === right.workspaceId
+    && left.revision === right.revision
+    && left.payloadHash === right.payloadHash;
+}
+
 function requiredOwnerRevision(value: unknown, field: string): number | string {
   if (Number.isSafeInteger(value) && Number(value) >= 0) return Number(value);
   return requiredString(value, field, 240);
@@ -193,16 +230,53 @@ export async function stageCompoundActionInstruction(input: {
   campaignId: string;
   idempotencyKey: string;
   instruction: JsonObject;
-}, records: CompoundActionInstructionCollection = instructionCollection()) {
+  expectedStoryWorkspaceRef?: JsonObject | null;
+  timelineAnchor?: { messageId: string; sequence: number; replayLineageId?: string } | null;
+}, records: CompoundActionInstructionCollection = instructionCollection(), activeStoryReader: (input: {
+  userId: string;
+  campaignId: string;
+}) => Promise<{ storyWorkspaceRef: StoryWorkspaceReference } | null> = readActiveStoryWorkspace) {
   requiredString(input.userId, 'userId');
   requiredString(input.campaignId, 'campaignId');
   requiredString(input.idempotencyKey, 'idempotencyKey');
   validateInstruction(input.instruction);
-  const requestHash = sha256(canonicalJson(input.instruction));
+  const timelineAnchor = input.expectedStoryWorkspaceRef == null ? null : validateTimelineAnchor(input.timelineAnchor);
+  const expectedStoryWorkspaceRef = input.expectedStoryWorkspaceRef == null
+    ? null
+    : exactStoryWorkspaceRef(input.expectedStoryWorkspaceRef, input.campaignId);
+  if (expectedStoryWorkspaceRef && (!timelineAnchor?.replayLineageId || !timelineAnchor.messageId)) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_ORIGIN_CHECKPOINT_INVALID', 'The saved-plan origin checkpoint is missing its Replay lineage or timeline anchor.', { field: 'timelineAnchor' });
+  }
+  const requestHashPayload = expectedStoryWorkspaceRef ? {
+    instruction: input.instruction,
+    expectedStoryWorkspaceRef: expectedStoryWorkspaceRef as unknown as JsonObject,
+    timelineAnchor,
+  } as JsonObject : input.instruction;
+  const requestHash = sha256(canonicalJson(requestHashPayload));
   const existing = await records.findOne({ userId: input.userId, campaignId: input.campaignId, idempotencyKey: input.idempotencyKey });
   if (existing) {
     if (existing.requestHash !== requestHash) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_IDEMPOTENCY_CONFLICT', 'The instruction staging key was already used for different player bytes.', {});
-    return { instructionRef: existing.instructionRef, instructionFingerprint: existing.instructionFingerprint, utf8Bytes: existing.utf8Bytes, duplicate: true };
+    return {
+      instructionRef: existing.instructionRef, instructionFingerprint: existing.instructionFingerprint,
+      utf8Bytes: existing.utf8Bytes, originCheckpoint: structuredClone(existing.originCheckpoint ?? null), duplicate: true,
+    };
+  }
+  let originCheckpoint: CompoundActionInstructionDocument['originCheckpoint'];
+  if (expectedStoryWorkspaceRef && timelineAnchor?.replayLineageId) {
+    const active = await activeStoryReader({ userId: input.userId, campaignId: input.campaignId });
+    const activeRef = active?.storyWorkspaceRef;
+    if (!activeRef || !sameExactStoryWorkspaceRef(expectedStoryWorkspaceRef, activeRef)) {
+      throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONFLICT', 'The saved Story changed before the player instruction could be anchored.', {});
+    }
+    originCheckpoint = {
+      contractVersion: COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONTRACT_VERSION,
+      storyWorkspaceRef: structuredClone(expectedStoryWorkspaceRef),
+      replayLineageId: timelineAnchor.replayLineageId,
+      messageId: timelineAnchor.messageId,
+      timelineSequence: timelineAnchor.sequence,
+      interactionId: String(input.instruction.interactionId),
+      instructionFingerprint: String(input.instruction.instructionFingerprint),
+    };
   }
   const document: CompoundActionInstructionDocument = {
     userId: input.userId,
@@ -214,6 +288,7 @@ export async function stageCompoundActionInstruction(input: {
     instruction: structuredClone(input.instruction),
     idempotencyKey: input.idempotencyKey,
     requestHash,
+    ...(originCheckpoint ? { originCheckpoint } : {}),
     createdAt: new Date(),
   };
   try {
@@ -221,12 +296,18 @@ export async function stageCompoundActionInstruction(input: {
   } catch (error: unknown) {
     if ((error as { code?: number }).code === 11000) {
       const replay = await records.findOne({ userId: input.userId, campaignId: input.campaignId, idempotencyKey: input.idempotencyKey });
-      if (replay?.requestHash === requestHash) return { instructionRef: replay.instructionRef, instructionFingerprint: replay.instructionFingerprint, utf8Bytes: replay.utf8Bytes, duplicate: true };
+      if (replay?.requestHash === requestHash) return {
+        instructionRef: replay.instructionRef, instructionFingerprint: replay.instructionFingerprint,
+        utf8Bytes: replay.utf8Bytes, originCheckpoint: structuredClone(replay.originCheckpoint ?? null), duplicate: true,
+      };
       throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_INSTRUCTION_CONFLICT', 'The player instruction changed before it could be staged.', {});
     }
     throw error;
   }
-  return { instructionRef: document.instructionRef, instructionFingerprint: document.instructionFingerprint, utf8Bytes: document.utf8Bytes, duplicate: false };
+  return {
+    instructionRef: document.instructionRef, instructionFingerprint: document.instructionFingerprint,
+    utf8Bytes: document.utf8Bytes, originCheckpoint: structuredClone(document.originCheckpoint ?? null), duplicate: false,
+  };
 }
 
 export async function readStagedCompoundActionInstruction(input: {
@@ -235,7 +316,11 @@ export async function readStagedCompoundActionInstruction(input: {
   interactionId: string;
 }, records: CompoundActionInstructionCollection = instructionCollection()) {
   const document = await records.findOne({ userId: input.userId, campaignId: input.campaignId, interactionId: input.interactionId });
-  return document ? { instruction: structuredClone(document.instruction), stagedAt: document.createdAt } : null;
+  return document ? {
+    instruction: structuredClone(document.instruction),
+    originCheckpoint: structuredClone(document.originCheckpoint ?? null),
+    stagedAt: document.createdAt,
+  } : null;
 }
 
 function validateProgram(program: unknown, instruction: JsonObject): asserts program is JsonObject {
@@ -520,8 +605,9 @@ export async function createCompoundActionArtifact(input: {
   cursor: JsonObject;
   clarifications?: JsonObject[];
   saga?: JsonObject;
+  originCheckpoint?: CompoundActionInstructionDocument['originCheckpoint'] | null;
   timelineAnchor?: { messageId: string; sequence: number; replayLineageId?: string } | null;
-}, records: CompoundActionArtifactCollection = artifactCollection()) {
+}, records: CompoundActionArtifactCollection = artifactCollection(), stagedInstructions?: CompoundActionInstructionCollection) {
   requiredString(input.userId, 'userId');
   requiredString(input.campaignId, 'campaignId');
   requiredString(input.idempotencyKey, 'idempotencyKey');
@@ -533,6 +619,21 @@ export async function createCompoundActionArtifact(input: {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_CLARIFICATION_INVALID', 'The interaction clarification state is invalid.', {});
   }
   const timelineAnchor = validateTimelineAnchor(input.timelineAnchor);
+  if (input.originCheckpoint != null) {
+    const submittedOrigin = input.originCheckpoint;
+    const submittedStoryRef = exactStoryWorkspaceRef(submittedOrigin.storyWorkspaceRef, input.campaignId, 'originCheckpoint.storyWorkspaceRef');
+    const staged = await (stagedInstructions ?? instructionCollection()).findOne({
+      userId: input.userId, campaignId: input.campaignId, interactionId: String(input.instruction.interactionId),
+    });
+    if (!staged?.originCheckpoint
+      || canonicalJson(staged.originCheckpoint as unknown as JsonObject) !== canonicalJson(submittedOrigin as unknown as JsonObject)
+      || staged.originCheckpoint.replayLineageId !== timelineAnchor?.replayLineageId
+      || staged.originCheckpoint.messageId !== timelineAnchor?.messageId
+      || staged.originCheckpoint.timelineSequence !== timelineAnchor?.sequence
+      || Number((input.program.authorityBase as JsonObject | undefined)?.storyWorkspaceRevision) !== submittedStoryRef.revision) {
+      throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_ORIGIN_CHECKPOINT_MISMATCH', 'The saved plan is not bound to its verified Story origin.', {});
+    }
+  }
   const saga = validateSaga(input.saga, input.instruction, input.program, input.cursor);
   const draft = {
     instruction: structuredClone(input.instruction),
@@ -844,10 +945,45 @@ async function replayCheckpointCandidates(
   return candidates;
 }
 
+async function replayOriginCandidates(
+  records: CompoundActionInstructionCollection,
+  filter: Filter<CompoundActionInstructionDocument>,
+): Promise<CompoundActionInstructionDocument[]> {
+  const candidates = await records.find(filter).limit(257).toArray();
+  if (candidates.length > 256) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_AMBIGUOUS', 'The saved plan has too many matching origin checkpoints to select safely.', {});
+  }
+  return candidates;
+}
+
+function validatedReplayOrigin(
+  document: CompoundActionInstructionDocument,
+  campaignId: string,
+  instructionFingerprint: string,
+  replayLineageId: string,
+) {
+  const origin = document.originCheckpoint;
+  if (!origin
+    || origin.contractVersion !== COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONTRACT_VERSION
+    || origin.replayLineageId !== replayLineageId
+    || origin.interactionId !== document.interactionId
+    || origin.instructionFingerprint !== instructionFingerprint
+    || document.instructionFingerprint !== instructionFingerprint
+    || origin.messageId.length < 1 || origin.messageId.length > 240
+    || !Number.isSafeInteger(origin.timelineSequence) || origin.timelineSequence < 0) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_ORIGIN_CHECKPOINT_INVALID', 'The saved plan origin checkpoint is inconsistent.', {});
+  }
+  return {
+    ...origin,
+    storyWorkspaceRef: exactStoryWorkspaceRef(origin.storyWorkspaceRef, campaignId, 'originCheckpoint.storyWorkspaceRef'),
+  };
+}
+
 /**
  * Resolves the Story revision that causally preceded a compound action from
- * GMC-owned immutable artifact history. Browser timeline refs are compared for
- * drift only and never participate in checkpoint selection.
+ * GMC-owned immutable instruction-origin history, with bounded artifact-only
+ * healing for records created before origin capture. Browser timeline refs are
+ * compared for drift only and never participate in checkpoint selection.
  */
 export async function resolveCompoundReplayStoryCheckpoint(input: {
   userId: string;
@@ -858,13 +994,15 @@ export async function resolveCompoundReplayStoryCheckpoint(input: {
   allowLegacyFingerprintBoundary?: boolean;
   programId?: string | null;
   observedSurvivingStoryWorkspaceRef?: JsonObject | null;
-}, records: CompoundActionArtifactCollection = artifactCollection(), revisionReader: ReplayCheckpointRevisionReader = readStoryWorkspaceRevision): Promise<{
+}, records: CompoundActionArtifactCollection = artifactCollection(), revisionReader: ReplayCheckpointRevisionReader = readStoryWorkspaceRevision, stagedInstructions: CompoundActionInstructionCollection = instructionCollection()): Promise<{
   contractVersion: typeof COMPOUND_REPLAY_STORY_CHECKPOINT_CONTRACT_VERSION;
   restoreStoryWorkspaceRef: StoryWorkspaceReference;
   selectionMode: 'replay_lineage' | 'legacy_fingerprint_boundary';
   matchedAnchorSequence: number;
   matchedArtifactCount: number;
   matchedProgramCount: number;
+  matchedOriginCount: number;
+  checkpointSource: 'instruction_stage' | 'artifact_legacy';
   observedSurvivingRefAgreement: boolean | null;
 }> {
   const userId = requiredString(input.userId, 'userId', 254);
@@ -880,19 +1018,43 @@ export async function resolveCompoundReplayStoryCheckpoint(input: {
     campaignId,
     'instruction.instructionFingerprint': instructionFingerprint,
     'timelineAnchor.sequence': { $gt: boundarySequence },
-    status: { $in: ['available', 'superseded', 'inactive'] },
+    status: { $in: ['available', 'superseded', 'inactive', 'tombstoned'] },
   } as unknown as Filter<CompoundActionArtifactRevisionDocument>;
 
   let selectionMode: 'replay_lineage' | 'legacy_fingerprint_boundary' | null = null;
   let candidates: CompoundActionArtifactRevisionDocument[] = [];
+  let matchedOrigins: ReturnType<typeof validatedReplayOrigin>[] = [];
+  let restoreStoryWorkspaceRefFromOrigin: StoryWorkspaceReference | null = null;
   if (replayLineageId) {
-    candidates = await replayCheckpointCandidates(records, {
-      ...baseFilter,
-      'timelineAnchor.replayLineageId': replayLineageId,
-    } as unknown as Filter<CompoundActionArtifactRevisionDocument>);
-    if (candidates.length) selectionMode = 'replay_lineage';
+    const originDocuments = await replayOriginCandidates(stagedInstructions, {
+      userId,
+      campaignId,
+      instructionFingerprint,
+      'originCheckpoint.replayLineageId': replayLineageId,
+      'originCheckpoint.timelineSequence': { $gt: boundarySequence },
+    } as unknown as Filter<CompoundActionInstructionDocument>);
+    if (originDocuments.length) {
+      const validatedOrigins = originDocuments.map((document) => validatedReplayOrigin(
+        document, campaignId, instructionFingerprint, replayLineageId,
+      ));
+      const firstOriginAnchor = Math.min(...validatedOrigins.map((origin) => origin.timelineSequence));
+      matchedOrigins = validatedOrigins.filter((origin) => origin.timelineSequence === firstOriginAnchor);
+      const earliestRevision = Math.min(...matchedOrigins.map((origin) => origin.storyWorkspaceRef.revision));
+      const earliestRefs = matchedOrigins.filter((origin) => origin.storyWorkspaceRef.revision === earliestRevision)
+        .map((origin) => origin.storyWorkspaceRef);
+      if (new Set(earliestRefs.map((ref) => `${ref.revision}:${ref.payloadHash}`)).size !== 1) {
+        throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_AMBIGUOUS', 'The saved plan has conflicting origin checkpoints.', {});
+      }
+      restoreStoryWorkspaceRefFromOrigin = earliestRefs[0];
+      candidates = await replayCheckpointCandidates(records, {
+        ...baseFilter,
+        'timelineAnchor.replayLineageId': replayLineageId,
+        'timelineAnchor.sequence': firstOriginAnchor,
+      } as unknown as Filter<CompoundActionArtifactRevisionDocument>);
+      selectionMode = 'replay_lineage';
+    }
   }
-  if (!candidates.length && input.allowLegacyFingerprintBoundary === true) {
+  if (!selectionMode && input.allowLegacyFingerprintBoundary === true) {
     candidates = await replayCheckpointCandidates(records, baseFilter);
     if (candidates.length) selectionMode = 'legacy_fingerprint_boundary';
   }
@@ -900,7 +1062,9 @@ export async function resolveCompoundReplayStoryCheckpoint(input: {
     throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_NOT_FOUND', 'No verified original Story checkpoint was found for this saved plan.', {});
   }
 
-  const matchedAnchorSequence = Math.min(...candidates.map((candidate) => Number(candidate.timelineAnchor?.sequence)));
+  const matchedAnchorSequence = selectionMode === 'replay_lineage'
+    ? matchedOrigins[0].timelineSequence
+    : Math.min(...candidates.map((candidate) => Number(candidate.timelineAnchor?.sequence)));
   const anchored = candidates.filter((candidate) => Number(candidate.timelineAnchor?.sequence) === matchedAnchorSequence);
   const byProgram = new Map<string, CompoundActionArtifactRevisionDocument>();
   for (const candidate of anchored) {
@@ -910,11 +1074,13 @@ export async function resolveCompoundReplayStoryCheckpoint(input: {
   if (programId && !byProgram.has(programId)) {
     throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_PROGRAM_MISMATCH', 'The selected saved plan does not belong to this Replay checkpoint.', {});
   }
-  const baseRevisions = [...byProgram.values()].map(replayCheckpointAuthorityBase);
+  const baseRevisions = selectionMode === 'replay_lineage'
+    ? [restoreStoryWorkspaceRefFromOrigin?.revision]
+    : [...byProgram.values()].map(replayCheckpointAuthorityBase);
   if (!baseRevisions.length) {
     throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_NOT_FOUND', 'No verified original Story checkpoint was found for this saved plan.', {});
   }
-  const restoreRevision = Math.min(...baseRevisions);
+  const restoreRevision = Math.min(...baseRevisions.map(Number));
   const storyRevision = await revisionReader({ userId, campaignId, revision: restoreRevision });
   const restoreStoryWorkspaceRef = storyRevision?.storyWorkspaceRef;
   if (!restoreStoryWorkspaceRef
@@ -937,6 +1103,8 @@ export async function resolveCompoundReplayStoryCheckpoint(input: {
     matchedAnchorSequence,
     matchedArtifactCount: anchored.length,
     matchedProgramCount: byProgram.size,
+    matchedOriginCount: matchedOrigins.length,
+    checkpointSource: selectionMode === 'replay_lineage' ? 'instruction_stage' : 'artifact_legacy',
     observedSurvivingRefAgreement,
   };
 }

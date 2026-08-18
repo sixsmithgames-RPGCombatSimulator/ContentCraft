@@ -96,6 +96,20 @@ function instructionMemoryCollection() {
       documents.push(structuredClone(document));
       return { acknowledged: true };
     },
+    find(filter: Filter<CompoundActionInstructionDocument>) {
+      let selected = documents.filter((document) => matches(
+        document as unknown as CompoundActionArtifactRevisionDocument,
+        filter as unknown as Filter<CompoundActionArtifactRevisionDocument>,
+      ));
+      const cursor = {
+        limit(limit: number) {
+          selected = selected.slice(0, limit);
+          return cursor;
+        },
+        async toArray() { return structuredClone(selected); },
+      };
+      return cursor;
+    },
   };
   return { records: records as unknown as Collection<CompoundActionInstructionDocument>, documents };
 }
@@ -189,6 +203,29 @@ function replayCreateInput({
   };
 }
 
+function storyRef(revision: number, payloadHash = 'a'.repeat(64)) {
+  return {
+    contractVersion: 'gmc.story-workspace-ref/1' as const,
+    campaignId: 'campaign-a', workspaceId: 'story-workspace:campaign-a', revision, payloadHash,
+  };
+}
+
+async function stageReplayOrigin(
+  store: ReturnType<typeof instructionMemoryCollection>,
+  artifactInput: ReturnType<typeof replayCreateInput>,
+  replayLineageId: string,
+  revision: number,
+) {
+  return stageCompoundActionInstruction({
+    userId: artifactInput.userId,
+    campaignId: artifactInput.campaignId,
+    idempotencyKey: `stage:${artifactInput.instruction.interactionId}`,
+    instruction: artifactInput.instruction,
+    expectedStoryWorkspaceRef: storyRef(revision),
+    timelineAnchor: { ...artifactInput.timelineAnchor, replayLineageId },
+  }, store.records, async () => ({ storyWorkspaceRef: storyRef(revision) }));
+}
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
@@ -238,6 +275,61 @@ describe('GMC compound-action private artifact store', () => {
     await expect(stageCompoundActionInstruction({
       userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'stage:turn-42', instruction: instruction('changed'),
     }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_IDEMPOTENCY_CONFLICT' });
+  });
+
+  it('atomically binds a staged instruction to the exact active Story origin and rejects stale authority', async () => {
+    const store = instructionMemoryCollection();
+    const exact = instruction();
+    const staged = await stageCompoundActionInstruction({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'stage:origin', instruction: exact,
+      expectedStoryWorkspaceRef: storyRef(7),
+      timelineAnchor: { messageId: 'message-42', sequence: 42, replayLineageId: 'lineage-42' },
+    }, store.records, async () => ({ storyWorkspaceRef: storyRef(7) }));
+    expect(staged).toMatchObject({
+      duplicate: false,
+      originCheckpoint: {
+        contractVersion: 'gmc.compound-action-origin-checkpoint/1',
+        storyWorkspaceRef: { revision: 7 }, replayLineageId: 'lineage-42', timelineSequence: 42,
+        interactionId: exact.interactionId, instructionFingerprint: exact.instructionFingerprint,
+      },
+    });
+    const replay = await stageCompoundActionInstruction({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'stage:origin', instruction: exact,
+      expectedStoryWorkspaceRef: storyRef(7),
+      timelineAnchor: { messageId: 'message-42', sequence: 42, replayLineageId: 'lineage-42' },
+    }, store.records, async () => ({ storyWorkspaceRef: storyRef(12) }));
+    expect(replay).toEqual({ ...staged, duplicate: true });
+
+    await expect(stageCompoundActionInstruction({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'stage:stale',
+      instruction: { ...exact, instructionRef: 'instruction:stale', interactionId: 'interaction:stale' },
+      expectedStoryWorkspaceRef: storyRef(7),
+      timelineAnchor: { messageId: 'message-stale', sequence: 43, replayLineageId: 'lineage-stale' },
+    }, store.records, async () => ({ storyWorkspaceRef: storyRef(12) })))
+      .rejects.toMatchObject({ code: 'COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONFLICT' });
+    expect(store.documents).toHaveLength(1);
+  });
+
+  it('creates a program only when its Story base and timeline match the staged origin checkpoint', async () => {
+    const artifacts = memoryCollection();
+    const instructions = instructionMemoryCollection();
+    const input = replayCreateInput({
+      programId: 'program:origin-bound', interactionId: 'interaction:origin-bound',
+      storyWorkspaceRevision: 7, replayLineageId: 'lineage:origin-bound',
+    });
+    const staged = await stageReplayOrigin(instructions, input, 'lineage:origin-bound', 7);
+    await expect(createCompoundActionArtifact({
+      ...input, originCheckpoint: staged.originCheckpoint,
+    }, artifacts.records, instructions.records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
+
+    const mismatched = replayCreateInput({
+      programId: 'program:origin-mismatch', interactionId: 'interaction:origin-mismatch',
+      storyWorkspaceRevision: 12, replayLineageId: 'lineage:origin-mismatch',
+    });
+    const mismatchOrigin = await stageReplayOrigin(instructions, mismatched, 'lineage:origin-mismatch', 7);
+    await expect(createCompoundActionArtifact({
+      ...mismatched, originCheckpoint: mismatchOrigin.originCheckpoint,
+    }, artifacts.records, instructions.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_ORIGIN_CHECKPOINT_MISMATCH' });
   });
   it('persists an exact instruction once, returns only a reference on write, and isolates owners', async () => {
     const store = memoryCollection();
@@ -510,15 +602,20 @@ describe('GMC compound-action private artifact store', () => {
 
   it('resolves an exact Replay lineage to the original GMC Story authority base despite a later contaminated attempt', async () => {
     const store = memoryCollection();
-    await createCompoundActionArtifact(replayCreateInput({
+    const instructions = instructionMemoryCollection();
+    const original = replayCreateInput({
       programId: 'program:original', interactionId: 'interaction:original', storyWorkspaceRevision: 7,
       replayLineageId: 'replay-lineage:second-mouth',
-    }), store.records);
-    store.documents[0].status = 'inactive';
-    await createCompoundActionArtifact(replayCreateInput({
+    });
+    const later = replayCreateInput({
       programId: 'program:later', interactionId: 'interaction:later', storyWorkspaceRevision: 12,
       replayLineageId: 'replay-lineage:second-mouth',
-    }), store.records);
+    });
+    await stageReplayOrigin(instructions, original, 'replay-lineage:second-mouth', 7);
+    await stageReplayOrigin(instructions, later, 'replay-lineage:second-mouth', 12);
+    await createCompoundActionArtifact(original, store.records);
+    store.documents[0].status = 'inactive';
+    await createCompoundActionArtifact(later, store.records);
 
     const checkpoint = await resolveCompoundReplayStoryCheckpoint({
       userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
@@ -530,7 +627,7 @@ describe('GMC compound-action private artifact store', () => {
         contractVersion: 'gmc.story-workspace-ref/1' as const, campaignId,
         workspaceId: `story-workspace:${campaignId}`, revision, payloadHash: 'a'.repeat(64),
       },
-    }));
+    }), instructions.records);
 
     expect(checkpoint).toEqual({
       contractVersion: 'gmc.compound-replay-story-checkpoint/1',
@@ -539,7 +636,8 @@ describe('GMC compound-action private artifact store', () => {
         workspaceId: 'story-workspace:campaign-a', revision: 7, payloadHash: 'a'.repeat(64),
       },
       selectionMode: 'replay_lineage', matchedAnchorSequence: 43,
-      matchedArtifactCount: 2, matchedProgramCount: 2, observedSurvivingRefAgreement: false,
+      matchedArtifactCount: 2, matchedProgramCount: 2, matchedOriginCount: 2,
+      checkpointSource: 'instruction_stage', observedSurvivingRefAgreement: false,
     });
     expect(JSON.stringify(checkpoint)).not.toContain('exactText');
     expect(JSON.stringify(checkpoint)).not.toContain('authorityBase');
@@ -550,7 +648,7 @@ describe('GMC compound-action private artifact store', () => {
     await createCompoundActionArtifact(replayCreateInput({
       programId: 'program:legacy-original', interactionId: 'interaction:legacy-original', storyWorkspaceRevision: 7,
     }), store.records);
-    store.documents[0].status = 'inactive';
+    store.documents[0].status = 'tombstoned';
     await createCompoundActionArtifact(replayCreateInput({
       programId: 'program:legacy-replay', interactionId: 'interaction:legacy-replay', storyWorkspaceRevision: 12,
     }), store.records);
@@ -568,21 +666,25 @@ describe('GMC compound-action private artifact store', () => {
         contractVersion: 'gmc.story-workspace-ref/1', campaignId,
         workspaceId: `story-workspace:${campaignId}`, revision, payloadHash: 'b'.repeat(64),
       },
-    }));
+    }), instructionMemoryCollection().records);
 
     expect(checkpoint).toMatchObject({
       selectionMode: 'legacy_fingerprint_boundary', matchedAnchorSequence: 43,
-      matchedArtifactCount: 2, matchedProgramCount: 2,
+      matchedArtifactCount: 2, matchedProgramCount: 2, matchedOriginCount: 0,
+      checkpointSource: 'artifact_legacy',
       restoreStoryWorkspaceRef: { revision: 7 },
     });
   });
 
   it('does not broaden a rejected exact lineage and rejects program or immutable Story mismatches', async () => {
     const store = memoryCollection();
-    await createCompoundActionArtifact(replayCreateInput({
+    const instructions = instructionMemoryCollection();
+    const only = replayCreateInput({
       programId: 'program:only', interactionId: 'interaction:only', storyWorkspaceRevision: 7,
       replayLineageId: 'replay-lineage:only',
-    }), store.records);
+    });
+    await stageReplayOrigin(instructions, only, 'replay-lineage:only', 7);
+    await createCompoundActionArtifact(only, store.records);
     const base = {
       userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
       instructionFingerprint: instruction().instructionFingerprint,
@@ -596,13 +698,13 @@ describe('GMC compound-action private artifact store', () => {
 
     await expect(resolveCompoundReplayStoryCheckpoint({
       ...base, replayLineageId: 'replay-lineage:missing', allowLegacyFingerprintBoundary: false,
-    }, store.records, reader)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_NOT_FOUND' });
+    }, store.records, reader, instructions.records)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_NOT_FOUND' });
     await expect(resolveCompoundReplayStoryCheckpoint({
       ...base, replayLineageId: 'replay-lineage:only', programId: 'program:other',
-    }, store.records, reader)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_PROGRAM_MISMATCH' });
+    }, store.records, reader, instructions.records)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_PROGRAM_MISMATCH' });
     await expect(resolveCompoundReplayStoryCheckpoint({
       ...base, replayLineageId: 'replay-lineage:only',
-    }, store.records, async () => null)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_STORY_REVISION_MISSING' });
+    }, store.records, async () => null, instructions.records)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_STORY_REVISION_MISSING' });
   });
 
   it('rejects oversized exact instructions before storage', async () => {

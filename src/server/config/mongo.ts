@@ -244,6 +244,16 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, idempotencyKey: 1 },
     { unique: true, name: 'unique_gmc_compound_action_instruction_idempotency' },
   );
+  await database.collection('gmc_compound_action_instructions').createIndex(
+    {
+      userId: 1,
+      campaignId: 1,
+      instructionFingerprint: 1,
+      'originCheckpoint.replayLineageId': 1,
+      'originCheckpoint.timelineSequence': 1,
+    },
+    { name: 'gmc_compound_action_instruction_origin_lookup' },
+  );
   await database.collection('gmc_compound_action_artifact_revisions').createIndex(
     { userId: 1, campaignId: 1, idempotencyKey: 1 },
     { unique: true, name: 'unique_gmc_compound_action_artifact_idempotency' },

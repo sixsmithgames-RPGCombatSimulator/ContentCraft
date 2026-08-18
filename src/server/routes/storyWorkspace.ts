@@ -445,6 +445,7 @@ storyWorkspaceRouter.post('/interaction-artifacts', requireServiceIntegration, a
     cursor: body.cursor,
     clarifications: body.clarifications,
     saga: body.saga,
+    originCheckpoint: body.originCheckpoint,
     timelineAnchor: body.timelineAnchor,
   });
   res.status(result.duplicate ? 200 : 201).json(result);
@@ -458,6 +459,8 @@ storyWorkspaceRouter.post('/interaction-instructions', requireServiceIntegration
     campaignId: req.params.campaignId,
     idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
     instruction: body.instruction,
+    expectedStoryWorkspaceRef: body.expectedStoryWorkspaceRef,
+    timelineAnchor: body.timelineAnchor,
   });
   res.status(result.duplicate ? 200 : 201).json(result);
 }));
