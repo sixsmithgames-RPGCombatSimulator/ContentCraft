@@ -257,19 +257,55 @@ describe('GMC compound-action private artifact store', () => {
       observationGroups: [], outcomeBindings: [], finalAuthorityHeads: { vcs: 8, gmc: 7 },
       presentationBindings: [{ outcomeId: 'outcome:hide', claimRef: 'claim:hide' }], idempotencyLineage: ['operation-key:vcs:rat-form'],
     };
+    const secondReceipt = {
+      ...receipt,
+      receiptId: 'receipt:presentation:search',
+      nodeId: 'node:search',
+      presentationBindings: [{ outcomeId: 'outcome:search', claimRef: 'claim:search' }],
+    };
     await advanceCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
       idempotencyKey: 'checkpoint:settlement:v4:turn-42', cursor: cursor(2),
       saga: saga(2, 'unsettled', null, 'checkpointed'),
     }, store.records);
     const settledSaga = saga(3, 'settled', receipt.receiptId, 'committed');
+    const settledCursor = {
+      ...cursor(3, ['node:hide']),
+      completedNodeRefs: ['node:hide', 'node:search'], readyNodeRefs: [], remainingNodeRefs: [],
+    };
     const settled = await settleCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 2,
-      idempotencyKey: 'settle:v4:turn-42', cursor: cursor(3, ['node:hide']), executionReceipt: receipt, saga: settledSaga,
+      idempotencyKey: 'settle:v4:turn-42', cursor: settledCursor, executionReceipt: receipt,
+      executionReceipts: [receipt, secondReceipt], saga: settledSaga,
     }, store.records);
     expect(settled).toMatchObject({ duplicate: false, artifactRef: { revision: 3 } });
     const active = await readActiveCompoundActionArtifact({ userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42' }, store.records);
-    expect(active?.artifact).toMatchObject({ cursor: { revision: 3 }, receipts: [{ receiptId: receipt.receiptId }], saga: { presentationSettlement: { state: 'settled' } } });
+    expect(active?.artifact).toMatchObject({
+      cursor: { revision: 3, completedNodeRefs: ['node:hide', 'node:search'] },
+      receipts: [{ receiptId: receipt.receiptId }, { receiptId: secondReceipt.receiptId }],
+      saga: { presentationSettlement: { state: 'settled' } },
+    });
+    const replay = await settleCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 2,
+      idempotencyKey: 'settle:v4:turn-42', cursor: settledCursor, executionReceipt: receipt,
+      executionReceipts: [receipt, secondReceipt], saga: settledSaga,
+    }, store.records);
+    expect(replay).toEqual({ ...settled, duplicate: true });
+    await expect(settleCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 3,
+      idempotencyKey: 'settle:v4:mismatched-primary', cursor: settledCursor, executionReceipt: receipt,
+      executionReceipts: [secondReceipt, receipt], saga: settledSaga,
+    }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_SETTLEMENT_INVALID' });
+    await expect(settleCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 3,
+      idempotencyKey: 'settle:v4:duplicate-receipt', cursor: settledCursor, executionReceipt: receipt,
+      executionReceipts: [receipt, receipt], saga: settledSaga,
+    }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_SETTLEMENT_INVALID' });
+    await expect(settleCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 3,
+      idempotencyKey: 'settle:v4:mixed-program', cursor: settledCursor, executionReceipt: receipt,
+      executionReceipts: [receipt, { ...secondReceipt, programId: 'program:other' }], saga: settledSaga,
+    }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_SETTLEMENT_INVALID' });
     await expect(settleCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 3,
       idempotencyKey: 'settle:v4:bad', cursor: cursor(4, ['node:hide']), executionReceipt: receipt,
@@ -409,6 +445,10 @@ describe('GMC compound-action private artifact store', () => {
     const duplicateDependent = structuredClone(observationProgram);
     ((duplicateDependent.nodes[0].observationPrerequisite as JsonObject).dependentObservationNodeRefs as string[]).push('observe-drain');
     await expect(create(duplicateDependent, 'create:duplicate-dependent')).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_INVALID' });
+
+    const duplicateOwner = structuredClone(observationProgram);
+    (duplicateOwner.nodes[3].observationGroups as JsonObject[]).push({ groupId: 'group:drain' });
+    await expect(create(duplicateOwner, 'create:duplicate-owner')).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_INVALID' });
   });
 
   it('rewinds later interaction revisions and restores the latest revision at the boundary', async () => {

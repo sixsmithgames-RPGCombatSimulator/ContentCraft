@@ -548,6 +548,7 @@ storyWorkspaceRouter.post('/interaction-artifacts/:programId/settle', requireSer
     idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
     cursor: body.cursor,
     executionReceipt: body.executionReceipt,
+    executionReceipts: body.executionReceipts,
     saga: body.saga,
   });
   res.status(result.duplicate ? 200 : 201).json(result);

@@ -35,14 +35,29 @@ valid bounded program before any artifact or owner write.
 
 For every observation prerequisite, GMC now requires unique dependent and
 group refs, a real transitive path from every dependent to the prerequisite,
-at least one listed group on every dependent, and coverage of every listed
-group by at least one dependent. Group IDs remain exact and cannot be invented
+at least one listed group on every dependent, and exactly one dependent owner
+for every listed group. Group IDs remain exact and cannot be invented
 or satisfied by a node outside the declared dependent set. This aligns the
 artifact store with GMA compiler `/7` and the Accepted GMA ADR-007 aggregate
 prerequisite contract without changing a schema version, limit, authority
 owner, or persistence lifetime. The exact two-dependent/two-group production
 shape, missing dependent coverage, orphan group, duplicate ref, and unrelated
 node cases are release tests.
+
+## Production presentation correction — 2026-08-17
+
+The literal five-intent conformance flow showed that one aggregate Scene
+preparation could still be followed by three independent narration settlements.
+That fragmented the player's turn and crossed the shared foreground-operation
+budget. GMC therefore accepts one bounded atomic presentation settlement for
+all simultaneously ready observation nodes. The fresh request supplies every
+`gma.action-execution-receipt/2` plus the first receipt in the legacy
+`executionReceipt` field. GMC validates unique receipt IDs, one program,
+node/cursor membership, the single checkpointed settlement operation, and its
+primary receipt ref; then it appends all receipts, commits the operation, and
+advances the cursor in one artifact revision. Historical single-receipt
+settlements remain valid. No Story or mechanics authority moves to GMA or
+Studio.
 
 ## Authoritative records
 
@@ -113,8 +128,8 @@ verified integration identity:
   gain saga validation and status lookup.
 - `POST /api/gmc/v1/campaigns/:campaignId/story/interaction-artifacts/:programId/settle`
   requires the checkpointed settlement operation, atomically marks it
-  committed, appends the immutable execution/presentation receipt (including
-  the exact recoverable player presentation), and advances the cursor under
+  committed, appends the bounded immutable execution/presentation receipt set
+  (including the exact recoverable player presentation), and advances the cursor under
   one expected artifact revision and the same idempotency key.
 
 Every mutation records its deterministic request fingerprint before dispatch.

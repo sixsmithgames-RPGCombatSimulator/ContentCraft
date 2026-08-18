@@ -296,6 +296,7 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
       }
       const declaredGroups = new Set(groupRefs.map(String));
       const coveredGroups = new Set<string>();
+      const groupOwnerCounts = new Map<string, number>();
       for (const dependentRef of dependentRefs) {
         const dependent = nodesById.get(String(dependentRef));
         const groups = Array.isArray(dependent?.observationGroups) ? dependent.observationGroups : [];
@@ -304,10 +305,16 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
         if (!dependent || !dependsTransitively(dependent, nodeId) || matchedGroups.length === 0) {
           throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An observation prerequisite must bind real downstream observation groups.', { nodeId, dependentRef });
         }
-        for (const groupRef of matchedGroups) coveredGroups.add(groupRef);
+        for (const groupRef of matchedGroups) {
+          coveredGroups.add(groupRef);
+          groupOwnerCounts.set(groupRef, Number(groupOwnerCounts.get(groupRef) ?? 0) + 1);
+        }
       }
       if ([...declaredGroups].some((groupRef) => !coveredGroups.has(groupRef))) {
         throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An observation prerequisite cannot bind an observation group outside its declared downstream nodes.', { nodeId });
+      }
+      if ([...declaredGroups].some((groupRef) => groupOwnerCounts.get(groupRef) !== 1)) {
+        throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An observation prerequisite must identify one exact downstream owner for each group.', { nodeId });
       }
     }
   }
@@ -638,9 +645,18 @@ export async function settleCompoundActionArtifact(input: {
   idempotencyKey: string;
   cursor: JsonObject;
   executionReceipt: JsonObject;
+  executionReceipts?: JsonObject[];
   saga: JsonObject;
 }, records: CompoundActionArtifactCollection = artifactCollection()) {
-  if (input.executionReceipt.schemaVersion !== COMPOUND_ACTION_CONTRACTS.actionExecutionReceiptV2
+  const executionReceipts = Array.isArray(input.executionReceipts) ? input.executionReceipts : [input.executionReceipt];
+  const receiptIds = executionReceipts.map((receipt) => receipt?.receiptId);
+  const completedNodeRefs = new Set(Array.isArray(input.cursor.completedNodeRefs) ? input.cursor.completedNodeRefs : []);
+  if (executionReceipts.length < 1 || executionReceipts.length > 8
+    || canonicalJson(executionReceipts[0]) !== canonicalJson(input.executionReceipt)
+    || new Set(receiptIds).size !== receiptIds.length
+    || executionReceipts.some((receipt) => receipt?.schemaVersion !== COMPOUND_ACTION_CONTRACTS.actionExecutionReceiptV2
+      || receipt?.programId !== input.programId
+      || !completedNodeRefs.has(receipt?.nodeId))
     || input.saga.schemaVersion !== COMPOUND_ACTION_CONTRACTS.actionSaga
     || !isObject(input.saga.presentationSettlement)
     || input.saga.presentationSettlement.state !== 'settled') {
@@ -671,7 +687,7 @@ export async function settleCompoundActionArtifact(input: {
     expectedRevision: input.expectedRevision,
     idempotencyKey: input.idempotencyKey,
     cursor: input.cursor,
-    appendReceipts: [input.executionReceipt],
+    appendReceipts: executionReceipts,
     saga: input.saga,
   }, records);
 }

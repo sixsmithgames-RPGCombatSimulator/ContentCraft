@@ -58,6 +58,17 @@ interpreter, authority retrieval, instruction staging, or artifact creation.
 The cross-repository alignment check compares all four bundles plus this
 operation's active prompt and result schema.
 
+## Atomic presentation batch correction — 2026-08-17
+
+- Accept a bounded `executionReceipts` array on the settlement route while
+  retaining `executionReceipt` as the matching primary compatibility field.
+- Validate version, program, unique receipt identity, cursor membership, and
+  the one committed settlement operation before writing.
+- Append the entire receipt set and cursor advance in one artifact revision;
+  idempotent replay must match every receipt.
+- Test one and multiple receipts, mismatched primary, duplicate IDs, mixed
+  programs, stale revisions, lost responses, and exact replay.
+
 ## Stop conditions
 
 Stop rollout on any observation-only mutation, owner/revision mismatch,
