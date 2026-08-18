@@ -408,3 +408,52 @@ It retains the non-collapsing observation-outcome rule as ordinary strings,
 while fresh typed observation requests remain stopped in GMA before model or
 authority work. This is containment under the Accepted D9.4 baseline; it does
 not accept or implement Proposed ADR-007.
+
+## Accepted D9.4.40 owner-resolved causal Replay checkpoint — 2026-08-18
+
+GMC accepts GMA ADR-005 D9.4.40 and Studio ADR-005 D9.4.40 by reference after
+production proved that a surviving browser narration row could carry a future
+Story ref. Browser timeline refs are presentation evidence and can no longer
+select the Story checkpoint for a compound Replay.
+
+GMC owns the service-private `gmc.compound-replay-story-checkpoint/1` resolver.
+It accepts only a bounded campaign-scoped selector containing the selected
+timeline boundary, exact saved-instruction fingerprint, stable Replay lineage
+when present, optional current-program membership guard, and an observational
+browser ref that never participates in selection. Exact stored Replay lineage
+is primary. For historical rows without that field, GMC may use only the first
+artifact anchor after the selected boundary for the exact fingerprint and must
+restrict all candidates to that single anchor. It groups immutable artifact
+revisions by program, verifies optional program membership, selects the earliest
+Story `authorityBase` across those Replay attempts, and reads that exact
+immutable Story revision. Missing, ambiguous, malformed, cross-campaign, mixed-
+lineage, or nonmember evidence returns no checkpoint and performs no mutation.
+
+Artifact timeline anchors gain an optional stable `replayLineageId` created by
+GMA's browser message and preserved on every Replay. The field is identity and
+provenance only; it contains no player text or Story data. Existing artifacts
+remain readable, inactive and superseded revisions remain immutable, and legacy
+resolution is a lazy compatibility read rather than a migration write.
+
+The checkpoint response contains only the complete immutable
+`gmc.story-workspace-ref/1`, selection mode, matched anchor, and bounded counts.
+GMA must use that exact ref in GMC's existing exact Story rewind and require the
+same ref plus `restoreMode: exact_ref` before artifact rewind or any VCS/canon/
+time/XP reversal. A browser-ref disagreement is redacted drift telemetry; the
+GMC checkpoint wins. A rejected selector cannot broaden into browser-ref or raw
+sequence deletion. The existing expected-head compare-and-swap, stable rewind
+idempotency, one GMA rebase, and honest partial-recovery ordering remain.
+
+This adds one bounded owner read and zero LLM operations, tokens, provider
+calls, VCS operations, Story writes, or correction rounds. Diagnostics are
+limited to hashed lineage/selector identity, selection mode, boundary/anchor,
+bounded match counts, revision numbers, and browser-ref agreement. No artifact
+body, instruction text, Story body, Scene content, prompt, narration, fact, or
+credential may be logged or returned.
+
+Release requires exact and legacy lineage tests; fingerprint, boundary,
+campaign, membership, ambiguity, and immutable-base containment; browser-drift
+selection; exact-ref equality; idempotency and operation ordering; old-artifact
+compatibility; complete GMC/GMA/Studio gates; direct `main` pins; hosted health;
+and a production Replay whose rebuilt first packet reads Flintwake before any
+movement, with no duplicate owner effect and no Gemini call in Manual AI mode.
