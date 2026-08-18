@@ -550,11 +550,11 @@ describe('provider-neutral LLM orchestrator', () => {
 
   it('accepts the typed observation preparation and narration contracts and rejects evasive first-pass answers', async () => {
     const preparationPacket = {
-      schemaVersion: 'gma.observation-authority-preparation-packet/1',
+      schemaVersion: 'gma.observation-authority-preparation-packet/2',
       immutable: { programId: 'program:observe', nodeId: 'node:observe', preparationFingerprint: 'a'.repeat(64) },
       currentScene: { sourceRefs: ['scene:second-mouth'], existingObservables: [], existingObstructions: [] },
       groups: [{
-        groupId: 'group:familiar', observer: { actorKind: 'familiar' }, availableModalities: ['visual', 'olfactory'],
+        groupId: 'group:familiar', accessId: 'gmc:observation-access:familiar', observer: { actorKind: 'familiar' }, availableModalities: ['visual', 'olfactory'],
         outcomes: [
           { outcomeId: 'outcome:appearance', facet: 'surface_description' },
           { outcomeId: 'outcome:species', facet: 'apparent_classification' },
@@ -595,6 +595,20 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(rejectedStalePreparation.status).toBe('review_required');
     expect(rejectedStalePreparation.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
       .toContain('OBSERVATION_PREPARATION_FINGERPRINT_MISMATCH');
+
+    const accessMismatchPacket: any = structuredClone(preparationPacket);
+    accessMismatchPacket.currentScene.existingObstructions = [{ obstructionId: 'gmc:obstruction:bend', hasV4Fields: false }];
+    const accessMismatchCandidate: any = structuredClone(candidate);
+    accessMismatchCandidate.existingObstructionUpgrades = [{
+      obstructionId: 'gmc:obstruction:bend', affectedAccessRefs: ['info:second-mouth-first-hidden-stretch'],
+      pathRefs: [], viewpointRefs: [], formRefs: [], provenanceReceiptRefs: ['scene:second-mouth'],
+    }];
+    const rejectedAccessMismatch = await executeLlmOperation(request('story.observation.prepare', 'typed-observation-access-mismatch', accessMismatchPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => accessMismatchCandidate)],
+    });
+    expect(rejectedAccessMismatch.status).toBe('review_required');
+    expect(rejectedAccessMismatch.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_PREPARATION_ACCESS_REFERENCE_INVALID');
 
     const narrationPacket = {
       schemaVersion: 'gma.current-scene-narration-packet/8',

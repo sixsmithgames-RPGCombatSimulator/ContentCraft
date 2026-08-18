@@ -266,7 +266,7 @@ registerSemanticValidator('observation-preparation-contract', ({ request, output
     issues.push({ code: 'OBSERVATION_PREPARATION_VERSION_UNSUPPORTED', message: 'The observation preparation result version is unsupported.', path: '/schemaVersion' });
     return result('observation-preparation-contract', issues);
   }
-  if (packet?.schemaVersion !== 'gma.observation-authority-preparation-packet/1') {
+  if (packet?.schemaVersion !== 'gma.observation-authority-preparation-packet/2') {
     issues.push({ code: 'OBSERVATION_PREPARATION_PACKET_MISMATCH', message: 'The candidate requires the matching typed observation preparation packet.' });
     return result('observation-preparation-contract', issues);
   }
@@ -290,6 +290,28 @@ registerSemanticValidator('observation-preparation-contract', ({ request, output
     }
     if (row && ['familiar', 'sensor'].includes(String((expected as any)?.observer?.actorKind ?? '')) && row.accessMode !== 'remote_sensor') {
       issues.push({ code: 'OBSERVATION_PREPARATION_VIEWPOINT_MISMATCH', message: 'A familiar or sensor must retain its remote viewpoint.', path: '/groupPreparations' });
+    }
+  }
+  const allowedAccessRefs = new Set([
+    ...(Array.isArray(packet?.groups) ? packet.groups.map((entry: any) => String(entry?.accessId ?? '')) : []),
+    ...(Array.isArray(packet?.currentScene?.existingObservationAccessRefs)
+      ? packet.currentScene.existingObservationAccessRefs.map(String)
+      : []),
+  ].filter(Boolean));
+  for (const [collection, rows] of [
+    ['existingObstructionUpgrades', output?.existingObstructionUpgrades],
+    ['obstructions', output?.obstructions],
+  ] as const) {
+    for (const [index, row] of (Array.isArray(rows) ? rows : []).entries()) {
+      const invalidRef = (Array.isArray(row?.affectedAccessRefs) ? row.affectedAccessRefs : [])
+        .find((ref: unknown) => !allowedAccessRefs.has(String(ref)));
+      if (invalidRef !== undefined) {
+        issues.push({
+          code: 'OBSERVATION_PREPARATION_ACCESS_REFERENCE_INVALID',
+          message: 'An affected access reference must be an exact observation access identifier supplied by the packet.',
+          path: `/${collection}/${index}/affectedAccessRefs`,
+        });
+      }
     }
   }
   const expectedOutcomes = new Map((Array.isArray(packet?.groups) ? packet.groups : []).flatMap((group: any) => (group?.outcomes ?? []).map((entry: any) => [String(entry?.outcomeId ?? ''), { ...entry, groupId: group.groupId }])));

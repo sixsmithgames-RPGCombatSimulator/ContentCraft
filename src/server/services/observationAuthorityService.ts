@@ -38,7 +38,7 @@ export const OBSERVATION_SAGA_SHARED_CONTRACTS = Object.freeze({
   gmcAuthorityCommit: 'gmc.observation-authority-commit/1', gmcAuthorityReceipt: 'gmc.observation-authority-receipt/1',
   sceneKit: 'gmc.scene-kit/4', playableSceneContext: 'gma.playable-scene-context/4', actionBoundReveal: 'gma.action-bound-reveal/4',
   substantiveOutcome: 'gma.substantive-outcome/2', actionExecutionReceipt: 'gma.action-execution-receipt/2',
-  observationPreparationPacket: 'gma.observation-authority-preparation-packet/1',
+  observationPreparationPacket: 'gma.observation-authority-preparation-packet/2',
   observationPreparationCandidate: 'gma.observation-authority-preparation-candidate/1',
   narrationPacket: 'gma.current-scene-narration-packet/8', narrationResult: 'gma.current-scene-narration-result/8',
   narrationRepair: 'gma.current-scene-narration-repair/8',

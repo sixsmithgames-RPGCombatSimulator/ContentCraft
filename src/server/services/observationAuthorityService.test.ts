@@ -184,6 +184,24 @@ describe('observation owner authority', () => {
     expect(projection).toMatchObject({ preparationState: 'ready', observables: [{ observableId: 'gmc:observable:worker-appearance' }, { observableId: 'gmc:observable:worker-distance' }] });
   });
 
+  it('accepts only exact Scene observation-access identifiers in obstruction access bindings', () => {
+    const kit = sceneKitV4();
+    kit.obstructions = [{
+      obstructionId: 'gmc:obstruction:entrance-bend', subjectRefs: ['gmc:element:drain-mouth'],
+      affectedFacets: ['extent'], affectedModalities: ['visual'], affectedAccessRefs: ['gmc:access:rat-worker'],
+      pathRefs: [], viewpointRefs: [], mobilityEffect: 'none', observerRefs: [], formRefs: [], methodRefs: [],
+      playerFacingStatement: 'The entrance bend blocks the origin sightline.',
+      sourceRefs: ['gmc:scene:second-mouth'], provenanceReceiptRefs: ['gmc:scene:second-mouth'],
+    }];
+    expect(() => validateSceneKitV4(kit)).not.toThrow();
+
+    const wrongVocabulary = structuredClone(kit);
+    (wrongVocabulary.obstructions as JsonObject[])[0].affectedAccessRefs = ['gmc:information:worker-signal'];
+    expect(() => validateSceneKitV4(wrongVocabulary)).toThrowError(expect.objectContaining({
+      code: 'STORY_OBSERVATION_ACCESS_REFERENCE_INVALID',
+    }));
+  });
+
   it('rejects split reciprocal bindings and leaves the prior Scene head intact', async () => {
     const store = await prepared();
     await expect(commitObservationAuthority({
