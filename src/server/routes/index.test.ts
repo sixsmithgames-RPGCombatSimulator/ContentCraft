@@ -4,6 +4,8 @@ import express from 'express';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ACTION_DIRECTED_STORY_CAPABILITIES,
+  ACTION_DIRECTED_STORY_PLAYABLE_SCENE_CONTEXT_READ_VERSIONS,
+  ACTION_DIRECTED_STORY_SCENE_KIT_READ_VERSIONS,
   STORY_OBLIGATION_CAPABILITIES,
 } from '../services/storyWorkspaceStore.js';
 import { COMPOUND_ACTION_CAPABILITIES, COMPOUND_ACTION_CONTRACTS } from '../services/compoundActionArtifactStore.js';
@@ -37,13 +39,15 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.11.12',
+      version: '1.11.13',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
           contracts: {
             migrationPreview: 'gmc.story-migration-preview/1',
             acceptedV1SceneSnapshot: 'gma.accepted-v1-scene-snapshot/1',
+            sceneKitReadVersions: ACTION_DIRECTED_STORY_SCENE_KIT_READ_VERSIONS,
+            playableSceneContextReadVersions: ACTION_DIRECTED_STORY_PLAYABLE_SCENE_CONTEXT_READ_VERSIONS,
           },
           authority: 'gmc',
           routeEnabled: false,
@@ -87,6 +91,12 @@ describe('API health', () => {
     ]);
     expect(ACTION_DIRECTED_STORY_CAPABILITIES).not.toContain('typed-observation-authority/1');
     expect(ACTION_DIRECTED_STORY_CAPABILITIES).not.toContain('atomic-observation-scene-write/1');
+    expect(ACTION_DIRECTED_STORY_SCENE_KIT_READ_VERSIONS).toEqual([
+      'gmc.scene-kit/2', 'gmc.scene-kit/3', 'gmc.scene-kit/4',
+    ]);
+    expect(ACTION_DIRECTED_STORY_PLAYABLE_SCENE_CONTEXT_READ_VERSIONS).toEqual([
+      'gma.playable-scene-context/2', 'gma.playable-scene-context/3', 'gma.playable-scene-context/4',
+    ]);
     expect(OBSERVATION_SAGA_SHARED_CONTRACTS.semanticActionCompilerPolicy).toBe('gma.semantic-action-compiler-policy/7');
   });
 });

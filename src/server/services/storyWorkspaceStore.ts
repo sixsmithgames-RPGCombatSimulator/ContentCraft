@@ -20,6 +20,22 @@ export const SCENE_KIT_CONTRACT_VERSION = 'gmc.scene-kit/3';
 export const PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION = 'gma.playable-scene-context/3';
 export const SCENE_KIT_V4_CONTRACT_VERSION = 'gmc.scene-kit/4';
 export const PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION = 'gma.playable-scene-context/4';
+/**
+ * Ordered owner-projection read sets. The version-3 entries remain the ordinary
+ * action-directed handoff writers; version 4 is owned by the verified
+ * observation route and is never down-converted for GMA.
+ * date_of_change: 2026-08-18
+ */
+export const ACTION_DIRECTED_STORY_SCENE_KIT_READ_VERSIONS = Object.freeze([
+  SCENE_KIT_V2_CONTRACT_VERSION,
+  SCENE_KIT_CONTRACT_VERSION,
+  SCENE_KIT_V4_CONTRACT_VERSION,
+] as const);
+export const ACTION_DIRECTED_STORY_PLAYABLE_SCENE_CONTEXT_READ_VERSIONS = Object.freeze([
+  PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
+  PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,
+  PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION,
+] as const);
 export const ACTOR_MECHANICS_BINDING_CONTRACT_VERSION = 'gmc.actor-mechanics-binding/1';
 export const STORY_DELTA_V2_CONTRACT_VERSION = 'studio.story-delta/2';
 export const SCENE_STORY_DESIGN_CONTRACT_VERSION = 'gmc.scene-story-design/1';
