@@ -557,3 +557,27 @@ version-skew, exact rewind, idempotency, zero-model, and redaction tests; full
 GMC/GMA/Studio gates; exact direct-`main` pins; hosted owner/asset verification;
 and production Flintwake-before-movement plus rat-familiar completion with no
 duplicate effect and Gemini remaining 181.
+
+## Accepted D9.4.43 prepared-boundary cursor coherence — 2026-08-18
+
+GMC accepts GMA ADR-005 D9.4.43 and Studio ADR-005 D9.4.43 by reference. The
+hosted failure occurred before GMC could prepare the missing SECOND MOUTH Story
+detail: GMA selected the observation node from a newly persisted prepared cursor
+but validated it against the older cursor read from the source artifact.
+
+GMC's contract and ownership do not change. It continues to accept one
+canonical action-directed Story request bound to an interaction, semantic
+action, current Story/Scene head, and optional compound program/node/slice. GMA
+must derive that node and slice from one prepared boundary snapshot before
+calling GMC. The LLM cannot choose or repair a cursor. GMC must continue to fail
+closed on stale request identity or owner revision and must never infer a node
+from prose.
+
+There is no new schema, query, write, migration, model operation, token budget,
+or GMC deployment requirement. Existing compare-and-swap, exact-ref, bounded
+diagnostic, privacy, idempotency, and rollback rules remain unchanged. GMC tests
+must continue to prove that one canonical request is accepted and that stale or
+mismatched program/node/slice authority is rejected. The new production-shaped
+source-cursor/prepared-cursor regression belongs to GMA, with Studio pinning the
+exact corrected GMA commit while retaining GMC `1.11.17` unless an independent
+GMC change becomes necessary.
