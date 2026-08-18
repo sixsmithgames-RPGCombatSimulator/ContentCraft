@@ -287,16 +287,27 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
       }
       const dependentRefs = Array.isArray(prerequisite.dependentObservationNodeRefs) ? prerequisite.dependentObservationNodeRefs : [];
       const groupRefs = Array.isArray(prerequisite.groupRefs) ? prerequisite.groupRefs : [];
-      if (!dependentRefs.length || !groupRefs.length || dependentRefs.some((ref) => typeof ref !== 'string') || groupRefs.some((ref) => typeof ref !== 'string')) {
+      if (!dependentRefs.length || !groupRefs.length
+        || dependentRefs.some((ref) => typeof ref !== 'string')
+        || groupRefs.some((ref) => typeof ref !== 'string')
+        || new Set(dependentRefs).size !== dependentRefs.length
+        || new Set(groupRefs).size !== groupRefs.length) {
         throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An observation prerequisite must bind dependent observation nodes and groups.', { nodeId });
       }
+      const declaredGroups = new Set(groupRefs.map(String));
+      const coveredGroups = new Set<string>();
       for (const dependentRef of dependentRefs) {
         const dependent = nodesById.get(String(dependentRef));
         const groups = Array.isArray(dependent?.observationGroups) ? dependent.observationGroups : [];
         const availableGroups = new Set(groups.filter(isObject).map((group) => String(group.groupId)));
-        if (!dependent || !dependsTransitively(dependent, nodeId) || groupRefs.some((ref) => !availableGroups.has(String(ref)))) {
+        const matchedGroups = [...availableGroups].filter((groupRef) => declaredGroups.has(groupRef));
+        if (!dependent || !dependsTransitively(dependent, nodeId) || matchedGroups.length === 0) {
           throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An observation prerequisite must bind real downstream observation groups.', { nodeId, dependentRef });
         }
+        for (const groupRef of matchedGroups) coveredGroups.add(groupRef);
+      }
+      if ([...declaredGroups].some((groupRef) => !coveredGroups.has(groupRef))) {
+        throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An observation prerequisite cannot bind an observation group outside its declared downstream nodes.', { nodeId });
       }
     }
   }

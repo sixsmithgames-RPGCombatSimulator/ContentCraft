@@ -23,6 +23,27 @@ rollback, observability, examples, tests, human gate, and all-or-none rollout
 as normative requirements. This record fixes the GMC-specific storage, route,
 authorization, migration, and operational choices required by that decision.
 
+## Production conformance correction — 2026-08-17
+
+The literal SECOND MOUTH policy `/10` program exposed an artifact-validator
+split brain. GMA emitted one VCS prerequisite and one GMC prerequisite, each
+shared by two downstream observation nodes. The prerequisite's `groupRefs`
+field is the union of the groups distributed across its
+`dependentObservationNodeRefs`; it does not mean that every dependent node
+contains every group. GMC had enforced the latter intersection and rejected a
+valid bounded program before any artifact or owner write.
+
+For every observation prerequisite, GMC now requires unique dependent and
+group refs, a real transitive path from every dependent to the prerequisite,
+at least one listed group on every dependent, and coverage of every listed
+group by at least one dependent. Group IDs remain exact and cannot be invented
+or satisfied by a node outside the declared dependent set. This aligns the
+artifact store with GMA compiler `/7` and the Accepted GMA ADR-007 aggregate
+prerequisite contract without changing a schema version, limit, authority
+owner, or persistence lifetime. The exact two-dependent/two-group production
+shape, missing dependent coverage, orphan group, duplicate ref, and unrelated
+node cases are release tests.
+
 ## Authoritative records
 
 The current `gmc_story_workspace_revisions` document remains the sole Story

@@ -357,6 +357,60 @@ describe('GMC compound-action private artifact store', () => {
     }, memoryCollection().records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_TOO_LARGE' });
   });
 
+  it('accepts shared prerequisite group unions distributed across downstream observation nodes', async () => {
+    const exact = instruction();
+    const base = program(exact);
+    const node = (nodeId: string, dependsOn: string[], observationGroups: JsonObject[] = [], observationPrerequisite: JsonObject | null = null) => ({
+      ...base.nodes[0], nodeId, dependsOn, observationGroups, observationPrerequisite,
+      dataRequirements: [], evidenceSpans: [{ start: 0, end: 1 }],
+    });
+    const prerequisite = (owner: 'gmc' | 'vcs', operationKind: 'establish_observer_viewpoint' | 'activate_familiar_form') => ({
+      schemaVersion: 'gma.observation-prerequisite/1', owner, operationKind,
+      dependentObservationNodeRefs: ['observe-drain', 'observe-worker'],
+      groupRefs: ['group:drain', 'group:worker'],
+    });
+    const observationProgram = {
+      ...base,
+      schemaVersion: 'gma.semantic-action-program/4',
+      nodes: [
+        node('activate-rat-form', [], [], prerequisite('vcs', 'activate_familiar_form')),
+        node('move-rat', ['activate-rat-form'], [], prerequisite('gmc', 'establish_observer_viewpoint')),
+        node('observe-drain', ['move-rat'], [{ groupId: 'group:drain' }]),
+        node('observe-worker', ['move-rat'], [{ groupId: 'group:worker' }]),
+        node('measure-worker-distance', [], [{ groupId: 'group:distance' }]),
+      ],
+    };
+    const observationCursor = {
+      ...cursor(1),
+      completedNodeRefs: [],
+      readyNodeRefs: ['activate-rat-form', 'measure-worker-distance'],
+      remainingNodeRefs: ['move-rat', 'observe-drain', 'observe-worker'],
+      skippedNodeRefs: [],
+    };
+    const create = (candidate: JsonObject, idempotencyKey: string) => createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey,
+      instruction: exact, program: candidate, cursor: observationCursor, saga: saga(1, 'unsettled'),
+    }, memoryCollection().records);
+
+    await expect(create(observationProgram, 'create:distributed-groups')).resolves.toMatchObject({ artifactRef: { revision: 1 } });
+
+    const orphanGroup = structuredClone(observationProgram);
+    ((orphanGroup.nodes[0].observationPrerequisite as JsonObject).groupRefs as string[]).push('group:outside');
+    await expect(create(orphanGroup, 'create:orphan-group')).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_INVALID' });
+
+    const uncoveredDependent = structuredClone(observationProgram);
+    (uncoveredDependent.nodes[0].observationPrerequisite as JsonObject).groupRefs = ['group:drain'];
+    await expect(create(uncoveredDependent, 'create:uncovered-dependent')).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_INVALID' });
+
+    const duplicateGroup = structuredClone(observationProgram);
+    ((duplicateGroup.nodes[0].observationPrerequisite as JsonObject).groupRefs as string[]).push('group:drain');
+    await expect(create(duplicateGroup, 'create:duplicate-group')).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_INVALID' });
+
+    const duplicateDependent = structuredClone(observationProgram);
+    ((duplicateDependent.nodes[0].observationPrerequisite as JsonObject).dependentObservationNodeRefs as string[]).push('observe-drain');
+    await expect(create(duplicateDependent, 'create:duplicate-dependent')).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_INVALID' });
+  });
+
   it('rewinds later interaction revisions and restores the latest revision at the boundary', async () => {
     const store = memoryCollection();
     await createCompoundActionArtifact(createInput(), store.records);
