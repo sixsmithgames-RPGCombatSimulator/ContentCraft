@@ -6,6 +6,7 @@ import { collections } from './gmcIntegrationStore.js';
 import {
   readActiveStoryWorkspace,
   readStoryWorkspaceRevision,
+  readStoryWorkspaceTimelineCheckpoint,
   StoryWorkspaceStoreError,
   type JsonObject,
   type JsonValue,
@@ -16,6 +17,7 @@ export const COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION = 'gmc.compound-act
 export const COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION = 'gmc.compound-action-artifact-ref/1';
 export const COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION = 'gmc.compound-action-requirement-projection/1';
 export const COMPOUND_REPLAY_STORY_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/1';
+export const COMPOUND_REPLAY_STORY_CHECKPOINT_V2_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/2';
 export const COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-action-origin-checkpoint/1';
 export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'compound-action-program/2',
@@ -915,6 +917,15 @@ type ReplayCheckpointRevisionReader = (input: {
   revision: number;
 }) => Promise<{ storyWorkspaceRef: StoryWorkspaceReference } | null>;
 
+type ReplayTimelineCheckpointReader = (input: {
+  userId: string;
+  campaignId: string;
+  boundarySequence: number;
+}) => Promise<{
+  storyWorkspaceRef: StoryWorkspaceReference;
+  timelineAnchor: { messageId: string; sequence: number };
+} | null>;
+
 function replayCheckpointFingerprint(value: unknown): string {
   const fingerprint = String(value ?? '').trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(fingerprint)) {
@@ -1105,6 +1116,189 @@ export async function resolveCompoundReplayStoryCheckpoint(input: {
     matchedProgramCount: byProgram.size,
     matchedOriginCount: matchedOrigins.length,
     checkpointSource: selectionMode === 'replay_lineage' ? 'instruction_stage' : 'artifact_legacy',
+    observedSurvivingRefAgreement,
+  };
+}
+
+function validateReplayRootInstruction(
+  document: CompoundActionInstructionDocument,
+  campaignId: string,
+  instructionFingerprint: string,
+  replayLineageId: string,
+) {
+  if (document.campaignId !== campaignId
+    || document.interactionId !== replayLineageId
+    || document.instructionFingerprint !== instructionFingerprint
+    || document.instruction?.interactionId !== replayLineageId
+    || document.instruction?.instructionFingerprint !== instructionFingerprint) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_LINEAGE_ROOT_INVALID', 'The saved plan lineage root is inconsistent.', {});
+  }
+  validateInstruction(document.instruction);
+}
+
+function replayProgramMembership(
+  candidates: CompoundActionArtifactRevisionDocument[],
+  programId: string | null,
+) {
+  const byProgram = new Map<string, CompoundActionArtifactRevisionDocument>();
+  for (const candidate of candidates) {
+    const prior = byProgram.get(candidate.programId);
+    if (!prior || candidate.revision < prior.revision) byProgram.set(candidate.programId, candidate);
+  }
+  if (programId && !byProgram.has(programId)) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_PROGRAM_MISMATCH', 'The selected saved plan does not belong to this Replay checkpoint.', {});
+  }
+  return byProgram;
+}
+
+function requireObservedStoryAgreement(
+  observedValue: JsonObject | null | undefined,
+  selected: StoryWorkspaceReference,
+  campaignId: string,
+): boolean | null {
+  if (observedValue == null) return null;
+  let observed: StoryWorkspaceReference;
+  try {
+    observed = exactStoryWorkspaceRef(observedValue, campaignId, 'observedSurvivingStoryWorkspaceRef');
+  } catch {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_OBSERVED_STORY_REF_INVALID', 'The surviving Story checkpoint is invalid.', {});
+  }
+  if (!sameExactStoryWorkspaceRef(observed, selected)) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_OBSERVED_STORY_REF_MISMATCH', 'The surviving Story checkpoint does not match the owner timeline.', {});
+  }
+  return true;
+}
+
+/**
+ * Resolves Replay from the immutable lineage root. A descendant retry origin
+ * can never replace an originless historical root; legacy Story selection is
+ * made from GMC's available owner timeline rather than artifact bases.
+ */
+export async function resolveCompoundReplayStoryCheckpointV2(input: {
+  userId: string;
+  campaignId: string;
+  boundarySequence: number;
+  instructionFingerprint: string;
+  replayLineageId: string;
+  allowRootlessArtifactMembership?: boolean;
+  programId?: string | null;
+  observedSurvivingStoryWorkspaceRef?: JsonObject | null;
+}, records: CompoundActionArtifactCollection = artifactCollection(), revisionReader: ReplayCheckpointRevisionReader = readStoryWorkspaceRevision, stagedInstructions: CompoundActionInstructionCollection = instructionCollection(), timelineCheckpointReader: ReplayTimelineCheckpointReader = readStoryWorkspaceTimelineCheckpoint): Promise<{
+  contractVersion: typeof COMPOUND_REPLAY_STORY_CHECKPOINT_V2_CONTRACT_VERSION;
+  restoreStoryWorkspaceRef: StoryWorkspaceReference;
+  selectionMode: 'root_instruction_origin' | 'legacy_owner_timeline';
+  rootEvidenceMode: 'origin_instruction' | 'legacy_instruction' | 'artifact_membership';
+  lineageRootInteractionId: string;
+  matchedAnchorSequence: number;
+  matchedInstructionCount: number;
+  matchedArtifactCount: number;
+  matchedProgramCount: number;
+  observedSurvivingRefAgreement: boolean | null;
+}> {
+  const userId = requiredString(input.userId, 'userId', 254);
+  const campaignId = requiredString(input.campaignId, 'campaignId');
+  const boundarySequence = requiredRevision(input.boundarySequence, 'boundarySequence');
+  const instructionFingerprint = replayCheckpointFingerprint(input.instructionFingerprint);
+  const replayLineageId = requiredString(input.replayLineageId, 'replayLineageId');
+  const programId = input.programId == null ? null : requiredString(input.programId, 'programId');
+  const rootDocuments = await replayOriginCandidates(stagedInstructions, {
+    userId,
+    campaignId,
+    interactionId: replayLineageId,
+    instructionFingerprint,
+  } as Filter<CompoundActionInstructionDocument>);
+  if (rootDocuments.length > 1) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_LINEAGE_ROOT_AMBIGUOUS', 'The saved plan has conflicting lineage roots.', {});
+  }
+  const root = rootDocuments[0] ?? null;
+  if (root) validateReplayRootInstruction(root, campaignId, instructionFingerprint, replayLineageId);
+
+  const artifactBaseFilter = {
+    userId,
+    campaignId,
+    'instruction.instructionFingerprint': instructionFingerprint,
+    'timelineAnchor.sequence': { $gt: boundarySequence },
+    status: { $in: ['available', 'superseded', 'inactive', 'tombstoned'] },
+  } as unknown as Filter<CompoundActionArtifactRevisionDocument>;
+  let artifacts: CompoundActionArtifactRevisionDocument[] = [];
+  let byProgram = new Map<string, CompoundActionArtifactRevisionDocument>();
+  let restoreStoryWorkspaceRef: StoryWorkspaceReference;
+  let selectionMode: 'root_instruction_origin' | 'legacy_owner_timeline';
+  let rootEvidenceMode: 'origin_instruction' | 'legacy_instruction' | 'artifact_membership';
+  let matchedAnchorSequence: number;
+
+  if (root?.originCheckpoint) {
+    const origin = validatedReplayOrigin(root, campaignId, instructionFingerprint, replayLineageId);
+    if (origin.timelineSequence <= boundarySequence) {
+      throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_LINEAGE_ROOT_INVALID', 'The saved plan root checkpoint is outside its Replay boundary.', {});
+    }
+    if (programId) {
+      artifacts = await replayCheckpointCandidates(records, {
+        ...artifactBaseFilter,
+        'timelineAnchor.replayLineageId': replayLineageId,
+      } as unknown as Filter<CompoundActionArtifactRevisionDocument>);
+      byProgram = replayProgramMembership(artifacts, programId);
+    }
+    const revision = await revisionReader({ userId, campaignId, revision: origin.storyWorkspaceRef.revision });
+    if (!revision?.storyWorkspaceRef || !sameExactStoryWorkspaceRef(revision.storyWorkspaceRef, origin.storyWorkspaceRef)) {
+      throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_STORY_REVISION_MISSING', 'The original Story checkpoint for this saved plan is unavailable.', {});
+    }
+    restoreStoryWorkspaceRef = structuredClone(origin.storyWorkspaceRef);
+    selectionMode = 'root_instruction_origin';
+    rootEvidenceMode = 'origin_instruction';
+    matchedAnchorSequence = origin.timelineSequence;
+  } else {
+    if (root) {
+      rootEvidenceMode = 'legacy_instruction';
+      if (programId) {
+        artifacts = await replayCheckpointCandidates(records, artifactBaseFilter);
+        byProgram = replayProgramMembership(artifacts, programId);
+      }
+    } else {
+      if (input.allowRootlessArtifactMembership !== true) {
+        throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_NOT_FOUND', 'No verified lineage root was found for this saved plan.', {});
+      }
+      const candidates = await replayCheckpointCandidates(records, artifactBaseFilter);
+      if (!candidates.length) {
+        throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_NOT_FOUND', 'No verified lineage root was found for this saved plan.', {});
+      }
+      const firstArtifactAnchor = Math.min(...candidates.map((candidate) => Number(candidate.timelineAnchor?.sequence)));
+      artifacts = candidates.filter((candidate) => Number(candidate.timelineAnchor?.sequence) === firstArtifactAnchor);
+      byProgram = replayProgramMembership(artifacts, programId);
+      rootEvidenceMode = 'artifact_membership';
+    }
+    const ownerCheckpoint = await timelineCheckpointReader({ userId, campaignId, boundarySequence });
+    if (!ownerCheckpoint?.storyWorkspaceRef
+      || ownerCheckpoint.timelineAnchor.sequence > boundarySequence) {
+      throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_STORY_REVISION_MISSING', 'The Story checkpoint before this saved plan is unavailable.', {});
+    }
+    const verifiedRevision = await revisionReader({
+      userId, campaignId, revision: ownerCheckpoint.storyWorkspaceRef.revision,
+    });
+    if (!verifiedRevision?.storyWorkspaceRef
+      || !sameExactStoryWorkspaceRef(verifiedRevision.storyWorkspaceRef, ownerCheckpoint.storyWorkspaceRef)) {
+      throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_STORY_REVISION_MISSING', 'The Story checkpoint before this saved plan is unavailable.', {});
+    }
+    restoreStoryWorkspaceRef = structuredClone(ownerCheckpoint.storyWorkspaceRef);
+    selectionMode = 'legacy_owner_timeline';
+    matchedAnchorSequence = ownerCheckpoint.timelineAnchor.sequence;
+  }
+
+  const observedSurvivingRefAgreement = requireObservedStoryAgreement(
+    input.observedSurvivingStoryWorkspaceRef,
+    restoreStoryWorkspaceRef,
+    campaignId,
+  );
+  return {
+    contractVersion: COMPOUND_REPLAY_STORY_CHECKPOINT_V2_CONTRACT_VERSION,
+    restoreStoryWorkspaceRef,
+    selectionMode,
+    rootEvidenceMode,
+    lineageRootInteractionId: replayLineageId,
+    matchedAnchorSequence,
+    matchedInstructionCount: rootDocuments.length,
+    matchedArtifactCount: artifacts.length,
+    matchedProgramCount: byProgram.size,
     observedSurvivingRefAgreement,
   };
 }

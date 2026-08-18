@@ -8,6 +8,7 @@ import {
   readActiveCompoundActionArtifact,
   readStagedCompoundActionInstruction,
   resolveCompoundReplayStoryCheckpoint,
+  resolveCompoundReplayStoryCheckpointV2,
   rewindCompoundActionArtifacts,
   settleCompoundActionArtifact,
   stageCompoundActionInstruction,
@@ -705,6 +706,107 @@ describe('GMC compound-action private artifact store', () => {
     await expect(resolveCompoundReplayStoryCheckpoint({
       ...base, replayLineageId: 'replay-lineage:only',
     }, store.records, async () => null, instructions.records)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_STORY_REVISION_MISSING' });
+  });
+
+  it('uses an originless lineage root and the GMC timeline even when a descendant origin is poisoned', async () => {
+    const artifacts = memoryCollection();
+    const instructions = instructionMemoryCollection();
+    const lineage = 'interaction:legacy-root';
+    const root = replayCreateInput({
+      programId: 'program:legacy-root', interactionId: lineage, storyWorkspaceRevision: 7,
+    });
+    const poisoned = replayCreateInput({
+      programId: 'program:poisoned-descendant', interactionId: 'interaction:poisoned-descendant',
+      storyWorkspaceRevision: 12, replayLineageId: lineage,
+    });
+    await stageCompoundActionInstruction({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'stage:legacy-root',
+      instruction: root.instruction,
+    }, instructions.records);
+    await stageReplayOrigin(instructions, poisoned, lineage, 12);
+    await createCompoundActionArtifact(poisoned, artifacts.records);
+
+    const checkpoint = await resolveCompoundReplayStoryCheckpointV2({
+      userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
+      instructionFingerprint: instruction().instructionFingerprint,
+      replayLineageId: lineage,
+      observedSurvivingStoryWorkspaceRef: storyRef(7, 'f'.repeat(64)),
+    }, artifacts.records, async ({ revision }) => ({
+      storyWorkspaceRef: storyRef(revision, revision === 7 ? 'f'.repeat(64) : 'c'.repeat(64)),
+    }), instructions.records, async () => ({
+      storyWorkspaceRef: storyRef(7, 'f'.repeat(64)),
+      timelineAnchor: { messageId: 'message:flintwake', sequence: 42 },
+    }));
+
+    expect(checkpoint).toEqual({
+      contractVersion: 'gmc.compound-replay-story-checkpoint/2',
+      restoreStoryWorkspaceRef: storyRef(7, 'f'.repeat(64)),
+      selectionMode: 'legacy_owner_timeline',
+      rootEvidenceMode: 'legacy_instruction',
+      lineageRootInteractionId: lineage,
+      matchedAnchorSequence: 42,
+      matchedInstructionCount: 1,
+      matchedArtifactCount: 0,
+      matchedProgramCount: 0,
+      observedSurvivingRefAgreement: true,
+    });
+    expect(JSON.stringify(checkpoint)).not.toContain('exactText');
+    expect(JSON.stringify(checkpoint)).not.toContain('authorityBase');
+  });
+
+  it('uses the exact lineage-root origin and rejects observed Story disagreement', async () => {
+    const artifacts = memoryCollection();
+    const instructions = instructionMemoryCollection();
+    const lineage = 'interaction:fresh-root';
+    const root = replayCreateInput({
+      programId: 'program:fresh-root', interactionId: lineage, storyWorkspaceRevision: 7,
+      replayLineageId: lineage,
+    });
+    await stageReplayOrigin(instructions, root, lineage, 7);
+    const input = {
+      userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
+      instructionFingerprint: instruction().instructionFingerprint,
+      replayLineageId: lineage,
+    };
+    const revisionReader = async ({ revision }: { revision: number }) => ({
+      storyWorkspaceRef: storyRef(revision),
+    });
+
+    await expect(resolveCompoundReplayStoryCheckpointV2({
+      ...input, observedSurvivingStoryWorkspaceRef: storyRef(7),
+    }, artifacts.records, revisionReader, instructions.records)).resolves.toMatchObject({
+      contractVersion: 'gmc.compound-replay-story-checkpoint/2',
+      selectionMode: 'root_instruction_origin', rootEvidenceMode: 'origin_instruction',
+      matchedInstructionCount: 1, matchedArtifactCount: 0, matchedProgramCount: 0,
+      restoreStoryWorkspaceRef: { revision: 7 }, observedSurvivingRefAgreement: true,
+    });
+    await expect(resolveCompoundReplayStoryCheckpointV2({
+      ...input, observedSurvivingStoryWorkspaceRef: storyRef(8),
+    }, artifacts.records, revisionReader, instructions.records)).rejects.toMatchObject({
+      code: 'COMPOUND_REPLAY_OBSERVED_STORY_REF_MISMATCH',
+    });
+  });
+
+  it('uses owner timeline state for a rootless row only after exact artifact membership', async () => {
+    const artifacts = memoryCollection();
+    await createCompoundActionArtifact(replayCreateInput({
+      programId: 'program:rootless', interactionId: 'interaction:rootless-attempt', storyWorkspaceRevision: 12,
+    }), artifacts.records);
+    const checkpoint = await resolveCompoundReplayStoryCheckpointV2({
+      userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
+      instructionFingerprint: instruction().instructionFingerprint,
+      replayLineageId: 'interaction:missing-root', allowRootlessArtifactMembership: true,
+      programId: 'program:rootless', observedSurvivingStoryWorkspaceRef: storyRef(7),
+    }, artifacts.records, async ({ revision }) => ({ storyWorkspaceRef: storyRef(revision) }),
+    instructionMemoryCollection().records, async () => ({
+      storyWorkspaceRef: storyRef(7), timelineAnchor: { messageId: 'message:survivor', sequence: 42 },
+    }));
+
+    expect(checkpoint).toMatchObject({
+      selectionMode: 'legacy_owner_timeline', rootEvidenceMode: 'artifact_membership',
+      restoreStoryWorkspaceRef: { revision: 7 }, matchedInstructionCount: 0,
+      matchedArtifactCount: 1, matchedProgramCount: 1,
+    });
   });
 
   it('rejects oversized exact instructions before storage', async () => {

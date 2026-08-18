@@ -222,6 +222,10 @@ async function createIndexes(database: Db): Promise<void> {
     { name: 'gmc_story_workspace_active_lookup' },
   );
   await database.collection('gmc_story_workspace_revisions').createIndex(
+    { userId: 1, campaignId: 1, workspaceId: 1, status: 1, 'timelineAnchor.sequence': -1, revision: -1 },
+    { name: 'gmc_story_workspace_timeline_checkpoint_lookup' },
+  );
+  await database.collection('gmc_story_workspace_revisions').createIndex(
     { userId: 1, campaignId: 1, supersededByRewindId: 1 },
     { name: 'gmc_story_workspace_rewind_replay' },
   );

@@ -43,6 +43,8 @@ import {
   readCompoundActionOperationStatus,
   resolveCompoundActionRequirements,
   resolveCompoundReplayStoryCheckpoint,
+  resolveCompoundReplayStoryCheckpointV2,
+  COMPOUND_REPLAY_STORY_CHECKPOINT_V2_CONTRACT_VERSION,
   readStagedCompoundActionInstruction,
   rewindCompoundActionArtifacts,
   stageCompoundActionInstruction,
@@ -542,15 +544,26 @@ storyWorkspaceRouter.put('/interaction-artifacts/:programId', requireServiceInte
 storyWorkspaceRouter.post('/interaction-artifacts/replay-checkpoint', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   const body = req.body ?? {};
-  res.json(await resolveCompoundReplayStoryCheckpoint({
+  const common = {
     userId: (req as IntegrationRequest).userId,
     campaignId: req.params.campaignId,
     boundarySequence: body.boundarySequence,
     instructionFingerprint: body.instructionFingerprint,
     replayLineageId: body.replayLineageId,
-    allowLegacyFingerprintBoundary: body.allowLegacyFingerprintBoundary === true,
     programId: body.programId,
     observedSurvivingStoryWorkspaceRef: body.observedSurvivingStoryWorkspaceRef,
+  };
+  if (body.checkpointContractVersion === COMPOUND_REPLAY_STORY_CHECKPOINT_V2_CONTRACT_VERSION) {
+    res.json(await resolveCompoundReplayStoryCheckpointV2({
+      ...common,
+      replayLineageId: body.replayLineageId,
+      allowRootlessArtifactMembership: body.allowRootlessArtifactMembership === true,
+    }));
+    return;
+  }
+  res.json(await resolveCompoundReplayStoryCheckpoint({
+    ...common,
+    allowLegacyFingerprintBoundary: body.allowLegacyFingerprintBoundary === true,
   }));
 }));
 

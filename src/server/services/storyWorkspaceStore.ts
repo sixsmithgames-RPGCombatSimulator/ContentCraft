@@ -1466,6 +1466,33 @@ export async function readStoryWorkspaceRevision(
   };
 }
 
+/**
+ * Selects the latest still-available owner revision at or before a browser
+ * timeline removal boundary. The browser supplies only the numeric boundary;
+ * GMC chooses and returns the immutable Story ref.
+ */
+export async function readStoryWorkspaceTimelineCheckpoint(
+  input: { userId: string; campaignId: string; boundarySequence: number },
+  records: RevisionCollection = collection(),
+) {
+  const userId = text(input.userId, 'userId', 254);
+  const campaignId = identifier(input.campaignId, 'campaignId');
+  const boundarySequence = nonNegativeInteger(input.boundarySequence, 'boundarySequence');
+  const record = await records.findOne({
+    userId,
+    campaignId,
+    workspaceId: `story-workspace:${campaignId}`,
+    status: 'available',
+    'timelineAnchor.sequence': { $lte: boundarySequence },
+  }, { sort: { 'timelineAnchor.sequence': -1, revision: -1 } });
+  if (!record?.timelineAnchor) return null;
+  return {
+    contractVersion: STORY_WORKSPACE_CONTRACT_VERSION,
+    storyWorkspaceRef: workspaceRef(record),
+    timelineAnchor: structuredClone(record.timelineAnchor),
+  };
+}
+
 /** Reads an immutable owner operation receipt without treating a timeout as a safe retry. */
 export async function readStoryWorkspaceOperation(
   input: { userId: string; campaignId: string; operationId: string },

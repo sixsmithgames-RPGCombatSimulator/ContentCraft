@@ -8,6 +8,7 @@ import {
   emptyStoryWorkspace,
   listStoryWorkspaceHistory,
   readActiveStoryWorkspace,
+  readStoryWorkspaceTimelineCheckpoint,
   replaceStoryWorkspace,
   rewindStoryWorkspace,
   synchronizeNpcIdentityPromotionToStory,
@@ -29,8 +30,9 @@ function valueAt(record: Record<string, unknown>, path: string): unknown {
 function matches(record: StoryWorkspaceRevisionDocument, filter: Filter<StoryWorkspaceRevisionDocument>) {
   return Object.entries(filter).every(([key, wanted]) => {
     const actual = valueAt(record as unknown as Record<string, unknown>, key);
-    if (wanted && typeof wanted === 'object' && !Array.isArray(wanted) && '$gt' in wanted) {
-      return Number(actual) > Number((wanted as { $gt: unknown }).$gt);
+    if (wanted && typeof wanted === 'object' && !Array.isArray(wanted)) {
+      if ('$gt' in wanted) return Number(actual) > Number((wanted as { $gt: unknown }).$gt);
+      if ('$lte' in wanted) return Number(actual) <= Number((wanted as { $lte: unknown }).$lte);
     }
     return actual === wanted;
   });
@@ -39,9 +41,13 @@ function matches(record: StoryWorkspaceRevisionDocument, filter: Filter<StoryWor
 function memoryCollection() {
   const documents: StoryWorkspaceRevisionDocument[] = [];
   const api = {
-    async findOne(filter: Filter<StoryWorkspaceRevisionDocument>, options?: { sort?: { revision?: number } }) {
+    async findOne(filter: Filter<StoryWorkspaceRevisionDocument>, options?: { sort?: { revision?: number; 'timelineAnchor.sequence'?: number } }) {
       const found = documents.filter((document) => matches(document, filter));
-      if (options?.sort?.revision) found.sort((left, right) => right.revision - left.revision);
+      if (options?.sort?.['timelineAnchor.sequence']) found.sort((left, right) => (
+        Number(right.timelineAnchor?.sequence ?? -1) - Number(left.timelineAnchor?.sequence ?? -1)
+        || right.revision - left.revision
+      ));
+      else if (options?.sort?.revision) found.sort((left, right) => right.revision - left.revision);
       return found[0] ?? null;
     },
     async insertOne(document: StoryWorkspaceRevisionDocument) {
@@ -415,6 +421,32 @@ describe('GMC Story workspace authority store', () => {
     }, records)).rejects.toMatchObject({ code: 'STORY_REWIND_RESTORE_REF_UNAVAILABLE' });
     await expect(readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, records))
       .resolves.toMatchObject({ storyWorkspaceRef: { revision: 2 } });
+  });
+
+  it('selects the latest available owner Story revision at or before a Replay boundary', async () => {
+    const { records, documents } = memoryCollection();
+    const flintwake = await replaceStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 0,
+      idempotencyKey: 'story:flintwake-boundary', timelineAnchor: { messageId: 'flintwake-message', sequence: 42 },
+      workspace: flintwakeWorkspace(),
+    }, records);
+    await replaceStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 1,
+      idempotencyKey: 'story:second-mouth-after-boundary', timelineAnchor: { messageId: 'second-mouth-message', sequence: 43 },
+      workspace: { ...flintwakeWorkspace(), activeSceneKitRef: null },
+    }, records);
+
+    await expect(readStoryWorkspaceTimelineCheckpoint({
+      userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
+    }, records)).resolves.toMatchObject({
+      storyWorkspaceRef: flintwake.storyWorkspaceRef,
+      timelineAnchor: { messageId: 'flintwake-message', sequence: 42 },
+    });
+
+    documents[0].status = 'superseded';
+    await expect(readStoryWorkspaceTimelineCheckpoint({
+      userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
+    }, records)).resolves.toBeNull();
   });
 
   it('reports validation failures without echoing private workspace content', async () => {
