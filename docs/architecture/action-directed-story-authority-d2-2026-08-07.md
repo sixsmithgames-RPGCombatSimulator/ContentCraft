@@ -457,3 +457,49 @@ selection; exact-ref equality; idempotency and operation ordering; old-artifact
 compatibility; complete GMC/GMA/Studio gates; direct `main` pins; hosted health;
 and a production Replay whose rebuilt first packet reads Flintwake before any
 movement, with no duplicate owner effect and no Gemini call in Manual AI mode.
+
+## Accepted D9.4.41 instruction-stage origin checkpoint — 2026-08-18
+
+GMC accepts GMA ADR-005 D9.4.41 and Studio ADR-005 D9.4.41 by reference after
+the hosted D9.4.40 check proved that an immutable artifact `authorityBase` can
+already be post-action state and that artifact availability can hide an older
+tombstoned pre-action base. Artifact history remains owner history, but artifact
+creation is no longer the primary causal-origin boundary.
+
+GMC adds service-private `gmc.compound-action-origin-checkpoint/1` to the
+immutable staged-instruction record. It binds the complete active
+`gmc.story-workspace-ref/1` to user, campaign, interaction, exact instruction
+fingerprint, stable Replay lineage, message ID, and timeline sequence. During
+staging GMC compares GMA's expected full ref to the active canonical Story head
+and atomically stores instruction plus checkpoint only on equality. A stale,
+malformed, cross-campaign, workspace, revision, or hash mismatch writes nothing
+and occurs before semantic planning. Idempotent duplicate staging must return
+the identical checkpoint.
+
+The Replay resolver selects exact origin-bearing instruction lineage first and
+verifies its immutable Story revision. A present but invalid exact origin fails
+closed and cannot broaden. Only a selected historical row explicitly marked as
+lacking a verified origin may use legacy artifact evidence. That compatibility
+query remains exact-fingerprint and first-post-boundary-anchor scoped, but it
+includes available, superseded, inactive, and tombstoned immutable artifact
+revisions. Tombstoned records contribute only instruction identity, anchor, and
+pre-execution Story-base evidence; they can never be read or restored as active
+program/cursor/receipt state. The chosen Story revision is still validated from
+the immutable Story store and returned as a complete exact ref.
+
+Freshly replayed rows stage a new origin-bearing instruction and therefore heal
+lazily without a migration write. The browser ref remains diagnostic only,
+GMA remains orchestration authority, VCS remains mechanics authority, and the
+LLM performs no Replay work. Instruction staging adds one current-head compare
+inside its existing owner operation; Replay remains one bounded read, capped at
+256 candidates, with no additional model, token, VCS, correction, or Story-
+write budget. Diagnostics remain redacted to modes, counts, anchors, revisions,
+agreement, and hashed identity.
+
+Release requires atomic staging and rollback-on-mismatch, exact ref equality,
+idempotent duplicate response, exact-lineage origin selection, terminal invalid
+origin, tombstoned legacy evidence without executable reuse, first-anchor and
+program grouping, immutable-revision containment, complete GMC/GMA/Studio
+gates, exact direct-`main` pins, hosted verification, and production Flintwake-
+before-movement plus rat-familiar completion with no duplicate effect or Manual-
+mode provider call.
