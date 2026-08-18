@@ -42,6 +42,7 @@ describe('D2 Story authority routes', () => {
       ['POST', '/interaction-artifacts'],
       ['POST', '/interaction-artifacts/requirements'],
       ['POST', '/interaction-artifacts/rewind'],
+      ['POST', '/interaction-artifacts/replay-checkpoint'],
       ['GET', '/interaction-artifacts/program-1'],
       ['PUT', '/interaction-artifacts/program-1'],
       ['POST', '/interaction-artifacts/program-1/settle'],

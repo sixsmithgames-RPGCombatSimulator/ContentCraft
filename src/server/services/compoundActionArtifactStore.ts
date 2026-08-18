@@ -3,11 +3,18 @@ import type { Collection, Filter } from 'mongodb';
 import { getDb } from '../config/mongo.js';
 import { readCurrentSceneContexts } from './actionDirectedStoryStore.js';
 import { collections } from './gmcIntegrationStore.js';
-import { StoryWorkspaceStoreError, type JsonObject, type JsonValue } from './storyWorkspaceStore.js';
+import {
+  readStoryWorkspaceRevision,
+  StoryWorkspaceStoreError,
+  type JsonObject,
+  type JsonValue,
+  type StoryWorkspaceReference,
+} from './storyWorkspaceStore.js';
 
 export const COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION = 'gmc.compound-action-artifact-store/1';
 export const COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION = 'gmc.compound-action-artifact-ref/1';
 export const COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION = 'gmc.compound-action-requirement-projection/1';
+export const COMPOUND_REPLAY_STORY_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/1';
 export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'compound-action-program/2',
   'compound-action-artifact-store/1',
@@ -64,7 +71,7 @@ export interface CompoundActionArtifactRevisionDocument {
   clarifications: JsonObject[];
   rootFailure: JsonObject | null;
   saga?: JsonObject | null;
-  timelineAnchor: { messageId: string; sequence: number } | null;
+  timelineAnchor: { messageId: string; sequence: number; replayLineageId?: string } | null;
   createdAt: Date;
   supersededAt?: Date;
   supersededByRewindId?: string;
@@ -445,12 +452,16 @@ function validateReceipts(receipts: unknown[], program: JsonObject): JsonObject[
   });
 }
 
-function validateTimelineAnchor(value: unknown): { messageId: string; sequence: number } | null {
+function validateTimelineAnchor(value: unknown): { messageId: string; sequence: number; replayLineageId?: string } | null {
   if (value === null || value === undefined) return null;
   if (!isObject(value)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_TIMELINE_INVALID', 'The timeline anchor is invalid.', {});
+  const replayLineageId = value.replayLineageId === undefined || value.replayLineageId === null
+    ? null
+    : requiredString(value.replayLineageId, 'timelineAnchor.replayLineageId');
   return {
     messageId: requiredString(value.messageId, 'timelineAnchor.messageId'),
     sequence: requiredRevision(value.sequence, 'timelineAnchor.sequence'),
+    ...(replayLineageId ? { replayLineageId } : {}),
   };
 }
 
@@ -509,7 +520,7 @@ export async function createCompoundActionArtifact(input: {
   cursor: JsonObject;
   clarifications?: JsonObject[];
   saga?: JsonObject;
-  timelineAnchor?: { messageId: string; sequence: number } | null;
+  timelineAnchor?: { messageId: string; sequence: number; replayLineageId?: string } | null;
 }, records: CompoundActionArtifactCollection = artifactCollection()) {
   requiredString(input.userId, 'userId');
   requiredString(input.campaignId, 'campaignId');
@@ -794,6 +805,139 @@ export async function rewindCompoundActionArtifacts(input: {
     inactivatedRevisionCount: updated.modifiedCount,
     restoredProgramCount: restoredPrograms.size,
     authoritativeStateChanged: false,
+  };
+}
+
+type ReplayCheckpointRevisionReader = (input: {
+  userId: string;
+  campaignId: string;
+  revision: number;
+}) => Promise<{ storyWorkspaceRef: StoryWorkspaceReference } | null>;
+
+function replayCheckpointFingerprint(value: unknown): string {
+  const fingerprint = String(value ?? '').trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(fingerprint)) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_REPLAY_CHECKPOINT_SELECTOR_INVALID', 'The Replay checkpoint selector is invalid.', { field: 'instructionFingerprint' });
+  }
+  return fingerprint;
+}
+
+function replayCheckpointAuthorityBase(document: CompoundActionArtifactRevisionDocument): number {
+  const authorityBase = document.program.authorityBase;
+  const revision = Number(authorityBase && typeof authorityBase === 'object' && !Array.isArray(authorityBase)
+    ? authorityBase.storyWorkspaceRevision
+    : NaN);
+  if (!Number.isSafeInteger(revision) || revision < 1) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_BASE_INVALID', 'The original Story checkpoint for this saved plan is invalid.', {});
+  }
+  return revision;
+}
+
+async function replayCheckpointCandidates(
+  records: CompoundActionArtifactCollection,
+  filter: Filter<CompoundActionArtifactRevisionDocument>,
+): Promise<CompoundActionArtifactRevisionDocument[]> {
+  const candidates = await records.find(filter).limit(257).toArray();
+  if (candidates.length > 256) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_AMBIGUOUS', 'The saved plan has too many matching Replay checkpoints to select safely.', {});
+  }
+  return candidates;
+}
+
+/**
+ * Resolves the Story revision that causally preceded a compound action from
+ * GMC-owned immutable artifact history. Browser timeline refs are compared for
+ * drift only and never participate in checkpoint selection.
+ */
+export async function resolveCompoundReplayStoryCheckpoint(input: {
+  userId: string;
+  campaignId: string;
+  boundarySequence: number;
+  instructionFingerprint: string;
+  replayLineageId?: string | null;
+  allowLegacyFingerprintBoundary?: boolean;
+  programId?: string | null;
+  observedSurvivingStoryWorkspaceRef?: JsonObject | null;
+}, records: CompoundActionArtifactCollection = artifactCollection(), revisionReader: ReplayCheckpointRevisionReader = readStoryWorkspaceRevision): Promise<{
+  contractVersion: typeof COMPOUND_REPLAY_STORY_CHECKPOINT_CONTRACT_VERSION;
+  restoreStoryWorkspaceRef: StoryWorkspaceReference;
+  selectionMode: 'replay_lineage' | 'legacy_fingerprint_boundary';
+  matchedAnchorSequence: number;
+  matchedArtifactCount: number;
+  matchedProgramCount: number;
+  observedSurvivingRefAgreement: boolean | null;
+}> {
+  const userId = requiredString(input.userId, 'userId', 254);
+  const campaignId = requiredString(input.campaignId, 'campaignId');
+  const boundarySequence = requiredRevision(input.boundarySequence, 'boundarySequence');
+  const instructionFingerprint = replayCheckpointFingerprint(input.instructionFingerprint);
+  const replayLineageId = input.replayLineageId == null
+    ? null
+    : requiredString(input.replayLineageId, 'replayLineageId');
+  const programId = input.programId == null ? null : requiredString(input.programId, 'programId');
+  const baseFilter = {
+    userId,
+    campaignId,
+    'instruction.instructionFingerprint': instructionFingerprint,
+    'timelineAnchor.sequence': { $gt: boundarySequence },
+    status: { $in: ['available', 'superseded', 'inactive'] },
+  } as unknown as Filter<CompoundActionArtifactRevisionDocument>;
+
+  let selectionMode: 'replay_lineage' | 'legacy_fingerprint_boundary' | null = null;
+  let candidates: CompoundActionArtifactRevisionDocument[] = [];
+  if (replayLineageId) {
+    candidates = await replayCheckpointCandidates(records, {
+      ...baseFilter,
+      'timelineAnchor.replayLineageId': replayLineageId,
+    } as unknown as Filter<CompoundActionArtifactRevisionDocument>);
+    if (candidates.length) selectionMode = 'replay_lineage';
+  }
+  if (!candidates.length && input.allowLegacyFingerprintBoundary === true) {
+    candidates = await replayCheckpointCandidates(records, baseFilter);
+    if (candidates.length) selectionMode = 'legacy_fingerprint_boundary';
+  }
+  if (!candidates.length || !selectionMode) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_NOT_FOUND', 'No verified original Story checkpoint was found for this saved plan.', {});
+  }
+
+  const matchedAnchorSequence = Math.min(...candidates.map((candidate) => Number(candidate.timelineAnchor?.sequence)));
+  const anchored = candidates.filter((candidate) => Number(candidate.timelineAnchor?.sequence) === matchedAnchorSequence);
+  const byProgram = new Map<string, CompoundActionArtifactRevisionDocument>();
+  for (const candidate of anchored) {
+    const prior = byProgram.get(candidate.programId);
+    if (!prior || candidate.revision < prior.revision) byProgram.set(candidate.programId, candidate);
+  }
+  if (programId && !byProgram.has(programId)) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_PROGRAM_MISMATCH', 'The selected saved plan does not belong to this Replay checkpoint.', {});
+  }
+  const baseRevisions = [...byProgram.values()].map(replayCheckpointAuthorityBase);
+  if (!baseRevisions.length) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_NOT_FOUND', 'No verified original Story checkpoint was found for this saved plan.', {});
+  }
+  const restoreRevision = Math.min(...baseRevisions);
+  const storyRevision = await revisionReader({ userId, campaignId, revision: restoreRevision });
+  const restoreStoryWorkspaceRef = storyRevision?.storyWorkspaceRef;
+  if (!restoreStoryWorkspaceRef
+    || restoreStoryWorkspaceRef.contractVersion !== 'gmc.story-workspace-ref/1'
+    || restoreStoryWorkspaceRef.campaignId !== campaignId
+    || restoreStoryWorkspaceRef.workspaceId !== `story-workspace:${campaignId}`
+    || Number(restoreStoryWorkspaceRef.revision) !== restoreRevision
+    || !/^[a-f0-9]{64}$/.test(String(restoreStoryWorkspaceRef.payloadHash ?? ''))) {
+    throw new StoryWorkspaceStoreError(409, 'COMPOUND_REPLAY_CHECKPOINT_STORY_REVISION_MISSING', 'The original Story checkpoint for this saved plan is unavailable.', {});
+  }
+  const observed = input.observedSurvivingStoryWorkspaceRef;
+  const observedSurvivingRefAgreement = observed && typeof observed === 'object' && !Array.isArray(observed)
+    ? Number(observed.revision) === restoreRevision
+      && String(observed.payloadHash ?? '').toLowerCase() === String(restoreStoryWorkspaceRef.payloadHash).toLowerCase()
+    : null;
+  return {
+    contractVersion: COMPOUND_REPLAY_STORY_CHECKPOINT_CONTRACT_VERSION,
+    restoreStoryWorkspaceRef: structuredClone(restoreStoryWorkspaceRef),
+    selectionMode,
+    matchedAnchorSequence,
+    matchedArtifactCount: anchored.length,
+    matchedProgramCount: byProgram.size,
+    observedSurvivingRefAgreement,
   };
 }
 

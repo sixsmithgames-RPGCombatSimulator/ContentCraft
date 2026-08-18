@@ -42,6 +42,7 @@ import {
   readActiveCompoundActionArtifact,
   readCompoundActionOperationStatus,
   resolveCompoundActionRequirements,
+  resolveCompoundReplayStoryCheckpoint,
   readStagedCompoundActionInstruction,
   rewindCompoundActionArtifacts,
   stageCompoundActionInstruction,
@@ -533,6 +534,21 @@ storyWorkspaceRouter.put('/interaction-artifacts/:programId', requireServiceInte
     saga: body.saga,
   });
   res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.post('/interaction-artifacts/replay-checkpoint', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  res.json(await resolveCompoundReplayStoryCheckpoint({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    boundarySequence: body.boundarySequence,
+    instructionFingerprint: body.instructionFingerprint,
+    replayLineageId: body.replayLineageId,
+    allowLegacyFingerprintBoundary: body.allowLegacyFingerprintBoundary === true,
+    programId: body.programId,
+    observedSurvivingStoryWorkspaceRef: body.observedSurvivingStoryWorkspaceRef,
+  }));
 }));
 
 storyWorkspaceRouter.post('/interaction-artifacts/:programId/settle', requireServiceIntegration, asyncRoute(async (req, res) => {

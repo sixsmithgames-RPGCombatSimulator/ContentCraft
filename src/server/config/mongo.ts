@@ -257,6 +257,17 @@ async function createIndexes(database: Db): Promise<void> {
     { name: 'gmc_compound_action_artifact_rewind_boundary' },
   );
   await database.collection('gmc_compound_action_artifact_revisions').createIndex(
+    {
+      userId: 1,
+      campaignId: 1,
+      'instruction.instructionFingerprint': 1,
+      'timelineAnchor.replayLineageId': 1,
+      'timelineAnchor.sequence': 1,
+      status: 1,
+    },
+    { name: 'gmc_compound_action_replay_checkpoint_lookup' },
+  );
+  await database.collection('gmc_compound_action_artifact_revisions').createIndex(
     { userId: 1, campaignId: 1, supersededByRewindId: 1 },
     { name: 'gmc_compound_action_artifact_rewind_replay' },
   );

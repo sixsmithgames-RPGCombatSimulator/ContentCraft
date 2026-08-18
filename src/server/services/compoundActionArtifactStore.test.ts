@@ -7,6 +7,7 @@ import {
   createCompoundActionArtifact,
   readActiveCompoundActionArtifact,
   readStagedCompoundActionInstruction,
+  resolveCompoundReplayStoryCheckpoint,
   rewindCompoundActionArtifacts,
   settleCompoundActionArtifact,
   stageCompoundActionInstruction,
@@ -56,6 +57,10 @@ function memoryCollection() {
       const cursor = {
         sort(sort: { revision?: number }) {
           if (sort.revision) selected = selected.sort((left, right) => right.revision - left.revision);
+          return cursor;
+        },
+        limit(limit: number) {
+          selected = selected.slice(0, limit);
           return cursor;
         },
         async toArray() { return structuredClone(selected); },
@@ -144,6 +149,43 @@ function createInput() {
     userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:turn-42',
     instruction: exact, program: program(exact), cursor: cursor(1),
     timelineAnchor: { messageId: 'message-42', sequence: 42 },
+  };
+}
+
+function replayCreateInput({
+  programId,
+  interactionId,
+  storyWorkspaceRevision,
+  sequence = 43,
+  replayLineageId,
+}: {
+  programId: string;
+  interactionId: string;
+  storyWorkspaceRevision: number;
+  sequence?: number;
+  replayLineageId?: string;
+}) {
+  const exact = {
+    ...instruction(),
+    instructionRef: `instruction:${interactionId}`,
+    interactionId,
+  };
+  const semanticProgram = {
+    ...program(exact),
+    programId,
+    authorityBase: {
+      campaignId: 'campaign-a', storyWorkspaceRevision, sceneRevision: 4, vcsCharacterRevision: 12,
+    },
+  };
+  const programCursor = {
+    ...cursor(1),
+    programId,
+    authorityHead: { storyWorkspaceRevision, sceneRevision: 4, vcsCharacterRevision: 12 },
+  };
+  return {
+    userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: `create:${programId}`,
+    instruction: exact, program: semanticProgram, cursor: programCursor,
+    timelineAnchor: { messageId: `message:${interactionId}`, sequence, ...(replayLineageId ? { replayLineageId } : {}) },
   };
 }
 
@@ -464,6 +506,103 @@ describe('GMC compound-action private artifact store', () => {
     }, store.records);
     expect(rewound).toMatchObject({ inactivatedRevisionCount: 1, restoredProgramCount: 1, authoritativeStateChanged: false });
     expect((await readActiveCompoundActionArtifact({ userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42' }, store.records))?.artifactRef.revision).toBe(1);
+  });
+
+  it('resolves an exact Replay lineage to the original GMC Story authority base despite a later contaminated attempt', async () => {
+    const store = memoryCollection();
+    await createCompoundActionArtifact(replayCreateInput({
+      programId: 'program:original', interactionId: 'interaction:original', storyWorkspaceRevision: 7,
+      replayLineageId: 'replay-lineage:second-mouth',
+    }), store.records);
+    store.documents[0].status = 'inactive';
+    await createCompoundActionArtifact(replayCreateInput({
+      programId: 'program:later', interactionId: 'interaction:later', storyWorkspaceRevision: 12,
+      replayLineageId: 'replay-lineage:second-mouth',
+    }), store.records);
+
+    const checkpoint = await resolveCompoundReplayStoryCheckpoint({
+      userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
+      instructionFingerprint: instruction().instructionFingerprint,
+      replayLineageId: 'replay-lineage:second-mouth', programId: 'program:later',
+      observedSurvivingStoryWorkspaceRef: { revision: 12, payloadHash: 'c'.repeat(64) },
+    }, store.records, async ({ campaignId, revision }) => ({
+      storyWorkspaceRef: {
+        contractVersion: 'gmc.story-workspace-ref/1' as const, campaignId,
+        workspaceId: `story-workspace:${campaignId}`, revision, payloadHash: 'a'.repeat(64),
+      },
+    }));
+
+    expect(checkpoint).toEqual({
+      contractVersion: 'gmc.compound-replay-story-checkpoint/1',
+      restoreStoryWorkspaceRef: {
+        contractVersion: 'gmc.story-workspace-ref/1', campaignId: 'campaign-a',
+        workspaceId: 'story-workspace:campaign-a', revision: 7, payloadHash: 'a'.repeat(64),
+      },
+      selectionMode: 'replay_lineage', matchedAnchorSequence: 43,
+      matchedArtifactCount: 2, matchedProgramCount: 2, observedSurvivingRefAgreement: false,
+    });
+    expect(JSON.stringify(checkpoint)).not.toContain('exactText');
+    expect(JSON.stringify(checkpoint)).not.toContain('authorityBase');
+  });
+
+  it('heals a legacy Replay from the first exact-fingerprint artifact anchor and ignores later matching actions', async () => {
+    const store = memoryCollection();
+    await createCompoundActionArtifact(replayCreateInput({
+      programId: 'program:legacy-original', interactionId: 'interaction:legacy-original', storyWorkspaceRevision: 7,
+    }), store.records);
+    store.documents[0].status = 'inactive';
+    await createCompoundActionArtifact(replayCreateInput({
+      programId: 'program:legacy-replay', interactionId: 'interaction:legacy-replay', storyWorkspaceRevision: 12,
+    }), store.records);
+    await createCompoundActionArtifact(replayCreateInput({
+      programId: 'program:unrelated-later', interactionId: 'interaction:unrelated-later', storyWorkspaceRevision: 4,
+      sequence: 80,
+    }), store.records);
+
+    const checkpoint = await resolveCompoundReplayStoryCheckpoint({
+      userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
+      instructionFingerprint: instruction().instructionFingerprint,
+      replayLineageId: 'new-lineage-with-no-historical-record', allowLegacyFingerprintBoundary: true,
+    }, store.records, async ({ campaignId, revision }) => ({
+      storyWorkspaceRef: {
+        contractVersion: 'gmc.story-workspace-ref/1', campaignId,
+        workspaceId: `story-workspace:${campaignId}`, revision, payloadHash: 'b'.repeat(64),
+      },
+    }));
+
+    expect(checkpoint).toMatchObject({
+      selectionMode: 'legacy_fingerprint_boundary', matchedAnchorSequence: 43,
+      matchedArtifactCount: 2, matchedProgramCount: 2,
+      restoreStoryWorkspaceRef: { revision: 7 },
+    });
+  });
+
+  it('does not broaden a rejected exact lineage and rejects program or immutable Story mismatches', async () => {
+    const store = memoryCollection();
+    await createCompoundActionArtifact(replayCreateInput({
+      programId: 'program:only', interactionId: 'interaction:only', storyWorkspaceRevision: 7,
+      replayLineageId: 'replay-lineage:only',
+    }), store.records);
+    const base = {
+      userId: 'tenant-a', campaignId: 'campaign-a', boundarySequence: 42,
+      instructionFingerprint: instruction().instructionFingerprint,
+    };
+    const reader = async ({ campaignId, revision }: { campaignId: string; revision: number }) => ({
+      storyWorkspaceRef: {
+        contractVersion: 'gmc.story-workspace-ref/1' as const, campaignId,
+        workspaceId: `story-workspace:${campaignId}`, revision, payloadHash: 'd'.repeat(64),
+      },
+    });
+
+    await expect(resolveCompoundReplayStoryCheckpoint({
+      ...base, replayLineageId: 'replay-lineage:missing', allowLegacyFingerprintBoundary: false,
+    }, store.records, reader)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_NOT_FOUND' });
+    await expect(resolveCompoundReplayStoryCheckpoint({
+      ...base, replayLineageId: 'replay-lineage:only', programId: 'program:other',
+    }, store.records, reader)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_PROGRAM_MISMATCH' });
+    await expect(resolveCompoundReplayStoryCheckpoint({
+      ...base, replayLineageId: 'replay-lineage:only',
+    }, store.records, async () => null)).rejects.toMatchObject({ code: 'COMPOUND_REPLAY_CHECKPOINT_STORY_REVISION_MISSING' });
   });
 
   it('rejects oversized exact instructions before storage', async () => {
