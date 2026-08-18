@@ -503,3 +503,57 @@ program grouping, immutable-revision containment, complete GMC/GMA/Studio
 gates, exact direct-`main` pins, hosted verification, and production Flintwake-
 before-movement plus rat-familiar completion with no duplicate effect or Manual-
 mode provider call.
+
+## Accepted D9.4.42 lineage-root owner-timeline predecessor — 2026-08-18
+
+GMC accepts GMA ADR-005 D9.4.42 and Studio ADR-005 D9.4.42 by reference after
+the hosted D9.4.41 test proved that a valid descendant retry origin can be
+captured from an already incorrect post-action Story head. The stable Replay
+lineage identifies a family of attempts; it does not make every attempt a
+causal root.
+
+GMC owns the additive service-private
+`gmc.compound-replay-story-checkpoint/2`. A caller explicitly requests version
+2 with campaign, selected removal boundary, exact instruction fingerprint,
+stable Replay lineage/root interaction ID, optional program guard, and optional
+observed surviving Story ref. Version 1 remains callable for the old GMA during
+deployment skew. Version 2 first reads the instruction whose interaction ID
+equals the lineage ID. A valid origin on that exact root wins. If that root
+exists without an origin, the lineage is legacy even when later attempts in the
+same lineage have valid origins. A descendant origin can never redefine the
+root. If no root instruction exists, GMC requires exact-fingerprint artifact
+membership at the first post-boundary anchor before compatibility selection;
+artifact `authorityBase` is not a Story selector.
+
+For either legacy class, GMC selects the latest available immutable Story
+workspace revision with `timelineAnchor.sequence <= boundary`, ordered by
+timeline sequence descending and then Story revision descending. The exact
+revision and payload hash are re-read from the owner store. If GMA supplied an
+observed surviving ref, complete equality is required; disagreement fails
+before rewind and does not privilege either the browser or the artifact. The
+response returns only the exact ref, selected anchor, root/selection modes,
+bounded membership counts, and agreement. It returns no instruction, Story,
+Scene, prompt, narration, or receipt body.
+
+The version-2 root instruction lookup and Story-boundary lookup are indexed and
+bounded. Artifact membership remains capped at 256 only for rootless legacy
+rows. Replay adds no model, token, correction, VCS, Story-write, or narration
+budget. Exact rewind retains expected-head compare-and-swap and idempotent
+receipt equality. There is no bulk migration: originless roots remain immutable
+legacy evidence, poisoned descendant origins remain historical but cannot win,
+and newly replayed attempts continue to carry their own origins without
+changing the root.
+
+Failures remain player-safe through GMA's established first/repeated recovery
+boundary; GMC diagnostics are limited to contract/root/selection mode, hashed
+identity, boundary/anchor/revision, counts, and ref agreement. Rollback keeps
+the version-2 reader and history while callers can revert to version 1; it never
+deletes origin or Story revisions or restores artifact/browser authority.
+
+Release requires fresh-root, legacy-root, poisoned-descendant, rootless-
+membership, repeated-text isolation, owner-boundary ordering, available-status,
+observed-ref disagreement, missing/ambiguous/cross-campaign, program guard,
+version-skew, exact rewind, idempotency, zero-model, and redaction tests; full
+GMC/GMA/Studio gates; exact direct-`main` pins; hosted owner/asset verification;
+and production Flintwake-before-movement plus rat-familiar completion with no
+duplicate effect and Gemini remaining 181.
