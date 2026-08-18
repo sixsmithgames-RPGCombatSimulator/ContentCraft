@@ -256,6 +256,34 @@ saga, settlement, rewind, privacy, and generated-contract tests; full GMC
 checks; a production-safe synthetic create/commit/status/settle/cleanup smoke;
 and exact bundle conformance from a verified `main` deployment.
 
+## Accepted correction: atomic Story-design revision pairing
+
+Accepted 2026-08-18 after the packet-2 production replay proved that a valid
+observation replacement of a designed Scene could not pass GMC's own workspace
+invariants. A `gmc.scene-story-design/1` targets one exact Scene-kit revision.
+The observation route advanced the Scene kit without advancing that reference,
+so normalization correctly rejected the mixed workspace with
+`STORY_SCENE_DESIGN_REVISION_MISMATCH` even when no concurrent owner edit had
+occurred.
+
+The owner commit now treats referential pairing as part of the same atomic
+observation mutation. For every existing design whose `sceneKitRef.sceneKitId`
+matches the current Scene, GMC changes only
+`sceneKitRef.sceneKitRevision` to the proposed Scene revision and increments
+the design revision once. Scene promise, obligations, affordances, source refs,
+unrelated designs, and unrelated workspace state are preserved. Both the Scene
+kit and rebound design refs appear in `changedRecordRefs`. The request
+fingerprint, workspace/Scene CAS, idempotency record, operation status, and
+receipt remain unchanged; duplicate replay cannot increment either revision.
+
+This is an owner-internal integrity operation. GMA, VCS, the browser, and the
+LLM neither propose nor validate the rewritten design reference. Historical
+workspace revisions remain immutable and paired. Rejection publishes neither
+the Scene nor design update, and rollback disables fresh writes without
+rewriting accepted history. Required tests use a designed active Scene and
+prove exact pairing, unchanged Story substance, unrelated-design preservation,
+idempotent replay, and zero partial writes.
+
 ## Review record
 
 Accepted after the containment replay proved that pausing the route was safe

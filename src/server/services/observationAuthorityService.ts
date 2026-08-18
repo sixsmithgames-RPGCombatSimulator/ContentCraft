@@ -80,6 +80,22 @@ function sceneKits(workspace: JsonObject): JsonObject[] {
   return Array.isArray(workspace.sceneKits) ? workspace.sceneKits.filter(object) : [];
 }
 
+function rebindSceneStoryDesigns(workspace: JsonObject, sceneKitId: string, sceneKitRevision: number): string[] {
+  const designs = Array.isArray(workspace.sceneStoryDesigns)
+    ? clone(workspace.sceneStoryDesigns as JsonValue[])
+    : [];
+  const changedRecordRefs: string[] = [];
+  workspace.sceneStoryDesigns = designs.map((value) => {
+    if (!object(value) || !object(value.sceneKitRef) || value.sceneKitRef.sceneKitId !== sceneKitId) return value;
+    const rebound = clone(value);
+    rebound.sceneKitRef = { ...clone(rebound.sceneKitRef as JsonObject), sceneKitRevision };
+    rebound.revision = Number(rebound.revision) + 1;
+    changedRecordRefs.push(`scene_story_design:${String(rebound.designId)}`);
+    return rebound;
+  });
+  return changedRecordRefs;
+}
+
 function activeSceneKit(workspace: JsonObject): JsonObject {
   if (!object(workspace.activeSceneKitRef)) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_UNAVAILABLE', 'No current Scene is available for observation.', {});
   const sceneKitId = requiredId(workspace.activeSceneKitRef.sceneKitId, 'workspace.activeSceneKitRef.sceneKitId');
@@ -295,6 +311,7 @@ export async function commitObservationAuthority(input: {
   }
   const workspace = clone(active.workspace);
   workspace.sceneKits = sceneKits(workspace).map((kit) => kit.sceneKitId === current.sceneKitId ? clone(input.sceneKit) : kit);
+  const reboundDesignRefs = rebindSceneStoryDesigns(workspace, String(current.sceneKitId), Number(input.sceneKit.revision));
   const written = await replaceStoryWorkspace({
     userId: input.userId,
     campaignId,
@@ -303,7 +320,7 @@ export async function commitObservationAuthority(input: {
     source: 'observation_authority',
     workspace,
     deltaId: operationId,
-    changedRecordRefs: [`scene_kit:${String(current.sceneKitId)}`],
+    changedRecordRefs: [`scene_kit:${String(current.sceneKitId)}`, ...reboundDesignRefs],
     requestHashOverride: requestFingerprint,
   }, records);
   return {

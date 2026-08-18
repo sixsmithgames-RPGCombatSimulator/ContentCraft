@@ -125,10 +125,37 @@ function reciprocal(subjectRef: string, storyActorRef: string, revision = 'revis
   };
 }
 
-async function prepared() {
+function sceneStoryDesign(): JsonObject {
+  return {
+    schemaVersion: 'gmc.scene-story-design/1', designId: 'scene-design:second-mouth', revision: 1,
+    sceneKitRef: { sceneKitId: 'scene-kit:second-mouth', sceneKitRevision: 1 },
+    scenePromise: {
+      whyNow: 'Kerrigan can learn what the worker is signaling before the entrance activity changes.',
+      meaningfulDevelopments: ['answer', 'complication', 'decision'],
+    },
+    obligations: [{
+      obligationId: 'obligation:second-mouth-signal', storyNodeRef: 'gmc:story:second-mouth',
+      question: 'What answers the worker at SECOND MOUTH?', state: 'open',
+      allowedContributions: ['answer', 'complication', 'decision'],
+      completionConditions: ['Kerrigan establishes what follows the signal.'],
+      sourceRefs: ['gmc:scene:second-mouth'],
+    }],
+    affordances: [{
+      affordanceId: 'affordance:observe-second-mouth', targetRef: 'gmc:element:drain-mouth',
+      targetLabel: 'SECOND MOUTH drain', mode: 'observe',
+      access: 'The entrance and accessible drain passage can be observed from cover or by a mobile familiar.',
+      factRefs: ['gmc:information:worker-signal'], changeDimensions: ['knowledge', 'options'],
+      obligationRefs: ['obligation:second-mouth-signal'],
+    }],
+    sourceRefs: ['gmc:scene:second-mouth'],
+  };
+}
+
+async function prepared(withStoryDesign = false) {
   const store = memoryCollection();
   const workspace = emptyStoryWorkspace('campaign-a');
   workspace.sceneKits = [sceneKitV3()];
+  if (withStoryDesign) workspace.sceneStoryDesigns = [sceneStoryDesign()];
   workspace.activeSceneKitRef = { sceneKitId: 'scene-kit:second-mouth' };
   await replaceStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a', expectedRevision: 0, idempotencyKey: 'prepare:scene', workspace }, store.records);
   return store;
@@ -165,7 +192,7 @@ describe('observation owner authority', () => {
   });
 
   it('atomically commits and reconciles reciprocal Scene observation authority', async () => {
-    const store = await prepared();
+    const store = await prepared(true);
     const kit = sceneKitV4();
     expect(() => validateSceneKitV4(kit)).not.toThrow();
     const request = {
@@ -176,8 +203,20 @@ describe('observation owner authority', () => {
     };
     const committed = await commitObservationAuthority(request, store.records);
     expect(committed).toMatchObject({ disposition: 'committed', duplicate: false, storyWorkspaceRef: { revision: 2 }, sceneKitRef: { revision: 2 } });
+    const writtenWorkspace = store.documents.find((document) => document.revision === 2)?.workspace;
+    const reboundDesign = (writtenWorkspace?.sceneStoryDesigns as JsonObject[])[0];
+    expect(reboundDesign).toMatchObject({
+      designId: 'scene-design:second-mouth', revision: 2,
+      sceneKitRef: { sceneKitId: 'scene-kit:second-mouth', sceneKitRevision: 2 },
+    });
+    const originalDesign = sceneStoryDesign();
+    expect(reboundDesign.scenePromise).toEqual(originalDesign.scenePromise);
+    expect(reboundDesign.obligations).toEqual(originalDesign.obligations);
+    expect(reboundDesign.affordances).toEqual(originalDesign.affordances);
+    expect(reboundDesign.sourceRefs).toEqual(originalDesign.sourceRefs);
     const replay = await commitObservationAuthority(request, store.records);
     expect(replay).toMatchObject({ disposition: 'committed', duplicate: true, storyWorkspaceRef: { revision: 2 } });
+    expect(store.documents).toHaveLength(2);
     await expect(readObservationAuthorityOperation({ userId: 'tenant-a', campaignId: 'campaign-a', operationId: request.operationId }, store.records))
       .resolves.toMatchObject({ disposition: 'committed', storyWorkspaceRef: { revision: 2 } });
     const projection = await readObservationAuthority({ userId: 'tenant-a', campaignId: 'campaign-a', subjectRefs: ['gmc:scene-role:drain-worker'] }, store.records);
