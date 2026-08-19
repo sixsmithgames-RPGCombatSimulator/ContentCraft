@@ -48,6 +48,7 @@ export const STORY_OBLIGATION_CAPABILITIES = Object.freeze([
 ] as const);
 export const ACTION_DIRECTED_STORY_CAPABILITIES = Object.freeze([
   'action-directed-scene-handoff/1',
+  'scene-handoff-receipt-reconciliation/1',
   'nested-story-graph/1',
   'single-playable-scene-authority/1',
   'combined-manual-story-turn/1',

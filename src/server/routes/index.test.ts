@@ -39,13 +39,14 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.11.17',
+      version: '1.11.18',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
           contracts: {
             migrationPreview: 'gmc.story-migration-preview/1',
             acceptedV1SceneSnapshot: 'gma.accepted-v1-scene-snapshot/1',
+            sceneHandoffReceipt: 'gmc.scene-handoff-receipt/1',
             sceneKitReadVersions: ACTION_DIRECTED_STORY_SCENE_KIT_READ_VERSIONS,
             playableSceneContextReadVersions: ACTION_DIRECTED_STORY_PLAYABLE_SCENE_CONTEXT_READ_VERSIONS,
           },
@@ -85,6 +86,7 @@ describe('API health', () => {
     });
     expect(ACTION_DIRECTED_STORY_CAPABILITIES).toEqual([
       'action-directed-scene-handoff/1',
+      'scene-handoff-receipt-reconciliation/1',
       'nested-story-graph/1',
       'single-playable-scene-authority/1',
       'combined-manual-story-turn/1',

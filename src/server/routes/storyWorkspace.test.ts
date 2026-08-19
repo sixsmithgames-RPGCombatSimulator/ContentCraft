@@ -35,6 +35,7 @@ describe('D2 Story authority routes', () => {
       ['POST', '/migrate-v2'],
       ['POST', '/migration-preview'],
       ['POST', '/scene-handoffs'],
+      ['GET', '/scene-handoffs/scene-handoff%3Aturn-1'],
       ['GET', '/scene-context'],
       ['GET', '/observation-authority'],
       ['POST', '/observation-authority/commit'],

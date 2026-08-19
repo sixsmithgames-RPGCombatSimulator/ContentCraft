@@ -61,6 +61,7 @@ import {
   compileLegacyScenePlanV2MigrationPreview,
   importAcceptedV1SceneSnapshotMigration,
   migrateStoryWorkspaceV2,
+  readCommittedSceneHandoff,
   readCurrentSceneContexts,
   readStoryGraphV2,
   replaceStoryGraphV2,
@@ -73,6 +74,7 @@ import {
   ACTION_DIRECTED_STORY_PLAYABLE_SCENE_CONTEXT_READ_VERSIONS,
   ACTION_DIRECTED_STORY_SCENE_KIT_READ_VERSIONS,
   PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,
+  SCENE_HANDOFF_RECEIPT_CONTRACT_VERSION,
   SCENE_HANDOFF_PROPOSAL_CONTRACT_VERSION,
   SCENE_KIT_CONTRACT_VERSION,
   SCENE_STORY_DESIGN_CONTRACT_VERSION,
@@ -426,6 +428,27 @@ storyWorkspaceRouter.post('/observation-authority/commit', requireServiceIntegra
   res.status(result.duplicate ? 200 : 201).json(result);
 }));
 
+storyWorkspaceRouter.get('/scene-handoffs/:idempotencyKey', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await readCommittedSceneHandoff({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    idempotencyKey: req.params.idempotencyKey,
+  });
+  if (!result) {
+    res.status(404).json({
+      error: {
+        code: 'STORY_SCENE_HANDOFF_RECEIPT_NOT_FOUND',
+        message: 'No committed Scene handoff matches that operation.',
+        correlationId: correlationId(req),
+        details: {},
+      },
+    });
+    return;
+  }
+  res.json(result);
+}));
+
 storyWorkspaceRouter.get('/observation-authority/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   res.json(await readObservationAuthorityOperation({
@@ -720,6 +743,7 @@ storyWorkspaceRouter.get('/contracts', (_req, res) => {
       storyGraph: STORY_GRAPH_CONTRACT_VERSION,
       storyNodeRef: STORY_GRAPH_NODE_REFERENCE_CONTRACT_VERSION,
       sceneHandoffProposal: SCENE_HANDOFF_PROPOSAL_CONTRACT_VERSION,
+      sceneHandoffReceipt: SCENE_HANDOFF_RECEIPT_CONTRACT_VERSION,
       sceneKit: SCENE_KIT_CONTRACT_VERSION,
       sceneKitReadVersions: ACTION_DIRECTED_STORY_SCENE_KIT_READ_VERSIONS,
       playableSceneContext: PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,

@@ -1332,6 +1332,25 @@ function resultFromCommittedWorkspace(workspace: JsonObject, storyWorkspaceRef: 
   };
 }
 
+/** Reads the immutable result of one exact Scene-handoff owner operation. */
+export async function readCommittedSceneHandoff(
+  input: { userId: string; campaignId: string; idempotencyKey: string },
+  records?: StoryWorkspaceRevisionCollection,
+): Promise<JsonObject | null> {
+  const idempotencyKey = stableId(input.idempotencyKey, 'idempotencyKey');
+  const committed = await readStoryWorkspaceRevision({
+    userId: input.userId,
+    campaignId: input.campaignId,
+    idempotencyKey,
+  }, records);
+  if (!committed || committed.source !== 'scene_handoff') return null;
+  return resultFromCommittedWorkspace(
+    committed.workspace,
+    committed.storyWorkspaceRef as unknown as JsonObject,
+    true,
+  );
+}
+
 /** Commits one exact Scene kit, locus, cast, and beat in one workspace revision. */
 export async function commitSceneHandoff(
   input: { userId: string; campaignId: string; envelope: SceneHandoffAuthorityEnvelope },

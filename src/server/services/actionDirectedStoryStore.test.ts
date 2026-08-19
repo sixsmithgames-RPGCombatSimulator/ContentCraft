@@ -12,6 +12,7 @@ import {
   importAcceptedV1SceneSnapshotMigration,
   migrateStoryWorkspaceV2,
   projectStoryGraphV2,
+  readCommittedSceneHandoff,
   readCurrentSceneContexts,
   readStoryGraphV2,
   replaceStoryGraphV2,
@@ -850,6 +851,61 @@ describe('D2 action-directed Story authority', () => {
     const changedReplay = handoffEnvelope({ openingNarration: 'A different draft under the same key.' });
     await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: changedReplay }, store.records))
       .rejects.toMatchObject({ code: 'STORY_IDEMPOTENCY_CONFLICT' });
+  });
+
+  it('reconciles only the immutable Scene-handoff result owned by the exact tenant, campaign, and key', async () => {
+    const store = await preparedStore();
+    const envelope = handoffEnvelope();
+    const committed = await commitSceneHandoff({
+      userId: 'tenant-a', campaignId: 'campaign-a', envelope,
+    }, store.records);
+    const documentCount = store.documents.length;
+
+    const reconciled = await readCommittedSceneHandoff({
+      userId: 'tenant-a', campaignId: 'campaign-a',
+      idempotencyKey: String(envelope.proposal.idempotencyKey),
+    }, store.records);
+
+    expect(reconciled).toMatchObject({
+      contractVersion: 'gmc.scene-handoff-receipt/1',
+      status: 'applied',
+      duplicate: true,
+      authoritativeStateChanged: false,
+      storyWorkspaceRef: committed.storyWorkspaceRef,
+      sceneHandoffReceipt: committed.sceneHandoffReceipt,
+      playableSceneContext: committed.playableSceneContext,
+    });
+    expect(store.documents).toHaveLength(documentCount);
+    await expect(readCommittedSceneHandoff({
+      userId: 'tenant-b', campaignId: 'campaign-a',
+      idempotencyKey: String(envelope.proposal.idempotencyKey),
+    }, store.records)).resolves.toBeNull();
+    await expect(readCommittedSceneHandoff({
+      userId: 'tenant-a', campaignId: 'campaign-b',
+      idempotencyKey: String(envelope.proposal.idempotencyKey),
+    }, store.records)).resolves.toBeNull();
+    await expect(readCommittedSceneHandoff({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'missing:handoff',
+    }, store.records)).resolves.toBeNull();
+  });
+
+  it('does not reconcile a non-handoff Story operation that uses the requested key', async () => {
+    const store = await preparedStore();
+    const active = (await readActiveStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a',
+    }, store.records))!;
+    await replaceStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a',
+      expectedRevision: active.storyWorkspaceRef.revision,
+      idempotencyKey: 'graph:other-operation',
+      source: 'story_graph',
+      workspace: active.workspace,
+    }, store.records);
+
+    await expect(readCommittedSceneHandoff({
+      userId: 'tenant-a', campaignId: 'campaign-a',
+      idempotencyKey: 'graph:other-operation',
+    }, store.records)).resolves.toBeNull();
   });
 
   it('applies beat and actual Story impacts together while preserving unrelated nodes', async () => {
