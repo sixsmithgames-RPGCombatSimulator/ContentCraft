@@ -38,8 +38,8 @@ export const OBSERVATION_SAGA_SHARED_CONTRACTS = Object.freeze({
   gmcAuthorityCommit: 'gmc.observation-authority-commit/1', gmcAuthorityReceipt: 'gmc.observation-authority-receipt/1',
   sceneKit: 'gmc.scene-kit/4', playableSceneContext: 'gma.playable-scene-context/4', actionBoundReveal: 'gma.action-bound-reveal/4',
   substantiveOutcome: 'gma.substantive-outcome/2', actionExecutionReceipt: 'gma.action-execution-receipt/2',
-  observationPreparationPacket: 'gma.observation-authority-preparation-packet/2',
-  observationPreparationCandidate: 'gma.observation-authority-preparation-candidate/1',
+  observationPreparationPacket: 'gma.observation-authority-preparation-packet/3',
+  observationPreparationCandidate: 'gma.observation-authority-preparation-candidate/2',
   narrationPacket: 'gma.current-scene-narration-packet/8', narrationResult: 'gma.current-scene-narration-result/8',
   narrationRepair: 'gma.current-scene-narration-repair/8',
 });
@@ -160,6 +160,52 @@ function currentSourceCatalog(kit: JsonObject): Set<string> {
   return refs;
 }
 
+function appendedPreparedTargets(current: JsonObject, proposed: JsonObject, preparedTargetRefs: string[]): string[] {
+  const prepared = new Set(preparedTargetRefs);
+  if (prepared.size !== preparedTargetRefs.length || preparedTargetRefs.length > 8) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_PREPARED_TARGET_INVALID', 'Prepared observation target references must be unique and bounded.', {});
+  }
+  const currentParticipants = object(current.participants) ? current.participants : {};
+  const proposedParticipants = object(proposed.participants) ? proposed.participants : {};
+  const currentRoles = Array.isArray(currentParticipants.sceneLocalRoles) ? currentParticipants.sceneLocalRoles.filter(object) : [];
+  const proposedRoles = Array.isArray(proposedParticipants.sceneLocalRoles) ? proposedParticipants.sceneLocalRoles.filter(object) : [];
+  const currentElements = Array.isArray(current.establishedElements) ? current.establishedElements.filter(object) : [];
+  const proposedElements = Array.isArray(proposed.establishedElements) ? proposed.establishedElements.filter(object) : [];
+  if (proposedRoles.length < currentRoles.length || proposedElements.length < currentElements.length
+    || canonical(proposedRoles.slice(0, currentRoles.length)) !== canonical(currentRoles)
+    || canonical(proposedElements.slice(0, currentElements.length)) !== canonical(currentElements)) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_UNRELATED_CHANGE_FORBIDDEN', 'Observation preparation changed an existing Scene role or element.', {});
+  }
+  const addedRows = [
+    ...proposedRoles.slice(currentRoles.length).map((row) => ({ ref: requiredId(row.roleId, 'sceneKit.participants.sceneLocalRoles[].roleId'), kind: 'role' })),
+    ...proposedElements.slice(currentElements.length).map((row) => ({ ref: requiredId(row.elementId, 'sceneKit.establishedElements[].elementId'), kind: 'element' })),
+  ];
+  const addedRefs = addedRows.map((row) => row.ref);
+  if (new Set(addedRefs).size !== addedRefs.length
+    || canonical([...addedRefs].sort()) !== canonical([...prepared].sort())) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_PREPARED_TARGET_INVALID', 'Prepared target references must exactly match the appended Scene roles and elements.', {});
+  }
+  const existingRefs = currentSourceCatalog(current);
+  if (addedRefs.some((ref) => existingRefs.has(ref))) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_PREPARED_TARGET_INVALID', 'A prepared observation target collides with current owner authority.', {});
+  }
+  return addedRefs;
+}
+
+function requirePreparedTargetUse(sceneKit: JsonObject, preparedTargetRefs: string[]): void {
+  const access = Array.isArray(sceneKit.observationAccess) ? sceneKit.observationAccess.filter(object) : [];
+  const observables = Array.isArray(sceneKit.observables) ? sceneKit.observables.filter(object) : [];
+  for (const ref of preparedTargetRefs) {
+    const accessUse = access.some((row) => Array.isArray(row.subjectRefs) && row.subjectRefs.includes(ref)
+      && Array.isArray(row.sourceRefs) && row.sourceRefs.includes(ref));
+    const observableUse = observables.some((row) => row.subjectRef === ref
+      && Array.isArray(row.sourceRefs) && row.sourceRefs.includes(ref));
+    if (!accessUse || !observableUse) {
+      throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_PREPARED_TARGET_ORPHANED', 'A prepared observation target is not closed by action-matched access and observable authority.', { targetRef: ref });
+    }
+  }
+}
+
 function validateReciprocalBindings(campaignId: string, kit: JsonObject, evidence: JsonObject[], derivedEvidence: JsonObject[]): void {
   const bySubject = new Map(evidence.map((row) => [String(row.subjectRef), row]));
   const candidates = new Set([...actorCandidates(kit).map((row) => row.actorRef), ...derivedEvidence.map((row) => String(row.actorRef))]);
@@ -241,6 +287,7 @@ export async function commitObservationAuthority(input: {
   sceneKit: JsonObject;
   vcsBindings: JsonObject[];
   sourceReceiptRefs: string[];
+  preparedTargetRefs?: string[];
   derivedActorEvidence?: JsonObject[];
 }, records?: Collection<StoryWorkspaceRevisionDocument>) {
   const campaignId = requiredId(input.campaignId, 'campaignId');
@@ -248,6 +295,7 @@ export async function commitObservationAuthority(input: {
   const expectedSceneRevision = revision(input.expectedSceneRevision, 'expectedSceneRevision');
   const operationId = requiredId(input.operationId, 'operationId');
   const idempotencyKey = requiredId(input.idempotencyKey, 'idempotencyKey');
+  const preparedTargetRefs = (input.preparedTargetRefs ?? []).map((ref, index) => requiredId(ref, `preparedTargetRefs[${index}]`));
   const requestPayload: JsonObject = {
     campaignId,
     expectedWorkspaceRevision,
@@ -257,6 +305,7 @@ export async function commitObservationAuthority(input: {
     sceneKit: input.sceneKit,
     vcsBindings: input.vcsBindings,
     sourceReceiptRefs: input.sourceReceiptRefs,
+    ...(input.preparedTargetRefs !== undefined ? { preparedTargetRefs } : {}),
     derivedActorEvidence: input.derivedActorEvidence ?? [],
   };
   const requestFingerprint = fingerprint(requestPayload);
@@ -279,6 +328,7 @@ export async function commitObservationAuthority(input: {
     || canonical(input.sceneKit.playableLocus as JsonValue) !== canonical(current.playableLocus as JsonValue)) {
     throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_SCENE_REPLACEMENT_INVALID', 'Observation preparation must replace the complete current Scene at the same playable locus.', {});
   }
+  const appendedTargetRefs = appendedPreparedTargets(current, input.sceneKit, preparedTargetRefs);
   const unrelatedCurrent = clone(current);
   const unrelatedProposed = clone(input.sceneKit);
   for (const record of [unrelatedCurrent, unrelatedProposed]) {
@@ -289,10 +339,15 @@ export async function commitObservationAuthority(input: {
     delete record.observables;
     delete record.obstructions;
   }
+  if (object(unrelatedProposed.participants) && object(unrelatedCurrent.participants)) {
+    unrelatedProposed.participants.sceneLocalRoles = clone(unrelatedCurrent.participants.sceneLocalRoles as JsonValue);
+  }
+  unrelatedProposed.establishedElements = clone(unrelatedCurrent.establishedElements as JsonValue);
   if (canonical(unrelatedCurrent) !== canonical(unrelatedProposed)) {
     throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_UNRELATED_CHANGE_FORBIDDEN', 'Observation preparation changed unrelated current-Scene fields.', {});
   }
   validateSceneKit(input.sceneKit);
+  requirePreparedTargetUse(input.sceneKit, appendedTargetRefs);
   const derivedEvidence = input.derivedActorEvidence ?? [];
   for (const [index, candidate] of derivedEvidence.entries()) {
     const expected = derivedActorCandidate(campaignId, current, {
@@ -303,6 +358,7 @@ export async function commitObservationAuthority(input: {
   validateReciprocalBindings(campaignId, input.sceneKit, input.vcsBindings, derivedEvidence);
   const allowedSources = currentSourceCatalog(current);
   input.sourceReceiptRefs.forEach((ref, index) => allowedSources.add(requiredId(ref, `sourceReceiptRefs[${index}]`)));
+  appendedTargetRefs.forEach((ref) => allowedSources.add(ref));
   for (const [collection, idField] of [['observationAccess', 'accessId'], ['observables', 'observableId'], ['obstructions', 'obstructionId']] as const) {
     for (const row of input.sceneKit[collection] as JsonObject[]) {
       for (const sourceRef of row.sourceRefs as string[]) if (!allowedSources.has(sourceRef)) throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_SOURCE_UNGROUNDED', 'Observation authority cites a source outside the accepted owner evidence.', { recordRef: row[idField], sourceRef });

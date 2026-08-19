@@ -284,6 +284,37 @@ rewriting accepted history. Required tests use a designed active Scene and
 prove exact pairing, unchanged Story substance, unrelated-design preservation,
 idempotent replay, and zero partial writes.
 
+## Accepted correction: action-matched scene-local target preparation
+
+Accepted 2026-08-19 after production proof found a forbidden GMA token join:
+an unestablished drain worker's observables were attached to the drain-opening
+element. Correct narration cannot excuse contradictory owner refs.
+
+The observation commit remains one complete same-locus Scene replacement and
+GMC remains its only mutable owner. The request may now include bounded
+`preparedTargetRefs`. When nonempty, that set must equal exactly the refs of
+scene-local roles and established elements appended by this replacement.
+Existing participants, roles, elements, information, beats, Story bindings,
+design substance, and all other unrelated fields remain byte-identical.
+
+Every appended target must be used as a subject and source by at least one new
+observation-access row and one new observable. A target used only by a blocker,
+an orphan ref, an extra or missing declaration, an existing-row edit/removal/
+reorder, or a source outside current owner evidence, accepted receipt evidence,
+and the exact prepared target set rejects the whole write. Source closure adds a
+prepared ref only after this append-only diff passes. Story-design revision
+rebinding, reciprocal observer bindings, workspace/Scene CAS, request
+fingerprinting, idempotency, operation status, privacy, and atomic publication
+are unchanged.
+
+Requests without `preparedTargetRefs` remain backward compatible and may add no
+role or element. Deploy GMC before the GMA packet `/3`/candidate `/2` consumer.
+Rollback stops new consumer emission first; accepted scene-local targets remain
+ordinary immutable Scene history. Tests cover valid role/element additions,
+legacy no-addition calls, exact set equality, unrelated diffs, orphan and
+blocker-only targets, source closure, stale/idempotent writes, designed-Scene
+rebind, and zero partial publication.
+
 ## Review record
 
 Accepted after the containment replay proved that pausing the route was safe

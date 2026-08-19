@@ -223,6 +223,119 @@ describe('observation owner authority', () => {
     expect(projection).toMatchObject({ preparationState: 'ready', observables: [{ observableId: 'gmc:observable:worker-appearance' }, { observableId: 'gmc:observable:worker-distance' }] });
   });
 
+  it('atomically appends only exact action-matched prepared targets and closes their observation authority', async () => {
+    const store = await prepared(true);
+    const kit = sceneKitV4();
+    const targetRef = 'gmc:scene-role:interior-drain-worker';
+    (kit.participants as JsonObject).sceneLocalRoles = [
+      ...((kit.participants as JsonObject).sceneLocalRoles as JsonObject[]),
+      { roleId: targetRef, label: 'interior drain worker', count: 1, objective: 'Inspect the runoff grating.' },
+    ];
+    (kit.observationAccess as JsonObject[]).push({
+      accessId: 'gmc:access:rat-interior-worker', originViewpointRef: 'gmc:viewpoint:kerrigan-cover', candidateViewpointRef: 'gmc:viewpoint:drain-interior',
+      accessMode: 'remote_sensor', pathRef: 'gmc:path:cover-to-drain', requiredCapabilityRefs: ['vcs:mobility:rat', 'vcs:sense:familiar-link'], availableModalities: ['visual'],
+      subjectRefs: [targetRef], facets: ['surface_description'], epistemicState: 'scene_local_established',
+      sourceRefs: [targetRef], playerFacingStatement: 'The rat can approach the worker inside the drain.',
+    });
+    (kit.observables as JsonObject[]).push({
+      observableId: 'gmc:observable:interior-worker-appearance', subjectRef: targetRef, facet: 'surface_description', resultKind: 'observed',
+      value: { kind: 'description', text: 'A lean worker in dark drain-service clothing.' }, playerFacingStatement: 'The worker is lean and wears dark drain-service clothing.',
+      perceptibility: { modalities: ['visual'], accessCondition: 'declared_method', observerRefs: ['gmc:actor:kerrigan-familiar'], methodRefs: ['vcs:sense:familiar-link'], mechanicRef: null },
+      supportedPrecision: 'ordinary', modality: 'visual', viewpointRef: 'gmc:viewpoint:drain-interior', epistemicState: 'scene_local_established', sourceRefs: [targetRef],
+    });
+    const request = {
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedWorkspaceRevision: 1, expectedSceneRevision: 1,
+      operationId: 'operation:prepare-interior-worker', idempotencyKey: 'observation:prepare-interior-worker', sceneKit: kit,
+      vcsBindings: [reciprocal('vcs:character:kerrigan', 'gmc:actor:kerrigan'), reciprocal('vcs:familiar:kerrigan', 'gmc:actor:kerrigan-familiar')],
+      sourceReceiptRefs: ['vcs:binding-receipt:kerrigan', 'vcs:binding-receipt:familiar'], preparedTargetRefs: [targetRef],
+    };
+    await expect(commitObservationAuthority(request, store.records)).resolves.toMatchObject({ disposition: 'committed', duplicate: false });
+    const written = store.documents.find((document) => document.revision === 2)?.workspace;
+    const writtenKit = (written?.sceneKits as JsonObject[])[0];
+    expect(((writtenKit.participants as JsonObject).sceneLocalRoles as JsonObject[]).at(-1)).toMatchObject({ roleId: targetRef });
+    expect((writtenKit.observables as JsonObject[]).at(-1)).toMatchObject({ subjectRef: targetRef, sourceRefs: [targetRef] });
+    await expect(commitObservationAuthority(request, store.records)).resolves.toMatchObject({ disposition: 'committed', duplicate: true });
+    expect(store.documents).toHaveLength(2);
+  });
+
+  it('atomically appends an action-matched prepared element with exact source closure', async () => {
+    const store = await prepared(true);
+    const kit = sceneKitV4();
+    const targetRef = 'gmc:element:interior-service-hatch';
+    kit.establishedElements = [
+      ...(kit.establishedElements as JsonObject[]),
+      { elementId: targetRef, truthState: 'scene_local_established', summary: 'An iron service hatch is set into the drain wall.' },
+    ];
+    (kit.observationAccess as JsonObject[]).push({
+      accessId: 'gmc:access:rat-interior-hatch', originViewpointRef: 'gmc:viewpoint:kerrigan-cover', candidateViewpointRef: 'gmc:viewpoint:drain-interior',
+      accessMode: 'remote_sensor', pathRef: 'gmc:path:cover-to-drain', requiredCapabilityRefs: ['vcs:mobility:rat', 'vcs:sense:familiar-link'], availableModalities: ['visual'],
+      subjectRefs: [targetRef], facets: ['surface_description'], epistemicState: 'scene_local_established',
+      sourceRefs: [targetRef], playerFacingStatement: 'The rat can see the service hatch inside the drain.',
+    });
+    (kit.observables as JsonObject[]).push({
+      observableId: 'gmc:observable:interior-service-hatch', subjectRef: targetRef, facet: 'surface_description', resultKind: 'observed',
+      value: { kind: 'description', text: 'An iron service hatch is set into the wall.' }, playerFacingStatement: 'An iron service hatch is set into the drain wall.',
+      perceptibility: { modalities: ['visual'], accessCondition: 'declared_method', observerRefs: ['gmc:actor:kerrigan-familiar'], methodRefs: ['vcs:sense:familiar-link'], mechanicRef: null },
+      supportedPrecision: 'ordinary', modality: 'visual', viewpointRef: 'gmc:viewpoint:drain-interior', epistemicState: 'scene_local_established', sourceRefs: [targetRef],
+    });
+    await expect(commitObservationAuthority({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedWorkspaceRevision: 1, expectedSceneRevision: 1,
+      operationId: 'operation:prepare-interior-hatch', idempotencyKey: 'observation:prepare-interior-hatch', sceneKit: kit,
+      vcsBindings: [reciprocal('vcs:character:kerrigan', 'gmc:actor:kerrigan'), reciprocal('vcs:familiar:kerrigan', 'gmc:actor:kerrigan-familiar')],
+      sourceReceiptRefs: ['vcs:binding-receipt:kerrigan', 'vcs:binding-receipt:familiar'], preparedTargetRefs: [targetRef],
+    }, store.records)).resolves.toMatchObject({ disposition: 'committed', duplicate: false });
+    const written = store.documents.find((document) => document.revision === 2)?.workspace;
+    const writtenKit = (written?.sceneKits as JsonObject[])[0];
+    expect((writtenKit.establishedElements as JsonObject[]).at(-1)).toMatchObject({ elementId: targetRef });
+    expect((writtenKit.observationAccess as JsonObject[]).at(-1)).toMatchObject({ subjectRefs: [targetRef], sourceRefs: [targetRef] });
+    expect((writtenKit.observables as JsonObject[]).at(-1)).toMatchObject({ subjectRef: targetRef, sourceRefs: [targetRef] });
+  });
+
+  it('rejects mismatched, orphaned, or unrelated prepared targets without publishing a partial Scene', async () => {
+    async function rejected(mutator: (kit: JsonObject) => void, preparedTargetRefs: string[], code: string) {
+      const store = await prepared();
+      const kit = sceneKitV4();
+      const targetRef = 'gmc:scene-role:prepared-worker';
+      (kit.participants as JsonObject).sceneLocalRoles = [
+        ...((kit.participants as JsonObject).sceneLocalRoles as JsonObject[]),
+        { roleId: targetRef, label: 'prepared worker', count: 1, objective: 'Inspect the drain.' },
+      ];
+      (kit.observationAccess as JsonObject[]).push({
+        accessId: 'gmc:access:prepared-worker', originViewpointRef: 'gmc:viewpoint:kerrigan-cover', candidateViewpointRef: 'gmc:viewpoint:drain-apron',
+        accessMode: 'remote_sensor', pathRef: 'gmc:path:cover-to-drain', requiredCapabilityRefs: ['vcs:sense:familiar-link'], availableModalities: ['visual'],
+        subjectRefs: [targetRef], facets: ['surface_description'], epistemicState: 'scene_local_established', sourceRefs: [targetRef], playerFacingStatement: 'The rat can see the prepared worker.',
+      });
+      (kit.observables as JsonObject[]).push({
+        observableId: 'gmc:observable:prepared-worker', subjectRef: targetRef, facet: 'surface_description', resultKind: 'observed',
+        value: { kind: 'description', text: 'A worker in dark clothing.' }, playerFacingStatement: 'The worker wears dark clothing.',
+        perceptibility: { modalities: ['visual'], accessCondition: 'declared_method', observerRefs: ['gmc:actor:kerrigan-familiar'], methodRefs: ['vcs:sense:familiar-link'], mechanicRef: null },
+        supportedPrecision: 'ordinary', modality: 'visual', viewpointRef: 'gmc:viewpoint:drain-apron', epistemicState: 'scene_local_established', sourceRefs: [targetRef],
+      });
+      mutator(kit);
+      await expect(commitObservationAuthority({
+        userId: 'tenant-a', campaignId: 'campaign-a', expectedWorkspaceRevision: 1, expectedSceneRevision: 1,
+        operationId: `operation:${code.toLowerCase()}`, idempotencyKey: `observation:${code.toLowerCase()}`, sceneKit: kit,
+        vcsBindings: [reciprocal('vcs:character:kerrigan', 'gmc:actor:kerrigan'), reciprocal('vcs:familiar:kerrigan', 'gmc:actor:kerrigan-familiar')],
+        sourceReceiptRefs: ['vcs:binding-receipt:kerrigan', 'vcs:binding-receipt:familiar'], preparedTargetRefs,
+      }, store.records)).rejects.toMatchObject({ code });
+      expect(store.documents).toHaveLength(1);
+    }
+
+    await rejected(() => {}, [], 'STORY_OBSERVATION_PREPARED_TARGET_INVALID');
+    await rejected((kit) => { (kit.observationAccess as JsonObject[]).pop(); }, ['gmc:scene-role:prepared-worker'], 'STORY_OBSERVATION_PREPARED_TARGET_ORPHANED');
+    await rejected((kit) => {
+      (kit.observationAccess as JsonObject[]).pop();
+      (kit.observables as JsonObject[]).pop();
+      (kit.obstructions as JsonObject[]).push({
+        obstructionId: 'gmc:obstruction:prepared-worker-only', subjectRefs: ['gmc:scene-role:prepared-worker'],
+        affectedFacets: ['surface_description'], affectedModalities: ['visual'], affectedAccessRefs: [], pathRefs: [], viewpointRefs: [],
+        mobilityEffect: 'none', observerRefs: [], formRefs: [], methodRefs: [], playerFacingStatement: 'The worker is blocked from view.',
+        sourceRefs: ['gmc:scene-role:prepared-worker'], provenanceReceiptRefs: ['vcs:binding-receipt:familiar'],
+      });
+    }, ['gmc:scene-role:prepared-worker'], 'STORY_OBSERVATION_PREPARED_TARGET_ORPHANED');
+    await rejected((kit) => { kit.purpose = 'An unrelated changed purpose.'; }, ['gmc:scene-role:prepared-worker'], 'STORY_OBSERVATION_UNRELATED_CHANGE_FORBIDDEN');
+  });
+
   it('accepts only exact Scene observation-access identifiers in obstruction access bindings', () => {
     const kit = sceneKitV4();
     kit.obstructions = [{

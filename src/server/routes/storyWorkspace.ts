@@ -423,6 +423,7 @@ storyWorkspaceRouter.post('/observation-authority/commit', requireServiceIntegra
     sceneKit: body.sceneKit,
     vcsBindings: body.vcsBindings ?? [],
     sourceReceiptRefs: body.sourceReceiptRefs ?? [],
+    preparedTargetRefs: body.preparedTargetRefs,
     derivedActorEvidence: body.derivedActorEvidence ?? [],
   });
   res.status(result.duplicate ? 200 : 201).json(result);
