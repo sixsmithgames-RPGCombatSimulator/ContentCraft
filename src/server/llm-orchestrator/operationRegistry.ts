@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-17.7';
+export const OPERATION_REGISTRY_VERSION = '2026-08-20.8';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-08-17.7',
   '2026-08-13.3',
   '2026-08-13.2',
   '2026-08-12.2',
@@ -896,7 +897,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'confidence', 'intents', 'ambiguities', 'coverage'],
     targetBytes: 12_000, hardLimitBytes: 16_384, maxOutputTokens: 4_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/10',
+    promptVersion: 'gma.semantic-intent-policy/11',
     outputProperties: {
       schemaVersion: { enum: ['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3'] },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -956,6 +957,7 @@ const seeds: Seed[] = [
       'Interpret one exact player instruction into the bounded semantic-intent version requested by responseContract. Return only that result object. Do not repeat or wrap the request task, policy, immutable instruction, Scene frame, response contract, or another request-envelope field.',
       'Copy responseContract.interactionId, responseContract.instructionRef, and responseContract.instructionFingerprint byte-for-byte into the top-level result. All three identity fields are required even when repeated elsewhere in the request; never omit, shorten, recompute, or alter them.',
       'Preserve every player-supported goal, target, declared method, requested outcome, sequence, parallel relationship, condition, and alternative. Cite exact unique phrases copied from the immutable instruction for every intent. Never silently omit overflow meaning.',
+      'Return native-valid JSON. Player-authored quotation marks, backslashes, control characters, and other JSON-significant characters inside evidenceQuotes are evidence content, not JSON delimiters: encode them with standard JSON string escapes in the serialized reply so the decoded evidenceQuotes value still matches the immutable instruction byte-for-byte. Never remove, curl, reinterpret, or leave an embedded quotation mark unescaped.',
       'Give every separate intent a unique, non-overlapping exact evidence subphrase. When one sentence contains an ordered prerequisite and the information purpose it enables, split the sentence at that meaning boundary instead of assigning the full clause to both intents. For “then send it toward the drain to see what\'s there.” use “then send it toward the drain” for movement and “to see what\'s there.” for observation. Never reuse or partially overlap an intent-level evidenceQuote across separate intents. Typed outcome evidence may repeat a narrower exact phrase only inside the information intent that owns it.',
       'Represent each semantic action exactly once. Introductory carrier wording with no independent result belongs to the concrete action it introduces. “I use my familiar, I summon it as a rat” is one familiar-activation intent, not separate use/summon/form intents. A same-clause summon with its form is one activation unless separately ordered. Keep ordered actions and independent results separate. This instruction has five intents: rat summon; move; drain view; worker better look; distance.',
       'When a malformed token is a close spelling error for an immediately established referent or method and local grammar clearly reuses that referent, preserve the literal spelling in evidence but use the established meaning in semantic fields. Ask an ambiguity only when a distinct meaning remains materially plausible.',

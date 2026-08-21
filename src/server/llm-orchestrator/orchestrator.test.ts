@@ -260,7 +260,8 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/10');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/11');
+    expect(interpretation.prompt.systemInstruction).toMatch(/native-valid JSON.*quotation marks.*standard JSON string escapes.*decoded evidenceQuotes.*byte-for-byte/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*top-level result/i);
     expect(interpretation.context.inputTargetBytes).toBe(12_000);
     expect(interpretation.context.inputHardLimitBytes).toBe(16_384);
@@ -734,7 +735,9 @@ describe('provider-neutral LLM orchestrator', () => {
       .toContain('STORY_SCENE_KIT_REPAIR_FACT_PLACEHOLDER');
   });
 
-  it('accepts the current keyed-row client and fails closed for the superseded provider transport', () => {
+  it('accepts the current and immediately prior GMA registry clients and fails closed for superseded transports', () => {
+    expect(acceptsOperationRegistryClientVersion('2026-08-20.8')).toBe(true);
+    expect(acceptsOperationRegistryClientVersion('2026-08-17.7')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.6')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.5')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.4')).toBe(false);
