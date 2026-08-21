@@ -3,6 +3,9 @@ import type { Collection, Filter } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
   advanceCompoundActionArtifact,
+  COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
+  COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
+  COMPOUND_ACTION_CONTRACTS,
   compileCompoundActionRequirementProjection,
   createCompoundActionArtifact,
   readActiveCompoundActionArtifact,
@@ -149,6 +152,31 @@ function program(boundInstruction = instruction()) {
   };
 }
 
+function parallelProgram(boundInstruction = instruction()) {
+  const base = program(boundInstruction);
+  return {
+    ...base,
+    schemaVersion: 'gma.semantic-action-program/5',
+    planner: {
+      source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/8',
+      confidence: 0.99, evidenceAnchorNormalizationCount: 0, parallelInformationGroupCount: 0,
+    },
+    nodes: [
+      { ...base.nodes[0], nodeId: 'intent-telepathic-message', ordinal: 1, dependsOn: [], condition: null, parallelWith: ['intent-rat-speaking-ruse'] },
+      { ...base.nodes[1], nodeId: 'intent-rat-speaking-ruse', ordinal: 2, dependsOn: [], condition: null, parallelWith: ['intent-telepathic-message'] },
+    ],
+    limits: { nodeCount: 2, dependencyCount: 0, parallelRelationshipCount: 1, maximumDepth: 1 },
+  };
+}
+
+function parallelCursor(revision = 1) {
+  return {
+    ...cursor(revision),
+    readyNodeRefs: ['intent-telepathic-message', 'intent-rat-speaking-ruse'],
+    remainingNodeRefs: [],
+  };
+}
+
 function cursor(revision: number, completedNodeRefs: string[] = []) {
   return {
     schemaVersion: 'gma.action-program-cursor/1', programId: 'program:turn-42', revision,
@@ -260,6 +288,60 @@ function saga(revision: number, state: 'unsettled' | 'settled', receiptRef: stri
 }
 
 describe('GMC compound-action private artifact store', () => {
+  it('advertises artifact-store /2 and atomically stores the valid reciprocal program /5', async () => {
+    expect(COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION).toBe('gmc.compound-action-artifact-store/2');
+    expect(COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS).toEqual([
+      'gma.semantic-action-program/2',
+      'gma.semantic-action-program/4',
+      'gma.semantic-action-program/5',
+    ]);
+    expect(Object.values(COMPOUND_ACTION_CONTRACTS)).not.toContain('gma.semantic-action-program/5');
+    const exact = instruction();
+    const store = memoryCollection();
+    const input = {
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:parallel:turn-42',
+      instruction: exact, program: parallelProgram(exact), cursor: parallelCursor(),
+    };
+    const created = await createCompoundActionArtifact(input, store.records);
+    expect(created).toMatchObject({ duplicate: false, artifactRef: { revision: 1, programId: 'program:turn-42' } });
+    const replay = await createCompoundActionArtifact(input, store.records);
+    expect(replay).toEqual({ ...created, duplicate: true });
+    const active = await readActiveCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42',
+    }, store.records);
+    expect(active?.artifact.program).toMatchObject({
+      schemaVersion: 'gma.semantic-action-program/5',
+      planner: { policyVersion: 'gma.semantic-action-compiler-policy/8' },
+      limits: { parallelRelationshipCount: 1 },
+    });
+    expect((((active?.artifact.program ?? {}) as JsonObject).nodes as JsonObject[]).map((node) => node.parallelWith)).toEqual([
+      ['intent-rat-speaking-ruse'], ['intent-telepathic-message'],
+    ]);
+  });
+
+  it('rejects malformed program /5 parallel graphs without storing a partial artifact', async () => {
+    const exact = instruction();
+    const variants = [
+      (candidate: JsonObject) => { delete (candidate.nodes as JsonObject[])[0].parallelWith; },
+      (candidate: JsonObject) => { (candidate.nodes as JsonObject[])[0].parallelWith = ['missing-node']; },
+      (candidate: JsonObject) => { (candidate.nodes as JsonObject[])[0].parallelWith = ['intent-telepathic-message']; },
+      (candidate: JsonObject) => { (candidate.nodes as JsonObject[])[1].parallelWith = []; },
+      (candidate: JsonObject) => { (candidate.nodes as JsonObject[])[0].parallelWith = ['intent-rat-speaking-ruse', 'intent-rat-speaking-ruse']; },
+      (candidate: JsonObject) => { (candidate.limits as JsonObject).parallelRelationshipCount = 0; },
+      (candidate: JsonObject) => { (candidate.planner as JsonObject).policyVersion = 'gma.semantic-action-compiler-policy/7'; },
+    ];
+    for (const [index, mutate] of variants.entries()) {
+      const store = memoryCollection();
+      const candidate = structuredClone(parallelProgram(exact)) as unknown as JsonObject;
+      mutate(candidate);
+      await expect(createCompoundActionArtifact({
+        userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: `create:invalid-parallel:${index}`,
+        instruction: exact, program: candidate, cursor: parallelCursor(),
+      }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_INVALID' });
+      expect(store.documents).toHaveLength(0);
+    }
+  });
+
   it('stages exact instruction bytes idempotently before semantic planning', async () => {
     const store = instructionMemoryCollection();
     const staged = await stageCompoundActionInstruction({

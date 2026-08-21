@@ -13,12 +13,13 @@ import {
   type StoryWorkspaceReference,
 } from './storyWorkspaceStore.js';
 
-export const COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION = 'gmc.compound-action-artifact-store/1';
+export const COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION = 'gmc.compound-action-artifact-store/2';
 export const COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION = 'gmc.compound-action-artifact-ref/1';
 export const COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION = 'gmc.compound-action-requirement-projection/1';
 export const COMPOUND_REPLAY_STORY_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/1';
 export const COMPOUND_REPLAY_STORY_CHECKPOINT_V2_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/2';
 export const COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-action-origin-checkpoint/1';
+export const PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION = 'gma.semantic-action-program/5';
 export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'compound-action-program/2',
   'compound-action-artifact-store/1',
@@ -37,6 +38,11 @@ export const COMPOUND_ACTION_CONTRACTS = Object.freeze({
   actionProgramCursor: 'gma.action-program-cursor/1',
   actionDirectedStoryRepair: 'gma.action-directed-story-repair/4',
 });
+export const COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS: readonly string[] = Object.freeze([
+  COMPOUND_ACTION_CONTRACTS.semanticActionProgram,
+  COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4,
+  PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION,
+]);
 export const COMPOUND_ACTION_LIMITS = Object.freeze({
   instructionMaximumBytes: 32_768,
   nodeMaximum: 8,
@@ -49,6 +55,7 @@ export const COMPOUND_ACTION_LIMITS = Object.freeze({
   observationReceiptMaximumBytes: 24_576,
   receiptMaximum: 16,
   clarificationMaximum: 8,
+  parallelRelationshipMaximum: 12,
 });
 
 type ArtifactStatus = 'available' | 'superseded' | 'inactive' | 'tombstoned';
@@ -326,7 +333,7 @@ export async function readStagedCompoundActionInstruction(input: {
 }
 
 function validateProgram(program: unknown, instruction: JsonObject): asserts program is JsonObject {
-  if (!isObject(program) || ![COMPOUND_ACTION_CONTRACTS.semanticActionProgram, COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4].includes(String(program.schemaVersion) as typeof COMPOUND_ACTION_CONTRACTS.semanticActionProgram)) {
+  if (!isObject(program) || !COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS.includes(String(program.schemaVersion))) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The semantic action program is invalid.', {});
   }
   requiredString(program.programId, 'program.programId');
@@ -358,6 +365,44 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
     requirements += Array.isArray(nodeValue.dataRequirements) ? nodeValue.dataRequirements.length : 0;
     nodesById.set(nodeId, nodeValue);
     seen.add(nodeId);
+  }
+  if (program.schemaVersion === PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION) {
+    const planner = isObject(program.planner) ? program.planner : null;
+    if (planner?.policyVersion !== 'gma.semantic-action-compiler-policy/8') {
+      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The parallel action program compiler policy is invalid.', {});
+    }
+    const relationPairs = new Set<string>();
+    for (const [index, nodeValue] of nodes.entries()) {
+      if (!isObject(nodeValue)) {
+        throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'An action node is invalid.', { index });
+      }
+      const node = nodeValue;
+      const nodeId = String(node.nodeId);
+      const parallelWith = node.parallelWith;
+      if (!Array.isArray(parallelWith)
+        || parallelWith.length > COMPOUND_ACTION_LIMITS.nodeMaximum - 1
+        || new Set(parallelWith).size !== parallelWith.length) {
+        throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'Parallel action references must be a unique bounded collection.', { index });
+      }
+      for (const parallelRefValue of parallelWith) {
+        const parallelRef = String(parallelRefValue);
+        if (typeof parallelRefValue !== 'string' || parallelRef === nodeId || !nodesById.has(parallelRef)) {
+          throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'A parallel action reference is invalid.', { index });
+        }
+        const peerRefs = Array.isArray(nodesById.get(parallelRef)?.parallelWith)
+          ? nodesById.get(parallelRef)?.parallelWith as JsonValue[]
+          : [];
+        if (!peerRefs.includes(nodeId)) {
+          throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'Parallel action references must be reciprocal.', { index });
+        }
+        relationPairs.add([nodeId, parallelRef].sort().join('|'));
+      }
+    }
+    const limits = isObject(program.limits) ? program.limits : null;
+    if (!limits || limits.parallelRelationshipCount !== relationPairs.size
+      || relationPairs.size > COMPOUND_ACTION_LIMITS.parallelRelationshipMaximum) {
+      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The parallel action relationship count is invalid.', {});
+    }
   }
   if (program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4) {
     const dependsTransitively = (node: JsonObject, ancestorRef: string, visiting = new Set<string>()): boolean => {

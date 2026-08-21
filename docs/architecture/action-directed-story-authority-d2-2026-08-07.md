@@ -585,3 +585,47 @@ mismatched program/node/slice authority is rejected. The new production-shaped
 source-cursor/prepared-cursor regression belongs to GMA, with Studio pinning the
 exact corrected GMA commit while retaining GMC `1.11.17` unless an independent
 GMC change becomes necessary.
+
+## Accepted D9.4.56 role-scoped compound-program persistence negotiation — 2026-08-21
+
+GMC accepts GMA ADR-005 D9.4.56 and Studio ADR-005 D9.4.56 by reference. The
+required D9.4.55 browser replay proved that GMA's external semantic result and
+local compiler correctly produced the two-member parallel program `/5`, while
+GMC rejected that program before persistence because artifact-store `/1`
+admitted only programs `/2` and `/4`.
+
+GMA remains logical owner of program meaning, compilation, cohort selection,
+execution, and receipt interpretation. GMC remains physical revisioned owner of
+the non-canonical interaction artifact and therefore owns storage admission,
+instruction binding, graph integrity, byte bounds, idempotency, and revisions.
+VCS neither stores nor interprets ordinary program `/5` and is not part of the
+storage-reader compatibility relation.
+
+GMC artifact-store contract `/2` adds an explicit bounded
+`readableSemanticActionPrograms` advertisement for `/2`, `/4`, and `/5` without
+changing the shared GMC/VCS compound-action contract map. GMC accepts `/5` only
+when its instruction identity, ordinary dependencies, bounded data requirements,
+unique known reciprocal `parallelWith` refs, exact unique relationship count,
+and existing ordinary program byte ceiling all validate. GMC must never create,
+drop, reorder, or infer a parallel relation; it stores the exact GMA document or
+rejects it atomically.
+
+No existing `/2` or `/4` artifact is migrated or rewritten. Their create, read,
+advance, settlement, replay, and tombstone behavior remains compatible. Receipt
+version selection remains `/1` for ordinary `/2` and `/5` and `/2` for
+observation `/4`. A rejected `/5` write leaves no program, cursor, receipt,
+narration, Story effect, or mechanic.
+
+GMC deploys before the GMA consumer. New GMC is additive for old GMA writers.
+New GMA must require current artifact-store `/2` health and `/5` readability
+before a fresh semantic prompt and again before a later Manual acceptance write.
+Rollback reverses that order. Diagnostics are limited to store/program versions,
+bounded issue metadata, correlation and hashed identities; exact player speech,
+prompts, campaign-private data, and credentials remain excluded.
+
+Release requires valid production `/5`, malformed parallel graph, legacy `/2`
+and `/4`, update, receipt, replay/tombstone, idempotency, health, skew, and
+redaction tests; complete GMC/GMA/Studio gates; direct `main` deployment in owner
+then consumer order; and a production replay that persists one exact `/5`
+program and narrates both the quoted telepathy and timed rat squeak with one
+coherent Scene/cursor/receipt lineage and no Gemini request.

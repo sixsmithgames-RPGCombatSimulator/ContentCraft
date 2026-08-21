@@ -8,7 +8,11 @@ import {
   ACTION_DIRECTED_STORY_SCENE_KIT_READ_VERSIONS,
   STORY_OBLIGATION_CAPABILITIES,
 } from '../services/storyWorkspaceStore.js';
-import { COMPOUND_ACTION_CAPABILITIES, COMPOUND_ACTION_CONTRACTS } from '../services/compoundActionArtifactStore.js';
+import {
+  COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
+  COMPOUND_ACTION_CAPABILITIES,
+  COMPOUND_ACTION_CONTRACTS,
+} from '../services/compoundActionArtifactStore.js';
 import {
   OBSERVATION_SAGA_CAPABILITIES,
   OBSERVATION_SAGA_SHARED_CONTRACTS,
@@ -39,7 +43,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.11.20',
+      version: '1.11.21',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -66,7 +70,8 @@ describe('API health', () => {
         compoundActions: {
           capabilities: COMPOUND_ACTION_CAPABILITIES,
           contracts: COMPOUND_ACTION_CONTRACTS,
-          artifactStoreContractVersion: 'gmc.compound-action-artifact-store/1',
+          artifactStoreContractVersion: 'gmc.compound-action-artifact-store/2',
+          readableSemanticActionPrograms: COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
           requirementProjectionContractVersion: 'gmc.compound-action-requirement-projection/1',
           authority: 'gmc',
           persistence: 'non_canonical_interaction',
