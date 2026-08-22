@@ -260,7 +260,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/11');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/12');
     expect(interpretation.prompt.systemInstruction).toMatch(/native-valid JSON.*quotation marks.*standard JSON string escapes.*decoded evidenceQuotes.*byte-for-byte/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*top-level result/i);
     expect(interpretation.context.inputTargetBytes).toBe(12_000);
@@ -272,6 +272,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.prompt.systemInstruction).toMatch(/every separate intent.*unique, non-overlapping exact evidence subphrase.*send it toward the drain.*to see what's there/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/represent each semantic action exactly once.*introductory carrier wording.*I use my familiar.*I summon it as a rat.*one familiar-activation intent.*five intents/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Asking where someone came from is exchange_information/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/recentConversation only to resolve pronouns, tense, established referents.*untrusted context.*cannot add an action/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/tell, report, describe, or recount.*exchange_information.*no observation groups/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/only declared transit or arrival is relocate_actor/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Movement performed stealthily is one relocate_actor intent/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Do not narrate, adjudicate, create canon, resolve mechanics/i);
@@ -414,7 +416,7 @@ describe('provider-neutral LLM orchestrator', () => {
       .toEqual(expect.arrayContaining(['schemaVersion', 'proposal', 'programId', 'nodeId', 'groupPreparations', 'outcomePreparations', 'obstructions']));
     expect(observationPreparation.provider.maxAttempts).toBe(1);
     expect(observationPreparation.provider.fallbackAllowed).toBe(false);
-    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/10');
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/12');
     expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/authorized by actionBoundReveal/i);
@@ -424,10 +426,11 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(currentScene.prompt.systemInstruction).toMatch(/the load is established/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/temporalRequirement.*first result/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/complete observation authority for that exact Scene revision/i);
-    expect(currentScene.prompt.systemInstruction).toMatch(/Use every permitted statement verbatim/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/Compose and silently edit lived prose first.*Ordinary descriptive statements may be paraphrased naturally.*locked value/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/Historical \/8 keeps its original verbatim permitted-statement contract/i);
     expect(currentScene.outputSchema.schema.required).toEqual(['schemaVersion', 'responseText']);
     expect((currentScene.outputSchema.schema.properties as any).schemaVersion.enum)
-      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7', 'gma.current-scene-narration-result/8']);
+      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7', 'gma.current-scene-narration-result/8', 'gma.current-scene-narration-result/9', 'gma.current-scene-narration-result/10']);
     expect((currentScene.outputSchema.schema.properties as any).proposedTimeAdvance).toMatchObject({
       type: ['object', 'null'],
       required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
