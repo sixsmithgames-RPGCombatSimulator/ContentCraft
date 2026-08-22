@@ -233,6 +233,26 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, 'workspace.sceneKits.sceneKitId': 1, revision: -1 },
     { name: 'gmc_story_workspace_scene_kit_lookup' },
   );
+  await database.collection('gmc_active_scene_states').createIndex(
+    { userId: 1, campaignId: 1, sceneKitId: 1 },
+    { unique: true, name: 'unique_gmc_active_scene_state' },
+  );
+  await database.collection('gmc_active_scene_states').createIndex(
+    { userId: 1, campaignId: 1, latestOperationId: 1 },
+    { sparse: true, name: 'gmc_active_scene_state_operation_lookup' },
+  );
+  await database.collection('gmc_scene_turn_receipts').createIndex(
+    { userId: 1, campaignId: 1, operationId: 1 },
+    { unique: true, name: 'unique_gmc_scene_turn_operation' },
+  );
+  await database.collection('gmc_scene_turn_receipts').createIndex(
+    { userId: 1, campaignId: 1, idempotencyKey: 1 },
+    { unique: true, name: 'unique_gmc_scene_turn_idempotency' },
+  );
+  await database.collection('gmc_scene_turn_receipts').createIndex(
+    { userId: 1, campaignId: 1, sceneKitId: 1, stateRevisionAfter: -1 },
+    { unique: true, name: 'unique_gmc_scene_turn_state_revision' },
+  );
   // Exact player instructions and resumable action programs are private,
   // non-canonical interaction artifacts. They are revisioned independently
   // from Story so an incomplete compound action cannot leak into campaign canon.

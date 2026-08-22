@@ -18,6 +18,19 @@ import {
   StoryWorkspaceStoreError,
 } from '../services/storyWorkspaceStore.js';
 import {
+  ACTIVE_SCENE_CAPABILITIES,
+  ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION,
+  ACTIVE_SCENE_CONTEXT_MAX_BYTES,
+  ACTIVE_SCENE_STATE_CONTRACT_VERSION,
+  ACTIVE_SCENE_STATE_MAX_BYTES,
+  commitSceneTurn,
+  readSceneTurnOperation,
+  SCENE_STATE_DELTA_CONTRACT_VERSION,
+  SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
+  SCENE_TURN_PROPOSAL_MAX_BYTES,
+  SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+} from '../services/activeSceneStateStore.js';
+import {
   commitObservationAuthority,
   OBSERVATION_AUTHORITY_COMMIT_CONTRACT_VERSION,
   OBSERVATION_AUTHORITY_PROJECTION_CONTRACT_VERSION,
@@ -451,6 +464,37 @@ storyWorkspaceRouter.get('/scene-handoffs/:idempotencyKey', requireServiceIntegr
   res.json(result);
 }));
 
+storyWorkspaceRouter.post('/scene-turns', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await commitSceneTurn({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    proposal: req.body,
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.get('/scene-turns/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await readSceneTurnOperation({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    operationId: req.params.operationId,
+  });
+  if (!result) {
+    res.status(404).json({
+      error: {
+        code: 'STORY_SCENE_TURN_RECEIPT_NOT_FOUND',
+        message: 'No accepted Scene turn matches that operation.',
+        correlationId: correlationId(req),
+        details: {},
+      },
+    });
+    return;
+  }
+  res.json(result);
+}));
+
 storyWorkspaceRouter.get('/observation-authority/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   res.json(await readObservationAuthorityOperation({
@@ -754,6 +798,19 @@ storyWorkspaceRouter.get('/contracts', (_req, res) => {
       capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
       authority: 'gmc',
       routeEnabled: false,
+    },
+    activeSceneState: {
+      capabilities: ACTIVE_SCENE_CAPABILITIES,
+      activeSceneState: ACTIVE_SCENE_STATE_CONTRACT_VERSION,
+      activeSceneContext: ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION,
+      sceneStateDelta: SCENE_STATE_DELTA_CONTRACT_VERSION,
+      sceneTurnProposal: SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
+      sceneTurnReceipt: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+      maximumStateBytes: ACTIVE_SCENE_STATE_MAX_BYTES,
+      maximumContextBytes: ACTIVE_SCENE_CONTEXT_MAX_BYTES,
+      maximumProposalBytes: SCENE_TURN_PROPOSAL_MAX_BYTES,
+      authority: 'gmc',
+      routeEnabled: true,
     },
     observationSaga: {
       projection: OBSERVATION_AUTHORITY_PROJECTION_CONTRACT_VERSION,

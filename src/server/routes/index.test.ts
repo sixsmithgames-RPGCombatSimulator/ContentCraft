@@ -18,6 +18,14 @@ import {
   OBSERVATION_SAGA_SHARED_CONTRACTS,
   OBSERVATION_SAGA_SHARED_WRITER_BUNDLE_VERSION,
 } from '../services/observationAuthorityService.js';
+import {
+  ACTIVE_SCENE_CAPABILITIES,
+  ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION,
+  ACTIVE_SCENE_STATE_CONTRACT_VERSION,
+  SCENE_STATE_DELTA_CONTRACT_VERSION,
+  SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
+  SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+} from '../services/activeSceneStateStore.js';
 import { apiRouter } from './index.js';
 
 const servers: Server[] = [];
@@ -43,7 +51,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.11.22',
+      version: '1.11.23',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -66,6 +74,20 @@ describe('API health', () => {
           },
           authority: 'gmc',
           routeEnabled: false,
+        },
+        activeSceneState: {
+          capabilities: ACTIVE_SCENE_CAPABILITIES,
+          contracts: {
+            activeSceneState: ACTIVE_SCENE_STATE_CONTRACT_VERSION,
+            activeSceneContext: ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION,
+            sceneStateDelta: SCENE_STATE_DELTA_CONTRACT_VERSION,
+            sceneTurnProposal: SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
+            sceneTurnReceipt: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+          },
+          authority: 'gmc',
+          mechanicsAuthority: 'vcs',
+          transcriptAuthority: false,
+          routeEnabled: true,
         },
         compoundActions: {
           capabilities: COMPOUND_ACTION_CAPABILITIES,

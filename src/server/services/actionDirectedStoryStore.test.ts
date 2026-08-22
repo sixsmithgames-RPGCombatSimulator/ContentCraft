@@ -420,6 +420,27 @@ describe('D2 action-directed Story authority', () => {
     expect(JSON.stringify(first.privateSceneContext)).toContain('unknown-compartment');
     expect(JSON.stringify(first.privateSceneContext)).toContain('green thread knotted inside');
     expect(JSON.stringify(first.privateSceneContext)).toContain('violet residue marks');
+    const castPreparedWorkspace = structuredClone(active);
+    castPreparedWorkspace.npcReadiness = [{
+      readinessId: 'npc-readiness:kerrigan', npcRef: 'gmc:pc:kerrigan', publicLabel: 'Kerrigan',
+      identityMaturity: 'established', sourceRefs: ['gmc:pc:kerrigan'],
+    }];
+    castPreparedWorkspace.npcSceneCards = [{
+      cardId: 'npc-card:kerrigan', npcRef: 'gmc:pc:kerrigan', publicLabel: 'Kerrigan',
+      currentObjective: 'Intercept the cart without losing the route.',
+      likelyAction: 'Keep to cover while observing the crew.',
+      disclosurePosture: 'Direct about the route and guarded about the source.',
+      hardLimits: ['Will not abandon the lead.'], approachSensitivities: ['Responds to concrete evidence.'],
+      sourceRefs: ['gmc:pc:kerrigan'],
+    }];
+    expect(buildPrivateSceneDirectorContext(castPreparedWorkspace)).toMatchObject({
+      npcReadiness: [expect.objectContaining({ npcRef: 'gmc:pc:kerrigan', publicLabel: 'Kerrigan' })],
+      npcSceneCards: [expect.objectContaining({
+        npcRef: 'gmc:pc:kerrigan',
+        currentObjective: 'Intercept the cart without losing the route.',
+        likelyAction: 'Keep to cover while observing the crew.',
+      })],
+    });
     const contexts = await readCurrentSceneContexts({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
     expect(contexts?.authorityReceiptCatalog).toMatchObject({
       contractVersion: 'gmc.story-authority-receipt-catalog/1',

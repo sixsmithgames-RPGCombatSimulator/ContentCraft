@@ -6,6 +6,7 @@ import {
   type JsonValue,
   PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
   PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES,
+  buildPlayableStoryProjection,
   PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,
   PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION,
   PLAYABLE_SCENE_CONTEXT_MAX_BYTES,
@@ -36,6 +37,11 @@ import {
   validateStorySatisfactionReceipt,
   validateStoryGraphV2,
 } from './storyWorkspaceStore.js';
+import {
+  buildActiveSceneContext,
+  readActiveSceneContext,
+  type ActiveSceneStateCollections,
+} from './activeSceneStateStore.js';
 
 /** D2 authority receipt and service-only projection versions. */
 export const STORY_GRAPH_WRITE_RECEIPT_CONTRACT_VERSION = 'gmc.story-graph-write-receipt/1';
@@ -1011,6 +1017,7 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
     priority: 'blocking',
     sourceRefs: (kit.sourceRefs as string[]).slice(0, 8),
   });
+  const playableStory = buildPlayableStoryProjection(workspace, String(kit.sceneKitId));
   const context: JsonObject = {
     schemaVersion: PRIVATE_SCENE_CONTEXT_CONTRACT_VERSION,
     workspaceRef: { workspaceId: workspace.workspaceId, revision: workspace.revision },
@@ -1019,6 +1026,8 @@ export function buildPrivateSceneDirectorContext(workspace: JsonObject): JsonObj
     storyNodes: directorStoryNodes.slice(0, 8).map((node) => clone(node)),
     scenePreparation: { hiddenElements, unresolvedInformation, potentialImpacts },
     sceneStoryDesign: activeSceneStoryDesign(workspace, kit),
+    npcSceneCards: clone((playableStory.npcSceneCards as JsonValue[] ?? []).slice(0, 24)),
+    npcReadiness: clone((playableStory.npcReadiness as JsonValue[] ?? []).slice(0, 24)),
     preparationDebt,
   };
   if (bytes(context) > PRIVATE_SCENE_CONTEXT_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_DIRECTOR_CONTEXT_TOO_LARGE', 'The private scene context exceeds its selection bound.', { maximumBytes: PRIVATE_SCENE_CONTEXT_MAX_BYTES });
@@ -1318,8 +1327,24 @@ function validateHandoffMode(mode: HandoffMode, proposed: JsonObject, current: J
   }
 }
 
-function resultFromCommittedWorkspace(workspace: JsonObject, storyWorkspaceRef: JsonObject, duplicate: boolean): JsonObject {
+async function resultFromCommittedWorkspace(
+  workspace: JsonObject,
+  storyWorkspaceRef: JsonObject,
+  duplicate: boolean,
+  identity: { userId: string; campaignId: string },
+  records?: StoryWorkspaceRevisionCollection,
+): Promise<JsonObject> {
   const receipt = isObject(workspace.lastSceneHandoffReceipt) ? workspace.lastSceneHandoffReceipt as JsonObject : {};
+  let activeSceneContext = buildActiveSceneContext(String(workspace.campaignId), activeV2SceneKit(workspace) as JsonObject);
+  // The normal service path returns the live active-scene snapshot only when
+  // this handoff still owns the current workspace head. Historical handoff
+  // reads remain immutable and cannot accidentally project later turn state.
+  if (!records) {
+    const current = await readActiveStoryWorkspace(identity);
+    if (Number(current?.storyWorkspaceRef.revision) === Number(storyWorkspaceRef.revision)) {
+      activeSceneContext = await readActiveSceneContext({ ...identity, workspace });
+    }
+  }
   return {
     contractVersion: SCENE_HANDOFF_RECEIPT_CONTRACT_VERSION,
     status: 'applied',
@@ -1329,6 +1354,7 @@ function resultFromCommittedWorkspace(workspace: JsonObject, storyWorkspaceRef: 
     sceneHandoffReceipt: clone(receipt),
     playableSceneContext: buildPlayableSceneContextV2(workspace),
     privateSceneContext: buildPrivateSceneDirectorContext(workspace),
+    activeSceneContext,
   };
 }
 
@@ -1348,6 +1374,8 @@ export async function readCommittedSceneHandoff(
     committed.workspace,
     committed.storyWorkspaceRef as unknown as JsonObject,
     true,
+    input,
+    records,
   );
 }
 
@@ -1366,7 +1394,7 @@ export async function commitSceneHandoff(
   const replay = await readStoryWorkspaceRevision({ userId: input.userId, campaignId: input.campaignId, idempotencyKey }, records);
   if (replay) {
     if (replay.requestHash !== requestHash || replay.source !== 'scene_handoff') throw new StoryWorkspaceStoreError(409, 'STORY_IDEMPOTENCY_CONFLICT', 'The handoff idempotency key was already used for a different write.', {});
-    return resultFromCommittedWorkspace(replay.workspace, replay.storyWorkspaceRef as unknown as JsonObject, true);
+    return resultFromCommittedWorkspace(replay.workspace, replay.storyWorkspaceRef as unknown as JsonObject, true, input, records);
   }
   const authorityReceipts = validateAuthorityReceipts(input.envelope, proposal);
   const authorityReceiptRefs = authorityReceipts.receiptRefs;
@@ -1510,7 +1538,13 @@ export async function commitSceneHandoff(
   }, records);
   const committed = await readStoryWorkspaceRevision({ userId: input.userId, campaignId: input.campaignId, revision: written.storyWorkspaceRef.revision }, records);
   if (!committed) throw new StoryWorkspaceStoreError(500, 'STORY_HANDOFF_COMMIT_UNREADABLE', 'The committed scene handoff could not be read back.', {});
-  return resultFromCommittedWorkspace(committed.workspace, committed.storyWorkspaceRef as unknown as JsonObject, written.duplicate);
+  return resultFromCommittedWorkspace(
+    committed.workspace,
+    committed.storyWorkspaceRef as unknown as JsonObject,
+    written.duplicate,
+    input,
+    records,
+  );
 }
 
 function validateStoryDeltaV2(input: unknown, campaignId: string): StoryDeltaV2 {
@@ -1764,13 +1798,20 @@ export async function applyStoryDeltaV2(
 export async function readCurrentSceneContexts(
   input: { userId: string; campaignId: string },
   records?: StoryWorkspaceRevisionCollection,
+  activeSceneStores?: ActiveSceneStateCollections,
 ) {
   const active = await readActiveStoryWorkspace(input, records);
   if (!active) return null;
+  const kit = activeV2SceneKit(active.workspace);
+  if (!kit) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_UNAVAILABLE', 'No version 2 current Scene kit is available.', {});
+  const activeSceneContext = activeSceneStores || !records
+    ? await readActiveSceneContext({ ...input, workspace: active.workspace }, activeSceneStores)
+    : buildActiveSceneContext(input.campaignId, kit);
   return {
     storyWorkspaceRef: active.storyWorkspaceRef,
     playableSceneContext: buildPlayableSceneContextV2(active.workspace),
     privateSceneContext: buildPrivateSceneDirectorContext(active.workspace),
+    activeSceneContext,
     authorityReceiptCatalog: buildStoryAuthorityReceiptCatalog(active.workspace),
   };
 }

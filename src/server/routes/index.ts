@@ -79,6 +79,17 @@ import {
   OBSERVATION_SAGA_SHARED_CONTRACTS,
   OBSERVATION_SAGA_SHARED_WRITER_BUNDLE_VERSION,
 } from '../services/observationAuthorityService.js';
+import {
+  ACTIVE_SCENE_CAPABILITIES,
+  ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION,
+  ACTIVE_SCENE_CONTEXT_MAX_BYTES,
+  ACTIVE_SCENE_STATE_CONTRACT_VERSION,
+  ACTIVE_SCENE_STATE_MAX_BYTES,
+  SCENE_STATE_DELTA_CONTRACT_VERSION,
+  SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
+  SCENE_TURN_PROPOSAL_MAX_BYTES,
+  SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+} from '../services/activeSceneStateStore.js';
 
 export const apiRouter = Router();
 
@@ -150,6 +161,26 @@ apiRouter.get('/health', (_req, res) => {
         },
         authority: 'gmc',
         routeEnabled: false,
+      },
+      activeSceneState: {
+        capabilities: ACTIVE_SCENE_CAPABILITIES,
+        contracts: {
+          activeSceneState: ACTIVE_SCENE_STATE_CONTRACT_VERSION,
+          activeSceneContext: ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION,
+          sceneStateDelta: SCENE_STATE_DELTA_CONTRACT_VERSION,
+          sceneTurnProposal: SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
+          sceneTurnReceipt: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+        },
+        limits: {
+          maximumStateBytes: ACTIVE_SCENE_STATE_MAX_BYTES,
+          maximumContextBytes: ACTIVE_SCENE_CONTEXT_MAX_BYTES,
+          maximumProposalBytes: SCENE_TURN_PROPOSAL_MAX_BYTES,
+        },
+        authority: 'gmc',
+        mechanicsAuthority: 'vcs',
+        transcriptAuthority: false,
+        access: 'service_only',
+        routeEnabled: true,
       },
       observationSaga: {
         readerBundle: OBSERVATION_AUTHORITY_READER_BUNDLE_VERSION,
