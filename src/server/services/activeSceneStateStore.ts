@@ -560,6 +560,11 @@ function materializeNextState(
   campaignId: string,
   kit: JsonObject,
 ): ActiveSceneStateDocument {
+  const retainedState = clone(previous) as ActiveSceneStateDocument & { _id?: unknown };
+  // Mongo owns the storage identity. A replacement may omit `_id`, but sending
+  // the JSON-cloned value back would change ObjectId into a plain object and
+  // make every transition after revision zero fail as an immutable-field write.
+  delete retainedState._id;
   const delta = proposal.stateDelta as JsonObject;
   const sequence = Number(proposal.timelineSequence);
   const receiptRef = String(receipt.receiptRef);
@@ -588,7 +593,7 @@ function materializeNextState(
     : previous.compactedThroughSequence;
   const now = new Date();
   const next: ActiveSceneStateDocument = {
-    ...clone(previous),
+    ...retainedState,
     userId: previous.userId,
     campaignId,
     sceneKitId: String(kit.sceneKitId),

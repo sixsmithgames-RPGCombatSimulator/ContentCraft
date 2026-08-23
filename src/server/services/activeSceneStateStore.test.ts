@@ -1,5 +1,6 @@
 import type { Collection, Filter } from 'mongodb';
 import { describe, expect, it } from 'vitest';
+import { ObjectId } from 'mongodb';
 import {
   ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION,
   ACTIVE_SCENE_STATE_CONTRACT_VERSION,
@@ -71,7 +72,13 @@ function activeSceneMemory() {
     async findOneAndReplace(filter: Filter<ActiveSceneStateDocument>, replacement: ActiveSceneStateDocument, options?: { upsert?: boolean }) {
       const index = states.findIndex((entry) => matches(entry as unknown as Record<string, unknown>, filter as Filter<Record<string, unknown>>));
       if (index >= 0) {
-        states[index] = structuredClone(replacement);
+        const current = states[index] as ActiveSceneStateDocument & { _id?: ObjectId };
+        if (current._id && Object.hasOwn(replacement, '_id')) {
+          throw Object.assign(new Error("Performing an update on the path '_id' would modify the immutable field '_id'"), { code: 66 });
+        }
+        const next = structuredClone(replacement) as ActiveSceneStateDocument & { _id?: ObjectId };
+        if (current._id) next._id = current._id;
+        states[index] = next;
         return structuredClone(states[index]);
       }
       if (options?.upsert) {
@@ -207,6 +214,25 @@ describe('durable active Scene state', () => {
     expect(memory.states[0]).toMatchObject({ revision: 1, acceptedTurnCount: 1, revealedInformationRefs: ['info:worker-description'] });
     expect(memory.states[0].actorStates).toHaveLength(1);
     expect(memory.receipts).toHaveLength(1);
+  });
+
+  it('omits Mongo storage identity when replacing an existing active Scene state', async () => {
+    const { story, active, playable } = await prepared();
+    const memory = activeSceneMemory();
+    await commitSceneTurn({
+      userId: 'user-a', campaignId: 'campaign-a',
+      proposal: proposal(playable, active.storyWorkspaceRef.revision, 0),
+    }, memory.stores, story.records);
+    const mongoId = new ObjectId();
+    Object.assign(memory.states[0] as ActiveSceneStateDocument & { _id: ObjectId }, { _id: mongoId });
+
+    const saved = await commitSceneTurn({
+      userId: 'user-a', campaignId: 'campaign-a',
+      proposal: proposal(playable, active.storyWorkspaceRef.revision, 1, 2),
+    }, memory.stores, story.records);
+
+    expect(saved).toMatchObject({ receipt: { stateRevisionBefore: 1, stateRevisionAfter: 2 } });
+    expect((memory.states[0] as ActiveSceneStateDocument & { _id: ObjectId })._id).toBe(mongoId);
   });
 
   it('rebinds retained continuity to an exact replacement of the same active Scene kit', async () => {
