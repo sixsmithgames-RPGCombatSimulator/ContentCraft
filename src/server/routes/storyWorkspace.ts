@@ -67,9 +67,10 @@ import {
   type CompoundActionRequirement,
 } from '../services/compoundActionArtifactStore.js';
 import { GMA_SCENE_PLAN_SCHEMA_ALLOWLIST, readActiveScenePlan, readLatestActiveScenePlan } from '../services/gmaScenePlanStore.js';
-import { collections } from '../services/gmcIntegrationStore.js';
+import { collections, listQuests } from '../services/gmcIntegrationStore.js';
 import {
   applyStoryDeltaV2,
+  buildSceneTimeContext,
   commitSceneHandoff,
   compileAcceptedV1SceneSnapshotMigrationPreview,
   compileLegacyScenePlanV2MigrationPreview,
@@ -382,9 +383,11 @@ storyWorkspaceRouter.post('/scene-handoffs', requireServiceIntegration, asyncRou
 
 storyWorkspaceRouter.get('/scene-context', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
+  const userId = (req as IntegrationRequest).userId;
+  const campaignId = req.params.campaignId;
   const result = await readCurrentSceneContexts({
-    userId: (req as IntegrationRequest).userId,
-    campaignId: req.params.campaignId,
+    userId,
+    campaignId,
   });
   if (!result) {
     res.status(404).json({
@@ -397,7 +400,17 @@ storyWorkspaceRouter.get('/scene-context', requireServiceIntegration, asyncRoute
     });
     return;
   }
-  res.json(result);
+  const state = await collections.state().findOne({ userId, campaignId });
+  const currentClock = state?.gameClock ?? null;
+  const pendingEvents = await listQuests(userId, campaignId, {}, currentClock);
+  res.json({
+    ...result,
+    gameTimeContext: buildSceneTimeContext({
+      gameClockRevision: state?.gameClockRevision ?? 0,
+      currentClock,
+      pendingEvents,
+    }),
+  });
 }));
 
 function queryRefs(value: unknown): string[] {

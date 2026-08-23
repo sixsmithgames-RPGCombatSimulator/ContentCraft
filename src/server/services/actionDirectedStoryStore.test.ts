@@ -4,6 +4,7 @@ import {
   applyStoryDeltaV2,
   buildPrivateSceneDirectorContext,
   buildPlayableSceneContextV2,
+  buildSceneTimeContext,
   buildStoryAuthorityReceiptCatalog,
   commitSceneHandoff,
   compileAcceptedV1SceneSnapshotMigrationPreview,
@@ -279,6 +280,36 @@ async function preparedStore() {
 }
 
 describe('D2 action-directed Story authority', () => {
+  it('builds a bounded read-only clock and pending-event context for scene preparation', () => {
+    const context = buildSceneTimeContext({
+      gameClockRevision: 42,
+      currentClock: { day: 5, hour: 5, minute: 35, second: 12, elapsedSeconds: 452_112 },
+      pendingEvents: [
+        {
+          _id: 'below-route-shift', title: 'Below-route shift change', status: 'active',
+          campaignDeadline: { day: 5, hour: 6, minute: 0, second: 0 }, deadlineState: 'due_soon',
+          consequence: 'The morning worker leaves SECOND MOUTH and the signal procedure changes.',
+        },
+        { _id: 'closed', title: 'Closed event', status: 'completed', deadlineState: 'closed' },
+        ...Array.from({ length: 12 }, (_entry, index) => ({
+          _id: `event-${index}`, title: `Pending event ${index}`, status: 'active', deadlineDescription: 'before noon',
+        })),
+      ],
+    });
+
+    expect(context).toMatchObject({
+      schemaVersion: 'gmc.scene-time-context/1', gameClockRevision: 42,
+      currentClock: { day: 5, hour: 5, minute: 35, second: 12 },
+    });
+    expect(context.pendingEvents).toEqual(expect.arrayContaining([expect.objectContaining({
+      eventRef: 'gmc:pending-event:below-route-shift', deadlineState: 'due_soon',
+      campaignDeadline: { day: 5, hour: 6, minute: 0, second: 0 },
+    })]));
+    expect((context.pendingEvents as JsonObject[])).toHaveLength(8);
+    expect(JSON.stringify(context)).not.toContain('Closed event');
+    expect(Buffer.byteLength(JSON.stringify(context), 'utf8')).toBeLessThanOrEqual(4_096);
+  });
+
   it('rejects unsupported fields at every exact Scene-handoff object boundary', () => {
     const base = structuredClone(handoffEnvelope().proposal) as JsonObject;
     const baseHandoff = base.handoff as JsonObject;
@@ -424,6 +455,9 @@ describe('D2 action-directed Story authority', () => {
     castPreparedWorkspace.npcReadiness = [{
       readinessId: 'npc-readiness:kerrigan', npcRef: 'gmc:pc:kerrigan', publicLabel: 'Kerrigan',
       identityMaturity: 'established', sourceRefs: ['gmc:pc:kerrigan'],
+    }, {
+      readinessId: 'npc-readiness:cart-driver', npcRef: 'role:cart-driver', publicLabel: 'cart driver',
+      identityMaturity: 'role_seed', readiness: 'ready', sourceRefs: ['role:cart-driver'],
     }];
     castPreparedWorkspace.npcSceneCards = [{
       cardId: 'npc-card:kerrigan', npcRef: 'gmc:pc:kerrigan', publicLabel: 'Kerrigan',
@@ -432,13 +466,25 @@ describe('D2 action-directed Story authority', () => {
       disclosurePosture: 'Direct about the route and guarded about the source.',
       hardLimits: ['Will not abandon the lead.'], approachSensitivities: ['Responds to concrete evidence.'],
       sourceRefs: ['gmc:pc:kerrigan'],
+    }, {
+      cardId: 'npc-card:cart-driver', npcRef: 'role:cart-driver', publicLabel: 'cart driver',
+      knowledge: ['The lamp-oil crates are bound for a locked Flintwake drain gate.'],
+      currentObjective: 'Deliver the load without exposing the receiving route.',
+      sourceRefs: ['role:cart-driver'],
     }];
     expect(buildPrivateSceneDirectorContext(castPreparedWorkspace)).toMatchObject({
-      npcReadiness: [expect.objectContaining({ npcRef: 'gmc:pc:kerrigan', publicLabel: 'Kerrigan' })],
+      npcReadiness: [
+        expect.objectContaining({ npcRef: 'gmc:pc:kerrigan', publicLabel: 'Kerrigan' }),
+        expect.objectContaining({ npcRef: 'role:cart-driver', publicLabel: 'cart driver', readiness: 'ready' }),
+      ],
       npcSceneCards: [expect.objectContaining({
         npcRef: 'gmc:pc:kerrigan',
         currentObjective: 'Intercept the cart without losing the route.',
         likelyAction: 'Keep to cover while observing the crew.',
+      }), expect.objectContaining({
+        npcRef: 'role:cart-driver',
+        knowledge: ['The lamp-oil crates are bound for a locked Flintwake drain gate.'],
+        currentObjective: 'Deliver the load without exposing the receiving route.',
       })],
     });
     const contexts = await readCurrentSceneContexts({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);

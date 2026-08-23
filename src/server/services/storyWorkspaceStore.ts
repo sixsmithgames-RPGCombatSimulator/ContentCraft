@@ -2129,10 +2129,14 @@ export function buildPlayableStoryProjection(workspace: JsonObject, requestedSce
   ] as Record<string, unknown>[];
   const versionTwoPresent = isVersioned && Array.isArray(participants.present) ? participants.present.map(String) : [];
   const versionTwoAnticipated = isVersioned && Array.isArray(participants.anticipated) ? participants.anticipated.map(String) : [];
+  const versionTwoSceneLocalRoleRefs = isVersioned && Array.isArray(participants.sceneLocalRoles)
+    ? participants.sceneLocalRoles.map((role) => String(plainObject(role) ? role.roleId ?? '' : '')).filter(Boolean)
+    : [];
   const npcRefs = new Set([
     ...participantRows.map((row) => String(row.entityId ?? row.npcRef ?? '')).filter(Boolean),
     ...versionTwoPresent,
     ...versionTwoAnticipated,
+    ...versionTwoSceneLocalRoleRefs,
   ]);
   const readinessRefs = new Set(participantRows.map((row) => String(row.readinessRef ?? '')).filter(Boolean));
   const readiness = recordArray(workspace, recordDescriptors.npc_readiness).filter((record) => (

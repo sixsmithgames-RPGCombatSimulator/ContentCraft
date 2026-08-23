@@ -301,6 +301,46 @@ describe('GMC Story workspace authority store', () => {
     expect(Buffer.byteLength(JSON.stringify(playable), 'utf8')).toBeLessThanOrEqual(STORY_PROMPT_PROJECTION_MAX_BYTES);
   });
 
+  it('projects GMC preparation attached to a current scene-local interaction role', () => {
+    const workspace = flintwakeWorkspace();
+    const kit = (workspace.sceneKits as JsonObject[])[0];
+    kit.schemaVersion = 'gmc.scene-kit/3';
+    kit.revision = 1;
+    kit.playableLocus = {
+      kind: 'canonical_location', label: 'Flintwake Wage Yard', canonicalAnchorRef: 'gmc:location:flintwake',
+      sourceRefs: ['gmc:location:flintwake'],
+    };
+    kit.participants = {
+      present: ['gmc:npc:dorrik'], anticipated: [],
+      sceneLocalRoles: [{ roleId: 'role:drain-worker', label: 'drain worker', count: 1, objective: 'Guard the below-route signal.' }],
+    };
+    (workspace.npcSceneCards as JsonObject[]).push({
+      cardId: 'card:drain-worker', npcRef: 'role:drain-worker', publicLabel: 'drain worker',
+      knowledge: ['The second whistle requests passage into the below route.'],
+      disclosurePosture: 'tests whether the questioner knows the route signs',
+      currentObjective: 'Guard the below-route signal.',
+    });
+    (workspace.npcReadiness as JsonObject[]).push({
+      readinessId: 'readiness:drain-worker', npcRef: 'role:drain-worker', publicLabel: 'drain worker',
+      identityKind: 'role', identityMaturity: 'role_seed', revealState: 'known', narrativeDepth: 'surface',
+      requiredNarrativeDepth: 'surface', mechanicalDepth: 'none', readiness: 'ready',
+    });
+
+    const playable = buildPlayableStoryProjection(workspace);
+
+    expect(playable.npcSceneCards).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        npcRef: 'role:drain-worker',
+        knowledge: ['The second whistle requests passage into the below route.'],
+        currentObjective: 'Guard the below-route signal.',
+      }),
+    ]));
+    expect(playable.npcReadiness).toEqual(expect.arrayContaining([
+      expect.objectContaining({ npcRef: 'role:drain-worker', readiness: 'ready' }),
+    ]));
+    expect(JSON.stringify(playable)).not.toContain('far-away secret');
+  });
+
   it('blocks runnable scenes with unresolved individual identity, missing information access, or no exit', async () => {
     const unresolved = flintwakeWorkspace();
     const readiness = (unresolved.npcReadiness as JsonObject[]).find((record) => record.readinessId === 'readiness:watch')!;

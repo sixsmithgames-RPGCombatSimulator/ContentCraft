@@ -50,6 +50,8 @@ export const STORY_MIGRATION_PREVIEW_CONTRACT_VERSION = 'gmc.story-migration-pre
 export const ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION = 'gma.accepted-v1-scene-snapshot/1';
 export const PRIVATE_SCENE_CONTEXT_CONTRACT_VERSION = 'gmc.scene-director-context/1';
 export const PRIVATE_SCENE_CONTEXT_MAX_BYTES = 32_768;
+export const SCENE_TIME_CONTEXT_CONTRACT_VERSION = 'gmc.scene-time-context/1';
+export const SCENE_TIME_CONTEXT_MAX_BYTES = 4_096;
 export const STORY_AUTHORITY_RECEIPT_CATALOG_CONTRACT_VERSION = 'gmc.story-authority-receipt-catalog/1';
 export const STORY_AUTHORITY_RECEIPT_CATALOG_MAX_ENTRIES = 192;
 export const STORY_SCENE_HANDOFF_SOURCE_RECEIPT_MAX_ENTRIES = 80;
@@ -1356,6 +1358,46 @@ async function resultFromCommittedWorkspace(
     privateSceneContext: buildPrivateSceneDirectorContext(workspace),
     activeSceneContext,
   };
+}
+
+/** Bounded read-only campaign-time input for action-directed preparation. */
+export function buildSceneTimeContext(input: {
+  gameClockRevision?: unknown;
+  currentClock?: unknown;
+  pendingEvents?: unknown;
+} = {}): JsonObject {
+  const pendingEvents = (Array.isArray(input.pendingEvents) ? input.pendingEvents : [])
+    .filter(isObject)
+    .filter((event) => !['completed', 'resolved', 'failed', 'abandoned', 'cancelled', 'closed'].includes(String(event.status ?? '').toLowerCase()))
+    .slice(0, 8)
+    .map((event, index) => {
+      const sourceId = String(event._id ?? event.id ?? event.questId ?? event.eventId ?? `pending-${index + 1}`).trim();
+      return {
+        eventRef: boundedText(event.eventRef ?? `gmc:pending-event:${sourceId.replace(/[^A-Za-z0-9._:-]+/g, '-')}`, `gmc:pending-event:${index + 1}`, 240),
+        title: boundedText(event.title ?? event.name ?? event.summary, 'Pending event', 180),
+        campaignDeadline: isObject(event.campaignDeadline) ? clone(event.campaignDeadline as JsonObject) : null,
+        deadlineAt: event.deadlineAt == null ? null : boundedText(event.deadlineAt, '', 120) || null,
+        deadlineDescription: event.deadlineDescription == null && event.deadline == null
+          ? null
+          : boundedText(event.deadlineDescription ?? event.deadline, '', 240) || null,
+        deadlineState: event.deadlineState == null ? null : boundedText(event.deadlineState, '', 80) || null,
+        consequence: event.consequence == null ? null : boundedText(event.consequence, '', 360) || null,
+        status: event.status == null ? null : boundedText(event.status, '', 80) || null,
+      } as JsonObject;
+    });
+  const context: JsonObject = {
+    schemaVersion: SCENE_TIME_CONTEXT_CONTRACT_VERSION,
+    gameClockRevision: Math.max(0, Number(input.gameClockRevision ?? 0) || 0),
+    currentClock: isObject(input.currentClock) ? clone(input.currentClock as JsonObject) : null,
+    pendingEvents,
+  };
+  while (bytes(context) > SCENE_TIME_CONTEXT_MAX_BYTES && pendingEvents.length) pendingEvents.pop();
+  if (bytes(context) > SCENE_TIME_CONTEXT_MAX_BYTES) {
+    throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_TIME_CONTEXT_TOO_LARGE', 'The bounded Scene time context exceeds its read limit.', {
+      maximumBytes: SCENE_TIME_CONTEXT_MAX_BYTES,
+    });
+  }
+  return context;
 }
 
 /** Reads the immutable result of one exact Scene-handoff owner operation. */
