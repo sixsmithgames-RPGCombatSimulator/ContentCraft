@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-22.10';
+export const OPERATION_REGISTRY_VERSION = '2026-08-27.11';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-20.8',
@@ -895,15 +895,25 @@ const seeds: Seed[] = [
   { id: 'intent.classify', operationClass: 'structured_low', tier: 'structured', required: ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'], optional: ['actionPlan', 'ambiguities', 'dataRequirements'], targetBytes: 8_000, hardLimitBytes: 16_000, maxOutputTokens: 700, thinkingLevel: 'minimal', maxAttempts: 1, fallbackAllowed: false },
   {
     id: 'action.intent.interpret', operationClass: 'reasoning_high', tier: 'reasoning',
-    required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'confidence', 'intents', 'ambiguities', 'coverage'],
-    targetBytes: 12_000, hardLimitBytes: 16_384, maxOutputTokens: 4_000,
+    required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'windowText', 'continuationExpected', 'semanticIntent', 'review'],
+    targetBytes: 20_000, hardLimitBytes: 24_576, maxOutputTokens: 5_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/12',
+    promptVersion: 'gma.semantic-intent-policy/13',
     outputProperties: {
-      schemaVersion: { enum: ['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3'] },
+      schemaVersion: { const: 'gma.semantic-plan-window/1' },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
       instructionRef: { type: 'string', minLength: 1, maxLength: 240 },
       instructionFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+      windowText: { type: 'string', minLength: 1, maxLength: 32_768 },
+      continuationExpected: { type: 'boolean' },
+      semanticIntent: {
+        type: 'object', additionalProperties: false,
+        required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'confidence', 'intents', 'ambiguities', 'coverage'],
+        properties: {
+          schemaVersion: { enum: ['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/3'] },
+          interactionId: { type: 'string', minLength: 1, maxLength: 240 },
+          instructionRef: { type: 'string', minLength: 1, maxLength: 240 },
+          instructionFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
       confidence: { type: 'number', minimum: 0, maximum: 1 },
       intents: {
         type: 'array', minItems: 1, maxItems: 8,
@@ -953,16 +963,26 @@ const seeds: Seed[] = [
         unrepresentedEvidenceQuotes: { type: 'array', maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 1_000 } },
         overflow: { type: 'boolean' },
       } },
+        },
+      },
+      review: { type: 'object', additionalProperties: false, required: ['allWindowActionsRepresented', 'noActionsInvented'], properties: {
+        allWindowActionsRepresented: { const: true },
+        noActionsInvented: { const: true },
+      } },
     },
     systemInstruction: [
-      'Interpret one exact player instruction into the bounded semantic-intent version requested by responseContract. Return only that result object. Do not repeat or wrap the request task, policy, immutable instruction, Scene frame, response contract, or another request-envelope field.',
-      'Copy responseContract.interactionId, responseContract.instructionRef, and responseContract.instructionFingerprint byte-for-byte into the top-level result. All three identity fields are required even when repeated elsewhere in the request; never omit, shorten, recompute, or alter them.',
-      'Preserve every player-supported goal, target, declared method, requested outcome, sequence, parallel relationship, condition, and alternative. Cite exact unique phrases copied from the immutable instruction for every intent. Never silently omit overflow meaning.',
+      'Interpret the next coherent exact prefix of one player instruction into gma.semantic-plan-window/1. Return only that result object. Do not repeat or wrap the request task, policy, immutable instruction, Scene frame, response contract, or another request-envelope field.',
+      'Copy responseContract.interactionId, responseContract.instructionRef, and responseContract.instructionFingerprint byte-for-byte into both the outer result and semanticIntent. All identity fields are required even when repeated; never omit, shorten, recompute, or alter them.',
+      'Select one non-empty exact prefix as windowText. Choose the largest coherent prefix whose complete material meaning fits within eight intents, twelve relationships, and six dependency levels. Do not split by counting verbs or nouns. Set continuationExpected true exactly when instruction text remains; never author, summarize, or reconstruct that continuation.',
+      'Preserve every player-supported goal, target, declared method, requested outcome, sequence, parallel relationship, condition, and alternative inside windowText. Cite exact unique phrases copied from windowText for every intent. Set both review attestations true only after checking that the window has no omitted or invented action.',
       'Return native-valid JSON. Player-authored quotation marks, backslashes, control characters, and other JSON-significant characters inside evidenceQuotes are evidence content, not JSON delimiters: encode them with standard JSON string escapes in the serialized reply so the decoded evidenceQuotes value still matches the immutable instruction byte-for-byte. Never remove, curl, reinterpret, or leave an embedded quotation mark unescaped.',
       'Give every separate intent a unique, non-overlapping exact evidence subphrase. When one sentence contains an ordered prerequisite and the information purpose it enables, split the sentence at that meaning boundary instead of assigning the full clause to both intents. For “then send it toward the drain to see what\'s there.” use “then send it toward the drain” for movement and “to see what\'s there.” for observation. Never reuse or partially overlap an intent-level evidenceQuote across separate intents. Typed outcome evidence may repeat a narrower exact phrase only inside the information intent that owns it.',
-      'Represent each semantic action exactly once. Introductory carrier wording with no independent result belongs to the concrete action it introduces. “I use my familiar, I summon it as a rat” is one familiar-activation intent, not separate use/summon/form intents. A same-clause summon with its form is one activation unless separately ordered. Keep ordered actions and independent results separate. This instruction has five intents: rat summon; move; drain view; worker better look; distance.',
+      // Do not restore the former “this instruction has five intents” clause.
+      // It was not helpful because one rat-familiar example contaminated every
+      // later player instruction with summon, closer-look, and distance work.
+      'Represent each material semantic action exactly once. Introductory carrier wording with no independent result belongs to the concrete action it introduces. A same-clause summon with its form is one activation unless separately ordered. Determine action count and contents only from windowText; examples and recent conversation cannot add an action.',
       'When a malformed token is a close spelling error for an immediately established referent or method and local grammar clearly reuses that referent, preserve the literal spelling in evidence but use the established meaning in semantic fields. Ask an ambiguity only when a distinct meaning remains materially plausible.',
-      'For semantic-intent-ir/3 observation instructions, return IR /3 as the top-level result within 16384 UTF-8 JSON bytes. Separate summon or form activation, movement, mechanics, and observation prerequisites. Every non-information intent must carry one to eight short ordinary-language requestedOutcomes strings and no observation groups.',
+      'Use semantic-intent-ir/3 inside semanticIntent only when windowText asks for fresh perception that needs typed observer, viewpoint, method, or outcome binding; otherwise use semantic-intent-ir/1. Separate summon or form activation, movement, mechanics, and observation prerequisites. Every non-information intent must carry one to eight short ordinary-language requestedOutcomes strings and no observation groups.',
       'Use requestedOutcomes as the only outcome collection field name. Never emit typedOutcomes, typedOutcomeCs, outcomeCs, outcomes, or another alias. Every relation must contain after, parallelWith, and condition; use empty arrays and null when none apply.',
       'For every requested information answer in /3, return one typed outcome. Keep appearance, apparent classification or species, identity, activity, distance, extent, presence, quantity, and contents separate. Apparent classification is not identity.',
       'Use only the facet, valueKind, and requestedPrecision vocabulary in responseContract. Distance is facet spatial_relation with valueKind measurement, measurement_range, measurement_or_relation, or relation; never use distance as a facet or value kind. Set relationOriginTargetId to the local target for the stated origin of a relation such as the observing player character.',

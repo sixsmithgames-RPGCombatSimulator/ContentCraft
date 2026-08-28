@@ -260,17 +260,21 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/12');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/13');
     expect(interpretation.prompt.systemInstruction).toMatch(/native-valid JSON.*quotation marks.*standard JSON string escapes.*decoded evidenceQuotes.*byte-for-byte/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*top-level result/i);
-    expect(interpretation.context.inputTargetBytes).toBe(12_000);
-    expect(interpretation.context.inputHardLimitBytes).toBe(16_384);
-    expect(interpretation.provider.maxOutputTokens).toBe(4_000);
-    expect((interpretation.outputSchema.schema.properties as any).schemaVersion.enum)
-      .toEqual(['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/2', 'gma.semantic-intent-ir/3']);
+    expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*outer result and semanticIntent/i);
+    expect(interpretation.context.inputTargetBytes).toBe(20_000);
+    expect(interpretation.context.inputHardLimitBytes).toBe(24_576);
+    expect(interpretation.provider.maxOutputTokens).toBe(5_000);
+    expect((interpretation.outputSchema.schema.properties as any).schemaVersion.const)
+      .toBe('gma.semantic-plan-window/1');
+    expect((interpretation.outputSchema.schema.properties as any).semanticIntent.properties.schemaVersion.enum)
+      .toEqual(['gma.semantic-intent-ir/1', 'gma.semantic-intent-ir/3']);
     expect(interpretation.prompt.systemInstruction).toMatch(/every player-supported goal, target, declared method/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/every separate intent.*unique, non-overlapping exact evidence subphrase.*send it toward the drain.*to see what's there/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/represent each semantic action exactly once.*introductory carrier wording.*I use my familiar.*I summon it as a rat.*one familiar-activation intent.*five intents/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/represent each material semantic action exactly once.*determine action count and contents only from windowText/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/eight intents, twelve relationships, and six dependency levels/i);
+    expect(interpretation.prompt.systemInstruction).not.toMatch(/this instruction has five intents/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Asking where someone came from is exchange_information/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/recentConversation only to resolve pronouns, tense, established referents.*untrusted context.*cannot add an action/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/tell, report, describe, or recount.*exchange_information.*no observation groups/i);
@@ -294,17 +298,18 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.prompt.systemInstruction).toMatch(/one evidence phrase requests multiple outcomes.*one information intent and one observation group.*never assign the same phrase to separate intents/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Do not repeat or wrap the request task/i);
     expect(interpretation.prompt.systemInstruction).not.toMatch(/completion boundaries|authorityRequirements|dataRequirements/i);
-    expect((interpretation.outputSchema.schema.properties as any).intents.items.required)
+    const semanticIntentSchema = (interpretation.outputSchema.schema.properties as any).semanticIntent.properties;
+    expect(semanticIntentSchema.intents.items.required)
       .not.toContain('observerTargetId');
-    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.targets.items.required)
+    expect(semanticIntentSchema.intents.items.properties.targets.items.required)
       .toEqual(['role', 'description']);
-    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.methods.items.required)
+    expect(semanticIntentSchema.intents.items.properties.methods.items.required)
       .toEqual(['kind', 'description', 'capabilityHint']);
-    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.requestedOutcomes.items.anyOf)
+    expect(semanticIntentSchema.intents.items.properties.requestedOutcomes.items.anyOf)
       .toHaveLength(2);
-    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.purpose.enum)
+    expect(semanticIntentSchema.intents.items.properties.purpose.enum)
       .toContain('exchange_information');
-    expect((interpretation.outputSchema.schema.properties as any).intents.items.properties.methods.items.properties.kind.enum)
+    expect(semanticIntentSchema.intents.items.properties.methods.items.properties.kind.enum)
       .toEqual(['approach', 'capability', 'spell', 'item', 'tool', 'other']);
     expect(interpretation.provider.maxAttempts).toBe(1);
     expect(interpretation.provider.fallbackAllowed).toBe(false);

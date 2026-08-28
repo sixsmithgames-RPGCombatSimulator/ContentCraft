@@ -315,6 +315,55 @@ legacy no-addition calls, exact set equality, unrelated diffs, orphan and
 blocker-only targets, source closure, stale/idempotent writes, designed-Scene
 rebind, and zero partial publication.
 
+## Accepted correction: hierarchical semantic-window policy
+
+Accepted 2026-08-27 with GMA ADR-009 after a valid SECOND MOUTH instruction
+failed twice before persistence. The reusable `action.intent.interpret` policy
+claimed that every current instruction contained five actions from an older
+rat-familiar example. The whole instruction was also limited to eight intents
+and forced through observation-specific structure merely because an observation
+appeared later. Those are language-planning defects, not owner-authority
+requirements.
+
+Fresh integrated and Manual planning use
+`gma.semantic-intent-policy/13` and return
+`gma.semantic-plan-window/1`. The result binds the exact root instruction
+identity, selects one exact non-empty prefix, states whether continuation
+remains, contains one bounded semantic-intent proposal for that prefix, and
+attests that the window has no omitted or imported actions. GMA validates the
+prefix against the immutable instruction and derives the exact suffix itself;
+the model never authors, summarizes, or reconstructs continuation text.
+
+The GMC system instruction may teach legal response shape, but it may not claim
+the current instruction's action count or contents. Only the immutable
+instruction supplies actions. Recent conversation may resolve a referent or
+tense but may not add a goal, target, method, order, condition, alternative, or
+outcome. The LLM identifies material actions by meaning rather than emitting one
+intent per verb or noun. A current window remains bounded by the existing
+semantic compiler limits: at most eight intents, twelve relationships, and six
+dependency levels; GMA recursively plans an exact continuation as a child after
+the parent window completes.
+
+GMC's universal LLM registry validates the outer plan-window schema and nested
+bounded semantic union. It does not validate its own model's authority claims,
+persist an unaccepted plan, choose a compiler route, or own the continuation.
+GMA continues to persist only existing program `/2`-`/5`, cursor, pending-append,
+parent-program, saga, and receipt contracts in the existing artifact store. No
+GMC collection, index, owner operation, Story schema, or rollback rule changes.
+Historical policy `/12` and semantic IR outputs remain readable only within
+their original recovery chains; fresh `/13` calls cannot downgrade or mix
+generations.
+
+GMC deploys registry `/13` before GMA enables fresh window emission. Release
+tests cover exact identity and prefix shape, neutral policy text, the former
+five-action example only when it is actually the immutable instruction, a
+question followed by already-present familiar movement and observation with no
+invented summon/look/distance actions, nested IR `/1` and `/3`, malformed or
+oversized windows, generated contract drift, legacy operation responses, and
+zero Story/artifact writes from rejected model proposals. GMA owns recursive
+continuation, owner execution, player recovery, and the dynamic storytelling
+quality gates in ADR-009.
+
 ## Review record
 
 Accepted after the containment replay proved that pausing the route was safe
