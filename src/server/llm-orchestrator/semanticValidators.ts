@@ -262,11 +262,16 @@ registerSemanticValidator('observation-preparation-contract', ({ request, output
     if (!output?.proposal) issues.push({ code: 'OBSERVATION_PREPARATION_PROPOSAL_REQUIRED', message: 'The legacy observation preparation result requires a proposal.', path: '/proposal' });
     return result('observation-preparation-contract', issues);
   }
-  if (output?.schemaVersion !== 'gma.observation-authority-preparation-candidate/1') {
+  const preparationVersions = new Map([
+    ['gma.observation-authority-preparation-candidate/1', 'gma.observation-authority-preparation-packet/2'],
+    ['gma.observation-authority-preparation-candidate/2', 'gma.observation-authority-preparation-packet/3'],
+    ['gma.observation-authority-preparation-candidate/3', 'gma.observation-authority-preparation-packet/4'],
+  ]);
+  if (!preparationVersions.has(output?.schemaVersion)) {
     issues.push({ code: 'OBSERVATION_PREPARATION_VERSION_UNSUPPORTED', message: 'The observation preparation result version is unsupported.', path: '/schemaVersion' });
     return result('observation-preparation-contract', issues);
   }
-  if (packet?.schemaVersion !== 'gma.observation-authority-preparation-packet/2') {
+  if (packet?.schemaVersion !== preparationVersions.get(output?.schemaVersion)) {
     issues.push({ code: 'OBSERVATION_PREPARATION_PACKET_MISMATCH', message: 'The candidate requires the matching typed observation preparation packet.' });
     return result('observation-preparation-contract', issues);
   }
@@ -334,6 +339,36 @@ registerSemanticValidator('observation-preparation-contract', ({ request, output
     const group = groupById.get(String(expected?.groupId ?? '')) as any;
     if (group && !group.availableModalities?.includes(row?.modality)) {
       issues.push({ code: 'OBSERVATION_PREPARATION_OUTCOME_MODALITY_MISMATCH', message: 'An outcome used a modality outside its observer group.', path: `/outcomePreparations/${index}/modality` });
+    }
+  }
+  if (output?.schemaVersion === 'gma.observation-authority-preparation-candidate/3') {
+    const expectedTargets = new Map((Array.isArray(packet?.unboundTargets) ? packet.unboundTargets : []).map((entry: any) => [String(entry?.localTargetRef ?? ''), entry]));
+    const targetRows = Array.isArray(output?.targetPreparations) ? output.targetPreparations : [];
+    const coveredTargetRefs = targetRows.flatMap((entry: any) => Array.isArray(entry?.localTargetRefs) ? entry.localTargetRefs.map(String) : []);
+    if (!sameStringSet(coveredTargetRefs, [...expectedTargets.keys()])) {
+      issues.push({ code: 'OBSERVATION_PREPARATION_TARGET_COVERAGE', message: 'The candidate must prepare every supplied target exactly once.', path: '/targetPreparations' });
+    }
+    const outcomeById = new Map<string, any>(outcomeRows.map((entry: any) => [String(entry?.outcomeId ?? ''), entry]));
+    for (const [index, row] of targetRows.entries()) {
+      const supplied = (Array.isArray(row?.localTargetRefs) ? row.localTargetRefs : []).map((ref: unknown) => expectedTargets.get(String(ref))).filter(Boolean) as any[];
+      if (!supplied.length || supplied.some((target) => String(target?.preparedSubjectRef ?? '') !== String(row?.subjectRef ?? ''))) {
+        issues.push({ code: 'OBSERVATION_PREPARATION_SUBJECT_MISMATCH', message: 'A target must copy its exact prepared subject reference.', path: `/targetPreparations/${index}/subjectRef` });
+        continue;
+      }
+      const observed = supplied.some((target) => (target?.outcomeIds ?? []).some((outcomeId: unknown) => outcomeById.get(String(outcomeId))?.resultKind === 'observed'));
+      const expectedDisposition = observed ? (supplied[0]?.preferredKind === 'actor' ? 'scene_local_role' : 'scene_local_element') : 'absent_in_scope';
+      if (row?.disposition !== expectedDisposition) {
+        issues.push({ code: 'OBSERVATION_PREPARATION_TARGET_DISPOSITION_MISMATCH', message: 'A target disposition must match its prepared outcomes.', path: `/targetPreparations/${index}/disposition` });
+      }
+      if (observed && row?.absenceScopeRef !== null) {
+        issues.push({ code: 'OBSERVATION_PREPARATION_ABSENCE_SCOPE_FORBIDDEN', message: 'An observed target cannot carry an absence scope.', path: `/targetPreparations/${index}/absenceScopeRef` });
+      }
+      if (!observed) {
+        const allowedScopes = supplied.map((target) => new Set((target?.allowedAbsenceScopeRefs ?? []).map(String)));
+        if (typeof row?.absenceScopeRef !== 'string' || allowedScopes.some((scope) => !scope.has(row.absenceScopeRef))) {
+          issues.push({ code: 'OBSERVATION_PREPARATION_ABSENCE_SCOPE_MISMATCH', message: 'A bounded negative must copy one exact allowed absence scope.', path: `/targetPreparations/${index}/absenceScopeRef` });
+        }
+      }
     }
   }
   const expectedObservableUpgrades = (packet?.currentScene?.existingObservables ?? []).filter((entry: any) => entry?.hasV4Fields !== true).map((entry: any) => entry?.observableId);

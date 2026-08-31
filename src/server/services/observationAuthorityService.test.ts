@@ -291,6 +291,46 @@ describe('observation owner authority', () => {
     expect((writtenKit.observables as JsonObject[]).at(-1)).toMatchObject({ subjectRef: targetRef, sourceRefs: [targetRef] });
   });
 
+  it('commits distinct bounded-negative subjects that cite one exact owner scope without appending targets', async () => {
+    const store = await prepared(true);
+    const kit = sceneKitV4();
+    const voiceSubjectRef = 'gma:observation-subject:voices';
+    const magicSubjectRef = 'gma:observation-subject:magic-signs';
+    (kit.observationAccess as JsonObject[]).push({
+      accessId: 'gmc:access:rat-scoped-negatives', originViewpointRef: 'gmc:viewpoint:kerrigan-cover', candidateViewpointRef: 'gmc:viewpoint:drain-interior',
+      accessMode: 'remote_sensor', pathRef: 'gmc:path:cover-to-drain', requiredCapabilityRefs: ['vcs:mobility:rat', 'vcs:sense:familiar-link'], availableModalities: ['visual', 'auditory'],
+      subjectRefs: [voiceSubjectRef, magicSubjectRef], facets: ['signal'], epistemicState: 'scene_local_established',
+      sourceRefs: ['gmc:element:drain-mouth'], playerFacingStatement: 'The rat can check the accessible drain interior for voices and visible magic.',
+    });
+    (kit.observables as JsonObject[]).push(
+      {
+        observableId: 'gmc:observable:no-voices', subjectRef: voiceSubjectRef, facet: 'signal', resultKind: 'bounded_negative',
+        value: { kind: 'statement', text: 'No voices are audible in the accessible drain interior.' }, playerFacingStatement: 'No voices are audible in the accessible drain interior.',
+        perceptibility: { modalities: ['auditory'], accessCondition: 'ordinary_hearing', observerRefs: ['gmc:actor:kerrigan-familiar'], methodRefs: ['vcs:sense:familiar-link'], mechanicRef: null },
+        supportedPrecision: 'ordinary', modality: 'auditory', viewpointRef: 'gmc:viewpoint:drain-interior', epistemicState: 'scene_local_established', sourceRefs: ['gmc:element:drain-mouth'],
+      },
+      {
+        observableId: 'gmc:observable:no-magic-signs', subjectRef: magicSubjectRef, facet: 'signal', resultKind: 'bounded_negative',
+        value: { kind: 'statement', text: 'No visible signs of magic mark the accessible drain interior.' }, playerFacingStatement: 'No visible signs of magic mark the accessible drain interior.',
+        perceptibility: { modalities: ['visual'], accessCondition: 'ordinary_view', observerRefs: ['gmc:actor:kerrigan-familiar'], methodRefs: ['vcs:sense:familiar-link'], mechanicRef: null },
+        supportedPrecision: 'ordinary', modality: 'visual', viewpointRef: 'gmc:viewpoint:drain-interior', epistemicState: 'scene_local_established', sourceRefs: ['gmc:element:drain-mouth'],
+      },
+    );
+    await expect(commitObservationAuthority({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedWorkspaceRevision: 1, expectedSceneRevision: 1,
+      operationId: 'operation:prepare-scoped-negatives', idempotencyKey: 'observation:prepare-scoped-negatives', sceneKit: kit,
+      vcsBindings: [reciprocal('vcs:character:kerrigan', 'gmc:actor:kerrigan'), reciprocal('vcs:familiar:kerrigan', 'gmc:actor:kerrigan-familiar')],
+      sourceReceiptRefs: ['vcs:binding-receipt:kerrigan', 'vcs:binding-receipt:familiar'], preparedTargetRefs: [],
+    }, store.records)).resolves.toMatchObject({ disposition: 'committed', duplicate: false });
+    const written = store.documents.find((document) => document.revision === 2)?.workspace;
+    const writtenKit = (written?.sceneKits as JsonObject[])[0];
+    const negatives = (writtenKit.observables as JsonObject[]).filter((row) => row.resultKind === 'bounded_negative');
+    expect(negatives.map((row) => row.subjectRef)).toEqual([voiceSubjectRef, magicSubjectRef]);
+    expect(negatives.every((row) => (row.sourceRefs as string[])[0] === 'gmc:element:drain-mouth')).toBe(true);
+    expect(((writtenKit.participants as JsonObject).sceneLocalRoles as JsonObject[])).toHaveLength(1);
+    expect(writtenKit.establishedElements).toHaveLength(1);
+  });
+
   it('rejects mismatched, orphaned, or unrelated prepared targets without publishing a partial Scene', async () => {
     async function rejected(mutator: (kit: JsonObject) => void, preparedTargetRefs: string[], code: string) {
       const store = await prepared();

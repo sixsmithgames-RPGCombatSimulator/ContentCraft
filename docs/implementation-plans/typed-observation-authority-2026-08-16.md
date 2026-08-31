@@ -75,3 +75,24 @@ Stop rollout on any observation-only mutation, owner/revision mismatch,
 duplicate non-idempotent write, projection disagreement, private observable
 leak, display-name join, legacy-text inference into v3, or inability to recover
 the exact authority result after timeout.
+
+## Stable prepared-subject correction — 2026-08-31
+
+Governing decisions are Accepted GMA ADR-005 D9.4.60 and the Accepted GMC
+ADR-003 stable-subject correction.
+
+1. Register packet `/4`, candidate `/3`, and policy `/5` for fresh
+   `story.observation.prepare` calls; retain old versions only for historical
+   recovery.
+2. Put the positive prepared-subject/absence-scope rule in the original system
+   instruction and response schema. The LLM copies both refs from the packet
+   and never invents or joins owner identities.
+3. Validate exact subject copying, observed-null scope, bounded-negative allowed
+   scope, complete outcome coverage, and existing result bounds before GMA may
+   propose an owner write.
+4. Advertise the same generation through GMC health, VCS, GMA, and Studio
+   contracts. Deploy the owner/registry before the writer and reject skew.
+5. Test multiple distinct bounded negatives that cite one Scene scope, malformed
+   scope/subject combinations, original-policy presence, zero writes, legacy
+   recovery, and generated-contract alignment; then run full GMC checks and the
+   authenticated saved-game continuation.

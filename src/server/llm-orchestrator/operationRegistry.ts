@@ -654,7 +654,7 @@ const observationValueOutput = {
 } as const;
 
 const observationPreparationOutput = {
-  schemaVersion: { enum: ['gma.observation-preparation-result/1', 'gma.observation-authority-preparation-candidate/1'] },
+  schemaVersion: { enum: ['gma.observation-preparation-result/1', 'gma.observation-authority-preparation-candidate/1', 'gma.observation-authority-preparation-candidate/2', 'gma.observation-authority-preparation-candidate/3'] },
   proposal: {
     type: 'object', additionalProperties: false,
     required: [
@@ -679,6 +679,22 @@ const observationPreparationOutput = {
   programId: { type: 'string', minLength: 1, maxLength: 240 },
   nodeId: { type: 'string', minLength: 1, maxLength: 240 },
   preparationFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+  targetPreparations: {
+    type: 'array', maxItems: 8, items: {
+      type: 'object', additionalProperties: false,
+      required: ['localTargetRefs', 'disposition', 'subjectRef', 'label', 'count', 'objective', 'summary'],
+      properties: {
+        localTargetRefs: { type: 'array', minItems: 1, maxItems: 8, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 240 } },
+        disposition: { enum: ['scene_local_role', 'scene_local_element', 'absent_in_scope'] },
+        subjectRef: { type: 'string', minLength: 1, maxLength: 240 },
+        absenceScopeRef: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 240 }] },
+        label: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 160 }] },
+        count: { anyOf: [{ type: 'null' }, { type: 'integer', minimum: 1, maximum: 16 }] },
+        objective: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 400 }] },
+        summary: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 500 }] },
+      },
+    },
+  },
   groupPreparations: {
     type: 'array', minItems: 1, maxItems: 8, items: {
       type: 'object', additionalProperties: false,
@@ -1242,18 +1258,19 @@ const seeds: Seed[] = [
   {
     id: 'story.observation.prepare', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion'],
-    optional: ['proposal', 'programId', 'nodeId', 'preparationFingerprint', 'groupPreparations', 'outcomePreparations', 'existingObservableUpgrades', 'existingObstructionUpgrades', 'obstructions'],
+    optional: ['proposal', 'programId', 'nodeId', 'preparationFingerprint', 'targetPreparations', 'groupPreparations', 'outcomePreparations', 'existingObservableUpgrades', 'existingObstructionUpgrades', 'obstructions'],
     validators: ['observation-preparation-contract'],
     temperature: 0.25, maxOutputTokens: 5000, targetBytes: 18_432, hardLimitBytes: 20_480,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.observation-authority-preparation-policy/1',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.observation-authority-preparation-policy/5',
     outputProperties: observationPreparationOutput,
     systemInstruction: [
       'Prepare structured typed observation authority for one exact pending action before any player-facing narration runs.',
-      'Return exactly the schemaVersion requested by responseContract. For gma.observation-authority-preparation-candidate/1, copy programId, nodeId, and preparationFingerprint exactly and return every required array; for an older compatible packet, return gma.observation-preparation-result/1 with only schemaVersion and proposal.',
+      'Return exactly the schemaVersion requested by responseContract. For gma.observation-authority-preparation-candidate/3, copy programId, nodeId, and preparationFingerprint exactly and return every required array; historical packets keep their matching candidate version, and the oldest compatible packet uses gma.observation-preparation-result/1 with only schemaVersion and proposal.',
       'For every supplied group, return exactly one groupPreparation using only its confirmed modalities. Preserve a familiar, sensor, ally, or moved observer as its own viewpoint; use remote_sensor for a familiar or sensor instead of reusing the player character sightline.',
       'For every supplied outcome, return exactly one concrete outcomePreparation. Routine visible or otherwise perceivable details must be established now: absent prior prose detail is preparation debt, not grounds for unknown, unclear, indistinct, or cannot-reliably-establish prose.',
       'Keep surface description, apparent classification, and identity separate. Apparent classification reports what the observer can reasonably classify from appearance and never invents canonical identity. Give spatial relations from the supplied relation origin at useful ordinary or approximate precision unless exact precision is both requested and established.',
       'Use bounded_negative only for an established absence inside a named observed scope. An obstruction is valid only when all of its evidence refs are copied from the supplied current Scene; never invent darkness, distance, cover, a corner, a wall, or a missing sense to avoid an answer.',
+      'For every supplied unbound target, copy preparedSubjectRef exactly into targetPreparations.subjectRef; never invent, rename, merge, or replace it. For an observed target, set absenceScopeRef to null and use the required role or element disposition. For a bounded-negative target, keep that exact subjectRef, use absent_in_scope, and copy one exact allowedAbsenceScopeRef into absenceScopeRef. subjectRef identifies what was checked; absenceScopeRef identifies where its absence was established, and they are never interchangeable.',
       'Return required upgrade metadata for every supplied legacy observable and obstruction without changing its fact, targets, statement, or sources.',
       'Keep the complete JSON result at or below twenty KiB and use concise statements while still preparing every supplied group and outcome.',
       'For the legacy result only, copy its immutable interaction ID, player-action fingerprint, workspace revision, current Scene revision, and grounded source refs and replace its same-locus Scene kit in place as gmc.scene-kit/3. For the current candidate, do not output a Scene kit; GMA deterministically compiles the accepted candidate into gmc.scene-kit/4 and GMC alone may commit it.',

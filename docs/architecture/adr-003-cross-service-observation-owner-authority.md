@@ -398,6 +398,45 @@ fixture, positive distinct-target and negative duplicate-address results, zero
 Story/artifact writes for rejected proposals, generated-contract drift checks,
 full GMC and GMA gates, and authenticated replay to concrete narration.
 
+## Accepted correction: stable prepared subjects and scoped absence evidence
+
+Accepted 2026-08-31 with GMA ADR-005 D9.4.60 after the next authenticated
+replay proved a second identity loss downstream of semantic planning. Candidate
+`/2` represented `absent_in_scope` by putting the enclosing Scene element in
+`subjectRef`. Several distinct negative findings therefore became competing
+observables at one subject/facet address.
+
+Fresh preparation packet `/4`, policy `/5`, and candidate `/3` separate the
+checked subject from its evidentiary scope. GMA deterministically supplies one
+`preparedSubjectRef` for every exact structured target signature. The model
+must copy it as `subjectRef`; it may copy one existing allowed Scene ref as
+`absenceScopeRef` only for `absent_in_scope`. Observed rows require a null
+absence scope. No name, prose, alias, verb, or noun join may choose either ref.
+
+GMC remains the only mutable Scene owner. It accepts the stable subject as the
+observation address while requiring each new row's `sourceRefs` to close over
+current owner evidence, accepted receipts, or an exactly appended prepared
+target. An observed new role or element uses and appends its stable subject. A
+bounded negative appends no target and cites its exact enclosing absence scope
+as source evidence. Existing workspace/Scene CAS, atomic replacement,
+idempotency, reciprocal mechanics binding, Story-design rebinding, visibility,
+and strict ambiguous-value resolution remain unchanged.
+
+Packet `/3` and candidate `/2` remain historical readers only. Fresh registry
+calls and health advertisement use `/4`, `/3`, and policy `/5`; correction
+prompts cannot introduce the rule after a deficient first pass. Deployment is
+GMC before the GMA writer, with VCS and shared Studio negotiation updated in the
+same generation. Rollback disables fresh writers and preserves committed old
+and new rows. Historical collapsed rows are not edited; new stable addresses
+allow a saved plan to prepare a later Scene revision and resolve safely.
+
+Tests cover original-policy text, exact ID copying, scope-as-subject rejection,
+foreign scopes, observed-null and negative-required scope rules, multiple
+distinct negatives citing one scope, prepared-target append closure, no append
+for absence, atomic/stale/idempotent writes, legacy recovery, privacy, contract
+alignment, and zero owner writes for invalid model output. Release requires
+full GMC and cross-service gates plus the authenticated Kerrigan continuation.
+
 ## Review record
 
 Accepted after the containment replay proved that pausing the route was safe

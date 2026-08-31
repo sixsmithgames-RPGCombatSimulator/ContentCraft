@@ -412,13 +412,14 @@ describe('provider-neutral LLM orchestrator', () => {
       type: ['object', 'null'],
       required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
     });
-    expect(observationPreparation.prompt.version).toBe('gma.observation-authority-preparation-policy/1');
+    expect(observationPreparation.prompt.version).toBe('gma.observation-authority-preparation-policy/5');
     expect(observationPreparation.prompt.systemInstruction).toMatch(/before any player-facing narration runs/i);
     expect(observationPreparation.prompt.systemInstruction).toMatch(/Routine visible or otherwise perceivable details must be established now/i);
     expect(observationPreparation.prompt.systemInstruction).toMatch(/Apparent classification reports what the observer can reasonably classify/i);
     expect(observationPreparation.prompt.systemInstruction).toMatch(/remote_sensor for a familiar or sensor/i);
     expect(observationPreparation.prompt.systemInstruction).toMatch(/sole mutable Scene and observation authority/i);
     expect(observationPreparation.prompt.systemInstruction).toMatch(/Never join by labels, names, prose similarity/i);
+    expect(observationPreparation.prompt.systemInstruction).toMatch(/copy preparedSubjectRef exactly.*absenceScopeRef/i);
     expect(observationPreparation.outputSchema.schema.required).toEqual(['schemaVersion']);
     expect(Object.keys(observationPreparation.outputSchema.schema.properties as Record<string, unknown>))
       .toEqual(expect.arrayContaining(['schemaVersion', 'proposal', 'programId', 'nodeId', 'groupPreparations', 'outcomePreparations', 'obstructions']));
@@ -563,9 +564,14 @@ describe('provider-neutral LLM orchestrator', () => {
 
   it('accepts the typed observation preparation and narration contracts and rejects evasive first-pass answers', async () => {
     const preparationPacket = {
-      schemaVersion: 'gma.observation-authority-preparation-packet/2',
+      schemaVersion: 'gma.observation-authority-preparation-packet/4',
       immutable: { programId: 'program:observe', nodeId: 'node:observe', preparationFingerprint: 'a'.repeat(64) },
-      currentScene: { sourceRefs: ['scene:second-mouth'], existingObservables: [], existingObstructions: [] },
+      currentScene: { sourceRefs: ['scene:second-mouth'], existingObservables: [], existingObstructions: [], existingObservationAccessRefs: [] },
+      unboundTargets: [{
+        localTargetRef: 'local:worker', targetDescription: 'the drain worker', preferredKind: 'actor',
+        preparedSubjectRef: 'gma:observation-subject:worker', outcomeIds: ['outcome:appearance', 'outcome:species'],
+        allowedAbsenceScopeRefs: ['scene:second-mouth'],
+      }],
       groups: [{
         groupId: 'group:familiar', accessId: 'gmc:observation-access:familiar', observer: { actorKind: 'familiar' }, availableModalities: ['visual', 'olfactory'],
         outcomes: [
@@ -575,7 +581,11 @@ describe('provider-neutral LLM orchestrator', () => {
       }],
     };
     const candidate = {
-      schemaVersion: 'gma.observation-authority-preparation-candidate/1', programId: 'program:observe', nodeId: 'node:observe', preparationFingerprint: 'a'.repeat(64),
+      schemaVersion: 'gma.observation-authority-preparation-candidate/3', programId: 'program:observe', nodeId: 'node:observe', preparationFingerprint: 'a'.repeat(64),
+      targetPreparations: [{
+        localTargetRefs: ['local:worker'], disposition: 'scene_local_role', subjectRef: 'gma:observation-subject:worker', absenceScopeRef: null,
+        label: 'drain worker', count: 1, objective: 'Work in the drain.', summary: null,
+      }],
       groupPreparations: [{
         groupId: 'group:familiar', originViewpointRef: 'viewpoint:cover', candidateViewpointRef: 'viewpoint:rat-near-worker',
         accessMode: 'remote_sensor', pathRef: 'path:apron', availableModalities: ['visual', 'olfactory'],
@@ -608,6 +618,21 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(rejectedStalePreparation.status).toBe('review_required');
     expect(rejectedStalePreparation.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
       .toContain('OBSERVATION_PREPARATION_FINGERPRINT_MISMATCH');
+
+    const scopeAsSubject: any = structuredClone(candidate);
+    scopeAsSubject.targetPreparations[0].subjectRef = 'scene:second-mouth';
+    scopeAsSubject.targetPreparations[0].disposition = 'absent_in_scope';
+    scopeAsSubject.targetPreparations[0].absenceScopeRef = 'scene:second-mouth';
+    scopeAsSubject.targetPreparations[0].label = null;
+    scopeAsSubject.targetPreparations[0].count = null;
+    scopeAsSubject.targetPreparations[0].objective = null;
+    scopeAsSubject.outcomePreparations.forEach((row: any) => { row.resultKind = 'bounded_negative'; });
+    const rejectedScopeAsSubject = await executeLlmOperation(request('story.observation.prepare', 'typed-observation-scope-as-subject', preparationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => scopeAsSubject)],
+    });
+    expect(rejectedScopeAsSubject.status).toBe('review_required');
+    expect(rejectedScopeAsSubject.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_PREPARATION_SUBJECT_MISMATCH');
 
     const accessMismatchPacket: any = structuredClone(preparationPacket);
     accessMismatchPacket.currentScene.existingObstructions = [{ obstructionId: 'gmc:obstruction:bend', hasV4Fields: false }];
