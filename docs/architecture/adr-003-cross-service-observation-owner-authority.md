@@ -326,7 +326,7 @@ appeared later. Those are language-planning defects, not owner-authority
 requirements.
 
 Fresh integrated and Manual planning use
-`gma.semantic-intent-policy/13` and return
+`gma.semantic-intent-policy/14` and return
 `gma.semantic-plan-window/1`. The result binds the exact root instruction
 identity, selects one exact non-empty prefix, states whether continuation
 remains, contains one bounded semantic-intent proposal for that prefix, and
@@ -350,11 +350,11 @@ persist an unaccepted plan, choose a compiler route, or own the continuation.
 GMA continues to persist only existing program `/2`-`/5`, cursor, pending-append,
 parent-program, saga, and receipt contracts in the existing artifact store. No
 GMC collection, index, owner operation, Story schema, or rollback rule changes.
-Historical policy `/12` and semantic IR outputs remain readable only within
-their original recovery chains; fresh `/13` calls cannot downgrade or mix
-generations.
+Historical policy `/12` and `/13` semantic IR outputs remain readable only
+within their original recovery chains; fresh `/14` calls cannot downgrade or
+mix generations.
 
-GMC deploys registry `/13` before GMA enables fresh window emission. Release
+GMC deploys registry `/14` before GMA enables fresh window emission. Release
 tests cover exact identity and prefix shape, neutral policy text, the former
 five-action example only when it is actually the immutable instruction, a
 question followed by already-present familiar movement and observation with no
@@ -363,6 +363,40 @@ oversized windows, generated contract drift, legacy operation responses, and
 zero Story/artifact writes from rejected model proposals. GMA owns recursive
 continuation, owner execution, player recovery, and the dynamic storytelling
 quality gates in ADR-009.
+
+## Accepted correction: unique typed-observation addresses
+
+Accepted 2026-08-31 with the paired GMA ADR-009 correction after authenticated
+play preserved six different investigation answers but assigned several of
+them to one enclosing Scene element and one repeated facet. Owner preparation
+therefore authored incompatible typed values at the same subject/facet address,
+and the resolver stopped only after the Scene write.
+
+Fresh `action.intent.interpret` policy `/14` positively requires every retained
+typed information outcome to have a unique
+`targetId + facet + relationOriginTargetId` address inside its information
+intent. Distinct requested subjects or phenomena in one room, passage, actor,
+container, or area receive distinct local subject targets. An enclosing owner
+ref may be copied only when it identifies the precise requested subject; it is
+not a substitute target for several different things merely sharing that
+scope. Otherwise the target remains unbound for the existing action-matched
+target-preparation flow.
+
+This is an additive model-policy and validation correction. It changes no GMC
+collection, index, Scene schema, owner operation, visibility rule, limit,
+authority owner, or persistence lifetime. GMA deterministically rejects a
+duplicate typed address before artifact persistence or owner work; GMC's
+first-pass system instruction teaches the same requirement before that
+validator runs. Redundant wording may become one outcome, but retained
+outcomes may not compete for one owner address. No verb, noun, subject-name, or
+phrase list is introduced.
+
+Historical `/13` calls remain valid only in their original recovery chains.
+GMC deploys registry `/14` before GMA emits it. Release requires matched Manual
+and integrated policy versions, a production-shaped multi-subject same-facet
+fixture, positive distinct-target and negative duplicate-address results, zero
+Story/artifact writes for rejected proposals, generated-contract drift checks,
+full GMC and GMA gates, and authenticated replay to concrete narration.
 
 ## Review record
 
