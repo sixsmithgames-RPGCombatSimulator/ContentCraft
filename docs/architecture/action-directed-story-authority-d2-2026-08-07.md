@@ -652,8 +652,11 @@ The Gemini adapter now projects every registered logical output schema onto
 Gemini's documented `responseJsonSchema` subset. String and number `const`
 constraints become single-value enums; boolean and null constants retain only
 their provider-supported type. Unsupported constraints such as `pattern`,
-`minLength`, and `maxLength` are omitted from the provider hint. The complete
-versioned schema, semantic validators, positive first-pass prompt policy, and
+`minLength`, and `maxLength` are omitted from the provider hint. If that
+supported-keyword projection still exceeds 4,096 bytes, the adapter
+progressively collapses only its deepest schema nodes to their supported base
+types until the provider hint meets the byte budget. The complete versioned
+schema, semantic validators, positive first-pass prompt policy, and
 proposal-only authority boundary remain unchanged and run after generation.
 The projection therefore reduces provider transport complexity without
 loosening any result GMA can accept or adding player-phrase classification.
@@ -668,5 +671,5 @@ Scene, action-program, mechanics, or timeline record.
 Release requires provider-conformance tests proving unsupported keywords are
 removed, required nested action-intent structure is retained, the full logical
 schema is not mutated, complete GMC checks pass, production health advertises
-1.11.37, and the unchanged natural-language Kerrigan investigation reaches a
+1.11.38, and the unchanged natural-language Kerrigan investigation reaches a
 real provider result before broader narration playtesting resumes.

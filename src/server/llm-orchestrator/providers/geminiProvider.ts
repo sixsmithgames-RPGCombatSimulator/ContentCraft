@@ -67,6 +67,8 @@ const GEMINI_RESPONSE_JSON_SCHEMA_KEYWORDS = new Set([
   'required',
   'propertyOrdering',
 ]);
+const GEMINI_RESPONSE_JSON_SCHEMA_TARGET_BYTES = 4_096;
+const GEMINI_RESPONSE_JSON_SCHEMA_DEPTH_CANDIDATES = [6, 5, 4, 3, 2] as const;
 
 function projectedConst(value: unknown): Record<string, unknown> {
   if (typeof value === 'string' || typeof value === 'number') return { enum: [value] };
@@ -81,31 +83,56 @@ function projectedConst(value: unknown): Record<string, unknown> {
  * Keep the complete logical schema for GMC's deterministic post-generation
  * validation; this projection is only the provider transport hint.
  */
-export function projectGeminiResponseJsonSchema(schema: unknown): unknown {
-  if (Array.isArray(schema)) return schema.map((entry) => projectGeminiResponseJsonSchema(entry));
+function projectGeminiSchemaNode(schema: unknown, depth: number, maximumDepth: number): unknown {
+  if (Array.isArray(schema)) {
+    return schema.map((entry) => projectGeminiSchemaNode(entry, depth + 1, maximumDepth));
+  }
   if (!schema || typeof schema !== 'object') return schema;
 
   const source = schema as Record<string, unknown>;
   const projected: Record<string, unknown> = Object.prototype.hasOwnProperty.call(source, 'const')
     ? projectedConst(source.const)
     : {};
+  if (depth >= maximumDepth) {
+    for (const key of ['$ref', 'type', 'format', 'enum'] as const) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) projected[key] = source[key];
+    }
+    return projected;
+  }
   for (const [key, value] of Object.entries(source)) {
     if (key === 'const' || !GEMINI_RESPONSE_JSON_SCHEMA_KEYWORDS.has(key)) continue;
     if ((key === 'properties' || key === '$defs') && value && typeof value === 'object' && !Array.isArray(value)) {
       projected[key] = Object.fromEntries(
         Object.entries(value as Record<string, unknown>)
-          .map(([propertyName, propertySchema]) => [propertyName, projectGeminiResponseJsonSchema(propertySchema)]),
+          .map(([propertyName, propertySchema]) => [
+            propertyName,
+            projectGeminiSchemaNode(propertySchema, depth + 1, maximumDepth),
+          ]),
       );
       continue;
     }
-    projected[key] = projectGeminiResponseJsonSchema(value);
+    projected[key] = projectGeminiSchemaNode(value, depth + 1, maximumDepth);
   }
   return projected;
 }
 
+export function projectGeminiResponseJsonSchema(schema: unknown): unknown {
+  const completeProjection = projectGeminiSchemaNode(schema, 0, Number.POSITIVE_INFINITY);
+  if (Buffer.byteLength(JSON.stringify(completeProjection), 'utf8') <= GEMINI_RESPONSE_JSON_SCHEMA_TARGET_BYTES) {
+    return completeProjection;
+  }
+  for (const maximumDepth of GEMINI_RESPONSE_JSON_SCHEMA_DEPTH_CANDIDATES) {
+    const candidate = projectGeminiSchemaNode(schema, 0, maximumDepth);
+    if (Buffer.byteLength(JSON.stringify(candidate), 'utf8') <= GEMINI_RESPONSE_JSON_SCHEMA_TARGET_BYTES) {
+      return candidate;
+    }
+  }
+  return projectGeminiSchemaNode(schema, 0, 2);
+}
+
 export class GeminiProviderAdapter implements LlmProviderAdapter {
   readonly id = 'gemini';
-  readonly version = '2';
+  readonly version = '3';
 
   isAvailable() {
     return Boolean(process.env.GEMINI_API_KEY);

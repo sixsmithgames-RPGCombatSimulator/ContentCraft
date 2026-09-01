@@ -92,8 +92,8 @@ describe('enabled provider adapter conformance', () => {
     expect(serialized).not.toMatch(/"(?:const|pattern|minLength|maxLength|uniqueItems)"\s*:/);
     expect(projected.properties.schemaVersion).toEqual({ enum: ['gma.semantic-plan-window/1'] });
     expect(projected.properties.review.properties.allWindowActionsRepresented).toEqual({ type: 'boolean' });
-    expect(projected.properties.semanticIntent.properties.intents.items.properties.relation)
-      .toBeTruthy();
+    expect(projected.properties.semanticIntent.properties.intents.items.type).toBe('object');
+    expect(Buffer.byteLength(serialized, 'utf8')).toBeLessThanOrEqual(4_096);
     expect(Buffer.byteLength(serialized, 'utf8'))
       .toBeLessThan(Buffer.byteLength(JSON.stringify(logicalSchema), 'utf8'));
     expect((logicalSchema as any).properties.schemaVersion.const).toBe('gma.semantic-plan-window/1');
