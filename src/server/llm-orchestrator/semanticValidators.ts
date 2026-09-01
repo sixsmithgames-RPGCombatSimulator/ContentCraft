@@ -255,6 +255,14 @@ function sameStringSet(actual: unknown, expected: unknown): boolean {
   return left.length === actual.length && JSON.stringify(left) === JSON.stringify(right);
 }
 
+function evidenceContainsLockedValue(evidence: unknown, lockedValue: any): boolean {
+  const source = String(evidence ?? '');
+  return (Array.isArray(lockedValue?.acceptedSurfaceForms) ? lockedValue.acceptedSurfaceForms : []).some((form: unknown) => {
+    const escaped = String(form).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[-\s]+/g, '[-\\s]+');
+    return new RegExp(`(?:^|[^A-Za-z0-9])${escaped}(?=$|[^A-Za-z0-9])`, 'i').test(source);
+  });
+}
+
 registerSemanticValidator('observation-preparation-contract', ({ request, output }) => {
   const issues: Array<{ code: string; message: string; path?: string }> = [];
   const packet = request.context?.input?.value as any;
@@ -392,16 +400,34 @@ registerSemanticValidator('observation-preparation-contract', ({ request, output
 registerSemanticValidator('observation-narration-contract', ({ request, output }) => {
   const issues: Array<{ code: string; message: string; path?: string }> = [];
   const packet = request.context?.input?.value as any;
-  if (output?.schemaVersion !== 'gma.current-scene-narration-result/8') {
+  const outputVersion = String(output?.schemaVersion ?? '');
+  const observationResultVersions = new Set([
+    'gma.current-scene-narration-result/8',
+    'gma.current-scene-narration-result/9',
+  ]);
+  if (!observationResultVersions.has(outputVersion)) {
     const required = ['responseMode', 'rollRequest', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority'];
     for (const field of required) if (!Object.prototype.hasOwnProperty.call(output ?? {}, field)) {
       issues.push({ code: 'CURRENT_SCENE_LEGACY_FIELD_REQUIRED', message: `The compatible current-scene result requires '${field}'.`, path: `/${field}` });
     }
     return result('observation-narration-contract', issues);
   }
-  if (packet?.schemaVersion !== 'gma.current-scene-narration-packet/8') {
+  const freshObservation = outputVersion === 'gma.current-scene-narration-result/9';
+  const expectedPacketVersion = freshObservation
+    ? 'gma.current-scene-narration-packet/9'
+    : 'gma.current-scene-narration-packet/8';
+  // Treating fresh observation /9 as ordinary current-Scene narration is not
+  // helpful: those sibling fields are forbidden by GMA's exact /9 contract.
+  if (packet?.schemaVersion !== expectedPacketVersion) {
     issues.push({ code: 'OBSERVATION_NARRATION_PACKET_MISMATCH', message: 'The narration result requires the matching settled-observation packet.' });
     return result('observation-narration-contract', issues);
+  }
+  const exactObservationFields = [
+    'schemaVersion', 'programId', 'nodeId', 'presentationFingerprint', 'responseText',
+    'presentationBindings', 'materialClaims', 'rulesNote',
+  ];
+  if (!sameStringSet(Object.keys(output ?? {}), exactObservationFields)) {
+    issues.push({ code: 'OBSERVATION_NARRATION_FIELDS_MISMATCH', message: 'The settled-observation result must contain exactly its versioned fields.', path: '/' });
   }
   if (String(output?.programId ?? '') !== String(packet?.immutable?.programId ?? '') || String(output?.nodeId ?? '') !== String(packet?.immutable?.nodeId ?? '')) {
     issues.push({ code: 'OBSERVATION_NARRATION_SCOPE_MISMATCH', message: 'The narration changed the saved program or node identity.', path: '/programId' });
@@ -417,7 +443,15 @@ registerSemanticValidator('observation-narration-contract', ({ request, output }
   const responseText = String(output?.responseText ?? '');
   for (const [index, binding] of bindings.entries()) {
     const expected = permitted.get(String(binding?.outcomeId ?? '')) as any;
-    if (!expected || binding?.permittedStatement !== expected.statement || !responseText.includes(String(binding?.permittedStatement ?? '')) || !String(binding?.narrationEvidence ?? '').includes(String(binding?.permittedStatement ?? '')) || !responseText.includes(String(binding?.narrationEvidence ?? ''))) {
+    const evidence = String(binding?.narrationEvidence ?? '');
+    const invalidHistorical = !freshObservation
+      && (!responseText.includes(String(binding?.permittedStatement ?? '')) || !evidence.includes(String(binding?.permittedStatement ?? '')));
+    const invalidFresh = freshObservation
+      && (evidence.trim().length < 12
+        || !responseText.includes(evidence)
+        || (Array.isArray(expected?.lockedValues) ? expected.lockedValues : [])
+          .some((lockedValue: any) => !evidenceContainsLockedValue(evidence, lockedValue)));
+    if (!expected || binding?.permittedStatement !== expected.statement || invalidHistorical || invalidFresh || !responseText.includes(evidence)) {
       issues.push({ code: 'OBSERVATION_NARRATION_STATEMENT_MISMATCH', message: 'The player response must contain the exact permitted statement for each outcome.', path: `/presentationBindings/${index}` });
     }
   }
@@ -427,9 +461,19 @@ registerSemanticValidator('observation-narration-contract', ({ request, output }
   }
   for (const [index, claim] of claims.entries()) {
     const expected = permitted.get(String(claim?.outcomeId ?? '')) as any;
-    if (!expected || claim?.claimText !== expected.statement || !responseText.includes(String(claim?.claimText ?? '')) || !sameStringSet(claim?.sourceRefs, expected?.sourceRefs)) {
+    const claimText = String(claim?.claimText ?? '');
+    const invalidClaimText = freshObservation
+      ? claimText.trim().length < 12 || !responseText.includes(claimText)
+      : claim?.claimText !== expected?.statement || !responseText.includes(claimText);
+    if (!expected || invalidClaimText || !sameStringSet(claim?.sourceRefs, expected?.sourceRefs)) {
       issues.push({ code: 'OBSERVATION_NARRATION_CLAIM_MISMATCH', message: 'A material claim must reproduce only the exact settled statement and source refs.', path: `/materialClaims/${index}` });
     }
+  }
+  if (output?.rulesNote !== null) {
+    issues.push({ code: 'OBSERVATION_NARRATION_RULES_NOTE_FORBIDDEN', message: 'Settled deterministic observation narration cannot add a rules note.', path: '/rulesNote' });
+  }
+  if (Buffer.byteLength(JSON.stringify(output ?? {}), 'utf8') > 20_480) {
+    issues.push({ code: 'OBSERVATION_NARRATION_RESULT_TOO_LARGE', message: 'The complete settled-observation narration exceeds its accepted bound.', path: '/' });
   }
   return result('observation-narration-contract', issues);
 });

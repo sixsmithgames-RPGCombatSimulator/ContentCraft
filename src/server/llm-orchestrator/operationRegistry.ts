@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-01.7';
+export const OPERATION_REGISTRY_VERSION = '2026-09-01.8';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-01.7',
   '2026-09-01.6',
   '2026-09-01.5',
   '2026-09-01.4',

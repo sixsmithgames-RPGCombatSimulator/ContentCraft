@@ -795,6 +795,93 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(rejectedStaleNarration.status).toBe('review_required');
     expect(rejectedStaleNarration.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
       .toContain('OBSERVATION_NARRATION_FINGERPRINT_MISMATCH');
+
+    const freshNarrationPacket = {
+      schemaVersion: 'gma.current-scene-narration-packet/9',
+      immutable: { programId: 'program:observe', nodeId: 'node:observe', presentationFingerprint: 'e'.repeat(64) },
+      permittedStatements: [{
+        outcomeId: 'outcome:distance', statement: 'The tally runner is twenty feet away.', sourceRefs: ['observable:distance'],
+        lockedValues: [{ lockedValueRef: 'outcome:distance:value', kind: 'number', canonicalValue: '20', acceptedSurfaceForms: ['20', 'twenty'] }],
+      }],
+    };
+    const freshResponseText = 'The tally runner pauses roughly twenty feet away, red wrapping bright against the wet stone.';
+    const freshNarration = {
+      schemaVersion: 'gma.current-scene-narration-result/9', programId: 'program:observe', nodeId: 'node:observe',
+      presentationFingerprint: 'e'.repeat(64), responseText: freshResponseText,
+      presentationBindings: [{
+        outcomeId: 'outcome:distance', permittedStatement: 'The tally runner is twenty feet away.',
+        narrationEvidence: 'The tally runner pauses roughly twenty feet away',
+      }],
+      materialClaims: [{
+        outcomeId: 'outcome:distance', claimText: 'The tally runner pauses roughly twenty feet away', sourceRefs: ['observable:distance'],
+      }],
+      rulesNote: null,
+    };
+    const acceptedFreshNarration = await executeLlmOperation(request('story.current-scene.narrate', 'fresh-typed-observation-narration', freshNarrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => freshNarration)],
+    });
+    expect(acceptedFreshNarration.status).toBe('succeeded');
+
+    const changedLockedValue = structuredClone(freshNarration);
+    changedLockedValue.responseText = 'The tally runner pauses roughly forty feet away, red wrapping bright against the wet stone.';
+    changedLockedValue.presentationBindings[0].narrationEvidence = 'The tally runner pauses roughly forty feet away';
+    changedLockedValue.materialClaims[0].claimText = 'The tally runner pauses roughly forty feet away';
+    const rejectedChangedLockedValue = await executeLlmOperation(request('story.current-scene.narrate', 'fresh-typed-observation-changed-lock', freshNarrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => changedLockedValue)],
+    });
+    expect(rejectedChangedLockedValue.status).toBe('review_required');
+    expect(rejectedChangedLockedValue.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_NARRATION_STATEMENT_MISMATCH');
+
+    const changedFreshSources = structuredClone(freshNarration);
+    changedFreshSources.materialClaims[0].sourceRefs = ['observable:unrelated'];
+    const rejectedChangedFreshSources = await executeLlmOperation(request('story.current-scene.narrate', 'fresh-typed-observation-source-drift', freshNarrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => changedFreshSources)],
+    });
+    expect(rejectedChangedFreshSources.status).toBe('review_required');
+    expect(rejectedChangedFreshSources.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_NARRATION_CLAIM_MISMATCH');
+
+    const missingFreshBinding = structuredClone(freshNarration);
+    missingFreshBinding.presentationBindings = [];
+    const rejectedMissingFreshBinding = await executeLlmOperation(request('story.current-scene.narrate', 'fresh-typed-observation-missing-binding', freshNarrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => missingFreshBinding)],
+    });
+    expect(rejectedMissingFreshBinding.status).toBe('review_required');
+
+    const duplicateFreshBinding = structuredClone(freshNarration);
+    duplicateFreshBinding.presentationBindings.push(structuredClone(duplicateFreshBinding.presentationBindings[0]));
+    const rejectedDuplicateFreshBinding = await executeLlmOperation(request('story.current-scene.narrate', 'fresh-typed-observation-duplicate-binding', freshNarrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => duplicateFreshBinding)],
+    });
+    expect(rejectedDuplicateFreshBinding.status).toBe('review_required');
+    expect(rejectedDuplicateFreshBinding.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_NARRATION_BINDING_COVERAGE');
+
+    const changedFreshIdentity = { ...freshNarration, presentationFingerprint: 'f'.repeat(64) };
+    const rejectedChangedFreshIdentity = await executeLlmOperation(request('story.current-scene.narrate', 'fresh-typed-observation-identity-drift', freshNarrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => changedFreshIdentity)],
+    });
+    expect(rejectedChangedFreshIdentity.status).toBe('review_required');
+    expect(rejectedChangedFreshIdentity.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_NARRATION_FINGERPRINT_MISMATCH');
+
+    const rejectedFreshFamilyMismatch = await executeLlmOperation(request('story.current-scene.narrate', 'fresh-typed-observation-family-mismatch', narrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => freshNarration)],
+    });
+    expect(rejectedFreshFamilyMismatch.status).toBe('review_required');
+    expect(rejectedFreshFamilyMismatch.validation.flatMap((entry) => entry.issues).map((issue) => issue.code))
+      .toContain('OBSERVATION_NARRATION_PACKET_MISMATCH');
+
+    const incompleteOrdinaryNarration = { schemaVersion: 'gma.current-scene-narration-result/11', responseText: 'The worker waits.' };
+    const rejectedIncompleteOrdinaryNarration = await executeLlmOperation(request('story.current-scene.narrate', 'ordinary-current-scene-required-fields', {
+      schemaVersion: 'gma.current-scene-narration-packet/13',
+    }), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => incompleteOrdinaryNarration)],
+    });
+    expect(rejectedIncompleteOrdinaryNarration.status).toBe('review_required');
+    expect(rejectedIncompleteOrdinaryNarration.validation.flatMap((entry) => entry.issues).map((issue) => issue.path))
+      .toEqual(expect.arrayContaining(['/responseMode', '/rollRequest', '/sceneRealization', '/declaredActionPayoff', '/storyOutcome', '/agencyAudit', '/mechanicsAuthority']));
   });
 
   it('accepts a complete flat Scene-kit repair without provider-hostile nesting', async () => {

@@ -620,6 +620,52 @@ generated-contract drift checks, full GMC and GMA gates, sanitized production
 telemetry, and one authenticated safe continuation of the unchanged saved
 action through preparation and concrete responsive narration.
 
+### Accepted production correction: dispatch fresh observation narration by schema family
+
+Accepted 2026-09-01 with the paired GMA ADR-009 correction after registry `.7`
+completed and committed the prepared observation authority for Kerrigan's
+unchanged saved action, then rejected the narration provider result with missing
+paths for `responseMode`, `rollRequest`, `sceneRealization`,
+`declaredActionPayoff`, `storyOutcome`, `agencyAudit`, and
+`mechanicsAuthority`. Those fields belong to ordinary current-Scene narration.
+They are deliberately absent from the exact fresh settled-observation result
+`gma.current-scene-narration-result/9`, which instead contains the immutable
+program, node, and presentation identities plus prose, outcome bindings,
+material claims, and `rulesNote`. The provider followed the requested `/9`
+family; GMC's semantic dispatcher recognized only historical observation `/8`
+and therefore applied the wrong sibling-family requirements.
+
+Registry `2026-09-01.8` dispatches `story.current-scene.narrate` semantic
+validation by the requested and returned logical schema family. Historical
+observation `/8` retains its exact permitted-statement rules. Fresh observation
+`/9` must match packet `/9`, copy immutable identities, cover every outcome once,
+bind each permitted outcome to an exact excerpt of final prose, preserve every
+locked value, cite only unchanged owner source refs, keep `rulesNote` null, and
+remain inside the existing 20,480-byte result bound. Other compatible
+current-Scene result versions retain their required response, mechanic,
+realization, payoff, Story-outcome, agency, and mechanics-authority fields. A
+schema version may never be accepted by a validator for a sibling result family.
+
+The positive first-pass requirements already exist in both the registered GMC
+prompt policy and GMA's versioned `/9` packet response contract, so this change
+does not teach a new rule in repair or weaken accepted evidence. It adds no verb,
+noun, alias, campaign phrase, provider attempt, fallback, token, envelope,
+operation, owner write, or deterministic narration phrase. The already-committed
+Scene preparation and owner receipts remain authoritative; only narration uses
+the fresh registry-scoped provider identity. No failed prose is applied.
+
+GMC deploys `.8` before GMA mirrors it. Rollback restores `.7` and the GMA mirror
+together, pauses fresh affected narration, and leaves every program, Scene,
+receipt, cursor, and timeline entry unchanged. Release requires positive `/8`
+and `/9` observation results, natural `/9` paraphrase with locked-value
+preservation, rejection of changed locked values, missing or duplicate bindings,
+source-ref drift, identity drift, packet/result-family mismatch, and an
+incomplete ordinary current-Scene result; unchanged one-attempt and no-fallback
+checks; generated registry alignment; full GMC and GMA gates; sanitized
+production telemetry; and one authenticated continuation of the exact saved
+action to concrete responsive narration without repeating observation
+preparation.
+
 Accepted after the containment replay proved that pausing the route was safe
 but not a player-complete result. The four repository owners approved the
 governing documented plan by directing implementation to proceed. Any material
