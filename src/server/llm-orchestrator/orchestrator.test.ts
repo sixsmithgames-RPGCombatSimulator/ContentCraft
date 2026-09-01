@@ -312,6 +312,8 @@ describe('provider-neutral LLM orchestrator', () => {
       .toEqual(['kind', 'description', 'capabilityHint']);
     expect(semanticIntentSchema.intents.items.properties.requestedOutcomes.items.anyOf)
       .toHaveLength(2);
+    expect(semanticIntentSchema.intents.items.properties.observationGroups.minItems)
+      .toBe(0);
     expect(semanticIntentSchema.intents.items.properties.purpose.enum)
       .toContain('exchange_information');
     expect(semanticIntentSchema.intents.items.properties.methods.items.properties.kind.enum)
@@ -319,6 +321,86 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.provider.maxAttempts).toBe(1);
     expect(interpretation.provider.fallbackAllowed).toBe(false);
     expect(legacyInterpretation.prompt.version).toBe('gma.semantic-action-planner-policy/3');
+
+    const productionIr3 = {
+      schemaVersion: 'gma.semantic-plan-window/1',
+      interactionId: 'interaction:kerrigan',
+      instructionRef: 'instruction:kerrigan',
+      instructionFingerprint: '0'.repeat(64),
+      windowText: 'Tell the worker I believe him, persuade him to trust me, inspect the evidence, then withdraw.',
+      continuationExpected: false,
+      semanticIntent: {
+        schemaVersion: 'gma.semantic-intent-ir/3',
+        interactionId: 'interaction:kerrigan',
+        instructionRef: 'instruction:kerrigan',
+        instructionFingerprint: '0'.repeat(64),
+        confidence: 0.97,
+        intents: [
+          {
+            intentId: 'intent:dialogue', summary: 'Tell the worker he is believed.',
+            evidenceQuotes: ['Tell the worker I believe him'], goal: 'Acknowledge the warning.',
+            purpose: 'exchange_information',
+            targets: [{ targetId: 'target:worker', role: 'recipient', description: 'the drain worker', authorityRef: null }],
+            methods: [{ methodId: 'method:quietly', kind: 'approach', description: 'speak quietly', capabilityHint: null, authorityRef: null }],
+            requestedOutcomes: ['The worker hears that Kerrigan believes him.'], observationGroups: [],
+            relation: { after: [], parallelWith: [], condition: null },
+          },
+          {
+            intentId: 'intent:influence', summary: 'Persuade the worker to trust Kerrigan.',
+            evidenceQuotes: ['persuade him to trust me'], goal: 'Earn the worker\'s confidence.',
+            purpose: 'influence_actor',
+            targets: [{ targetId: 'target:worker', role: 'recipient', description: 'the drain worker', authorityRef: null }],
+            methods: [{ methodId: 'method:rapport', kind: 'approach', description: 'build rapport', capabilityHint: 'Persuasion', authorityRef: null }],
+            requestedOutcomes: ['The worker decides whether to trust Kerrigan.'], observationGroups: [],
+            relation: { after: ['intent:dialogue'], parallelWith: [], condition: null },
+          },
+          {
+            intentId: 'intent:inspect', summary: 'Inspect the available evidence.',
+            evidenceQuotes: ['inspect the evidence'], goal: 'Find a link to the deeper magic.',
+            purpose: 'discover_information', observerTargetId: 'target:kerrigan',
+            targets: [
+              { targetId: 'target:kerrigan', role: 'actor', description: 'Kerrigan', authorityRef: 'character:kerrigan' },
+              { targetId: 'target:evidence', role: 'subject', description: 'the worker reactions and physical evidence', authorityRef: null },
+            ],
+            methods: [{ methodId: 'method:compare', kind: 'approach', description: 'compare reactions and evidence', capabilityHint: 'Investigation', authorityRef: null }],
+            requestedOutcomes: [{
+              outcomeId: 'outcome:link', targetId: 'target:evidence', facet: 'other_observable', valueKind: 'statement',
+              requestedPrecision: 'ordinary', relationOriginTargetId: null, evidenceQuotes: ['inspect the evidence'],
+            }],
+            observationGroups: [{
+              groupId: 'group:inspect', observerTargetId: 'target:kerrigan', observerKind: 'character',
+              methodId: 'method:compare', formTargetId: null, viewpointBinding: 'Kerrigan compares the evidence from her present position.',
+              outcomeIds: ['outcome:link'],
+            }],
+            relation: { after: ['intent:influence'], parallelWith: [], condition: null },
+          },
+          {
+            intentId: 'intent:withdraw', summary: 'Withdraw to the safest shadowed exit.',
+            evidenceQuotes: ['then withdraw'], goal: 'Leave without drawing attention.',
+            purpose: 'relocate_actor',
+            targets: [{ targetId: 'target:exit', role: 'destination', description: 'the safest shadowed exit', authorityRef: null }],
+            methods: [{ methodId: 'method:stealth', kind: 'approach', description: 'move stealthily', capabilityHint: 'Stealth', authorityRef: null }],
+            requestedOutcomes: ['Kerrigan reaches the safest shadowed exit.'], observationGroups: [],
+            relation: { after: ['intent:inspect'], parallelWith: [], condition: null },
+          },
+        ],
+        ambiguities: [],
+        coverage: { fullyRepresented: true, unrepresentedEvidenceQuotes: [], overflow: false },
+      },
+      review: { allWindowActionsRepresented: true, noActionsInvented: true },
+    };
+    expect(validateOperationOutput('action.intent.interpret', productionIr3).valid).toBe(true);
+
+    const overboundGroups = structuredClone(productionIr3);
+    overboundGroups.semanticIntent.intents[2].observationGroups = Array.from(
+      { length: 9 },
+      (_value, index) => ({
+        groupId: `group:${index}`, observerTargetId: 'target:kerrigan', observerKind: 'character',
+        methodId: 'method:compare', formTargetId: null, viewpointBinding: 'Kerrigan compares the evidence.',
+        outcomeIds: ['outcome:link'],
+      }),
+    );
+    expect(validateOperationOutput('action.intent.interpret', overboundGroups).valid).toBe(false);
 
     expect(narration.prompt.version).toBe('gma.compound-action-execution-policy/3');
     expect(narration.prompt.systemInstruction).toMatch(/every observable result and immediate NPC decision explicitly/i);

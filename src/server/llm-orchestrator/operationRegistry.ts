@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-01.4';
+export const OPERATION_REGISTRY_VERSION = '2026-09-01.5';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-01.4',
   '2026-09-01.3',
   '2026-09-01.2',
   '2026-08-31.2',
@@ -975,7 +976,7 @@ const seeds: Seed[] = [
               } },
             ] } },
             observerTargetId: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 240 }] },
-            observationGroups: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['groupId', 'observerTargetId', 'observerKind', 'methodId', 'formTargetId', 'viewpointBinding', 'outcomeIds'], properties: {
+            observationGroups: { type: 'array', minItems: 0, maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['groupId', 'observerTargetId', 'observerKind', 'methodId', 'formTargetId', 'viewpointBinding', 'outcomeIds'], properties: {
               groupId: { type: 'string', minLength: 1, maxLength: 240 }, observerTargetId: { type: 'string', minLength: 1, maxLength: 240 }, observerKind: { enum: ['character', 'familiar', 'sensor', 'ally'] },
               methodId: { type: 'string', minLength: 1, maxLength: 240 }, formTargetId: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 240 }] },
               viewpointBinding: { type: 'string', minLength: 1, maxLength: 240 }, outcomeIds: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'string', minLength: 1, maxLength: 240 } },

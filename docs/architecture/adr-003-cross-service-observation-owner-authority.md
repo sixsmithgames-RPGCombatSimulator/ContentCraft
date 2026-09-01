@@ -439,6 +439,44 @@ full GMC and cross-service gates plus the authenticated Kerrigan continuation.
 
 ## Review record
 
+### Accepted production correction: legal empty groups on non-information intents
+
+Accepted 2026-09-01 with the paired GMA ADR-009 correction after the
+authenticated Kerrigan semantic replacement returned a structurally correct
+`gma.semantic-intent-ir/3` plan. Three non-information intents explicitly used
+`observationGroups: []`, as both the versioned first-pass policy and GMA
+response contract require. GMC's registered JSON schema nevertheless set
+`minItems: 1` whenever that optional field was present, so it rejected the
+legal result before GMA's purpose-aware semantic validator could run.
+
+For `action.intent.interpret`, the registered structural schema now permits
+zero through eight observation-group rows. The existing positive first-pass
+policy remains authoritative: an IR `/3` information intent must contain one
+to eight groups partitioning every typed outcome exactly once, while a
+non-information intent must omit the field or use an empty array. GMA's
+versioned deterministic semantic validator continues to enforce that
+schema-version-and-purpose discriminator before program persistence. IR `/1`
+continues to use ordinary outcomes and no observation groups. This change
+removes a schema contradiction; it does not weaken the semantic acceptance
+boundary or teach a rule only in repair.
+
+Registry `2026-09-01.5` publishes the corrected structural schema. GMC deploys
+before GMA mirrors that registry generation. No collection, index, owner
+operation, Story state, artifact, receipt, model-operation budget, token limit,
+or persistence lifetime changes. Failed results remain unapplied and the
+player-authorized replacement/provider boundaries remain unchanged.
+Telemetry records only validation code and bounded JSON paths, never player
+text or model output. Rollback restores the old registry only together with
+the GMA mirror and stops fresh semantic planning; it does not alter saved game
+state.
+
+Release requires JSON-schema acceptance of a production-shaped IR `/3` result
+with empty groups on dialogue, influence, and movement intents plus non-empty
+groups on its information intent; rejection of overbound group arrays; the
+unchanged positive policy text; generated registry drift checks; complete GMC
+and GMA gates; and an authenticated continuation reaching GMA program persistence
+without rewriting the player instruction.
+
 ### Accepted production correction: preserve unrelated reciprocal bindings
 
 Accepted 2026-08-31 during the retained Kerrigan observation playtest. A
