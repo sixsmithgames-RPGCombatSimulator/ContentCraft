@@ -530,7 +530,7 @@ describe('provider-neutral LLM orchestrator', () => {
       .toEqual(expect.arrayContaining(['schemaVersion', 'proposal', 'programId', 'nodeId', 'groupPreparations', 'outcomePreparations', 'obstructions']));
     expect(observationPreparation.provider.maxAttempts).toBe(1);
     expect(observationPreparation.provider.fallbackAllowed).toBe(false);
-    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/16');
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/17');
     expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/authorized by actionBoundReveal/i);
@@ -542,6 +542,10 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(currentScene.prompt.systemInstruction).toMatch(/complete observation authority for that exact Scene revision/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/Compose and silently edit lived prose first.*Ordinary descriptive statements may be paraphrased naturally.*locked value/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/Historical \/8 keeps its original verbatim permitted-statement contract/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/return exactly these top-level fields and no others.*presentationBindings.*rulesNote/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/must omit these non-observation sibling fields.*proposedTimeAdvance.*sceneRealization/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/For non-observation current-Scene result families only.*temporalRequirement/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/For non-observation current-Scene result families, return gma\.scene-realization\/1/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/typed story-fact bindings.*direct resolution/i);
     expect(currentScene.outputSchema.schema.required).toEqual(['schemaVersion', 'responseText']);
     expect((currentScene.outputSchema.schema.properties as any).schemaVersion.enum)
@@ -821,6 +825,26 @@ describe('provider-neutral LLM orchestrator', () => {
       userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => freshNarration)],
     });
     expect(acceptedFreshNarration.status).toBe('succeeded');
+
+    const forbiddenSiblingField = { ...freshNarration, proposedTimeAdvance: null };
+    const rejectedForbiddenSiblingField = await executeLlmOperation(request('story.current-scene.narrate', 'fresh-typed-observation-forbidden-field', freshNarrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => forbiddenSiblingField)],
+    });
+    expect(rejectedForbiddenSiblingField.status).toBe('review_required');
+    expect(rejectedForbiddenSiblingField.validation.flatMap((entry) => entry.issues))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'OBSERVATION_NARRATION_FIELD_FORBIDDEN', path: '/proposedTimeAdvance' }),
+      ]));
+
+    const { rulesNote: _omittedRulesNote, ...missingObservationField } = structuredClone(freshNarration);
+    const rejectedMissingObservationField = await executeLlmOperation(request('story.current-scene.narrate', 'fresh-typed-observation-missing-field', freshNarrationPacket), {
+      userId: 'user-1', store: new MemoryExecutionStore(), providers: [new FakeProviderAdapter(() => missingObservationField)],
+    });
+    expect(rejectedMissingObservationField.status).toBe('review_required');
+    expect(rejectedMissingObservationField.validation.flatMap((entry) => entry.issues))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'OBSERVATION_NARRATION_FIELD_REQUIRED', path: '/rulesNote' }),
+      ]));
 
     const changedLockedValue = structuredClone(freshNarration);
     changedLockedValue.responseText = 'The tally runner pauses roughly forty feet away, red wrapping bright against the wet stone.';

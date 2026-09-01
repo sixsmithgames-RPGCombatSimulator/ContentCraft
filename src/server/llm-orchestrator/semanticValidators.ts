@@ -426,8 +426,12 @@ registerSemanticValidator('observation-narration-contract', ({ request, output }
     'schemaVersion', 'programId', 'nodeId', 'presentationFingerprint', 'responseText',
     'presentationBindings', 'materialClaims', 'rulesNote',
   ];
-  if (!sameStringSet(Object.keys(output ?? {}), exactObservationFields)) {
-    issues.push({ code: 'OBSERVATION_NARRATION_FIELDS_MISMATCH', message: 'The settled-observation result must contain exactly its versioned fields.', path: '/' });
+  const actualObservationFields = new Set(Object.keys(output ?? {}));
+  for (const field of exactObservationFields) if (!actualObservationFields.has(field)) {
+    issues.push({ code: 'OBSERVATION_NARRATION_FIELD_REQUIRED', message: `The settled-observation result requires '${field}'.`, path: `/${field}` });
+  }
+  for (const field of actualObservationFields) if (!exactObservationFields.includes(field)) {
+    issues.push({ code: 'OBSERVATION_NARRATION_FIELD_FORBIDDEN', message: `The settled-observation result cannot contain sibling-family field '${field}'.`, path: `/${field}` });
   }
   if (String(output?.programId ?? '') !== String(packet?.immutable?.programId ?? '') || String(output?.nodeId ?? '') !== String(packet?.immutable?.nodeId ?? '')) {
     issues.push({ code: 'OBSERVATION_NARRATION_SCOPE_MISMATCH', message: 'The narration changed the saved program or node identity.', path: '/programId' });

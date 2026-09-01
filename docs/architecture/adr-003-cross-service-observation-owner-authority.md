@@ -666,6 +666,48 @@ production telemetry; and one authenticated continuation of the exact saved
 action to concrete responsive narration without repeating observation
 preparation.
 
+### Accepted production correction: make shared narration prompt families exclusive
+
+Accepted 2026-09-01 with the paired GMA ADR-009 correction after registry `.8`
+correctly dispatched Kerrigan's fresh `/9` observation result, then rejected a
+JSON-schema-valid and authority-valid result because its top-level field set was
+not exact. The shared first-pass policy told `/9` to use its observation-only
+contract but later unconditionally required `proposedTimeAdvance` and
+`gma.scene-realization/1`. Those sibling-family instructions contradicted the
+exact `/9` response contract and made a compliant result unnecessarily
+unlikely. No narration or additional authority write was accepted.
+
+Registry `2026-09-01.9` and current-scene narration policy `/17` make the shared
+operation's result families mutually exclusive. Fresh `/9` and historical `/8`
+must return only `schemaVersion`, `programId`, `nodeId`,
+`presentationFingerprint`, `responseText`, `presentationBindings`,
+`materialClaims`, and `rulesNote`; they must omit `proposedTimeAdvance`,
+`responseMode`, `rollRequest`, `sceneRealization`, `declaredActionPayoff`,
+`storyOutcome`, `agencyAudit`, and `mechanicsAuthority`. Temporal proposals,
+provisional checks, Story impacts, Scene realization, agency audit, and
+mechanics-authority instructions apply only to non-observation current-Scene
+families. Dynamic prose, supported NPC behavior and dialogue, outcome coverage,
+natural paraphrase, locked values, exact evidence excerpts, and source grounding
+remain mandatory for `/9`.
+
+The semantic validator keeps the exact family boundary because GMA's versioned
+consumer contract is exact and the provider schema is intentionally shared for
+ordered rollout. It now reports each missing or forbidden top-level field at
+that field's path rather than one opaque root issue. This diagnostic refinement
+does not add a new model requirement, accept an unauthorized field, or expose
+provider output to the player. There is no schema, owner state, migration,
+token, attempt, fallback, or authority-operation change.
+
+GMC deploys `.9` before GMA mirrors it. Rollback restores `.8` and the GMA
+mirror together and pauses affected narration while preserving the durable
+program, prepared Scene, accepted observation candidate, receipts, and timeline.
+Release requires first-pass tests proving observation-only and ordinary-only
+instructions are explicitly scoped, rejection paths identify every extra or
+missing field, historical `/8`, fresh `/9`, and ordinary `/11` semantics remain
+intact, generated registry artifacts are current, full GMC and GMA gates pass,
+and the unchanged Kerrigan continuation reaches concrete narration without
+repeating observation preparation.
+
 Accepted after the containment replay proved that pausing the route was safe
 but not a player-complete result. The four repository owners approved the
 governing documented plan by directing implementation to proceed. Any material
