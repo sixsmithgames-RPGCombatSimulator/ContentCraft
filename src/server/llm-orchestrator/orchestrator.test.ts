@@ -365,7 +365,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const currentScene = getOperationDefinition('story.current-scene.narrate');
     const repair = getOperationDefinition('story.turn.repair');
     const sceneKitRepair = getOperationDefinition('story.scene-kit.repair');
-    expect(turn.prompt.version).toBe('gma.story-director-policy/14');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/15');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
     expect(turn.prompt.systemInstruction).toMatch(/upstream preparation interaction-ready/i);
@@ -450,7 +450,7 @@ describe('provider-neutral LLM orchestrator', () => {
     });
     expect(currentScene.provider.maxAttempts).toBe(1);
     expect(currentScene.provider.fallbackAllowed).toBe(false);
-    expect(repair.prompt.version).toBe('gma.story-director-policy/14');
+    expect(repair.prompt.version).toBe('gma.story-director-policy/15');
     expect(repair.prompt.systemInstruction).toMatch(/only the failed fields/i);
     expect(repair.prompt.systemInstruction).toMatch(/Do not return the complete Story Director result/i);
     expect(repair.outputSchema.schema.required).toEqual(['schemaVersion', 'correctionId', 'sceneKitPatch', 'patchesJson']);
@@ -459,7 +459,7 @@ describe('provider-neutral LLM orchestrator', () => {
       required: expect.arrayContaining(['playableLocus', 'participants', 'beats', 'exitVectors']),
     });
     const sceneRepairProperties = sceneKitRepair.outputSchema.schema.properties as any;
-    expect(sceneKitRepair.prompt.version).toBe('gma.story-director-policy/14');
+    expect(sceneKitRepair.prompt.version).toBe('gma.story-director-policy/15');
     expect(sceneKitRepair.prompt.systemInstruction).toMatch(/one fields row for each key/i);
     expect(sceneKitRepair.prompt.systemInstruction).toMatch(/at least one non-empty.*informationId/i);
     expect(sceneKitRepair.prompt.systemInstruction).toMatch(/completion, failure, abandonment, and redirect/i);

@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-01.1';
+export const OPERATION_REGISTRY_VERSION = '2026-09-01.2';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-31.2',
@@ -1303,7 +1303,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'proposal', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority'],
     optional: ['proposedTimeAdvance'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/14',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/15',
     outputProperties: actionDirectedStoryTurnOutput,
     systemInstruction: [
       'Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet.',
@@ -1311,6 +1311,7 @@ const seeds: Seed[] = [
       'Preserve the exact declared action and fingerprint. Prefer an eligible prepared Scene kit; otherwise create only the minimum complete supported Scene kit.',
       'Establish one playable locus, one exact present cast, two to five beats with exactly one active beat, all four exit kinds, Story bindings, and potential impacts.',
       'Make upstream preparation interaction-ready before prose: every scene-local role needs a typed surface_description observable or a specific surface obstruction. A role addressed by the player also needs a concrete information fact with a social access vector and a social affordance targeting that exact role. Use its prepared objective, knowledge, and posture so its behavior and answers are purposeful rather than generic.',
+      'For every typed observable and obstruction, each subject, source, observer, method, and non-null mechanic ref must be either an ID declared locally by this exact proposed Scene kit or an exact receipt-backed authority ref copied from bounded context sourceRefs. A source-empty factCatalog factId is narration evidence, not typed observation provenance. Include every external typed ref in proposal.sourceRefs; the complete source union may contain at most 24 refs.',
       'Use the supplied GMC scene-time context as read-only authority for current clock and pending events. Let it shape urgency and activity only when relevant; never turn a scheduled possibility into an occurrence, and request elapsed time only through proposedTimeAdvance.',
       'When the packet requests the current Story Director result, include one gmc.scene-story-design/2 in handoff.storyDesign, bound to the exact proposed Scene-kit revision. Prepare one to four concrete dramatic questions and only action-capable affordances grounded in supplied fact, target, and Story-node references. Prepare possibilities, not a required player route.',
       'For every supplied story_fact outcome requirement, return exactly one storyFactBindings row. Copy the immutable instruction fingerprint, semantic node ref, requirement ref, and requirement fingerprint exactly; bind them to one exact affordance and one or more exact Scene information refs also listed on that affordance. Use direct when current prose pays off the fact without a mechanic, or provisional_check only with one legal VCS skill check and five finished branches. Never join by actor identity alone, labels, access prose, fact wording, synonyms, or token overlap.',
@@ -1361,7 +1362,7 @@ const seeds: Seed[] = [
     id: 'story.scene-kit.repair', operationClass: 'reasoning_high', tier: 'reasoning',
     required: Object.keys(sceneKitRepairProviderOutput), validators: ['story-scene-kit-repair-rows'],
     temperature: 0.25, maxOutputTokens: 7000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/14',
+    thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/15',
     outputProperties: sceneKitRepairProviderOutput,
     systemInstruction: [
       'Repair one complete proposal.handoff.sceneKit from the supplied bounded GMA focused-repair packet.',
@@ -1371,6 +1372,7 @@ const seeds: Seed[] = [
       'Logical row contract: information is an array of {informationId,state,factText}, where factText is the concrete in-world fact to reveal and never a placeholder such as "contents revealed"; informationAccess must contain at least one non-empty {informationId,accessVector} row for every returned informationId and no unknown informationId. observables and obstructions are complete typed gmc.scene-kit/3 arrays with exact refs and scoped facets. beats is an array of 2-5 {beatId,kind,state,trigger,changeSurface} rows with unique beatId values; every beatImpacts row must use one returned beatId and contain {beatId,storyNodeRef,outcome,effect}. exitVectors must include non-empty {kind,condition} rows for completion, failure, abandonment, and redirect. Return arrays, including empty arrays where allowed, for every other collection field.',
       'When the scene purpose, dramatic question, or repair evidence names a central story-bearing container or load, information must state its fixed contents or bounded absence. Returning only a container label, an established load, or a future search is not a prepared answer.',
       'Every scene-local role needs a typed surface_description observable or a specific surface_description obstruction. A role addressed by the declared action needs a concrete socially reachable information fact and a social affordance for that exact role.',
+      'For every typed observable and obstruction, each subject, source, observer, method, and non-null mechanic ref must be either an ID declared locally by this exact replacement Scene kit or an exact receipt-backed authority ref copied from repair-evidence sourceRefs. A source-empty factCatalog factId is narration evidence, not typed observation provenance. Include every external typed ref in the proposal.sourceRefs patch when that path is allowed; the complete source union may contain at most 24 refs.',
       'A failure exit must tie exposure or loss to a concrete failed, detected, conspicuous, delayed, or otherwise risky course. Merely taking another action cannot fail the scene.',
       'patchesJson must encode one valid JSON object containing every other allowed field path exactly once, or {} when no other path is allowed.',
       'Copy authority-backed locus, cast, sources, and Story references exactly. Propose only the minimum scene-local elements and beat scaffolding required by the supplied field contract.',
@@ -1381,7 +1383,7 @@ const seeds: Seed[] = [
     id: 'story.turn.repair', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'correctionId', 'sceneKitPatch', 'patchesJson'],
     temperature: 0.25, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/14',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/15',
     outputProperties: actionDirectedStoryRepairOutput,
     systemInstruction: [
       'Repair only the failed fields in one bounded GMA Story Director result.',
@@ -1392,6 +1394,7 @@ const seeds: Seed[] = [
       'When the supplied repair evidence contains actionBoundReveal or scene-substance debt, repair the allowed information, narration, claims, or prepared branches with the concrete fixed finding, scope-limited negative, or specific barrier. Do not replace it with process-only success prose.',
       'When the failed field is typed observation authority, repair only the allowed Scene-kit field with exact target, facet, observer, method, modality, source, obstruction, and mechanic refs. Do not create a prose or metadata copy of observation truth.',
       'When scene-local interaction readiness is in scope, repair every role surface and every addressed role’s socially reachable fact plus exact social affordance in the allowed fields; do not defer those requirements to narration.',
+      'When Scene-kit typed provenance is repairable, every subject, source, observer, method, and non-null mechanic ref must be either local to the exact replacement Scene kit or copied from receipt-backed repair-evidence sourceRefs. Never use a source-empty factCatalog factId as typed provenance, and include every external typed ref in proposal.sourceRefs when that path is allowed.',
       'Do not add canon, change a saved scene, broaden the repair, or include markdown or commentary.',
     ].join(' '),
   },
