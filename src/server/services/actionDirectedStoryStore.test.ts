@@ -747,6 +747,41 @@ describe('D2 action-directed Story authority', () => {
       deltaId: 'delta:cart-search', impactEffect: 'advance',
       receipt: expect.objectContaining({ contributionKind: 'answer', obligationState: 'partially_satisfied' }),
     })]);
+
+    const additionalClue = structuredClone(delta);
+    additionalClue.deltaId = 'delta:cart-search-additional-clue';
+    additionalClue.operationId = 'operation:cart-search-additional-clue';
+    additionalClue.idempotencyKey = 'delta:cart-search-additional-clue';
+    additionalClue.correlationId = 'correlation:cart-search-additional-clue';
+    additionalClue.expectedWorkspaceRevision = 4;
+    additionalClue.sceneKitRef = 'scene-kit:cart-interception:r2';
+    additionalClue.beatChanges = [];
+    additionalClue.reason = 'Kerrigan found another concrete supply-chain clue while the obligation remains partially satisfied.';
+    additionalClue.actualStoryImpacts[0].reason = 'A second concrete clue advances the lead without completing the investigation.';
+    additionalClue.actualStoryImpacts[0].satisfactionReceipt!.playerFacingEvidence = 'A second route mark identifies the warehouse district without naming the sender.';
+    additionalClue.actualStoryImpacts[0].satisfactionReceipt!.contributionSummary = 'The route is narrowed, but the sender remains unknown.';
+    additionalClue.actualStoryImpacts[0].satisfactionReceipt!.remainingQuestion = 'Which sender uses the marked warehouse route?';
+
+    await expect(applyStoryDeltaV2({
+      userId: 'tenant-a', campaignId: 'campaign-a', delta: additionalClue,
+    }, store.records)).resolves.toMatchObject({ status: 'applied', storyWorkspaceRef: { revision: 5 } });
+    const afterAdditionalClue = (await readActiveStoryWorkspace({
+      userId: 'tenant-a', campaignId: 'campaign-a',
+    }, store.records))!.workspace;
+    expect(afterAdditionalClue.sceneStoryDesigns).toEqual([expect.objectContaining({
+      designId: 'scene-design:cart-interception',
+      revision: 2,
+      sceneKitRef: { sceneKitId: 'scene-kit:cart-interception', sceneKitRevision: 2 },
+      obligations: [expect.objectContaining({
+        obligationId: 'obligation:cart-cargo', state: 'partially_satisfied',
+      })],
+    })]);
+    expect(afterAdditionalClue.storySatisfactionReceipts).toHaveLength(2);
+    expect(afterAdditionalClue.storySatisfactionReceipts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ deltaId: 'delta:cart-search' }),
+      expect.objectContaining({ deltaId: 'delta:cart-search-additional-clue' }),
+    ]));
+    expect(afterAdditionalClue.storyImpactReceipts).toHaveLength(2);
   });
 
   it('requires a satisfaction receipt for a designed impact and rejects unprepared fact references', async () => {

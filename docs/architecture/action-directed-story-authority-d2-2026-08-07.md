@@ -36,6 +36,14 @@ This phase adds:
 - health/contract advertisement only after the complete D2 authority boundary
   is deployed.
 
+Receipt-backed contributions are events, while Scene-kit and Story-design
+revisions describe material record content. GMC therefore preserves every new
+satisfaction receipt and actual impact even when an obligation remains in its
+current coarse state, but it increments the design revision only when a design
+field actually changes. Reasserting `partially_satisfied` as
+`partially_satisfied` is not a design mutation and cannot create a synthetic
+revision conflict.
+
 This phase does not enable action-directed routing in GMA, call an LLM, choose a
 player action, apply VCS mechanics, expose private Story preparation to a
 player route, or implement the Studio D3 interface.

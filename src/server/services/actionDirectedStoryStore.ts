@@ -1784,8 +1784,15 @@ export async function applyStoryDeltaV2(
     const satisfaction = validateImpactSatisfaction(impact, design);
     if (satisfaction && design) {
       const obligation = (design.obligations as JsonObject[]).find((candidate) => candidate.obligationId === satisfaction.obligationRef)!;
-      obligation.state = satisfaction.obligationState;
-      designChanged = true;
+      if (obligation.state !== satisfaction.obligationState) {
+        obligation.state = satisfaction.obligationState;
+        designChanged = true;
+      }
+      // A repeated coarse obligation state is not a design mutation. Spending
+      // a design revision here is not helpful because normalization correctly
+      // rejects a revision increase with no material record change. The new
+      // receipt, evidence, graph impact, and workspace revision are still
+      // retained below as the durable result of play.
       satisfactionHistory.push({
         deltaId: delta.deltaId,
         sceneKitRef: delta.sceneKitRef,
