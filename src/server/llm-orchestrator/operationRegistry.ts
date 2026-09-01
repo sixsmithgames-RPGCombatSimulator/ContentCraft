@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-01.2';
+export const OPERATION_REGISTRY_VERSION = '2026-09-01.3';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-01.2',
   '2026-08-31.2',
   '2026-08-27.11',
   '2026-08-20.8',
@@ -930,7 +931,7 @@ const seeds: Seed[] = [
   {
     id: 'action.intent.interpret', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'windowText', 'continuationExpected', 'semanticIntent', 'review'],
-    targetBytes: 20_000, hardLimitBytes: 24_576, maxOutputTokens: 5_000,
+    targetBytes: 20_000, hardLimitBytes: 24_576, maxOutputTokens: 12_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
     promptVersion: 'gma.semantic-intent-policy/16',
     outputProperties: {

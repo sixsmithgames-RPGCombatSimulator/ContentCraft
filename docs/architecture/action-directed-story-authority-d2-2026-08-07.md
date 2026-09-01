@@ -663,6 +663,15 @@ generation.
 The projection therefore reduces provider transport complexity without
 loosening any result GMA can accept or adding player-phrase classification.
 
+The production JSON-mode replay reached Gemini successfully but exhausted the
+old 5,000-token combined reasoning/output ceiling before the native JSON result
+closed. `action.intent.interpret` therefore receives a 12,000-token output
+ceiling for its existing one provider operation. The eight-intent, twelve-
+relationship, six-level, 24,576-byte input, single-attempt, no-fallback, and
+proposal-only bounds do not change. Registry `2026-09-01.3` advertises this
+provider policy and temporarily accepts client `2026-09-01.2` during the
+GMC-first/GMA-second rollout.
+
 Adapter diagnostics record only operation ID, model ID, provider HTTP status,
 provider status code, and up to eight bounded provider field paths extracted
 from standard field violations. They exclude violation descriptions,
@@ -675,5 +684,5 @@ mechanics, or timeline record.
 Release requires provider-conformance tests proving unsupported keywords are
 removed, required nested action-intent structure is retained, the full logical
 schema is not mutated, complete GMC checks pass, production health advertises
-1.11.41, and the unchanged natural-language Kerrigan investigation reaches a
+1.11.42, and the unchanged natural-language Kerrigan investigation reaches a
 real provider result before broader narration playtesting resumes.

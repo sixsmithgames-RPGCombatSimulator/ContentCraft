@@ -265,7 +265,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*outer result and semanticIntent/i);
     expect(interpretation.context.inputTargetBytes).toBe(20_000);
     expect(interpretation.context.inputHardLimitBytes).toBe(24_576);
-    expect(interpretation.provider.maxOutputTokens).toBe(5_000);
+    expect(interpretation.provider.maxOutputTokens).toBe(12_000);
     expect((interpretation.outputSchema.schema.properties as any).schemaVersion.const)
       .toBe('gma.semantic-plan-window/1');
     expect((interpretation.outputSchema.schema.properties as any).semanticIntent.properties.schemaVersion.enum)
