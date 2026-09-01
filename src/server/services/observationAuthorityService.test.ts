@@ -183,6 +183,17 @@ async function prepared(withStoryDesign = false) {
   return store;
 }
 
+async function preparedV4() {
+  const store = await prepared();
+  await commitObservationAuthority({
+    userId: 'tenant-a', campaignId: 'campaign-a', expectedWorkspaceRevision: 1, expectedSceneRevision: 1,
+    operationId: 'operation:prepare-scene-v4', idempotencyKey: 'observation:prepare-scene-v4', sceneKit: sceneKitV4(),
+    vcsBindings: [reciprocal('vcs:character:kerrigan', 'gmc:actor:kerrigan'), reciprocal('vcs:familiar:kerrigan', 'gmc:actor:kerrigan-familiar')],
+    sourceReceiptRefs: ['vcs:binding-receipt:kerrigan', 'vcs:binding-receipt:familiar'],
+  }, store.records);
+  return store;
+}
+
 describe('observation owner authority', () => {
   it('keeps version 3 at 24 while version 4 accepts and projects 64 complete rows', () => {
     const v3 = sceneKitV3();
@@ -282,6 +293,47 @@ describe('observation owner authority', () => {
       .resolves.toMatchObject({ disposition: 'committed', storyWorkspaceRef: { revision: 2 } });
     const projection = await readObservationAuthority({ userId: 'tenant-a', campaignId: 'campaign-a', subjectRefs: ['gmc:scene-role:drain-worker'] }, store.records);
     expect(projection).toMatchObject({ preparationState: 'ready', observables: [{ observableId: 'gmc:observable:worker-appearance' }, { observableId: 'gmc:observable:worker-distance' }] });
+  });
+
+  it('preserves unrelated accepted bindings while revalidating only action-participating actors', async () => {
+    const acceptedStore = await preparedV4();
+    const acceptedKit = sceneKitV4();
+    acceptedKit.revision = 3;
+    (acceptedKit.observables as JsonObject[]).push(compactObservable(99));
+    await expect(commitObservationAuthority({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedWorkspaceRevision: 2, expectedSceneRevision: 2,
+      operationId: 'operation:direct-kerrigan-observation', idempotencyKey: 'observation:direct-kerrigan-observation', sceneKit: acceptedKit,
+      vcsBindings: [reciprocal('vcs:character:kerrigan', 'gmc:actor:kerrigan')],
+      sourceReceiptRefs: ['vcs:binding-receipt:kerrigan'],
+    }, acceptedStore.records)).resolves.toMatchObject({ disposition: 'committed', duplicate: false });
+    const writtenKit = (acceptedStore.documents.find((document) => document.revision === 3)?.workspace.sceneKits as JsonObject[])[0];
+    expect((writtenKit.actorMechanicsBindings as JsonObject[]).find((row) => row.actorRef === 'gmc:actor:kerrigan-familiar'))
+      .toEqual((sceneKitV4().actorMechanicsBindings as JsonObject[]).find((row) => row.actorRef === 'gmc:actor:kerrigan-familiar'));
+
+    const mutatedStore = await preparedV4();
+    const mutatedKit = sceneKitV4();
+    mutatedKit.revision = 3;
+    (mutatedKit.observables as JsonObject[]).push(compactObservable(100));
+    const unrelatedFamiliar = (mutatedKit.actorMechanicsBindings as JsonObject[]).find((row) => row.actorRef === 'gmc:actor:kerrigan-familiar') as JsonObject;
+    unrelatedFamiliar.vcsRevision = 'revision:kerrigan:99';
+    await expect(commitObservationAuthority({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedWorkspaceRevision: 2, expectedSceneRevision: 2,
+      operationId: 'operation:mutated-unrelated-familiar', idempotencyKey: 'observation:mutated-unrelated-familiar', sceneKit: mutatedKit,
+      vcsBindings: [reciprocal('vcs:character:kerrigan', 'gmc:actor:kerrigan')],
+      sourceReceiptRefs: ['vcs:binding-receipt:kerrigan'],
+    }, mutatedStore.records)).rejects.toMatchObject({ code: 'STORY_OBSERVATION_UNRELATED_CHANGE_FORBIDDEN' });
+    expect(mutatedStore.documents).toHaveLength(2);
+
+    const missingEvidenceStore = await preparedV4();
+    const missingEvidenceKit = sceneKitV4();
+    missingEvidenceKit.revision = 3;
+    (missingEvidenceKit.observables as JsonObject[]).push(compactObservable(101));
+    await expect(commitObservationAuthority({
+      userId: 'tenant-a', campaignId: 'campaign-a', expectedWorkspaceRevision: 2, expectedSceneRevision: 2,
+      operationId: 'operation:missing-current-evidence', idempotencyKey: 'observation:missing-current-evidence', sceneKit: missingEvidenceKit,
+      vcsBindings: [], sourceReceiptRefs: [],
+    }, missingEvidenceStore.records)).rejects.toMatchObject({ code: 'STORY_ACTOR_MECHANICS_BINDING_MISMATCH' });
+    expect(missingEvidenceStore.documents).toHaveLength(2);
   });
 
   it('atomically appends only exact action-matched prepared targets and closes their observation authority', async () => {

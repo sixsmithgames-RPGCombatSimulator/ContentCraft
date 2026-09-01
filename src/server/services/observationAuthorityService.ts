@@ -206,11 +206,52 @@ function requirePreparedTargetUse(sceneKit: JsonObject, preparedTargetRefs: stri
   }
 }
 
-function validateReciprocalBindings(campaignId: string, kit: JsonObject, evidence: JsonObject[], derivedEvidence: JsonObject[]): void {
+function validateReciprocalBindings(campaignId: string, current: JsonObject, kit: JsonObject, evidence: JsonObject[], derivedEvidence: JsonObject[]): void {
   const bySubject = new Map(evidence.map((row) => [String(row.subjectRef), row]));
+  const currentBindings = Array.isArray(current.actorMechanicsBindings) ? current.actorMechanicsBindings.filter(object) : [];
+  const proposedBindings = Array.isArray(kit.actorMechanicsBindings) ? kit.actorMechanicsBindings.filter(object) : [];
+  const currentByBindingRef = new Map(currentBindings.map((row) => [String(row.bindingRef), row]));
+  const proposedByBindingRef = new Map(proposedBindings.map((row) => [String(row.bindingRef), row]));
+  const proposedByActorRef = new Map(proposedBindings.map((row) => [String(row.actorRef), row]));
+  const currentObservables = new Map((Array.isArray(current.observables) ? current.observables.filter(object) : [])
+    .map((row) => [String(row.observableId), row]));
+  const currentObstructions = new Map((Array.isArray(current.obstructions) ? current.obstructions.filter(object) : [])
+    .map((row) => [String(row.obstructionId), row]));
+  const touchedActorRefs = new Set(evidence.map((row) => String(row.storyActorRef)).filter(Boolean));
+  for (const row of Array.isArray(kit.observables) ? kit.observables.filter(object) : []) {
+    const prior = currentObservables.get(String(row.observableId));
+    if (!prior || canonical(prior) !== canonical(row)) {
+      const perceptibility = object(row.perceptibility) ? row.perceptibility : {};
+      for (const actorRef of Array.isArray(perceptibility.observerRefs) ? perceptibility.observerRefs : []) touchedActorRefs.add(String(actorRef));
+    }
+  }
+  for (const row of Array.isArray(kit.obstructions) ? kit.obstructions.filter(object) : []) {
+    const prior = currentObstructions.get(String(row.obstructionId));
+    if (!prior || canonical(prior) !== canonical(row)) {
+      for (const actorRef of Array.isArray(row.observerRefs) ? row.observerRefs : []) touchedActorRefs.add(String(actorRef));
+    }
+  }
+  for (const currentBinding of currentBindings) {
+    const actorRef = String(currentBinding.actorRef);
+    const proposedBinding = proposedByBindingRef.get(String(currentBinding.bindingRef));
+    if (touchedActorRefs.has(actorRef)) {
+      if (!proposedByActorRef.has(actorRef)) {
+        throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_UNRELATED_CHANGE_FORBIDDEN', 'Observation preparation removed the mechanics binding for an action-participating Scene actor.', { actorRef });
+      }
+      continue;
+    }
+    // Requiring fresh reciprocal evidence for an unrelated preserved actor is
+    // not helpful: the current owner Scene already accepted this exact binding,
+    // while the new action must remain unable to remove or rewrite it.
+    if (!proposedBinding || canonical(proposedBinding) !== canonical(currentBinding)) {
+      throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_UNRELATED_CHANGE_FORBIDDEN', 'Observation preparation changed an unrelated current-Scene mechanics binding.', { actorRef });
+    }
+  }
   const candidates = new Set([...actorCandidates(kit).map((row) => row.actorRef), ...derivedEvidence.map((row) => String(row.actorRef))]);
-  for (const [index, raw] of (kit.actorMechanicsBindings as JsonObject[]).entries()) {
+  for (const [index, raw] of proposedBindings.entries()) {
     if (raw.schemaVersion !== ACTOR_MECHANICS_BINDING_CONTRACT_VERSION || raw.state !== 'active') continue;
+    const acceptedCurrent = currentByBindingRef.get(String(raw.bindingRef));
+    if (acceptedCurrent && canonical(acceptedCurrent) === canonical(raw) && !touchedActorRefs.has(String(raw.actorRef))) continue;
     if (raw.campaignRef !== campaignId || !candidates.has(String(raw.actorRef))) {
       throw new StoryWorkspaceStoreError(422, 'STORY_ACTOR_MECHANICS_BINDING_UNGROUNDED', 'An active actor mechanics binding is outside the current campaign or Scene.', { index });
     }
@@ -355,7 +396,7 @@ export async function commitObservationAuthority(input: {
     });
     if (candidate.schemaVersion !== DERIVED_ACTOR_CANDIDATE_CONTRACT_VERSION || canonical(candidate) !== canonical(expected)) throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_DERIVED_ACTOR_INVALID', 'A derived observer candidate does not match the current GMC projection.', { index });
   }
-  validateReciprocalBindings(campaignId, input.sceneKit, input.vcsBindings, derivedEvidence);
+  validateReciprocalBindings(campaignId, current, input.sceneKit, input.vcsBindings, derivedEvidence);
   const allowedSources = currentSourceCatalog(current);
   input.sourceReceiptRefs.forEach((ref, index) => allowedSources.add(requiredId(ref, `sourceReceiptRefs[${index}]`)));
   appendedTargetRefs.forEach((ref) => allowedSources.add(ref));

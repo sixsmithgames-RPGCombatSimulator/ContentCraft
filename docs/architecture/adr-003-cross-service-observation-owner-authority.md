@@ -439,6 +439,27 @@ full GMC and cross-service gates plus the authenticated Kerrigan continuation.
 
 ## Review record
 
+### Accepted production correction: preserve unrelated reciprocal bindings
+
+Accepted 2026-08-31 during the retained Kerrigan observation playtest. A
+same-locus replacement may carry actor/mechanics bindings accepted by an
+earlier observation group while the current action supplies fresh reciprocal
+VCS evidence for a different actor. The current Scene head remains authority
+for an unchanged unrelated binding; requiring its evidence to be resubmitted
+made one observer's history block another observer's valid action.
+
+GMC preserves every current binding whose actor is absent from the submitted
+VCS evidence byte-for-byte. It validates each new or replaced binding against
+the submitted reciprocal evidence exactly as before. Removing or mutating an
+unrelated binding is an unrelated-Scene change and rejects the transaction
+before write. No model, label, browser field, or GMA-derived alias can create a
+binding or exempt a touched actor from reciprocal validation.
+
+This changes no schema, route, persistence lifetime, operation budget, or
+rollback rule. Tests must prove partial current-action evidence preserves an
+unrelated accepted binding, an unrelated mutation writes nothing, and a
+touched binding still fails without exact reciprocal VCS evidence.
+
 Accepted after the containment replay proved that pausing the route was safe
 but not a player-complete result. The four repository owners approved the
 governing documented plan by directing implementation to proceed. Any material
