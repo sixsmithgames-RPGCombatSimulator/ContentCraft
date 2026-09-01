@@ -97,6 +97,30 @@ function projectedConst(value: unknown): Record<string, unknown> {
   return {};
 }
 
+function minimalGeminiSchemaNode(source: Record<string, unknown>): Record<string, unknown> {
+  const projected: Record<string, unknown> = Object.prototype.hasOwnProperty.call(source, 'const')
+    ? projectedConst(source.const)
+    : {};
+  for (const key of ['$ref', 'type', 'format', 'enum'] as const) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) projected[key] = source[key];
+  }
+  if (source.type === 'object') projected.additionalProperties = true;
+  if (source.type === 'array' && source.items && typeof source.items === 'object') {
+    projected.items = minimalGeminiSchemaNode(source.items as Record<string, unknown>);
+  }
+  if (Array.isArray(source.anyOf)) {
+    projected.anyOf = source.anyOf.map((entry) => entry && typeof entry === 'object'
+      ? minimalGeminiSchemaNode(entry as Record<string, unknown>)
+      : entry);
+  }
+  if (Array.isArray(source.oneOf)) {
+    projected.oneOf = source.oneOf.map((entry) => entry && typeof entry === 'object'
+      ? minimalGeminiSchemaNode(entry as Record<string, unknown>)
+      : entry);
+  }
+  return projected;
+}
+
 /**
  * Gemini accepts only a documented subset of JSON Schema and can return an
  * opaque provider 500 for unsupported or over-constrained response schemas.
@@ -113,12 +137,7 @@ function projectGeminiSchemaNode(schema: unknown, depth: number, maximumDepth: n
   const projected: Record<string, unknown> = Object.prototype.hasOwnProperty.call(source, 'const')
     ? projectedConst(source.const)
     : {};
-  if (depth >= maximumDepth) {
-    for (const key of ['$ref', 'type', 'format', 'enum'] as const) {
-      if (Object.prototype.hasOwnProperty.call(source, key)) projected[key] = source[key];
-    }
-    return projected;
-  }
+  if (depth >= maximumDepth) return minimalGeminiSchemaNode(source);
   for (const [key, value] of Object.entries(source)) {
     if (key === 'const' || !GEMINI_RESPONSE_JSON_SCHEMA_KEYWORDS.has(key)) continue;
     if ((key === 'properties' || key === '$defs') && value && typeof value === 'object' && !Array.isArray(value)) {

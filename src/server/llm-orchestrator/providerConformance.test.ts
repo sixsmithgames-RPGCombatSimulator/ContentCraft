@@ -97,6 +97,16 @@ describe('enabled provider adapter conformance', () => {
     expect(Buffer.byteLength(serialized, 'utf8'))
       .toBeLessThan(Buffer.byteLength(JSON.stringify(logicalSchema), 'utf8'));
     expect((logicalSchema as any).properties.schemaVersion.const).toBe('gma.semantic-plan-window/1');
+
+    const visit = (value: any) => {
+      if (!value || typeof value !== 'object') return;
+      if (value.type === 'array') expect(value.items).toBeTruthy();
+      if (value.type === 'object') {
+        expect(Boolean(value.properties) || value.additionalProperties === true).toBe(true);
+      }
+      for (const nested of Array.isArray(value) ? value : Object.values(value)) visit(nested);
+    };
+    visit(projected);
   });
 
   it('distinguishes output truncation from other malformed provider JSON', async () => {
