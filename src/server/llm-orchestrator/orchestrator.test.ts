@@ -260,7 +260,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/15');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/16');
     expect(interpretation.prompt.systemInstruction).toMatch(/native-valid JSON.*quotation marks.*standard JSON string escapes.*decoded evidenceQuotes.*byte-for-byte/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*outer result and semanticIntent/i);
     expect(interpretation.context.inputTargetBytes).toBe(20_000);
@@ -297,7 +297,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.prompt.systemInstruction).toMatch(/Distance is facet spatial_relation.*never use distance as a facet or value kind/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/relationOriginTargetId.*local target.*stated origin/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/one evidence phrase requests multiple outcomes.*one information intent and one observation group.*never assign the same phrase to separate intents/i);
-    expect(interpretation.prompt.systemInstruction).toMatch(/every retained typed information outcome.*unique targetId \+ facet \+ relationOriginTargetId address.*Distinct requested subjects or phenomena.*distinct local subject targets.*Do not bind all of them to the enclosing target/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/every retained typed information outcome.*unique targetId \+ facet \+ relationOriginTargetId address.*Distinct requested subjects or phenomena.*distinct local subject targets.*do not bind them all to the enclosing target/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/Reuse a non-null authorityRef only when case\/whitespace-normalized target descriptions name the same subject.*Different derived subjects \(purpose, route, risk, pattern, relation\) use null unless each has a precise catalog ref/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Do not repeat or wrap the request task/i);
     expect(interpretation.prompt.systemInstruction).not.toMatch(/completion boundaries|authorityRequirements|dataRequirements/i);
     const semanticIntentSchema = (interpretation.outputSchema.schema.properties as any).semanticIntent.properties;
