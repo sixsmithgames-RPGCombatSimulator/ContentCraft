@@ -3,6 +3,7 @@ import type { LlmProviderAdapter, ProviderStructuredRequest } from './provider.j
 import { FakeProviderAdapter } from './providers/fakeProvider.js';
 import {
   GeminiProviderAdapter,
+  geminiResponseJsonSchemaForRequest,
   projectGeminiResponseJsonSchema,
 } from './providers/geminiProvider.js';
 import { getOperationDefinition } from './operationRegistry.js';
@@ -84,7 +85,7 @@ describe('enabled provider adapter conformance', () => {
     expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' });
   });
 
-  it('projects the logical contract onto Gemini-supported JSON Schema without weakening GMC validation', () => {
+  it('omits over-budget provider schemas without weakening or mutating GMC validation', () => {
     const logicalSchema = getOperationDefinition('action.intent.interpret').outputSchema.schema;
     const projected = projectGeminiResponseJsonSchema(logicalSchema) as any;
     const serialized = JSON.stringify(projected);
@@ -92,21 +93,29 @@ describe('enabled provider adapter conformance', () => {
     expect(serialized).not.toMatch(/"(?:const|pattern|minLength|maxLength|uniqueItems)"\s*:/);
     expect(projected.properties.schemaVersion).toEqual({ enum: ['gma.semantic-plan-window/1'] });
     expect(projected.properties.review.properties.allWindowActionsRepresented).toEqual({ type: 'boolean' });
-    expect(projected.properties.semanticIntent.properties.intents.items.type).toBe('object');
-    expect(Buffer.byteLength(serialized, 'utf8')).toBeLessThanOrEqual(4_096);
+    expect(projected.properties.semanticIntent.properties.intents.items.properties.relation)
+      .toBeTruthy();
+    expect(Buffer.byteLength(serialized, 'utf8')).toBeGreaterThan(4_096);
     expect(Buffer.byteLength(serialized, 'utf8'))
       .toBeLessThan(Buffer.byteLength(JSON.stringify(logicalSchema), 'utf8'));
     expect((logicalSchema as any).properties.schemaVersion.const).toBe('gma.semantic-plan-window/1');
+    expect(geminiResponseJsonSchemaForRequest(logicalSchema)).toBeUndefined();
+  });
 
-    const visit = (value: any) => {
-      if (!value || typeof value !== 'object') return;
-      if (value.type === 'array') expect(value.items).toBeTruthy();
-      if (value.type === 'object') {
-        expect(Boolean(value.properties) || value.additionalProperties === true).toBe(true);
-      }
-      for (const nested of Array.isArray(value) ? value : Object.values(value)) visit(nested);
-    };
-    visit(projected);
+  it('uses JSON response mode without a schema hint for an over-budget logical contract', async () => {
+    process.env.GEMINI_API_KEY = 'fixture-key';
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: '{"accepted":true}' }] } }],
+      usageMetadata: { promptTokenCount: 7, candidatesTokenCount: 3 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await new GeminiProviderAdapter().generateStructured({
+      ...request,
+      outputSchema: getOperationDefinition('action.intent.interpret').outputSchema.schema,
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.generationConfig.responseMimeType).toBe('application/json');
+    expect(body.generationConfig.responseJsonSchema).toBeUndefined();
   });
 
   it('distinguishes output truncation from other malformed provider JSON', async () => {
