@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-01.5';
+export const OPERATION_REGISTRY_VERSION = '2026-09-01.6';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-01.5',
   '2026-09-01.4',
   '2026-09-01.3',
   '2026-09-01.2',
@@ -1282,7 +1283,10 @@ const seeds: Seed[] = [
     required: ['schemaVersion'],
     optional: ['proposal', 'programId', 'nodeId', 'preparationFingerprint', 'targetPreparations', 'groupPreparations', 'outcomePreparations', 'existingObservableUpgrades', 'existingObstructionUpgrades', 'obstructions'],
     validators: ['observation-preparation-contract'],
-    temperature: 0.25, maxOutputTokens: 5000, targetBytes: 18_432, hardLimitBytes: 20_480,
+    // A 20 KiB envelope is not helpful here: GMA's bounded 32 KiB preparation
+    // packet plus the universal wrapper cannot fit, even though every outcome
+    // is legal. Reserve wrapper headroom without enlarging the packet itself.
+    temperature: 0.25, maxOutputTokens: 5000, targetBytes: 36_864, hardLimitBytes: 40_960,
     thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.observation-authority-preparation-policy/5',
     outputProperties: observationPreparationOutput,
     systemInstruction: [
@@ -1339,7 +1343,9 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'responseText'],
     optional: ['programId', 'nodeId', 'presentationFingerprint', 'presentationBindings', 'materialClaims', 'rulesNote', 'responseMode', 'rollRequest', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority', 'proposedTimeAdvance'],
     validators: ['observation-narration-contract'],
-    temperature: 0.45, maxOutputTokens: 5000, targetBytes: 18_432, hardLimitBytes: 20_480,
+    // A legal 24 KiB narration packet must fit with its labeled universal
+    // wrapper; rejecting it here would discard dynamic prose before generation.
+    temperature: 0.45, maxOutputTokens: 5000, targetBytes: 28_672, hardLimitBytes: 32_768,
     thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/16',
     outputProperties: actionDirectedCurrentSceneOutput,
     systemInstruction: [

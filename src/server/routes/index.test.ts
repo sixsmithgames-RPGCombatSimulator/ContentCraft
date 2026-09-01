@@ -51,7 +51,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.11.46',
+      version: '1.11.47',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,

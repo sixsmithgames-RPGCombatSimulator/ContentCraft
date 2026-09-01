@@ -443,6 +443,24 @@ describe('provider-neutral LLM orchestrator', () => {
     }).valid).toBe(true);
   });
 
+  it('budgets complete observation envelopes above both bounded GMA packet maxima', () => {
+    const preparation = getOperationDefinition('story.observation.prepare');
+    const narration = getOperationDefinition('story.current-scene.narrate');
+
+    expect(preparation.context.inputTargetBytes).toBe(36_864);
+    expect(preparation.context.inputHardLimitBytes).toBe(40_960);
+    expect(narration.context.inputTargetBytes).toBe(28_672);
+    expect(narration.context.inputHardLimitBytes).toBe(32_768);
+    expect(preparation.context.inputHardLimitBytes - 32_768).toBeGreaterThanOrEqual(4_096);
+    expect(narration.context.inputHardLimitBytes - 24_576).toBeGreaterThanOrEqual(4_096);
+    expect(preparation.provider.maxOutputTokens).toBe(5_000);
+    expect(narration.provider.maxOutputTokens).toBe(5_000);
+    expect(preparation.provider.maxAttempts).toBe(1);
+    expect(narration.provider.maxAttempts).toBe(1);
+    expect(preparation.provider.fallbackAllowed).toBe(false);
+    expect(narration.provider.fallbackAllowed).toBe(false);
+  });
+
   it('registers the combined action-directed Story turn with the complete first-pass contract', () => {
     const turn = getOperationDefinition('story.turn.direct');
     const observationPreparation = getOperationDefinition('story.observation.prepare');
@@ -861,6 +879,7 @@ describe('provider-neutral LLM orchestrator', () => {
   });
 
   it('accepts the current and immediately prior GMA registry clients and fails closed for superseded transports', () => {
+    expect(acceptsOperationRegistryClientVersion('2026-09-01.5')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-20.8')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-17.7')).toBe(true);
     expect(acceptsOperationRegistryClientVersion('2026-08-08.6')).toBe(true);

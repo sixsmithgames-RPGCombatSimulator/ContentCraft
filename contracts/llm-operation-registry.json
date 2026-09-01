@@ -1,6 +1,6 @@
 {
   "schemaVersion": "gma-gmc.llm-registry-artifact/1",
-  "registryVersion": "2026-09-01.5",
+  "registryVersion": "2026-09-01.6",
   "modelPolicyVersion": "2026-08-01.1",
   "operations": [
     {
@@ -4851,8 +4851,8 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 18432,
-        "inputHardLimitBytes": 20480,
+        "inputTargetBytes": 28672,
+        "inputHardLimitBytes": 32768,
         "requiredReferenceRevisions": []
       },
       "provider": {
@@ -6033,8 +6033,8 @@
           "workflow",
           "priorResult"
         ],
-        "inputTargetBytes": 18432,
-        "inputHardLimitBytes": 20480,
+        "inputTargetBytes": 36864,
+        "inputHardLimitBytes": 40960,
         "requiredReferenceRevisions": []
       },
       "provider": {

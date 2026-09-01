@@ -533,6 +533,54 @@ health limits advertise the same value, program byte limits remain unchanged,
 full GMC and GMA gates pass, GMC deploys before GMA, and the authenticated
 unchanged Kerrigan action reaches program persistence and concrete narration.
 
+### Accepted production correction: complete observation provider-envelope budgets
+
+Accepted 2026-09-01 with the paired GMA ADR-009 correction after the unchanged
+Kerrigan action passed semantic planning and artifact persistence, then GMC
+rejected `story.observation.prepare` before a provider call with
+`LLM_CONTEXT_HARD_LIMIT_EXCEEDED`. GMA's accepted preparation packet may be at
+most 32,768 bytes, but GMC's complete universal provider envelope for that
+operation was capped at 20,480 bytes. The same contradiction existed one stage
+later: a legal 24,576-byte current-Scene narration packet could not fit the
+20,480-byte narration envelope. Player wording and action count did not cause
+this failure.
+
+Registry `2026-09-01.6` budgets the complete provider input, including the
+labeled input layer, references, constraints, and output-contract selector.
+`story.observation.prepare` uses a 36,864-byte target and 40,960-byte hard
+limit; `story.current-scene.narrate` uses a 28,672-byte target and 32,768-byte
+hard limit. The packet bounds remain 32,768 and 24,576 bytes respectively, so
+the additional bytes are reserved only for the universal envelope. The
+existing 5,000-token output caps, one-attempt provider limits, no-fallback
+policy, prompt versions, candidate/result schemas, validator requirements,
+owner authority, and model-operation budget do not change. GMA may not solve
+an envelope mismatch by dropping a requested outcome, shortening a material
+fact, parsing verbs or nouns, or weakening the dynamic narration contract.
+
+The preparation and current-Scene narration provider idempotency keys include
+the exact registry generation. This creates one fresh provider-only identity
+after an accepted registry deployment while keeping program, artifact,
+instruction, Scene commit, VCS operation, cursor, receipt, timeline, replay,
+and settlement identities unchanged. Identical calls in one registry
+generation still reuse one key. Rollback restores the prior registry and GMA
+mirror together and pauses fresh affected calls; it never rewrites saved game
+state.
+
+Operational telemetry records only stable codes, bounded counts, byte totals,
+workflow/stage, and correlation identifiers. Browser-supplied developer
+messages and generic server exception messages are redacted at the persistence
+boundary because they can contain player actions, prompts, model output, or
+Scene substance. Player-facing recovery copy remains available in the browser
+and API response but is not operational-log payload.
+
+Release requires exact registry-budget tests, complete-envelope projections at
+both legal packet maxima, production-shaped preparation and narration packets,
+same-generation key stability, cross-generation provider-key separation,
+unchanged owner keys, zero provider calls above the hard limit, diagnostic
+canaries proving player/model prose is absent, full GMC and GMA checks, GMC
+deployment before GMA, and one authenticated safe continuation of the unchanged
+saved action through concrete narration.
+
 Accepted after the containment replay proved that pausing the route was safe
 but not a player-complete result. The four repository owners approved the
 governing documented plan by directing implementation to proceed. Any material
