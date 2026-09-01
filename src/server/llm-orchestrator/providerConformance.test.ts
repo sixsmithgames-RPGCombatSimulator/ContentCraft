@@ -123,4 +123,28 @@ describe('enabled provider adapter conformance', () => {
       status: 429,
     });
   });
+
+  it('keeps provider diagnostics to bounded field paths without logging request content', async () => {
+    process.env.GEMINI_API_KEY = 'fixture-key';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        message: 'Invalid value at \'generation_config.response_json_schema.properties[2].value.type\'.',
+        details: [{ fieldViolations: [{
+          field: 'generation_config.response_json_schema.properties[2].value.type',
+          description: 'private request content must never be logged',
+        }] }],
+      },
+    }), { status: 400, headers: { 'Content-Type': 'application/json' } })));
+
+    await expect(new GeminiProviderAdapter().generateStructured(request)).rejects.toMatchObject({
+      code: 'PROVIDER_HTTP_ERROR',
+      providerStatus: 400,
+    });
+    expect(warn).toHaveBeenCalledWith('[LLM][Gemini] Structured provider request failed', expect.objectContaining({
+      providerFields: ['generation_config.response_json_schema.properties[2].value.type'],
+    }));
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private request content');
+  });
 });

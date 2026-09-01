@@ -40,6 +40,26 @@ function providerSpendCap(message: string) {
   return /\b(?:monthly|project(?:-level)?|billing(?: account)?)\b[^.\n]{0,100}\b(?:spend(?:ing)?|budget|quota|cap|limit)\b|\b(?:spend(?:ing)?|budget) cap\b/i.test(message);
 }
 
+function providerDiagnosticFields(payload: any, message: string) {
+  const fields = new Set<string>();
+  const accept = (value: unknown) => {
+    const field = String(value ?? '').trim();
+    if (field && field.length <= 240 && /^[A-Za-z0-9_$.'\[\]-]+$/.test(field)) fields.add(field);
+  };
+  for (const detail of Array.isArray(payload?.error?.details) ? payload.error.details : []) {
+    for (const violation of Array.isArray(detail?.fieldViolations) ? detail.fieldViolations : []) {
+      accept(violation?.field);
+    }
+  }
+  for (const pattern of [
+    /Unknown name "([A-Za-z0-9_$-]{1,80})"/g,
+    /(?:at|field) '([A-Za-z0-9_$.'\[\]-]{1,240})'/g,
+  ]) {
+    for (const match of message.matchAll(pattern)) accept(match[1]);
+  }
+  return [...fields].slice(0, 8);
+}
+
 function supportsSamplingTemperature(model: string) {
   return !/^gemini-(?:3\.[5-9]|[4-9]\.)/i.test(model);
 }
@@ -186,6 +206,7 @@ export class GeminiProviderAdapter implements LlmProviderAdapter {
           model: request.model,
           providerStatus: response.status,
           providerCode: String(payload?.error?.status ?? payload?.status ?? 'unknown'),
+          providerFields: providerDiagnosticFields(payload, message),
         });
         throw new OrchestratorError({
           code: spendCap ? 'PROVIDER_SPEND_CAP_EXCEEDED' : (response.status === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_HTTP_ERROR'),

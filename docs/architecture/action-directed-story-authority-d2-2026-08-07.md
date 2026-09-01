@@ -662,14 +662,16 @@ The projection therefore reduces provider transport complexity without
 loosening any result GMA can accept or adding player-phrase classification.
 
 Adapter diagnostics record only operation ID, model ID, provider HTTP status,
-and provider status code. They exclude credentials, player text, private Story
-context, schema bodies, and generated content. Existing idempotency records are
-not migrated; a fresh GMA provider-retry epoch or fresh player turn receives the
-new transport. Rollback restores adapter version 1 without changing any Story,
-Scene, action-program, mechanics, or timeline record.
+provider status code, and up to eight bounded provider field paths extracted
+from standard field violations. They exclude violation descriptions,
+credentials, player text, private Story context, schema bodies, and generated
+content. Existing idempotency records are not migrated; a fresh GMA
+provider-retry epoch or fresh player turn receives the new transport. Rollback
+restores adapter version 1 without changing any Story, Scene, action-program,
+mechanics, or timeline record.
 
 Release requires provider-conformance tests proving unsupported keywords are
 removed, required nested action-intent structure is retained, the full logical
 schema is not mutated, complete GMC checks pass, production health advertises
-1.11.38, and the unchanged natural-language Kerrigan investigation reaches a
+1.11.39, and the unchanged natural-language Kerrigan investigation reaches a
 real provider result before broader narration playtesting resumes.
