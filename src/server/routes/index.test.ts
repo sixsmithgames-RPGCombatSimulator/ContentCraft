@@ -51,7 +51,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.11.34',
+      version: '1.11.35',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -114,6 +114,7 @@ describe('API health', () => {
     expect(ACTION_DIRECTED_STORY_CAPABILITIES).toEqual([
       'action-directed-scene-handoff/1',
       'scene-handoff-receipt-reconciliation/1',
+      'current-scene-handoff-receipt/1',
       'nested-story-graph/1',
       'single-playable-scene-authority/1',
       'combined-manual-story-turn/1',

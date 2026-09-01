@@ -1863,6 +1863,9 @@ export async function readCurrentSceneContexts(
     : buildActiveSceneContext(input.campaignId, kit);
   return {
     storyWorkspaceRef: active.storyWorkspaceRef,
+    lastSceneHandoffReceipt: isObject(active.workspace.lastSceneHandoffReceipt)
+      ? clone(active.workspace.lastSceneHandoffReceipt as JsonObject)
+      : null,
     playableSceneContext: buildPlayableSceneContextV2(active.workspace),
     privateSceneContext: buildPrivateSceneDirectorContext(active.workspace),
     activeSceneContext,

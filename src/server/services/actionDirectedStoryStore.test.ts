@@ -431,6 +431,8 @@ describe('D2 action-directed Story authority', () => {
 
   it('commits one exact current scene atomically and replays the original receipt and projection', async () => {
     const store = await preparedStore();
+    const beforeHandoff = await readCurrentSceneContexts({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    expect(beforeHandoff?.lastSceneHandoffReceipt).toBeNull();
     const envelope = handoffEnvelope();
     const proposedKit = (envelope.proposal.handoff as JsonObject).sceneKit as JsonObject;
     (proposedKit.establishedElements as JsonObject[]).push(
@@ -504,6 +506,7 @@ describe('D2 action-directed Story authority', () => {
       })],
     });
     const contexts = await readCurrentSceneContexts({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    expect(contexts?.lastSceneHandoffReceipt).toEqual(first.sceneHandoffReceipt);
     expect(contexts?.authorityReceiptCatalog).toMatchObject({
       contractVersion: 'gmc.story-authority-receipt-catalog/1',
       workspaceRevision: 3,
@@ -702,6 +705,7 @@ describe('D2 action-directed Story authority', () => {
     });
     expect(JSON.stringify(committed.playableSceneContext)).not.toContain('obligation:cart-cargo');
     const contexts = await readCurrentSceneContexts({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    expect(contexts?.lastSceneHandoffReceipt).toEqual(committed.sceneHandoffReceipt);
     expect(contexts?.authorityReceiptCatalog.receipts).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceRef: 'scene-design:cart-interception' }),
       expect.objectContaining({ sourceRef: 'obligation:cart-cargo' }),
