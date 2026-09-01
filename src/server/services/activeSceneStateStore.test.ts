@@ -8,6 +8,7 @@ import {
   buildActiveSceneContext,
   commitSceneTurn,
   readActiveSceneContext,
+  readLatestSceneTurnReceipt,
   readSceneTurnOperation,
   SCENE_TURN_RECEIPT_CONTRACT_VERSION,
   type ActiveSceneStateCollections,
@@ -214,6 +215,9 @@ describe('durable active Scene state', () => {
     expect(memory.states[0]).toMatchObject({ revision: 1, acceptedTurnCount: 1, revealedInformationRefs: ['info:worker-description'] });
     expect(memory.states[0].actorStates).toHaveLength(1);
     expect(memory.receipts).toHaveLength(1);
+    await expect(readLatestSceneTurnReceipt({
+      userId: 'user-a', campaignId: 'campaign-a', sceneKitId: String((playable.sceneKitRef as JsonObject).sceneKitId),
+    }, memory.stores)).resolves.toEqual(first.receipt);
   });
 
   it('omits Mongo storage identity when replacing an existing active Scene state', async () => {

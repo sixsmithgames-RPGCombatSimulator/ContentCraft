@@ -561,6 +561,23 @@ describe('GMC compound-action private artifact store', () => {
       userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:tampered-candidate:turn-42',
       instruction: exact, program: { ...program(exact), schemaVersion: 'gma.semantic-action-program/4' }, cursor: cursor(1), saga: tampered,
     }, memoryCollection().records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_SAGA_INVALID' });
+
+    const storyCandidate = {
+      schemaVersion: 'gma.compound-story-settlement-candidate/1',
+      programId: 'program:turn-42',
+      responseText: 'The scraper catches stone, giving Kerrigan one precise sound window.',
+    };
+    const storyFingerprint = createHash('sha256').update(canonicalJson(storyCandidate), 'utf8').digest('hex');
+    const storySaga = saga(1, 'unsettled');
+    storySaga.acceptedModelCandidateRefs = [storyFingerprint];
+    storySaga.pendingModelCandidate = {
+      schemaVersion: 'gma.accepted-model-candidate/2', kind: 'story_narration', operationKey: 'story-narration:turn-42',
+      inputFingerprint: 'd'.repeat(64), candidateFingerprint: storyFingerprint, candidate: storyCandidate,
+    };
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:story-candidate:turn-42',
+      instruction: exact, program: { ...program(exact), schemaVersion: 'gma.semantic-action-program/4' }, cursor: cursor(1), saga: storySaga,
+    }, memoryCollection().records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
   });
 
   it('uses the shared 24 KiB observation-program bound without widening legacy programs', async () => {

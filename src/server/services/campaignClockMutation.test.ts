@@ -6,6 +6,7 @@ import {
   campaignClockReceiptState,
   CampaignClockMutationError,
   durableClockSnapshot,
+  readCampaignClockMutationReceipt,
 } from './campaignClockMutation.js';
 
 function copy<T>(value: T): T {
@@ -90,6 +91,15 @@ describe('campaign clock mutation', () => {
     expect(replay.duplicate).toBe(true);
     expect(replay.gameClock).toEqual(first.gameClock);
     expect(collection.snapshot()?.gameClockRevision).toBe(1);
+    expect(readCampaignClockMutationReceipt(collection.snapshot(), 'gma-time:turn-1')).toMatchObject({
+      contractVersion: 'gmc.campaign-clock-mutation-receipt/1',
+      status: 'applied',
+      mutationId: 'gma-time:turn-1',
+      expectedRevision: 0,
+      gameClockRevision: 1,
+      gameClock: first.gameClock,
+    });
+    expect(readCampaignClockMutationReceipt(collection.snapshot(), 'gma-time:missing')).toBeNull();
   });
 
   it('rejects reuse with different data and rejects a stale distinct writer', async () => {

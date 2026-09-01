@@ -26,6 +26,10 @@ export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'compound-action-feasibility/1',
   'compound-action-typed-repair/4',
 ] as const);
+export const GMC_COMPOUND_ACTION_CAPABILITIES = Object.freeze([
+  ...COMPOUND_ACTION_CAPABILITIES,
+  'durable-story-settlement-candidate/1',
+] as const);
 export const COMPOUND_ACTION_CONTRACTS = Object.freeze({
   playerInstructionArtifact: 'gma.player-instruction-artifact/1',
   semanticActionProgram: 'gma.semantic-action-program/2',
@@ -37,6 +41,11 @@ export const COMPOUND_ACTION_CONTRACTS = Object.freeze({
   actionSaga: 'gma.action-saga/1',
   actionProgramCursor: 'gma.action-program-cursor/1',
   actionDirectedStoryRepair: 'gma.action-directed-story-repair/4',
+});
+export const GMC_COMPOUND_ACTION_CONTRACTS = Object.freeze({
+  ...COMPOUND_ACTION_CONTRACTS,
+  acceptedModelCandidateV2: 'gma.accepted-model-candidate/2',
+  compoundStorySettlementCandidate: 'gma.compound-story-settlement-candidate/1',
 });
 export const COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS: readonly string[] = Object.freeze([
   COMPOUND_ACTION_CONTRACTS.semanticActionProgram,
@@ -510,10 +519,18 @@ function validateSaga(saga: unknown, instruction: JsonObject, program: JsonObjec
     if (!Array.isArray(saga[field]) || saga[field].length > 64 || saga[field].some((value) => typeof value !== 'string')) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The action saga contains an invalid bounded reference set.', { field });
   }
   if (saga.pendingModelCandidate !== null && saga.pendingModelCandidate !== undefined) {
-    const pending = saga.pendingModelCandidate;
-    if (!isObject(pending) || pending.schemaVersion !== 'gma.accepted-model-candidate/1'
-      || !['observation_preparation', 'observation_narration'].includes(String(pending.kind))
-      || !isObject(pending.candidate)) {
+    const pendingValue = saga.pendingModelCandidate;
+    if (!isObject(pendingValue)) {
+      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The pending accepted model candidate is invalid.', {});
+    }
+    const pending = pendingValue;
+    const observationCandidate = pending.schemaVersion === 'gma.accepted-model-candidate/1'
+      && ['observation_preparation', 'observation_narration'].includes(String(pending.kind));
+    const storyCandidate = pending.schemaVersion === GMC_COMPOUND_ACTION_CONTRACTS.acceptedModelCandidateV2
+      && pending.kind === 'story_narration'
+      && isObject(pending.candidate)
+      && pending.candidate.schemaVersion === GMC_COMPOUND_ACTION_CONTRACTS.compoundStorySettlementCandidate;
+    if ((!observationCandidate && !storyCandidate) || !isObject(pending.candidate)) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The pending accepted model candidate is invalid.', {});
     }
     requiredString(pending.operationKey, 'saga.pendingModelCandidate.operationKey');
@@ -522,7 +539,7 @@ function validateSaga(saga: unknown, instruction: JsonObject, program: JsonObjec
     if (!/^[a-f0-9]{64}$/.test(inputFingerprint) || !/^[a-f0-9]{64}$/.test(candidateFingerprint)
       || candidateFingerprint !== sha256(canonicalJson(pending.candidate))
       || !(saga.acceptedModelCandidateRefs as JsonValue[]).includes(candidateFingerprint)
-      || byteLength(pending) > 20_480) {
+      || byteLength(pending) > (storyCandidate ? 24_576 : 20_480)) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The pending accepted model candidate does not match its durable fingerprint.', {});
     }
   }

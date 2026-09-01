@@ -22,6 +22,7 @@ export const ACTIVE_SCENE_RECENT_RECEIPT_LIMIT = 8;
 export const ACTIVE_SCENE_CAPABILITIES = Object.freeze([
   'durable-active-scene/1',
   'scene-turn-receipts/1',
+  'latest-scene-turn-receipt/1',
 ] as const);
 
 type ScenePhase = 'completed' | 'pending_mechanic' | 'owner_confirmed_mechanic';
@@ -396,6 +397,24 @@ function publicReceipt(receipt: SceneTurnReceiptDocument | JsonObject): JsonObje
     outcomeSummary: receipt.outcomeSummary as JsonValue,
     sourceReceiptRefs: clone(receipt.sourceReceiptRefs as JsonValue[]),
   };
+}
+
+/** Returns owner evidence for recovery without enlarging the model prompt context. */
+export async function readLatestSceneTurnReceipt(
+  input: { userId: string; campaignId: string; sceneKitId: string },
+  stores: ActiveSceneStateCollections = collections(),
+): Promise<JsonObject | null> {
+  const receipt = await stores.receipts.findOne(
+    { userId: input.userId, campaignId: input.campaignId, sceneKitId: input.sceneKitId },
+    { sort: { stateRevisionAfter: -1 } },
+  );
+  if (receipt) return publicReceipt(receipt);
+  const state = await stores.states.findOne({
+    userId: input.userId,
+    campaignId: input.campaignId,
+    sceneKitId: input.sceneKitId,
+  });
+  return state?.latestReceipt ? publicReceipt(state.latestReceipt) : null;
 }
 
 export function buildActiveSceneContext(

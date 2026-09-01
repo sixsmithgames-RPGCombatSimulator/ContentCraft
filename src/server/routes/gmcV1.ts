@@ -53,7 +53,11 @@ import {
 import { synchronizeNpcIdentityPromotionToStory } from '../services/storyWorkspaceStore.js';
 import { generationPrompts, getGeminiUsageSnapshot } from '../services/gmcLiveGeneration.js';
 import { ensureCampaignActor } from '../services/actorEnsureWorkflow.js';
-import { applyCampaignClockMutation, campaignClockReceiptState } from '../services/campaignClockMutation.js';
+import {
+  applyCampaignClockMutation,
+  campaignClockReceiptState,
+  readCampaignClockMutationReceipt,
+} from '../services/campaignClockMutation.js';
 import { createCampaignMutation } from '../services/campaignCreateMutation.js';
 import {
   confirmCharacterSheetAuthorityMutation,
@@ -420,6 +424,23 @@ gmcV1Router.get('/campaigns/:campaignId/time', asyncRoute(async (req, res) => {
   const state = await collections.state().findOne({ userId: uid, campaignId: id });
   const receiptState = campaignClockReceiptState(state);
   res.json({ ...receiptState, campaignState: receiptState });
+}));
+
+gmcV1Router.get('/campaigns/:campaignId/time/mutations/:mutationId', asyncRoute(async (req, res) => {
+  if (!await campaign(req, res)) return;
+  const uid = userId(req); const id = req.params.campaignId;
+  const state = await collections.state().findOne({ userId: uid, campaignId: id });
+  const receipt = readCampaignClockMutationReceipt(state, req.params.mutationId);
+  if (!receipt) {
+    res.status(404).json({
+      error: {
+        code: 'CAMPAIGN_CLOCK_MUTATION_NOT_FOUND',
+        message: 'No campaign clock mutation receipt was found for this operation.',
+      },
+    });
+    return;
+  }
+  res.json(receipt);
 }));
 
 gmcV1Router.patch('/campaigns/:campaignId/time', asyncRoute(async (req, res) => {

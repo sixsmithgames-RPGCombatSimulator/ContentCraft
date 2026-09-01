@@ -6,6 +6,7 @@ export const STORY_WORKSPACE_CONTRACT_VERSION = 'gmc.story-workspace/1';
 export const STORY_WORKSPACE_REFERENCE_CONTRACT_VERSION = 'gmc.story-workspace-ref/1';
 export const STORY_DELTA_CONTRACT_VERSION = 'studio.story-delta/1';
 export const STORY_DELTA_RECEIPT_CONTRACT_VERSION = 'gmc.story-delta-receipt/1';
+export const STORY_MUTATION_RECEIPT_CONTRACT_VERSION = 'gmc.story-mutation-receipt/1';
 export const STORY_PUBLIC_PROJECTION_CONTRACT_VERSION = 'gmc.story-public-projection/1';
 export const PLAYABLE_STORY_PROJECTION_CONTRACT_VERSION = 'gmc.playable-story-projection/1';
 /** Versioned D2 contracts implemented by GMC's Story authority boundary. */
@@ -54,6 +55,7 @@ export const ACTION_DIRECTED_STORY_CAPABILITIES = Object.freeze([
   'action-directed-scene-handoff/1',
   'scene-handoff-receipt-reconciliation/1',
   'current-scene-handoff-receipt/1',
+  'story-outcome-receipt-reconciliation/1',
   'nested-story-graph/1',
   'single-playable-scene-authority/1',
   'combined-manual-story-turn/1',

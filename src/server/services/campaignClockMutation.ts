@@ -10,6 +10,8 @@ type StateCollection = {
   ): Promise<Record<string, any> | null>;
 };
 
+export const CAMPAIGN_CLOCK_MUTATION_RECEIPT_CONTRACT_VERSION = 'gmc.campaign-clock-mutation-receipt/1';
+
 export class CampaignClockMutationError extends Error {
   status: number;
   code: string;
@@ -54,6 +56,26 @@ function sha256(value: string) {
 
 export function campaignClockMutationKey(mutationId: string) {
   return sha256(mutationId);
+}
+
+export function readCampaignClockMutationReceipt(
+  state: Record<string, any> | null | undefined,
+  mutationId: string,
+) {
+  const id = String(mutationId ?? '').trim();
+  if (!id) throw new CampaignClockMutationError(400, 'VALIDATION_ERROR', 'mutationId is required for a campaign clock receipt read.');
+  const record = state?.timeMutationLedger?.[campaignClockMutationKey(id)] ?? null;
+  if (!record || record.mutationId !== id) return null;
+  return {
+    contractVersion: CAMPAIGN_CLOCK_MUTATION_RECEIPT_CONTRACT_VERSION,
+    status: 'applied',
+    mutationId: id,
+    expectedRevision: Math.max(0, Number(record.expectedRevision ?? 0) || 0),
+    previousGameClock: record.previousGameClock ?? null,
+    gameClock: record.gameClock ?? null,
+    gameClockRevision: Math.max(0, Number(record.gameClockRevision ?? 0) || 0),
+    source: record.source ?? null,
+  };
 }
 
 export function campaignClockMutationFingerprint({

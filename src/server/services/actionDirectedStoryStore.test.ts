@@ -1038,6 +1038,53 @@ describe('D2 action-directed Story authority', () => {
     }, store.records)).resolves.toBeNull();
   });
 
+  it('projects the exact current Story-outcome witness with its handoff origin', async () => {
+    const store = await preparedStore();
+    const committed = await commitSceneHandoff({
+      userId: 'tenant-a', campaignId: 'campaign-a', envelope: handoffEnvelope(),
+    }, store.records);
+    await applyStoryDeltaV2({
+      userId: 'tenant-a',
+      campaignId: 'campaign-a',
+      delta: {
+        schemaVersion: 'studio.story-delta/2',
+        deltaId: 'story-outcome:turn-2',
+        operationId: 'story-outcome:turn-2',
+        idempotencyKey: 'story-outcome:turn-2:test',
+        correlationId: 'turn-2',
+        campaignId: 'campaign-a',
+        initiatedBy: 'gma',
+        sourceSystem: 'gma',
+        targetAuthority: 'gmc',
+        visibility: 'gm_only',
+        classification: 'beat_update',
+        expectedWorkspaceRevision: 3,
+        reason: 'The validated current-scene result resolved the active beat.',
+        sourceRevisions: { gmcStory: 3, gmcSceneKit: 1, timelineSequence: 2 },
+        sourceReceiptRefs: ['gma:validated-story-turn:turn-2'],
+        sceneKitRef: 'scene-kit:cart-interception',
+        beatChanges: [{ beatRef: 'beat:cart-arrival', state: 'resolved', sourceReceiptRefs: ['gma:validated-story-turn:turn-2'] }],
+        actualStoryImpacts: [],
+        affectedRecords: [],
+      },
+    }, store.records);
+
+    const contexts = await readCurrentSceneContexts({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    expect(contexts?.latestStoryMutationReceipt).toEqual({
+      contractVersion: 'gmc.story-mutation-receipt/1',
+      status: 'committed',
+      mutationKind: 'story_outcome',
+      campaignId: 'campaign-a',
+      workspaceId: 'story-workspace:campaign-a',
+      deltaId: 'story-outcome:turn-2',
+      operationId: 'story-outcome:turn-2',
+      interactionId: 'turn-2',
+      timelineSequence: 2,
+      storyWorkspaceRef: expect.objectContaining({ revision: 4 }),
+      originSceneHandoffReceiptRef: (committed.sceneHandoffReceipt as Record<string, unknown>).idempotencyKey,
+    });
+  });
+
   it('does not reconcile a non-handoff Story operation that uses the requested key', async () => {
     const store = await preparedStore();
     const active = (await readActiveStoryWorkspace({

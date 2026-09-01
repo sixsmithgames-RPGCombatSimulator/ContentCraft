@@ -24,6 +24,7 @@ import {
   SCENE_KIT_V4_OBSERVATION_ACCESS_MAXIMUM,
   STORY_DELTA_MAX_BYTES,
   STORY_DELTA_V2_CONTRACT_VERSION,
+  STORY_MUTATION_RECEIPT_CONTRACT_VERSION,
   STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
   STORY_GRAPH_CONTRACT_VERSION,
   STORY_GRAPH_MAX_BYTES,
@@ -44,6 +45,7 @@ import {
 import {
   buildActiveSceneContext,
   readActiveSceneContext,
+  readLatestSceneTurnReceipt,
   type ActiveSceneStateCollections,
 } from './activeSceneStateStore.js';
 
@@ -1861,11 +1863,49 @@ export async function readCurrentSceneContexts(
   const activeSceneContext = activeSceneStores || !records
     ? await readActiveSceneContext({ ...input, workspace: active.workspace }, activeSceneStores)
     : buildActiveSceneContext(input.campaignId, kit);
+  const latestSceneTurnReceipt = activeSceneStores || !records
+    ? await readLatestSceneTurnReceipt({
+        ...input,
+        sceneKitId: String(kit.sceneKitId),
+      }, activeSceneStores)
+    : null;
+  const lastStoryDeltaRef = typeof active.workspace.lastStoryDeltaRef === 'string'
+    ? active.workspace.lastStoryDeltaRef.trim()
+    : '';
+  const sourceRevisionState = isObject(active.workspace.sourceRevisions)
+    ? active.workspace.sourceRevisions as JsonObject
+    : {};
+  const storyInteractionId = lastStoryDeltaRef.startsWith('story-outcome:')
+    ? lastStoryDeltaRef.slice('story-outcome:'.length)
+    : '';
+  const lastSceneHandoffReceipt = isObject(active.workspace.lastSceneHandoffReceipt)
+    ? active.workspace.lastSceneHandoffReceipt as JsonObject
+    : null;
+  // This witness is derived from the one current immutable workspace. A
+  // separate mutable receipt catalog would not help recovery because it could
+  // drift away from the Story head it is meant to prove.
+  const latestStoryMutationReceipt = lastStoryDeltaRef && storyInteractionId
+    ? {
+        contractVersion: STORY_MUTATION_RECEIPT_CONTRACT_VERSION,
+        status: 'committed',
+        mutationKind: 'story_outcome',
+        campaignId: input.campaignId,
+        workspaceId: String(active.storyWorkspaceRef.workspaceId),
+        deltaId: lastStoryDeltaRef,
+        operationId: lastStoryDeltaRef,
+        interactionId: storyInteractionId,
+        timelineSequence: Math.max(0, Number(sourceRevisionState.timelineSequence ?? 0) || 0),
+        storyWorkspaceRef: clone(active.storyWorkspaceRef as unknown as JsonObject),
+        originSceneHandoffReceiptRef: lastSceneHandoffReceipt?.interactionId === storyInteractionId
+          ? String(lastSceneHandoffReceipt.idempotencyKey ?? '') || null
+          : null,
+      }
+    : null;
   return {
     storyWorkspaceRef: active.storyWorkspaceRef,
-    lastSceneHandoffReceipt: isObject(active.workspace.lastSceneHandoffReceipt)
-      ? clone(active.workspace.lastSceneHandoffReceipt as JsonObject)
-      : null,
+    lastSceneHandoffReceipt: lastSceneHandoffReceipt ? clone(lastSceneHandoffReceipt) : null,
+    latestStoryMutationReceipt,
+    latestSceneTurnReceipt,
     playableSceneContext: buildPlayableSceneContextV2(active.workspace),
     privateSceneContext: buildPrivateSceneDirectorContext(active.workspace),
     activeSceneContext,

@@ -45,6 +45,7 @@ import {
   STORY_DELTA_V2_CONTRACT_VERSION,
   STORY_GRAPH_CONTRACT_VERSION,
   STORY_GRAPH_NODE_REFERENCE_CONTRACT_VERSION,
+  STORY_MUTATION_RECEIPT_CONTRACT_VERSION,
   STORY_AFFORDANCE_PROJECTION_CONTRACT_VERSION,
   STORY_OBLIGATION_CAPABILITIES,
   STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
@@ -64,8 +65,8 @@ import {
   COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION,
   COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
   COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
-  COMPOUND_ACTION_CAPABILITIES,
-  COMPOUND_ACTION_CONTRACTS,
+  GMC_COMPOUND_ACTION_CAPABILITIES,
+  GMC_COMPOUND_ACTION_CONTRACTS,
   COMPOUND_ACTION_LIMITS,
   COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION,
 } from '../services/compoundActionArtifactStore.js';
@@ -90,6 +91,7 @@ import {
   SCENE_TURN_PROPOSAL_MAX_BYTES,
   SCENE_TURN_RECEIPT_CONTRACT_VERSION,
 } from '../services/activeSceneStateStore.js';
+import { CAMPAIGN_CLOCK_MUTATION_RECEIPT_CONTRACT_VERSION } from '../services/campaignClockMutation.js';
 
 export const apiRouter = Router();
 
@@ -156,6 +158,7 @@ apiRouter.get('/health', (_req, res) => {
           playableSceneContext: PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,
           playableSceneContextReadVersions: ACTION_DIRECTED_STORY_PLAYABLE_SCENE_CONTEXT_READ_VERSIONS,
           storyDelta: STORY_DELTA_V2_CONTRACT_VERSION,
+          storyMutationReceipt: STORY_MUTATION_RECEIPT_CONTRACT_VERSION,
           migrationPreview: STORY_MIGRATION_PREVIEW_CONTRACT_VERSION,
           acceptedV1SceneSnapshot: ACCEPTED_V1_SCENE_SNAPSHOT_CONTRACT_VERSION,
         },
@@ -179,6 +182,15 @@ apiRouter.get('/health', (_req, res) => {
         authority: 'gmc',
         mechanicsAuthority: 'vcs',
         transcriptAuthority: false,
+        access: 'service_only',
+        routeEnabled: true,
+      },
+      campaignTime: {
+        capabilities: ['campaign-clock-mutation-receipt/1'],
+        contracts: {
+          mutationReceipt: CAMPAIGN_CLOCK_MUTATION_RECEIPT_CONTRACT_VERSION,
+        },
+        authority: 'gmc',
         access: 'service_only',
         routeEnabled: true,
       },
@@ -211,8 +223,8 @@ apiRouter.get('/health', (_req, res) => {
         routeEnabled: false,
       },
       compoundActions: {
-        capabilities: COMPOUND_ACTION_CAPABILITIES,
-        contracts: COMPOUND_ACTION_CONTRACTS,
+        capabilities: GMC_COMPOUND_ACTION_CAPABILITIES,
+        contracts: GMC_COMPOUND_ACTION_CONTRACTS,
         artifactStoreContractVersion: COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
         readableSemanticActionPrograms: COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
         artifactReferenceContractVersion: COMPOUND_ACTION_ARTIFACT_REFERENCE_CONTRACT_VERSION,
