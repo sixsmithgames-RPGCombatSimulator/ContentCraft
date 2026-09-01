@@ -498,6 +498,41 @@ rollback rule. Tests must prove partial current-action evidence preserves an
 unrelated accepted binding, an unrelated mutation writes nothing, and a
 touched binding still fails without exact reciprocal VCS evidence.
 
+### Accepted production correction: bounded lossless requirement window
+
+Accepted 2026-09-01 with the paired GMA ADR-009 correction after the unchanged
+Kerrigan dialogue, investigation, and conditional-withdrawal action passed GMC
+registry `2026-09-01.5` but its deterministic program compilation produced
+more than sixteen typed data requirements. The result remained within the
+accepted eight-node, twelve-relationship, six-level, and 24,576-byte
+observation-program bounds. Rejecting it at the older aggregate row cap made a
+legal semantic window unpersistable even though every row represented a
+distinct retained target, method, or requested outcome.
+
+The shared aggregate `dataRequirementMaximum` is now thirty-two for one
+compiled semantic program. GMC remains the independent storage-boundary owner:
+it accepts at most thirty-two rows only when every existing node, dependency,
+typed-observation binding, vocabulary, and exact byte check also passes. It
+rejects thirty-three or more before publication. The compiler and store may not
+truncate, merge, or discard distinct typed outcomes to fit this limit. The
+24,576-byte observation-program maximum and 16,384-byte legacy-program maximum
+remain absolute independent ceilings.
+
+This correction changes no model schema or operation, prompt, registry
+generation, token budget, node or relationship count, authority owner,
+collection, index, cursor, receipt, Story state, or persistence lifetime.
+Instructions requiring more than the bounded current window continue through
+the accepted exact-suffix child-window flow; the larger row budget does not
+turn one model call into an unbounded plan. Rollback restores the paired GMA and
+GMC cap together, pauses fresh affected planning, and leaves accepted artifacts
+readable without rewriting saved game state.
+
+Release requires exact-boundary tests proving seventeen through thirty-two
+lossless requirements persist, thirty-three writes nothing, projection and
+health limits advertise the same value, program byte limits remain unchanged,
+full GMC and GMA gates pass, GMC deploys before GMA, and the authenticated
+unchanged Kerrigan action reaches program persistence and concrete narration.
+
 Accepted after the containment replay proved that pausing the route was safe
 but not a player-complete result. The four repository owners approved the
 governing documented plan by directing implementation to proceed. Any material

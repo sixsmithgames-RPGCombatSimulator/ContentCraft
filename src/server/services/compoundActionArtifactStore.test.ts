@@ -594,7 +594,7 @@ describe('GMC compound-action private artifact store', () => {
     }, memoryCollection().records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_TOO_LARGE' });
   });
 
-  it('accepts a policy-9 observation program with five outcomes after lossless binding compaction and rejects post-normalization overflow', async () => {
+  it('preserves a lossless 32-requirement observation program and rejects the 33rd row without writing', async () => {
     const exact = instruction();
     const base = program(exact);
     const outcomes = ['drain-contents', 'drain-presence', 'worker-surface', 'worker-class', 'worker-distance'];
@@ -627,14 +627,28 @@ describe('GMC compound-action private artifact store', () => {
       instruction: exact, program: compactProgram, cursor: cursor(1), saga: saga(1, 'unsettled'),
     }, memoryCollection().records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
 
-    const overbound = structuredClone(compactProgram);
-    (overbound.nodes[0].dataRequirements as JsonObject[]).push(...Array.from({ length: 5 }, (_, index) => ({
-      dimension: 'how', kind: 'character_capability', query: `overflow ${index + 1}`,
+    const atCapacity = structuredClone(compactProgram);
+    (atCapacity.nodes[0].dataRequirements as JsonObject[]).push(...Array.from({ length: 20 }, (_, index) => ({
+      dimension: 'how', kind: 'character_capability', query: `preserved capacity row ${index + 1}`,
     })));
+    const boundedStore = memoryCollection();
     await expect(createCompoundActionArtifact({
-      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:policy-7-overbound',
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:policy-9-at-capacity',
+      instruction: exact, program: atCapacity, cursor: cursor(1), saga: saga(1, 'unsettled'),
+    }, boundedStore.records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
+    expect((boundedStore.documents[0].program.nodes as JsonObject[])
+      .reduce((total, node) => total + (node.dataRequirements as JsonObject[]).length, 0)).toBe(32);
+
+    const overbound = structuredClone(atCapacity);
+    (overbound.nodes[0].dataRequirements as JsonObject[]).push({
+      dimension: 'how', kind: 'character_capability', query: 'the forbidden thirty-third row',
+    });
+    const rejectedStore = memoryCollection();
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:policy-9-overbound',
       instruction: exact, program: overbound, cursor: cursor(1), saga: saga(1, 'unsettled'),
-    }, memoryCollection().records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_TOO_LARGE' });
+    }, rejectedStore.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_TOO_LARGE' });
+    expect(rejectedStore.documents).toHaveLength(0);
   });
 
   it('accepts shared prerequisite group unions distributed across downstream observation nodes', async () => {
@@ -928,6 +942,24 @@ describe('GMC compound-action private artifact store', () => {
 });
 
 describe('GMC typed compound-action requirement projection', () => {
+  it('projects 32 typed requirements and rejects 33 before resolution', () => {
+    const requirements = Array.from({ length: 32 }, (_, index) => ({
+      dimension: 'what' as const,
+      kind: 'story_fact' as const,
+      query: `distinct requested fact ${index + 1}`,
+    }));
+    const input = {
+      programId: 'program:requirement-boundary', nodeId: 'node:investigate', requirements,
+      currentScene: { locationId: 'location:flintwake', revision: 5 },
+      facts: [], entities: [],
+    };
+    expect(compileCompoundActionRequirementProjection(input).requirementResults).toHaveLength(32);
+    expect(() => compileCompoundActionRequirementProjection({
+      ...input,
+      requirements: [...requirements, { dimension: 'what', kind: 'story_fact', query: 'forbidden fact 33' }],
+    })).toThrow(expect.objectContaining({ code: 'COMPOUND_ACTION_REQUIREMENTS_TOO_LARGE' }));
+  });
+
   it('distinguishes scene presence, location subjects, destination references, preparation debt, and VCS mechanics', () => {
     const projection = compileCompoundActionRequirementProjection({
       programId: 'program:turn-42', nodeId: 'node:search',

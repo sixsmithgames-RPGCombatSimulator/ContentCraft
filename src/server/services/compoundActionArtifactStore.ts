@@ -56,7 +56,7 @@ export const COMPOUND_ACTION_LIMITS = Object.freeze({
   instructionMaximumBytes: 32_768,
   nodeMaximum: 8,
   dependencyMaximum: 12,
-  dataRequirementMaximum: 16,
+  dataRequirementMaximum: 32,
   programMaximumBytes: 16_384,
   observationProgramMaximumBytes: 24_576,
   cursorMaximumBytes: 16_384,

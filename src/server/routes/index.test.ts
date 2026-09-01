@@ -51,7 +51,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.11.45',
+      version: '1.11.46',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -103,6 +103,7 @@ describe('API health', () => {
           artifactStoreContractVersion: 'gmc.compound-action-artifact-store/2',
           readableSemanticActionPrograms: COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
           requirementProjectionContractVersion: 'gmc.compound-action-requirement-projection/1',
+          limits: { dataRequirementMaximum: 32 },
           authority: 'gmc',
           persistence: 'non_canonical_interaction',
           access: 'service_only',
