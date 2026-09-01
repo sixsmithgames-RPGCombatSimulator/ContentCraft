@@ -38,12 +38,16 @@ export const ACTION_DIRECTED_STORY_PLAYABLE_SCENE_CONTEXT_READ_VERSIONS = Object
 ] as const);
 export const ACTOR_MECHANICS_BINDING_CONTRACT_VERSION = 'gmc.actor-mechanics-binding/1';
 export const STORY_DELTA_V2_CONTRACT_VERSION = 'studio.story-delta/2';
-export const SCENE_STORY_DESIGN_CONTRACT_VERSION = 'gmc.scene-story-design/1';
-export const STORY_AFFORDANCE_PROJECTION_CONTRACT_VERSION = 'gma.story-affordance-projection/1';
+export const LEGACY_SCENE_STORY_DESIGN_CONTRACT_VERSION = 'gmc.scene-story-design/1';
+export const SCENE_STORY_DESIGN_CONTRACT_VERSION = 'gmc.scene-story-design/2';
+export const LEGACY_STORY_AFFORDANCE_PROJECTION_CONTRACT_VERSION = 'gma.story-affordance-projection/1';
+export const STORY_AFFORDANCE_PROJECTION_CONTRACT_VERSION = 'gma.story-affordance-projection/2';
 export const STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION = 'gma.story-satisfaction-receipt/1';
 export const STORY_OBLIGATION_CAPABILITIES = Object.freeze([
   'scene-story-design/1',
+  'scene-story-design/2',
   'story-affordance-projection/1',
+  'story-affordance-projection/2',
   'story-satisfaction-receipt/1',
 ] as const);
 export const ACTION_DIRECTED_STORY_CAPABILITIES = Object.freeze([
@@ -766,8 +770,11 @@ function enumArray(value: unknown, field: string, allowed: readonly string[], ma
 /** Validates a GMC-owned dramatic design bound to one exact Scene-kit revision. */
 export function validateSceneStoryDesign(input: unknown): asserts input is JsonObject {
   if (!plainObject(input)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'The scene story design must be an object.', { field: 'storyDesign' });
-  exactKeys(input, 'storyDesign', ['schemaVersion', 'designId', 'revision', 'sceneKitRef', 'scenePromise', 'obligations', 'affordances', 'sourceRefs']);
-  if (input.schemaVersion !== SCENE_STORY_DESIGN_CONTRACT_VERSION) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'The scene story-design version is not supported.', { field: 'storyDesign.schemaVersion' });
+  const version = String(input.schemaVersion);
+  if (![LEGACY_SCENE_STORY_DESIGN_CONTRACT_VERSION, SCENE_STORY_DESIGN_CONTRACT_VERSION].includes(version)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'The scene story-design version is not supported.', { field: 'storyDesign.schemaVersion' });
+  exactKeys(input, 'storyDesign', version === SCENE_STORY_DESIGN_CONTRACT_VERSION
+    ? ['schemaVersion', 'designId', 'revision', 'sceneKitRef', 'scenePromise', 'obligations', 'affordances', 'storyFactBindings', 'sourceRefs']
+    : ['schemaVersion', 'designId', 'revision', 'sceneKitRef', 'scenePromise', 'obligations', 'affordances', 'sourceRefs']);
   identifier(input.designId, 'storyDesign.designId');
   positiveInteger(input.revision, 'storyDesign.revision');
   if (!plainObject(input.sceneKitRef)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'The story design requires a Scene-kit reference.', { field: 'storyDesign.sceneKitRef' });
@@ -815,6 +822,34 @@ export function validateSceneStoryDesign(input: unknown): asserts input is JsonO
       if (!obligationIds.has(ref)) throw new StoryWorkspaceStoreError(422, 'STORY_OBLIGATION_REFERENCE_INVALID', 'A story affordance references an unknown obligation.', { field: `${field}.obligationRefs`, obligationRef: ref });
     });
   });
+  if (version === SCENE_STORY_DESIGN_CONTRACT_VERSION) {
+    if (!Array.isArray(input.storyFactBindings) || input.storyFactBindings.length > 24) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'Typed story-fact bindings exceed their bound.', { field: 'storyDesign.storyFactBindings' });
+    const bindingIds = new Set<string>();
+    const bindingScopes = new Set<string>();
+    const affordanceById = new Map((input.affordances as JsonObject[]).map((entry) => [String(entry.affordanceId), entry]));
+    input.storyFactBindings.forEach((binding, index) => {
+      const field = `storyDesign.storyFactBindings[${index}]`;
+      if (!plainObject(binding)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_INVALID', 'A typed story-fact binding must be an object.', { field });
+      exactKeys(binding, field, ['bindingId', 'instructionFingerprint', 'semanticNodeRef', 'requirementRef', 'requirementFingerprint', 'affordanceRef', 'factRefs', 'resolutionMode']);
+      const bindingId = identifier(binding.bindingId, `${field}.bindingId`);
+      if (bindingIds.has(bindingId)) throw new StoryWorkspaceStoreError(409, 'STORY_FACT_BINDING_DUPLICATE', 'A story design contains a duplicate typed binding.', { bindingId });
+      bindingIds.add(bindingId);
+      if (!/^[a-f0-9]{64}$/.test(String(binding.instructionFingerprint))) throw new StoryWorkspaceStoreError(422, 'STORY_FACT_BINDING_INVALID', 'A typed binding has an invalid instruction fingerprint.', { field: `${field}.instructionFingerprint` });
+      identifier(binding.semanticNodeRef, `${field}.semanticNodeRef`);
+      const requirementRef = identifier(binding.requirementRef, `${field}.requirementRef`);
+      if (!/^[a-f0-9]{64}$/.test(String(binding.requirementFingerprint))) throw new StoryWorkspaceStoreError(422, 'STORY_FACT_BINDING_INVALID', 'A typed binding has an invalid requirement fingerprint.', { field: `${field}.requirementFingerprint` });
+      const affordanceRef = identifier(binding.affordanceRef, `${field}.affordanceRef`);
+      const scope = `${String(binding.instructionFingerprint)}:${requirementRef}`;
+      if (bindingScopes.has(scope)) throw new StoryWorkspaceStoreError(409, 'STORY_FACT_BINDING_DUPLICATE', 'An instruction requirement has more than one typed binding.', { requirementRef });
+      bindingScopes.add(scope);
+      if (!['direct', 'provisional_check'].includes(String(binding.resolutionMode))) throw new StoryWorkspaceStoreError(422, 'STORY_FACT_BINDING_INVALID', 'A typed binding resolution mode is invalid.', { field: `${field}.resolutionMode` });
+      const refs = identifierArray(binding.factRefs, `${field}.factRefs`, 8, 1);
+      const affordance = affordanceById.get(affordanceRef);
+      if (!affordance) throw new StoryWorkspaceStoreError(422, 'STORY_FACT_BINDING_REFERENCE_INVALID', 'A typed binding references an unknown affordance.', { field: `${field}.affordanceRef`, affordanceRef });
+      const affordanceFacts = new Set((affordance.factRefs as string[]).map(String));
+      for (const factRef of refs) if (!affordanceFacts.has(factRef)) throw new StoryWorkspaceStoreError(422, 'STORY_FACT_BINDING_REFERENCE_INVALID', 'A typed binding fact is not exposed by its bound affordance.', { field: `${field}.factRefs`, factRef });
+    });
+  }
   identifierArray(input.sourceRefs, 'storyDesign.sourceRefs', 24, 1);
   if (byteLength(input as JsonObject) > SCENE_STORY_DESIGN_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_DESIGN_TOO_LARGE', 'The scene story design exceeds its storage bound.', { maximumBytes: SCENE_STORY_DESIGN_MAX_BYTES });
 }
@@ -861,6 +896,16 @@ export function validateSceneHandoffProposal(input: unknown): asserts input is J
     const designRef = input.handoff.storyDesign.sceneKitRef as JsonObject;
     if (designRef.sceneKitId !== input.handoff.sceneKit.sceneKitId || designRef.sceneKitRevision !== input.handoff.sceneKit.revision) {
       throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_DESIGN_REVISION_MISMATCH', 'The story design must target the exact proposed Scene-kit revision.', { field: 'proposal.handoff.storyDesign.sceneKitRef' });
+    }
+    if (input.handoff.storyDesign.schemaVersion === SCENE_STORY_DESIGN_CONTRACT_VERSION) {
+      const sceneFactRefs = new Set([
+        ...(input.handoff.sceneKit.information as JsonObject[]).map((entry) => String(entry.informationId)),
+        ...(input.handoff.sceneKit.establishedElements as JsonObject[]).map((entry) => String(entry.elementId)),
+      ]);
+      for (const [index, binding] of (input.handoff.storyDesign.storyFactBindings as JsonObject[]).entries()) {
+        if (binding.instructionFingerprint !== input.playerActionFingerprint) throw new StoryWorkspaceStoreError(422, 'STORY_FACT_BINDING_IDENTITY_INVALID', 'A typed binding does not belong to this exact player action.', { field: `proposal.handoff.storyDesign.storyFactBindings[${index}].instructionFingerprint` });
+        for (const factRef of binding.factRefs as string[]) if (!sceneFactRefs.has(factRef)) throw new StoryWorkspaceStoreError(422, 'STORY_FACT_BINDING_REFERENCE_INVALID', 'A typed binding references a fact outside the exact proposed Scene kit.', { field: `proposal.handoff.storyDesign.storyFactBindings[${index}].factRefs`, factRef });
+      }
     }
   }
   for (const [index, information] of (input.handoff.sceneKit.information as JsonObject[]).entries()) {

@@ -51,7 +51,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.11.30',
+      version: '1.11.31',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -68,8 +68,8 @@ describe('API health', () => {
         storyObligations: {
           capabilities: STORY_OBLIGATION_CAPABILITIES,
           contracts: {
-            sceneStoryDesign: 'gmc.scene-story-design/1',
-            storyAffordanceProjection: 'gma.story-affordance-projection/1',
+            sceneStoryDesign: 'gmc.scene-story-design/2',
+            storyAffordanceProjection: 'gma.story-affordance-projection/2',
             storySatisfactionReceipt: 'gma.story-satisfaction-receipt/1',
           },
           authority: 'gmc',

@@ -436,13 +436,29 @@ const storyDirectorSceneDesign = {
   type: 'object', additionalProperties: false,
   required: ['schemaVersion', 'designId', 'revision', 'sceneKitRef', 'scenePromise', 'obligations', 'affordances', 'sourceRefs'],
   properties: {
-    schemaVersion: { const: 'gmc.scene-story-design/1' },
+    schemaVersion: { enum: ['gmc.scene-story-design/1', 'gmc.scene-story-design/2'] },
     designId: { type: 'string', minLength: 1, maxLength: 240 },
     revision: { type: 'integer', minimum: 1 },
     sceneKitRef: { type: 'object' },
     scenePromise: { type: 'object' },
     obligations: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'object' } },
     affordances: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'object' } },
+    storyFactBindings: {
+      type: 'array', maxItems: 24, items: {
+        type: 'object', additionalProperties: false,
+        required: ['bindingId', 'instructionFingerprint', 'semanticNodeRef', 'requirementRef', 'requirementFingerprint', 'affordanceRef', 'factRefs', 'resolutionMode'],
+        properties: {
+          bindingId: { type: 'string', minLength: 1, maxLength: 240 },
+          instructionFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+          semanticNodeRef: { type: 'string', minLength: 1, maxLength: 240 },
+          requirementRef: { type: 'string', minLength: 1, maxLength: 240 },
+          requirementFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+          affordanceRef: { type: 'string', minLength: 1, maxLength: 240 },
+          factRefs: { type: 'array', minItems: 1, maxItems: 8, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 240 } },
+          resolutionMode: { enum: ['direct', 'provisional_check'] },
+        },
+      },
+    },
     sourceRefs: storyDirectorProviderRefs,
   },
 } as const;
@@ -585,7 +601,7 @@ const actionDirectedTimeProposalOutput = {
 } as const;
 
 const actionDirectedStoryTurnOutput = {
-  schemaVersion: { enum: ['gma.story-director-result/2', 'gma.story-director-result/3', 'gma.story-director-result/4'] },
+  schemaVersion: { enum: ['gma.story-director-result/2', 'gma.story-director-result/3', 'gma.story-director-result/4', 'gma.story-director-result/5'] },
   proposedTimeAdvance: actionDirectedTimeProposalOutput,
   proposal: {
     type: 'object', additionalProperties: false,
@@ -775,7 +791,7 @@ const observationPreparationOutput = {
 } as const;
 
 const actionDirectedCurrentSceneOutput = {
-  schemaVersion: { enum: ['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7', 'gma.current-scene-narration-result/8', 'gma.current-scene-narration-result/9', 'gma.current-scene-narration-result/10'] },
+  schemaVersion: { enum: ['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7', 'gma.current-scene-narration-result/8', 'gma.current-scene-narration-result/9', 'gma.current-scene-narration-result/10', 'gma.current-scene-narration-result/11'] },
   programId: { type: 'string', minLength: 1, maxLength: 240 },
   nodeId: { type: 'string', minLength: 1, maxLength: 240 },
   presentationFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
@@ -1286,22 +1302,23 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'proposal', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority'],
     optional: ['proposedTimeAdvance'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/13',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/14',
     outputProperties: actionDirectedStoryTurnOutput,
     systemInstruction: [
       'Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet.',
-      'Return exactly one JSON object matching the requested gma.story-director-result version, including gma.story-director-result/4 for current packets. This is proposal-only; GMC remains Story and canon authority and VCS remains mechanics authority.',
+      'Return exactly one JSON object matching the requested gma.story-director-result version, including gma.story-director-result/5 for current packets. This is proposal-only; GMC remains Story and canon authority and VCS remains mechanics authority.',
       'Preserve the exact declared action and fingerprint. Prefer an eligible prepared Scene kit; otherwise create only the minimum complete supported Scene kit.',
       'Establish one playable locus, one exact present cast, two to five beats with exactly one active beat, all four exit kinds, Story bindings, and potential impacts.',
       'Make upstream preparation interaction-ready before prose: every scene-local role needs a typed surface_description observable or a specific surface obstruction. A role addressed by the player also needs a concrete information fact with a social access vector and a social affordance targeting that exact role. Use its prepared objective, knowledge, and posture so its behavior and answers are purposeful rather than generic.',
       'Use the supplied GMC scene-time context as read-only authority for current clock and pending events. Let it shape urgency and activity only when relevant; never turn a scheduled possibility into an occurrence, and request elapsed time only through proposedTimeAdvance.',
-      'When the packet requests gma.story-director-result/3 or /4, include one gmc.scene-story-design/1 in handoff.storyDesign, bound to the exact proposed Scene-kit revision. Prepare one to four concrete dramatic questions and only action-capable affordances grounded in supplied fact, target, and Story-node references. Prepare possibilities, not a required player route.',
+      'When the packet requests the current Story Director result, include one gmc.scene-story-design/2 in handoff.storyDesign, bound to the exact proposed Scene-kit revision. Prepare one to four concrete dramatic questions and only action-capable affordances grounded in supplied fact, target, and Story-node references. Prepare possibilities, not a required player route.',
+      'For every supplied story_fact outcome requirement, return exactly one storyFactBindings row. Copy the immutable instruction fingerprint, semantic node ref, requirement ref, and requirement fingerprint exactly; bind them to one exact affordance and one or more exact Scene information refs also listed on that affordance. Use direct when current prose pays off the fact without a mechanic, or provisional_check only with one legal VCS skill check and five finished branches. Never join by actor identity alone, labels, access prose, fact wording, synonyms, or token overlap.',
       'Obey the supplied temporalRequirement in the first result. Required means proposedTimeAdvance has shouldAdvance true, positive whole seconds no greater than seven days, the exact required activity, and a concrete reason; forbidden means null. This is only a proposal for GMC campaign-time authority.',
       'For wait_for_trigger, replace the same Scene kit in the same locus, supersede the prior situation, advance its revision once, and establish a concrete changed active beat. Repeating the same observation or beat is invalid.',
       'The active beat and opening narration must concretely pay off the declared action now or establish the precise position for one provisional VCS mechanic.',
       'Prepare a concrete fixed information fact or bounded absence for every central story-bearing target implied by the scene purpose, dramatic question, active beat, or established elements. A container label or a promise that contents will be revealed later is not an answer.',
       'For every typed observation requirement, return gmc.scene-kit/3 with exact observables and scoped obstructions. Bind only by targetRef, facet, observerRef, methodRef, modality, sourceRef, and mechanicRef; never by labels or prose similarity. Do not duplicate or contradict observation truth in another field.',
-      'When the supplied actionBoundReveal reports blocking scene-substance debt, replace the same Scene kit in place and add the minimum action-matched information row. A row is action-matched only when its factText or an accessVector repeats the declared or semantic action\'s target or method terms; name the exact target instead of relying only on a synonym. State any directly reached fact exactly in openingNarration before requesting a roll.',
+      'When the supplied actionBoundReveal reports blocking scene-substance debt, replace the same Scene kit in place and add the minimum concrete information required by the structured semantic outcome. For every story_fact outcome, authorize that information only through its exact storyFactBindings identity and reference closure; labels, verbs, nouns, synonyms, and prose overlap are not authority. State every direct bound fact in openingNarration, or use provisional_check with one legal VCS check and five finished branches.',
       'For a provisional check on a story-bearing target, prepare all five outcome branches with gma.substantive-outcome/2: a fact-bound finding, scope-limited negative, or specific barrier. Fixed contents cannot change between outcome bands.',
       'Bind every material narrated fact, presence, and reveal to supplied fact IDs or IDs created in the proposed Scene kit. Do not reveal concealed or undetermined preparation.',
       'Return gma.scene-realization/1. Cover every requested responder or cohort member with exact prose evidence; describe a cohort collectively with all, each, both, or its known count, or use one observedCount 1 row with different evidence per member; account for requested concealment and every action-matched capability.',
@@ -1317,11 +1334,11 @@ const seeds: Seed[] = [
     optional: ['programId', 'nodeId', 'presentationFingerprint', 'presentationBindings', 'materialClaims', 'rulesNote', 'responseMode', 'rollRequest', 'sceneRealization', 'declaredActionPayoff', 'storyOutcome', 'agencyAudit', 'mechanicsAuthority', 'proposedTimeAdvance'],
     validators: ['observation-narration-contract'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 18_432, hardLimitBytes: 20_480,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/15',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/16',
     outputProperties: actionDirectedCurrentSceneOutput,
     systemInstruction: [
       'Narrate exactly one player action in the already-current GMC Scene kit from the supplied bounded GMA packet.',
-      'Return exactly one JSON object using the current-scene result schemaVersion requested by the bounded GMA packet: gma.current-scene-narration-result/9 for fresh settled typed-observation narration, gma.current-scene-narration-result/10 for fresh Story current-scene narration, or /8, /7, /6, /5, or /4 only for an older compatible packet during ordered rollout. Do not propose, replace, move, or close the Scene kit.',
+      'Return exactly one JSON object using the current-scene result schemaVersion requested by the bounded GMA packet: gma.current-scene-narration-result/9 for fresh settled typed-observation narration, gma.current-scene-narration-result/11 for fresh Story current-scene narration, or /10, /8, /7, /6, /5, or /4 only for an older compatible packet during ordered rollout. Do not propose, replace, move, or close the Scene kit.',
       'For gma.current-scene-narration-result/9, copy programId, nodeId, and presentationFingerprint exactly. Compose and silently edit lived prose first, faithfully realize every permitted outcome, then bind each outcome to an exact excerpt from the final responseText and return exactly one matching material claim with unchanged source refs. Ordinary descriptive statements may be paraphrased naturally; preserve every listed locked value, including exact names, quantities, measurements, quoted speech, and mechanics. Historical /8 keeps its original verbatim permitted-statement contract.',
       'A fresh /9 or historical /8 result must answer appearance, apparent classification, distance, contents, activity, presence, and every other supplied outcome explicitly. Do not weaken a concrete answer into unknown, unclear, indistinct, or cannot-reliably-establish language. Keep apparent classification distinct from identity and preserve each remote observer viewpoint.',
       'For fresh /9 and historical /8, keep responseText at or below twelve thousand characters and the complete JSON result at or below twenty KiB; use concise connective prose while preserving every required outcome and binding.',
@@ -1329,6 +1346,7 @@ const seeds: Seed[] = [
       'Preserve the exact declared action. Use plainly available supplied facts plus only private facts explicitly authorized by actionBoundReveal, and keep mechanics provisional under VCS authority.',
       'Use supplied participant context for purposeful NPC behavior, dialogue, objectives, and immediate decisions without exposing private motives as player-known fact. Use the GMC scene-time context as read-only authority; pending events remain possibilities until play or elapsed time makes their effects observable.',
       'When actionBoundReveal marks a fact requiredNow, faithfully state it in responseText before any roll and cite its exact factId. Ordinary descriptive factText may be paraphrased; exact names, quantities, measurements, quoted speech, and mechanics remain unchanged. A roll may change completeness, time, danger, or interpretation, but not the fixed contents already reached by the action.',
+      'For typed story-fact bindings, direct resolution must pay off every mapped requirement in current responseText without a check. provisional_check resolution requires one legal pending VCS skill check and all five finished branches. Never replace or widen the supplied binding by comparing actor labels, requirement wording, access prose, fact wording, synonyms, or token overlap.',
       'When actionBoundReveal contains gma.observation-resolution/1, treat it as the complete observation authority for that exact Scene revision. Narrate every typed result without weakening or reclassifying it, and never fall back to prose matching, narrator uncertainty, or an unrelated obstruction.',
       'For a provisional check on a story-bearing target, return all five prepared branches with gma.substantive-outcome/2. Each branch must state a concrete fact-bound finding, scope-limited negative, or specific barrier; process-only prose such as “the load is established” is not a result.',
       'When storyAffordanceProjection is supplied, any claimed actualStoryImpact must reference a projected obligation, use an allowed contribution, and include gma.story-satisfaction-receipt/1. State the receipt’s concrete answer, confirmation, complication, consequence, or decision explicitly in responseText; metadata alone is never a result. Cite only supplied factRefs, use an effect-compatible obligationState, leave remainingQuestion empty only when resolved, and return no impact or receipt when no obligation changed.',
@@ -1342,7 +1360,7 @@ const seeds: Seed[] = [
     id: 'story.scene-kit.repair', operationClass: 'reasoning_high', tier: 'reasoning',
     required: Object.keys(sceneKitRepairProviderOutput), validators: ['story-scene-kit-repair-rows'],
     temperature: 0.25, maxOutputTokens: 7000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/13',
+    thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/14',
     outputProperties: sceneKitRepairProviderOutput,
     systemInstruction: [
       'Repair one complete proposal.handoff.sceneKit from the supplied bounded GMA focused-repair packet.',
@@ -1362,7 +1380,7 @@ const seeds: Seed[] = [
     id: 'story.turn.repair', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'correctionId', 'sceneKitPatch', 'patchesJson'],
     temperature: 0.25, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/13',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/14',
     outputProperties: actionDirectedStoryRepairOutput,
     systemInstruction: [
       'Repair only the failed fields in one bounded GMA Story Director result.',

@@ -15,6 +15,7 @@ import {
   readStoryWorkspaceRevision,
   replaceStoryWorkspace,
   SCENE_HANDOFF_RECEIPT_CONTRACT_VERSION,
+  LEGACY_SCENE_STORY_DESIGN_CONTRACT_VERSION,
   SCENE_STORY_DESIGN_CONTRACT_VERSION,
   SCENE_KIT_V2_CONTRACT_VERSION,
   SCENE_KIT_CONTRACT_VERSION,
@@ -190,7 +191,7 @@ export function activeSceneStoryDesign(workspace: JsonObject, kit = activeV2Scen
   if (!kit) return null;
   return sceneStoryDesigns(workspace).find((design) => {
     const ref = isObject(design.sceneKitRef) ? design.sceneKitRef : null;
-    return design.schemaVersion === SCENE_STORY_DESIGN_CONTRACT_VERSION
+    return [SCENE_STORY_DESIGN_CONTRACT_VERSION, LEGACY_SCENE_STORY_DESIGN_CONTRACT_VERSION].includes(String(design.schemaVersion))
       && ref?.sceneKitId === kit.sceneKitId
       && Number(ref.sceneKitRevision) === Number(kit.revision);
   }) ?? null;

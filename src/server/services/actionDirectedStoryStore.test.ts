@@ -205,7 +205,7 @@ function typedCartSceneKit(): JsonObject {
 
 function cartStoryDesign(): JsonObject {
   return {
-    schemaVersion: 'gmc.scene-story-design/1',
+    schemaVersion: 'gmc.scene-story-design/2',
     designId: 'scene-design:cart-interception',
     revision: 1,
     sceneKitRef: { sceneKitId: 'scene-kit:cart-interception', sceneKitRevision: 1 },
@@ -232,8 +232,24 @@ function cartStoryDesign(): JsonObject {
       changeDimensions: ['knowledge', 'options', 'pressure'],
       obligationRefs: ['obligation:cart-cargo'],
     }],
+    storyFactBindings: [],
     sourceRefs: ['gmc:lead:matched-cart-route', 'story:arc:flintwake'],
   };
+}
+
+function boundCartStoryDesign(): JsonObject {
+  const design = cartStoryDesign();
+  design.storyFactBindings = [{
+    bindingId: 'binding:search-cart-cargo',
+    instructionFingerprint: 'a'.repeat(64),
+    semanticNodeRef: 'search-cart',
+    requirementRef: 'search-cart:requirement:1',
+    requirementFingerprint: 'b'.repeat(64),
+    affordanceRef: 'affordance:search-cart',
+    factRefs: ['information:cart-cargo'],
+    resolutionMode: 'provisional_check',
+  }];
+  return design;
 }
 
 function handoffEnvelope(overrides: Partial<JsonObject> = {}): SceneHandoffAuthorityEnvelope {
@@ -918,6 +934,33 @@ describe('D2 action-directed Story authority', () => {
     const changedReplay = handoffEnvelope({ openingNarration: 'A different draft under the same key.' });
     await expect(commitSceneHandoff({ userId: 'tenant-a', campaignId: 'campaign-a', envelope: changedReplay }, store.records))
       .rejects.toMatchObject({ code: 'STORY_IDEMPOTENCY_CONFLICT' });
+  });
+
+  it('accepts only exact action-owned story-fact bindings with closed Scene references', () => {
+    const proposal = structuredClone(handoffEnvelope().proposal) as JsonObject;
+    (proposal.handoff as JsonObject).storyDesign = boundCartStoryDesign();
+    expect(() => validateSceneHandoffProposal(proposal)).not.toThrow();
+
+    const stale = structuredClone(proposal) as JsonObject;
+    ((((stale.handoff as JsonObject).storyDesign as JsonObject).storyFactBindings as JsonObject[])[0]).instructionFingerprint = 'c'.repeat(64);
+    expect(() => validateSceneHandoffProposal(stale)).toThrowError(expect.objectContaining({
+      code: 'STORY_FACT_BINDING_IDENTITY_INVALID',
+    }));
+
+    const unprepared = structuredClone(proposal) as JsonObject;
+    const unpreparedDesign = (unprepared.handoff as JsonObject).storyDesign as JsonObject;
+    ((unpreparedDesign.affordances as JsonObject[])[0].factRefs as string[])[0] = 'information:invented-cargo';
+    (((unpreparedDesign.storyFactBindings as JsonObject[])[0].factRefs as string[]))[0] = 'information:invented-cargo';
+    expect(() => validateSceneHandoffProposal(unprepared)).toThrowError(expect.objectContaining({
+      code: 'STORY_FACT_BINDING_REFERENCE_INVALID',
+    }));
+
+    const duplicate = structuredClone(proposal) as JsonObject;
+    const duplicateBindings = ((((duplicate.handoff as JsonObject).storyDesign as JsonObject).storyFactBindings) as JsonObject[]);
+    duplicateBindings.push({ ...structuredClone(duplicateBindings[0]), bindingId: 'binding:search-cart-cargo-duplicate' });
+    expect(() => validateSceneHandoffProposal(duplicate)).toThrowError(expect.objectContaining({
+      code: 'STORY_FACT_BINDING_DUPLICATE',
+    }));
   });
 
   it('reconciles only the immutable Scene-handoff result owned by the exact tenant, campaign, and key', async () => {

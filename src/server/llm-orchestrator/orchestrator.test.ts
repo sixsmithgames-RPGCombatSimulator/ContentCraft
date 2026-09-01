@@ -364,14 +364,14 @@ describe('provider-neutral LLM orchestrator', () => {
     const currentScene = getOperationDefinition('story.current-scene.narrate');
     const repair = getOperationDefinition('story.turn.repair');
     const sceneKitRepair = getOperationDefinition('story.scene-kit.repair');
-    expect(turn.prompt.version).toBe('gma.story-director-policy/13');
+    expect(turn.prompt.version).toBe('gma.story-director-policy/14');
     expect(turn.prompt.systemInstruction).toMatch(/Preserve the exact declared action and fingerprint/i);
     expect(turn.prompt.systemInstruction).toMatch(/one playable locus, one exact present cast/i);
     expect(turn.prompt.systemInstruction).toMatch(/upstream preparation interaction-ready/i);
     expect(turn.prompt.systemInstruction).toMatch(/scene-time context as read-only authority/i);
     expect(turn.prompt.systemInstruction).toMatch(/concretely pay off the declared action now/i);
-    expect(turn.prompt.systemInstruction).toMatch(/factText or an accessVector repeats the declared or semantic action's target or method terms/i);
-    expect(turn.prompt.systemInstruction).toMatch(/name the exact target instead of relying only on a synonym/i);
+    expect(turn.prompt.systemInstruction).toMatch(/exact storyFactBindings identity and reference closure/i);
+    expect(turn.prompt.systemInstruction).toMatch(/labels, verbs, nouns, synonyms, and prose overlap are not authority/i);
     expect(turn.prompt.systemInstruction).toMatch(/Bind every material narrated fact/i);
     expect(turn.prompt.systemInstruction).toMatch(/Do not invent a player choice/i);
     expect(turn.prompt.systemInstruction).toMatch(/gma\.scene-realization\/1/i);
@@ -380,7 +380,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(turn.prompt.systemInstruction).toMatch(/concrete fixed information fact or bounded absence/i);
     expect(turn.prompt.systemInstruction).toMatch(/gma\.substantive-outcome\/2/i);
     expect(turn.prompt.systemInstruction).toMatch(/exact observables and scoped obstructions/i);
-    expect(turn.prompt.systemInstruction).toMatch(/gmc\.scene-story-design\/1/i);
+    expect(turn.prompt.systemInstruction).toMatch(/gmc\.scene-story-design\/2/i);
+    expect(turn.prompt.systemInstruction).toMatch(/every supplied story_fact outcome requirement.*exactly one storyFactBindings row/i);
     expect(turn.prompt.systemInstruction).toMatch(/Prepare possibilities, not a required player route/i);
     expect(turn.prompt.systemInstruction).toMatch(/temporalRequirement.*first result/i);
     expect(turn.prompt.systemInstruction).toMatch(/wait_for_trigger.*changed active beat/i);
@@ -426,7 +427,7 @@ describe('provider-neutral LLM orchestrator', () => {
       .toEqual(expect.arrayContaining(['schemaVersion', 'proposal', 'programId', 'nodeId', 'groupPreparations', 'outcomePreparations', 'obstructions']));
     expect(observationPreparation.provider.maxAttempts).toBe(1);
     expect(observationPreparation.provider.fallbackAllowed).toBe(false);
-    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/15');
+    expect(currentScene.prompt.version).toBe('gma.current-scene-narration-policy/16');
     expect(currentScene.prompt.systemInstruction).toMatch(/already-current GMC Scene kit/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/rules analysis out of responseText/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/authorized by actionBoundReveal/i);
@@ -438,16 +439,17 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(currentScene.prompt.systemInstruction).toMatch(/complete observation authority for that exact Scene revision/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/Compose and silently edit lived prose first.*Ordinary descriptive statements may be paraphrased naturally.*locked value/i);
     expect(currentScene.prompt.systemInstruction).toMatch(/Historical \/8 keeps its original verbatim permitted-statement contract/i);
+    expect(currentScene.prompt.systemInstruction).toMatch(/typed story-fact bindings.*direct resolution/i);
     expect(currentScene.outputSchema.schema.required).toEqual(['schemaVersion', 'responseText']);
     expect((currentScene.outputSchema.schema.properties as any).schemaVersion.enum)
-      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7', 'gma.current-scene-narration-result/8', 'gma.current-scene-narration-result/9', 'gma.current-scene-narration-result/10']);
+      .toEqual(['gma.current-scene-narration-result/4', 'gma.current-scene-narration-result/5', 'gma.current-scene-narration-result/6', 'gma.current-scene-narration-result/7', 'gma.current-scene-narration-result/8', 'gma.current-scene-narration-result/9', 'gma.current-scene-narration-result/10', 'gma.current-scene-narration-result/11']);
     expect((currentScene.outputSchema.schema.properties as any).proposedTimeAdvance).toMatchObject({
       type: ['object', 'null'],
       required: ['shouldAdvance', 'seconds', 'reason', 'activity'],
     });
     expect(currentScene.provider.maxAttempts).toBe(1);
     expect(currentScene.provider.fallbackAllowed).toBe(false);
-    expect(repair.prompt.version).toBe('gma.story-director-policy/13');
+    expect(repair.prompt.version).toBe('gma.story-director-policy/14');
     expect(repair.prompt.systemInstruction).toMatch(/only the failed fields/i);
     expect(repair.prompt.systemInstruction).toMatch(/Do not return the complete Story Director result/i);
     expect(repair.outputSchema.schema.required).toEqual(['schemaVersion', 'correctionId', 'sceneKitPatch', 'patchesJson']);
@@ -456,7 +458,7 @@ describe('provider-neutral LLM orchestrator', () => {
       required: expect.arrayContaining(['playableLocus', 'participants', 'beats', 'exitVectors']),
     });
     const sceneRepairProperties = sceneKitRepair.outputSchema.schema.properties as any;
-    expect(sceneKitRepair.prompt.version).toBe('gma.story-director-policy/13');
+    expect(sceneKitRepair.prompt.version).toBe('gma.story-director-policy/14');
     expect(sceneKitRepair.prompt.systemInstruction).toMatch(/one fields row for each key/i);
     expect(sceneKitRepair.prompt.systemInstruction).toMatch(/at least one non-empty.*informationId/i);
     expect(sceneKitRepair.prompt.systemInstruction).toMatch(/completion, failure, abandonment, and redirect/i);
