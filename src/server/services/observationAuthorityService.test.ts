@@ -7,11 +7,15 @@ import {
 } from './observationAuthorityService.js';
 import {
   emptyStoryWorkspace,
+  SCENE_KIT_V4_OBSERVABLE_MAXIMUM,
+  SCENE_KIT_V4_OBSERVATION_ACCESS_MAXIMUM,
   type JsonObject,
   replaceStoryWorkspace,
   type StoryWorkspaceRevisionDocument,
+  validateSceneKitV3,
   validateSceneKitV4,
 } from './storyWorkspaceStore.js';
+import { buildPlayableSceneContextV2 } from './actionDirectedStoryStore.js';
 
 function matches(document: StoryWorkspaceRevisionDocument, filter: Filter<StoryWorkspaceRevisionDocument>): boolean {
   return Object.entries(filter).every(([key, wanted]) => {
@@ -117,6 +121,24 @@ function sceneKitV4(): JsonObject {
   };
 }
 
+function compactObservable(index: number): JsonObject {
+  return {
+    observableId: `gmc:observable:capacity-${index}`, subjectRef: 'gmc:scene-role:drain-worker', facet: 'surface_description', resultKind: 'observed',
+    value: { kind: 'description', text: `Visible detail ${index}.` }, playerFacingStatement: `Kerrigan can see visible detail ${index} from cover.`,
+    perceptibility: { modalities: ['visual'], accessCondition: 'ordinary_view', observerRefs: ['gmc:actor:kerrigan'], methodRefs: [] },
+    supportedPrecision: 'ordinary', modality: 'visual', viewpointRef: 'gmc:viewpoint:kerrigan-cover', epistemicState: 'scene_local_established', sourceRefs: ['gmc:scene-role:drain-worker'],
+  };
+}
+
+function compactAccess(index: number): JsonObject {
+  return {
+    accessId: `gmc:access:capacity-${index}`, originViewpointRef: 'gmc:viewpoint:kerrigan-cover', candidateViewpointRef: `gmc:viewpoint:capacity-${index}`,
+    accessMode: 'stationary', pathRef: null, requiredCapabilityRefs: [], availableModalities: ['visual'], subjectRefs: ['gmc:scene-role:drain-worker'],
+    facets: ['surface_description'], epistemicState: 'scene_local_established', sourceRefs: ['gmc:scene-role:drain-worker'],
+    playerFacingStatement: `Kerrigan has a bounded line of sight for detail ${index}.`,
+  };
+}
+
 function reciprocal(subjectRef: string, storyActorRef: string, revision = 'revision:kerrigan:7'): JsonObject {
   return {
     schemaVersion: 'vcs.story-subject-binding/1', bindingRef: `vcs:binding:${subjectRef.split(':').at(-1)}`,
@@ -162,6 +184,45 @@ async function prepared(withStoryDesign = false) {
 }
 
 describe('observation owner authority', () => {
+  it('keeps version 3 at 24 while version 4 accepts and projects 64 complete rows', () => {
+    const v3 = sceneKitV3();
+    v3.observables = Array.from({ length: 24 }, (_, index) => {
+      const observable = compactObservable(index);
+      delete observable.supportedPrecision;
+      delete observable.modality;
+      delete observable.viewpointRef;
+      return observable;
+    });
+    expect(() => validateSceneKitV3(v3)).not.toThrow();
+    expect(() => validateSceneKitV3({ ...v3, observables: [...v3.observables as JsonObject[], compactObservable(24)] }))
+      .toThrowError(expect.objectContaining({ code: 'STORY_SCENE_KIT_V3_INVALID', details: expect.objectContaining({ field: 'sceneKit.observables' }) }));
+
+    const observableBoundary = sceneKitV4();
+    observableBoundary.observables = Array.from({ length: SCENE_KIT_V4_OBSERVABLE_MAXIMUM }, (_, index) => compactObservable(index));
+    expect(JSON.stringify(observableBoundary).length).toBeGreaterThan(32_768);
+    expect(() => validateSceneKitV4(observableBoundary)).not.toThrow();
+    expect(() => validateSceneKitV4({ ...observableBoundary, observables: [...observableBoundary.observables as JsonObject[], compactObservable(64)] }))
+      .toThrowError(expect.objectContaining({ code: 'STORY_SCENE_KIT_V4_INVALID', details: expect.objectContaining({ field: 'sceneKit.observables', maximum: 64 }) }));
+
+    const accessBoundary = sceneKitV4();
+    accessBoundary.observationAccess = Array.from({ length: SCENE_KIT_V4_OBSERVATION_ACCESS_MAXIMUM }, (_, index) => compactAccess(index));
+    expect(() => validateSceneKitV4(accessBoundary)).not.toThrow();
+    expect(() => validateSceneKitV4({ ...accessBoundary, observationAccess: [...accessBoundary.observationAccess as JsonObject[], compactAccess(64)] }))
+      .toThrowError(expect.objectContaining({ code: 'STORY_SCENE_KIT_V4_INVALID', details: expect.objectContaining({ field: 'sceneKit.observationAccess', maximum: 64 }) }));
+
+    const projectedKit = sceneKitV4();
+    projectedKit.observables = Array.from({ length: 26 }, (_, index) => compactObservable(index));
+    projectedKit.observationAccess = Array.from({ length: 26 }, (_, index) => compactAccess(index));
+    const workspace = emptyStoryWorkspace('campaign-a');
+    workspace.sceneKits = [projectedKit];
+    workspace.activeSceneKitRef = { sceneKitId: projectedKit.sceneKitId, revision: projectedKit.revision };
+    workspace.activeBeatRef = 'beat:recon';
+    const projection = buildPlayableSceneContextV2(workspace);
+    expect(projection.schemaVersion).toBe('gma.playable-scene-context/4');
+    expect(projection.observables).toHaveLength(26);
+    expect(projection.observationAccess).toHaveLength(26);
+  });
+
   it('projects exact owner refs and requires a Scene-kit upgrade without inventing access', async () => {
     const store = await prepared();
     const projection = await readObservationAuthority({ userId: 'tenant-a', campaignId: 'campaign-a', actorRefs: ['gmc:actor:kerrigan-familiar'] }, store.records);

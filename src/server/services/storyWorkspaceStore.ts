@@ -62,6 +62,9 @@ export const STORY_GRAPH_MAX_BYTES = 65_536;
 export const SCENE_HANDOFF_MAX_BYTES = 65_536;
 export const PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES = 18_432;
 export const PLAYABLE_SCENE_CONTEXT_MAX_BYTES = 32_768;
+export const PLAYABLE_SCENE_CONTEXT_V4_MAX_BYTES = 65_536;
+export const SCENE_KIT_V4_OBSERVABLE_MAXIMUM = 64;
+export const SCENE_KIT_V4_OBSERVATION_ACCESS_MAXIMUM = 64;
 export const SCENE_STORY_DESIGN_MAX_BYTES = 20_480;
 export const STORY_SATISFACTION_RECEIPT_MAX_BYTES = 2_048;
 
@@ -691,31 +694,17 @@ export function validateSceneKitV4(input: unknown): asserts input is JsonObject 
   if (!plainObject(input)) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'The version 4 Scene kit must be an object.', { field: 'sceneKit' });
   exactKeys(input, 'sceneKit', ['schemaVersion', 'sceneKitId', 'revision', 'planningState', 'playableLocus', 'purpose', 'dramaticQuestion', 'participants', 'establishedElements', 'information', 'actorMechanicsBindings', 'observationAccess', 'observables', 'obstructions', 'beats', 'pressures', 'exitVectors', 'storyBindings', 'sourceRefs']);
   if (input.schemaVersion !== SCENE_KIT_V4_CONTRACT_VERSION) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'The observation-authority Scene-kit version is not supported.', { field: 'sceneKit.schemaVersion' });
-  if (!Array.isArray(input.observables) || input.observables.length > 24) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Scene observables exceed their bound.', { field: 'sceneKit.observables' });
+  if (!Array.isArray(input.observables) || input.observables.length > SCENE_KIT_V4_OBSERVABLE_MAXIMUM) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Scene observables exceed their bound.', { field: 'sceneKit.observables', maximum: SCENE_KIT_V4_OBSERVABLE_MAXIMUM });
   if (!Array.isArray(input.obstructions) || input.obstructions.length > 16) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Scene obstructions exceed their bound.', { field: 'sceneKit.obstructions' });
   if (!Array.isArray(input.actorMechanicsBindings) || input.actorMechanicsBindings.length > 32) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Actor mechanics bindings exceed their bound.', { field: 'sceneKit.actorMechanicsBindings' });
-  if (!Array.isArray(input.observationAccess) || input.observationAccess.length > 24) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Observation access relations exceed their bound.', { field: 'sceneKit.observationAccess' });
-  const typedShape = clone(input as JsonObject);
-  typedShape.schemaVersion = SCENE_KIT_CONTRACT_VERSION;
-  delete typedShape.actorMechanicsBindings;
-  delete typedShape.observationAccess;
-  typedShape.observables = (typedShape.observables as JsonObject[]).map((entry) => {
-    const legacy = clone(entry);
-    delete legacy.supportedPrecision;
-    delete legacy.modality;
-    delete legacy.viewpointRef;
-    return legacy;
-  });
-  typedShape.obstructions = (typedShape.obstructions as JsonObject[]).map((entry) => {
-    const legacy = clone(entry);
-    delete legacy.affectedAccessRefs;
-    delete legacy.pathRefs;
-    delete legacy.viewpointRefs;
-    delete legacy.formRefs;
-    delete legacy.provenanceReceiptRefs;
-    return legacy;
-  });
-  validateSceneKitV3(typedShape);
+  if (!Array.isArray(input.observationAccess) || input.observationAccess.length > SCENE_KIT_V4_OBSERVATION_ACCESS_MAXIMUM) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_KIT_V4_INVALID', 'Observation access relations exceed their bound.', { field: 'sceneKit.observationAccess', maximum: SCENE_KIT_V4_OBSERVATION_ACCESS_MAXIMUM });
+  const baseShape = clone(input as JsonObject);
+  baseShape.schemaVersion = SCENE_KIT_V2_CONTRACT_VERSION;
+  delete baseShape.actorMechanicsBindings;
+  delete baseShape.observationAccess;
+  delete baseShape.observables;
+  delete baseShape.obstructions;
+  validateSceneKitV2(baseShape);
   const bindingRefs = new Set<string>();
   const actorRefs = new Set<string>();
   input.actorMechanicsBindings.forEach((entry, index) => {
@@ -733,14 +722,22 @@ export function validateSceneKitV4(input: unknown): asserts input is JsonObject 
     if (accessRefs.has(ref)) throw new StoryWorkspaceStoreError(409, 'STORY_OBSERVATION_ACCESS_DUPLICATE', 'The Scene kit contains a duplicate observation access relation.', { accessId: ref });
     accessRefs.add(ref);
   });
+  const typedRefs = new Set<string>();
+  input.observables.forEach((entry, index) => {
+    const ref = validateSceneObservableV4(entry, `sceneKit.observables[${index}]`);
+    if (typedRefs.has(ref)) throw new StoryWorkspaceStoreError(409, 'STORY_SCENE_OBSERVATION_DUPLICATE', 'The Scene kit contains a duplicate typed observation ref.', { field: `sceneKit.observables[${index}].observableId` });
+    typedRefs.add(ref);
+  });
+  input.obstructions.forEach((entry, index) => {
+    const ref = validateSceneObstructionV4(entry, `sceneKit.obstructions[${index}]`);
+    if (typedRefs.has(ref)) throw new StoryWorkspaceStoreError(409, 'STORY_SCENE_OBSERVATION_DUPLICATE', 'The Scene kit contains a duplicate typed observation ref.', { field: `sceneKit.obstructions[${index}].obstructionId` });
+    typedRefs.add(ref);
+  });
   const authorityRefs = new Set<string>([
     ...input.observationAccess.map((entry) => String((entry as JsonObject).accessId)),
-    ...input.observables.map((entry) => String((entry as JsonObject).observableId)),
-    ...input.obstructions.map((entry) => String((entry as JsonObject).obstructionId)),
+    ...typedRefs,
   ]);
-  input.observables.forEach((entry, index) => validateSceneObservableV4(entry, `sceneKit.observables[${index}]`));
-  input.obstructions.forEach((entry, index) => {
-    validateSceneObstructionV4(entry, `sceneKit.obstructions[${index}]`);
+  input.obstructions.forEach((entry) => {
     const obstruction = entry as JsonObject;
     for (const ref of obstruction.affectedAccessRefs as string[]) if (!authorityRefs.has(ref)) throw new StoryWorkspaceStoreError(422, 'STORY_OBSERVATION_ACCESS_REFERENCE_INVALID', 'An obstruction cites an access relation outside this Scene kit.', { obstructionId: obstruction.obstructionId, accessId: ref });
   });

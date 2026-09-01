@@ -9,6 +9,7 @@ import {
   buildPlayableStoryProjection,
   PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION,
   PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION,
+  PLAYABLE_SCENE_CONTEXT_V4_MAX_BYTES,
   PLAYABLE_SCENE_CONTEXT_MAX_BYTES,
   readActiveStoryWorkspace,
   readStoryWorkspaceRevision,
@@ -18,6 +19,8 @@ import {
   SCENE_KIT_V2_CONTRACT_VERSION,
   SCENE_KIT_CONTRACT_VERSION,
   SCENE_KIT_V4_CONTRACT_VERSION,
+  SCENE_KIT_V4_OBSERVABLE_MAXIMUM,
+  SCENE_KIT_V4_OBSERVATION_ACCESS_MAXIMUM,
   STORY_DELTA_MAX_BYTES,
   STORY_DELTA_V2_CONTRACT_VERSION,
   STORY_SATISFACTION_RECEIPT_CONTRACT_VERSION,
@@ -924,11 +927,11 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
       return projected;
     }),
     ...(typedObservationAuthority ? {
-      observables: clone((kit.observables as JsonValue[]).slice(0, 24)),
+      observables: clone((kit.observables as JsonValue[]).slice(0, boundedObservationAuthority ? SCENE_KIT_V4_OBSERVABLE_MAXIMUM : 24)),
       obstructions: clone((kit.obstructions as JsonValue[]).slice(0, 16)),
     } : {}),
     ...(boundedObservationAuthority ? {
-      observationAccess: clone((kit.observationAccess as JsonValue[]).slice(0, 24)),
+      observationAccess: clone((kit.observationAccess as JsonValue[]).slice(0, SCENE_KIT_V4_OBSERVATION_ACCESS_MAXIMUM)),
     } : {}),
     storyNodeSummaries: (kit.storyBindings as string[]).slice(0, 8).map((nodeId) => nodesById.get(nodeId)).filter((node): node is JsonObject => Boolean(node)).map((node) => ({
       nodeId: node.nodeId,
@@ -947,7 +950,8 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
   };
   const forbidden = findForbiddenProjectionField(context);
   if (forbidden) throw new StoryWorkspaceStoreError(500, 'STORY_PLAYABLE_CONTEXT_PRIVATE_LEAK', 'The playable scene context contains a private field.', { field: forbidden });
-  const maximumBytes = typedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_MAX_BYTES : PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES;
+  const maximumBytes = boundedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_V4_MAX_BYTES
+    : typedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_MAX_BYTES : PLAYABLE_SCENE_CONTEXT_V2_MAX_BYTES;
   if (bytes(context) > maximumBytes) throw new StoryWorkspaceStoreError(413, 'STORY_PLAYABLE_CONTEXT_TOO_LARGE', 'The playable scene context exceeds its prompt bound.', { maximumBytes });
   return context;
 }
