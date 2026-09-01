@@ -581,6 +581,45 @@ canaries proving player/model prose is absent, full GMC and GMA checks, GMC
 deployment before GMA, and one authenticated safe continuation of the unchanged
 saved action through concrete narration.
 
+### Accepted production correction: complete observation provider-output budgets
+
+Accepted 2026-09-01 with the paired GMA ADR-009 correction after registry `.6`
+successfully admitted the unchanged Kerrigan preparation envelope and invoked
+the provider. The provider then returned `MAX_TOKENS` at the operation's
+5,000-token ceiling before its schema-constrained JSON document was complete.
+GMA rejected the partial document as `PROVIDER_OUTPUT_TRUNCATED`; no candidate,
+Scene update, narration, or mechanics result was accepted. This proves the
+remaining failure is a provider-output budget contradiction, not player wording,
+semantic decomposition, input size, or an owner-state conflict.
+
+Registry `2026-09-01.7` gives both `story.observation.prepare` and
+`story.current-scene.narrate` a 12,000-token provider-output ceiling. The
+preparation candidate remains bounded to 20,480 serialized bytes at GMA's
+acceptance boundary, and every existing schema array, string, packet, complete
+provider-envelope, and operation-count limit remains unchanged. The higher
+provider ceiling permits the model to finish the bounded structured document;
+it does not enlarge what GMA can accept. The current Gemini reasoning route
+supports a 65,536-token output limit, so this remains a bounded fraction of the
+provider's advertised capacity. Cost and telemetry continue to record actual
+usage rather than reserving or charging the ceiling.
+
+The one-attempt policy, no-fallback policy, thinking levels, temperatures,
+prompt versions, candidate/result schemas, deterministic validators, owner
+authority, and cross-service operation ordering do not change. GMA may not
+truncate a candidate, remove a requested outcome, weaken evidence bindings, or
+replace dynamic narration with a deterministic phrase to fit the old ceiling.
+Registry-scoped provider idempotency supplies one fresh provider-only identity
+after `.7` deploys; program, artifact, instruction, Scene, VCS, cursor, receipt,
+timeline, replay, and settlement identities remain unchanged.
+
+GMC deploys `.7` before GMA advertises it. Rollback restores the `.6` registry
+and GMA mirror together and pauses fresh affected calls while leaving every
+saved artifact and owner revision intact. Release requires exact output-budget
+registry tests for both operations, unchanged attempt/fallback/input budgets,
+generated-contract drift checks, full GMC and GMA gates, sanitized production
+telemetry, and one authenticated safe continuation of the unchanged saved
+action through preparation and concrete responsive narration.
+
 Accepted after the containment replay proved that pausing the route was safe
 but not a player-complete result. The four repository owners approved the
 governing documented plan by directing implementation to proceed. Any material

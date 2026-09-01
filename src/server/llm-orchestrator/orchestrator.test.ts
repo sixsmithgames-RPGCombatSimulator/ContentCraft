@@ -453,8 +453,8 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(narration.context.inputHardLimitBytes).toBe(32_768);
     expect(preparation.context.inputHardLimitBytes - 32_768).toBeGreaterThanOrEqual(4_096);
     expect(narration.context.inputHardLimitBytes - 24_576).toBeGreaterThanOrEqual(4_096);
-    expect(preparation.provider.maxOutputTokens).toBe(5_000);
-    expect(narration.provider.maxOutputTokens).toBe(5_000);
+    expect(preparation.provider.maxOutputTokens).toBe(12_000);
+    expect(narration.provider.maxOutputTokens).toBe(12_000);
     expect(preparation.provider.maxAttempts).toBe(1);
     expect(narration.provider.maxAttempts).toBe(1);
     expect(preparation.provider.fallbackAllowed).toBe(false);

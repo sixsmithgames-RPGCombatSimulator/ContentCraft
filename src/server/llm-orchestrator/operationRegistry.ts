@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-01.6';
+export const OPERATION_REGISTRY_VERSION = '2026-09-01.7';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-01.6',
   '2026-09-01.5',
   '2026-09-01.4',
   '2026-09-01.3',
@@ -1286,7 +1287,9 @@ const seeds: Seed[] = [
     // A 20 KiB envelope is not helpful here: GMA's bounded 32 KiB preparation
     // packet plus the universal wrapper cannot fit, even though every outcome
     // is legal. Reserve wrapper headroom without enlarging the packet itself.
-    temperature: 0.25, maxOutputTokens: 5000, targetBytes: 36_864, hardLimitBytes: 40_960,
+    // Five thousand output tokens are not helpful for this bounded contract:
+    // the provider can reach its ceiling before closing otherwise-valid JSON.
+    temperature: 0.25, maxOutputTokens: 12_000, targetBytes: 36_864, hardLimitBytes: 40_960,
     thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.observation-authority-preparation-policy/5',
     outputProperties: observationPreparationOutput,
     systemInstruction: [
@@ -1345,7 +1348,9 @@ const seeds: Seed[] = [
     validators: ['observation-narration-contract'],
     // A legal 24 KiB narration packet must fit with its labeled universal
     // wrapper; rejecting it here would discard dynamic prose before generation.
-    temperature: 0.45, maxOutputTokens: 5000, targetBytes: 28_672, hardLimitBytes: 32_768,
+    // Five thousand output tokens are not helpful for a complete prepared turn:
+    // truncated JSON discards the dynamic prose and every valid binding with it.
+    temperature: 0.45, maxOutputTokens: 12_000, targetBytes: 28_672, hardLimitBytes: 32_768,
     thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.current-scene-narration-policy/16',
     outputProperties: actionDirectedCurrentSceneOutput,
     systemInstruction: [
