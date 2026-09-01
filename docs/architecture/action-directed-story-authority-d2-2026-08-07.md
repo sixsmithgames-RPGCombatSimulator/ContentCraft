@@ -694,9 +694,22 @@ schema and validator are unchanged. Registry `2026-09-01.4` advertises the
 prompt-policy correction and temporarily accepts clients `.3` and `.2` during
 the owner-first rollout.
 
+A second fresh result followed the new condition wording but still omitted
+required root fields and altered another required field type. JSON MIME mode
+therefore does not receive prompt prose alone for an oversized contract.
+Provider adapter version 5 appends the complete, immutable logical output JSON
+Schema to the original system instruction when that schema cannot be attached
+through `responseJsonSchema`. The schema is static operation policy, contains
+no player or campaign data, and is only a first-pass generation instruction;
+GMC still runs the same complete deterministic schema and semantic validators
+before accepting the proposal. Small compatible schemas continue to use the
+native provider schema field without duplicated prompt material. This keeps
+the provider request valid while giving the LLM every required field, exact
+type, enum, and nested shape instead of a guessed partial transport schema.
+
 Release requires provider-conformance tests proving unsupported keywords are
 removed, required nested action-intent structure is retained, the full logical
 schema is not mutated, first-pass tests proving the non-null relation shape is
-present in policy, complete GMC checks, production health advertising 1.11.43,
+present in policy, complete GMC checks, production health advertising 1.11.44,
 and the unchanged natural-language Kerrigan investigation reaching an accepted
 model result before broader narration playtesting resumes.

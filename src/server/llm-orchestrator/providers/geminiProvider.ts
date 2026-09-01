@@ -140,9 +140,22 @@ export function geminiResponseJsonSchemaForRequest(schema: unknown): unknown | u
     : undefined;
 }
 
+function geminiSystemInstructionForRequest(
+  systemInstruction: string,
+  logicalSchema: unknown,
+  responseJsonSchema: unknown | undefined,
+) {
+  if (responseJsonSchema !== undefined) return systemInstruction;
+  return [
+    systemInstruction,
+    'The provider transport cannot attach this large response schema directly. The complete versioned logical JSON Schema follows as binding first-pass output instructions. Return one instance that satisfies it; do not return, quote, summarize, or wrap the schema itself.',
+    JSON.stringify(logicalSchema),
+  ].join('\n');
+}
+
 export class GeminiProviderAdapter implements LlmProviderAdapter {
   readonly id = 'gemini';
-  readonly version = '4';
+  readonly version = '5';
 
   isAvailable() {
     return Boolean(process.env.GEMINI_API_KEY);
@@ -172,6 +185,11 @@ export class GeminiProviderAdapter implements LlmProviderAdapter {
       };
       const responseJsonSchema = geminiResponseJsonSchemaForRequest(request.outputSchema);
       if (responseJsonSchema !== undefined) generationConfig.responseJsonSchema = responseJsonSchema;
+      const systemInstruction = geminiSystemInstructionForRequest(
+        request.systemInstruction,
+        request.outputSchema,
+        responseJsonSchema,
+      );
       if (request.temperature !== undefined && supportsSamplingTemperature(request.model)) {
         generationConfig.temperature = request.temperature;
       }
@@ -183,7 +201,7 @@ export class GeminiProviderAdapter implements LlmProviderAdapter {
         apiKey,
         signal: controller.signal,
         body: JSON.stringify({
-            systemInstruction: { parts: [{ text: request.systemInstruction }] },
+            systemInstruction: { parts: [{ text: systemInstruction }] },
             contents: [{ role: 'user', parts: [{ text: JSON.stringify(request.input) }] }],
             generationConfig,
           }),

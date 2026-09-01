@@ -102,7 +102,7 @@ describe('enabled provider adapter conformance', () => {
     expect(geminiResponseJsonSchemaForRequest(logicalSchema)).toBeUndefined();
   });
 
-  it('uses JSON response mode without a schema hint for an over-budget logical contract', async () => {
+  it('uses JSON response mode plus the complete logical schema as first-pass instructions for an over-budget contract', async () => {
     process.env.GEMINI_API_KEY = 'fixture-key';
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       candidates: [{ content: { parts: [{ text: '{"accepted":true}' }] } }],
@@ -116,6 +116,9 @@ describe('enabled provider adapter conformance', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.generationConfig.responseMimeType).toBe('application/json');
     expect(body.generationConfig.responseJsonSchema).toBeUndefined();
+    expect(body.systemInstruction.parts[0].text).toContain('The complete versioned logical JSON Schema follows');
+    expect(body.systemInstruction.parts[0].text).toContain('"required":["schemaVersion","interactionId","instructionRef","instructionFingerprint","windowText","continuationExpected","semanticIntent","review"]');
+    expect(body.systemInstruction.parts[0].text).toContain('"required":["predicate","intentRef","description"]');
   });
 
   it('distinguishes output truncation from other malformed provider JSON', async () => {
