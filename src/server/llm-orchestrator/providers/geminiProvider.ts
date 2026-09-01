@@ -44,9 +44,68 @@ function supportsSamplingTemperature(model: string) {
   return !/^gemini-(?:3\.[5-9]|[4-9]\.)/i.test(model);
 }
 
+const GEMINI_RESPONSE_JSON_SCHEMA_KEYWORDS = new Set([
+  '$id',
+  '$defs',
+  '$ref',
+  '$anchor',
+  'type',
+  'format',
+  'title',
+  'description',
+  'enum',
+  'items',
+  'prefixItems',
+  'minItems',
+  'maxItems',
+  'minimum',
+  'maximum',
+  'anyOf',
+  'oneOf',
+  'properties',
+  'additionalProperties',
+  'required',
+  'propertyOrdering',
+]);
+
+function projectedConst(value: unknown): Record<string, unknown> {
+  if (typeof value === 'string' || typeof value === 'number') return { enum: [value] };
+  if (typeof value === 'boolean') return { type: 'boolean' };
+  if (value === null) return { type: 'null' };
+  return {};
+}
+
+/**
+ * Gemini accepts only a documented subset of JSON Schema and can return an
+ * opaque provider 500 for unsupported or over-constrained response schemas.
+ * Keep the complete logical schema for GMC's deterministic post-generation
+ * validation; this projection is only the provider transport hint.
+ */
+export function projectGeminiResponseJsonSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map((entry) => projectGeminiResponseJsonSchema(entry));
+  if (!schema || typeof schema !== 'object') return schema;
+
+  const source = schema as Record<string, unknown>;
+  const projected: Record<string, unknown> = Object.prototype.hasOwnProperty.call(source, 'const')
+    ? projectedConst(source.const)
+    : {};
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'const' || !GEMINI_RESPONSE_JSON_SCHEMA_KEYWORDS.has(key)) continue;
+    if ((key === 'properties' || key === '$defs') && value && typeof value === 'object' && !Array.isArray(value)) {
+      projected[key] = Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .map(([propertyName, propertySchema]) => [propertyName, projectGeminiResponseJsonSchema(propertySchema)]),
+      );
+      continue;
+    }
+    projected[key] = projectGeminiResponseJsonSchema(value);
+  }
+  return projected;
+}
+
 export class GeminiProviderAdapter implements LlmProviderAdapter {
   readonly id = 'gemini';
-  readonly version = '1';
+  readonly version = '2';
 
   isAvailable() {
     return Boolean(process.env.GEMINI_API_KEY);
@@ -72,7 +131,7 @@ export class GeminiProviderAdapter implements LlmProviderAdapter {
     try {
       const generationConfig: Record<string, unknown> = {
         responseMimeType: 'application/json',
-        responseJsonSchema: request.outputSchema,
+        responseJsonSchema: projectGeminiResponseJsonSchema(request.outputSchema),
         maxOutputTokens: request.maxOutputTokens,
       };
       if (request.temperature !== undefined && supportsSamplingTemperature(request.model)) {
@@ -95,6 +154,12 @@ export class GeminiProviderAdapter implements LlmProviderAdapter {
         const payload = await response.json().catch(() => ({}));
         const message = providerMessage(payload, `Provider request failed (${response.status}).`);
         const spendCap = response.status === 429 && providerSpendCap(message);
+        console.warn('[LLM][Gemini] Structured provider request failed', {
+          operation: request.operation,
+          model: request.model,
+          providerStatus: response.status,
+          providerCode: String(payload?.error?.status ?? payload?.status ?? 'unknown'),
+        });
         throw new OrchestratorError({
           code: spendCap ? 'PROVIDER_SPEND_CAP_EXCEEDED' : (response.status === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_HTTP_ERROR'),
           category: 'provider',

@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LlmProviderAdapter, ProviderStructuredRequest } from './provider.js';
 import { FakeProviderAdapter } from './providers/fakeProvider.js';
-import { GeminiProviderAdapter } from './providers/geminiProvider.js';
+import {
+  GeminiProviderAdapter,
+  projectGeminiResponseJsonSchema,
+} from './providers/geminiProvider.js';
+import { getOperationDefinition } from './operationRegistry.js';
 
 const originalKey = process.env.GEMINI_API_KEY;
 
@@ -78,6 +82,21 @@ describe('enabled provider adapter conformance', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.generationConfig.temperature).toBeUndefined();
     expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+  });
+
+  it('projects the logical contract onto Gemini-supported JSON Schema without weakening GMC validation', () => {
+    const logicalSchema = getOperationDefinition('action.intent.interpret').outputSchema.schema;
+    const projected = projectGeminiResponseJsonSchema(logicalSchema) as any;
+    const serialized = JSON.stringify(projected);
+
+    expect(serialized).not.toMatch(/"(?:const|pattern|minLength|maxLength|uniqueItems)"\s*:/);
+    expect(projected.properties.schemaVersion).toEqual({ enum: ['gma.semantic-plan-window/1'] });
+    expect(projected.properties.review.properties.allWindowActionsRepresented).toEqual({ type: 'boolean' });
+    expect(projected.properties.semanticIntent.properties.intents.items.properties.relation)
+      .toBeTruthy();
+    expect(Buffer.byteLength(serialized, 'utf8'))
+      .toBeLessThan(Buffer.byteLength(JSON.stringify(logicalSchema), 'utf8'));
+    expect((logicalSchema as any).properties.schemaVersion.const).toBe('gma.semantic-plan-window/1');
   });
 
   it('distinguishes output truncation from other malformed provider JSON', async () => {

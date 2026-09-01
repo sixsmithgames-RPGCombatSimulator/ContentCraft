@@ -637,3 +637,36 @@ redaction tests; complete GMC/GMA/Studio gates; direct `main` deployment in owne
 then consumer order; and a production replay that persists one exact `/5`
 program and narrates both the quoted telepathy and timed rat squeak with one
 coherent Scene/cursor/receipt lineage and no Gemini request.
+
+## Accepted D9.4.78 Gemini response-schema projection — 2026-09-01
+
+GMC accepts the production playtest correction authorized under GMA ADR-009.
+The exact compound investigation reached GMC within the registered 24,576-byte
+context limit, but repeated `action.intent.interpret` calls failed at Gemini
+with provider HTTP 500 before a result existed. The logical response contract
+contains JSON Schema keywords that Gemini does not support and a deeply nested
+shape that the provider may reject opaquely. Retrying the same transport cannot
+correct that deterministic provider-boundary mismatch.
+
+The Gemini adapter now projects every registered logical output schema onto
+Gemini's documented `responseJsonSchema` subset. String and number `const`
+constraints become single-value enums; boolean and null constants retain only
+their provider-supported type. Unsupported constraints such as `pattern`,
+`minLength`, and `maxLength` are omitted from the provider hint. The complete
+versioned schema, semantic validators, positive first-pass prompt policy, and
+proposal-only authority boundary remain unchanged and run after generation.
+The projection therefore reduces provider transport complexity without
+loosening any result GMA can accept or adding player-phrase classification.
+
+Adapter diagnostics record only operation ID, model ID, provider HTTP status,
+and provider status code. They exclude credentials, player text, private Story
+context, schema bodies, and generated content. Existing idempotency records are
+not migrated; a fresh GMA provider-retry epoch or fresh player turn receives the
+new transport. Rollback restores adapter version 1 without changing any Story,
+Scene, action-program, mechanics, or timeline record.
+
+Release requires provider-conformance tests proving unsupported keywords are
+removed, required nested action-intent structure is retained, the full logical
+schema is not mutated, complete GMC checks pass, production health advertises
+1.11.37, and the unchanged natural-language Kerrigan investigation reaches a
+real provider result before broader narration playtesting resumes.
