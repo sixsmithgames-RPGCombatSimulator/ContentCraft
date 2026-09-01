@@ -915,7 +915,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'windowText', 'continuationExpected', 'semanticIntent', 'review'],
     targetBytes: 20_000, hardLimitBytes: 24_576, maxOutputTokens: 5_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/14',
+    promptVersion: 'gma.semantic-intent-policy/15',
     outputProperties: {
       schemaVersion: { const: 'gma.semantic-plan-window/1' },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -1014,6 +1014,7 @@ const seeds: Seed[] = [
       'Choose method kind by the declared method: named skill or feature is capability, named magic is spell, an item is item, a tool is tool, an ordinary tactic is approach, and other is only for a supported method outside those meanings.',
       'Keep a method with the goal it modifies. Movement performed stealthily is one relocate_actor intent with a capability method, not two sequential intents.',
       'Every intent must contain one to eight requested outcomes. In semantic-intent-ir/1, preserve each separately requested answer as its own requestedOutcomes string. Appearance, apparent ancestry or species, identity, distance, contents, activity, presence, and quantity are different outcomes and must not be collapsed into one generic observation.',
+      'For exchange_information and influence_actor, preserve every independently answerable proposition, practical decision, permission, condition, reason, time constraint, warning, or other requested result as its own requestedOutcomes string even when all results concern the same actor and method. Never combine several requested answers into one summary outcome.',
       'Keep completed, succeeded, failed, impossible, declined, interrupted, and selected distinct. A failed attempt is not impossible.',
       'Do not narrate, adjudicate, create canon, resolve mechanics, choose application routing, authority, retrieval, lifecycle, or stopping labels, or invent a materially ambiguous player method.',
       'If one consequential meaning is ambiguous, preserve all unaffected intents and return one focused ambiguity for only the affected intent. Return at most eight intents, twelve relationships, and eight ambiguity options.',

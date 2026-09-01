@@ -260,7 +260,7 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/14');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/15');
     expect(interpretation.prompt.systemInstruction).toMatch(/native-valid JSON.*quotation marks.*standard JSON string escapes.*decoded evidenceQuotes.*byte-for-byte/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*outer result and semanticIntent/i);
     expect(interpretation.context.inputTargetBytes).toBe(20_000);
@@ -285,6 +285,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(interpretation.prompt.systemInstruction).toMatch(/appearance.*ancestry or species.*identity.*distance.*contents.*activity.*presence.*quantity/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/Partition every \/3 outcome into exactly one explicit observation group with observerKind/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/non-information intent.*requestedOutcomes strings/i);
+    expect(interpretation.prompt.systemInstruction).toMatch(/every independently answerable proposition, practical decision, permission, condition, reason, time constraint, warning/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/close spelling error.*immediately established referent/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/closer or better look.*surface_description.*apparent_classification/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/information intent must redeclare.*local rows in that same intent/i);

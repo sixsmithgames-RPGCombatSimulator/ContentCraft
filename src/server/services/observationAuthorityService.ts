@@ -27,7 +27,7 @@ export const OBSERVATION_SAGA_CAPABILITIES = Object.freeze([
 ] as const);
 export const OBSERVATION_SAGA_SHARED_CONTRACTS = Object.freeze({
   playerInstructionArtifact: 'gma.player-instruction-artifact/1', semanticIntentIr: 'gma.semantic-intent-ir/3',
-  semanticActionProgram: 'gma.semantic-action-program/4', semanticActionCompilerPolicy: 'gma.semantic-action-compiler-policy/7',
+  semanticActionProgram: 'gma.semantic-action-program/4', semanticActionCompilerPolicy: 'gma.semantic-action-compiler-policy/9',
   observationPrerequisite: 'gma.observation-prerequisite/1',
   authorityReadSet: 'gma.authority-read-set/1', perceptionProfile: 'gma.perception-profile/1',
   observationRequest: 'gma.observation-request/2', observationResolution: 'gma.observation-resolution/2',

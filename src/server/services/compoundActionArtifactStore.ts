@@ -368,7 +368,7 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
   }
   if (program.schemaVersion === PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION) {
     const planner = isObject(program.planner) ? program.planner : null;
-    if (planner?.policyVersion !== 'gma.semantic-action-compiler-policy/8') {
+    if (!['gma.semantic-action-compiler-policy/8', 'gma.semantic-action-compiler-policy/9'].includes(String(planner?.policyVersion ?? ''))) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The parallel action program compiler policy is invalid.', {});
     }
     const relationPairs = new Set<string>();

@@ -158,7 +158,7 @@ function parallelProgram(boundInstruction = instruction()) {
     ...base,
     schemaVersion: 'gma.semantic-action-program/5',
     planner: {
-      source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/8',
+      source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/9',
       confidence: 0.99, evidenceAnchorNormalizationCount: 0, parallelInformationGroupCount: 0,
     },
     nodes: [
@@ -311,12 +311,22 @@ describe('GMC compound-action private artifact store', () => {
     }, store.records);
     expect(active?.artifact.program).toMatchObject({
       schemaVersion: 'gma.semantic-action-program/5',
-      planner: { policyVersion: 'gma.semantic-action-compiler-policy/8' },
+      planner: { policyVersion: 'gma.semantic-action-compiler-policy/9' },
       limits: { parallelRelationshipCount: 1 },
     });
     expect((((active?.artifact.program ?? {}) as JsonObject).nodes as JsonObject[]).map((node) => node.parallelWith)).toEqual([
       ['intent-rat-speaking-ruse'], ['intent-telepathic-message'],
     ]);
+  });
+
+  it('keeps an already-prepared policy-8 reciprocal program /5 readable during the policy-9 rollout', async () => {
+    const exact = instruction();
+    const historicalProgram = parallelProgram(exact);
+    historicalProgram.planner.policyVersion = 'gma.semantic-action-compiler-policy/8';
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:historical-parallel:turn-42',
+      instruction: exact, program: historicalProgram, cursor: parallelCursor(),
+    }, memoryCollection().records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
   });
 
   it('rejects malformed program /5 parallel graphs without storing a partial artifact', async () => {
@@ -567,7 +577,7 @@ describe('GMC compound-action private artifact store', () => {
     }, memoryCollection().records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_TOO_LARGE' });
   });
 
-  it('accepts a policy-7 observation program with five outcomes after lossless binding compaction and rejects post-normalization overflow', async () => {
+  it('accepts a policy-9 observation program with five outcomes after lossless binding compaction and rejects post-normalization overflow', async () => {
     const exact = instruction();
     const base = program(exact);
     const outcomes = ['drain-contents', 'drain-presence', 'worker-surface', 'worker-class', 'worker-distance'];
@@ -575,7 +585,7 @@ describe('GMC compound-action private artifact store', () => {
       ...base,
       schemaVersion: 'gma.semantic-action-program/4',
       planner: {
-        source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/7', confidence: 1,
+        source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/9', confidence: 1,
         evidenceAnchorNormalizationCount: 0, parallelInformationGroupCount: 0, observationBindingCompactionCount: 10,
       },
       nodes: base.nodes.map((node, index) => index === 0 ? {
