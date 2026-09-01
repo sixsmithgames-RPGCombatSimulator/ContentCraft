@@ -9,9 +9,10 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-01.3';
+export const OPERATION_REGISTRY_VERSION = '2026-09-01.4';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-01.3',
   '2026-09-01.2',
   '2026-08-31.2',
   '2026-08-27.11',
@@ -933,7 +934,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'windowText', 'continuationExpected', 'semanticIntent', 'review'],
     targetBytes: 20_000, hardLimitBytes: 24_576, maxOutputTokens: 12_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/16',
+    promptVersion: 'gma.semantic-intent-policy/17',
     outputProperties: {
       schemaVersion: { const: 'gma.semantic-plan-window/1' },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },
@@ -1019,6 +1020,7 @@ const seeds: Seed[] = [
       'When a malformed token is a close spelling error for an immediately established referent or method and local grammar clearly reuses that referent, preserve the literal spelling in evidence but use the established meaning in semantic fields. Ask an ambiguity only when a distinct meaning remains materially plausible.',
       'Use semantic-intent-ir/3 inside semanticIntent only when windowText asks for fresh perception that needs typed observer, viewpoint, method, or outcome binding; otherwise use semantic-intent-ir/1. Separate summon or form activation, movement, mechanics, and observation prerequisites. Every non-information intent must carry one to eight short ordinary-language requestedOutcomes strings and no observation groups.',
       'Use requestedOutcomes as the only outcome collection field name. Never emit typedOutcomes, typedOutcomeCs, outcomeCs, outcomes, or another alias. Every relation must contain after, parallelWith, and condition; use empty arrays and null when none apply.',
+      'A non-null relation.condition must be exactly {predicate,intentRef,description}, with no other fields. predicate must be completed, succeeded, failed, impossible, declined, interrupted, or selected; intentRef must be the exact intentId whose result controls this intent; description must be null or a short player-supported explanation. Use null when no other intent result controls the intent. Do not encode a free-form condition under a different key or point intentRef at prose.',
       'For every requested information answer in /3, return one typed outcome. Keep appearance, apparent classification or species, identity, activity, distance, extent, presence, quantity, and contents separate. Apparent classification is not identity.',
       'Use only the facet, valueKind, and requestedPrecision vocabulary in responseContract. Distance is facet spatial_relation with valueKind measurement, measurement_range, measurement_or_relation, or relation; never use distance as a facet or value kind. Set relationOriginTargetId to the local target for the stated origin of a relation such as the observing player character.',
       'An unqualified closer or better look at a visible actor requests both surface_description and apparent_classification, not canonical identity. Keep answers from the same observation act in the fewest information intents compatible with distinct observers, methods, prerequisites, and relation origins.',

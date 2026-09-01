@@ -260,7 +260,9 @@ describe('provider-neutral LLM orchestrator', () => {
     const narration = getOperationDefinition('action.slice.narrate');
     const repair = getOperationDefinition('action.slice.repair');
 
-    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/16');
+    expect(interpretation.prompt.version).toBe('gma.semantic-intent-policy/17');
+    expect(interpretation.prompt.systemInstruction).toContain('A non-null relation.condition must be exactly {predicate,intentRef,description}');
+    expect(interpretation.prompt.systemInstruction).toContain('intentRef must be the exact intentId whose result controls this intent');
     expect(interpretation.prompt.systemInstruction).toMatch(/native-valid JSON.*quotation marks.*standard JSON string escapes.*decoded evidenceQuotes.*byte-for-byte/i);
     expect(interpretation.prompt.systemInstruction).toMatch(/copy responseContract\.interactionId.*instructionRef.*instructionFingerprint.*outer result and semanticIntent/i);
     expect(interpretation.context.inputTargetBytes).toBe(20_000);

@@ -681,8 +681,22 @@ provider-retry epoch or fresh player turn receives the new transport. Rollback
 restores adapter version 1 without changing any Story, Scene, action-program,
 mechanics, or timeline record.
 
+The first complete JSON-mode result exposed one remaining first-pass policy
+gap: a player-supported conditional branch was returned with an invented
+condition-object shape. The validator correctly rejected it, but the exact
+non-null shape had not been stated in the original prompt after the oversized
+provider schema was omitted. Policy `gma.semantic-intent-policy/17` now states
+that every non-null relation condition is exactly
+`{predicate,intentRef,description}`, defines the complete predicate vocabulary,
+requires an exact controlling intent ID, and forbids alternate keys. This is a
+universal structural requirement independent of player wording; the logical
+schema and validator are unchanged. Registry `2026-09-01.4` advertises the
+prompt-policy correction and temporarily accepts clients `.3` and `.2` during
+the owner-first rollout.
+
 Release requires provider-conformance tests proving unsupported keywords are
 removed, required nested action-intent structure is retained, the full logical
-schema is not mutated, complete GMC checks pass, production health advertises
-1.11.42, and the unchanged natural-language Kerrigan investigation reaches a
-real provider result before broader narration playtesting resumes.
+schema is not mutated, first-pass tests proving the non-null relation shape is
+present in policy, complete GMC checks, production health advertising 1.11.43,
+and the unchanged natural-language Kerrigan investigation reaching an accepted
+model result before broader narration playtesting resumes.
