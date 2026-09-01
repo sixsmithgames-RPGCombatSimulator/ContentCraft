@@ -9,7 +9,7 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-08-31.1';
+export const OPERATION_REGISTRY_VERSION = '2026-08-31.2';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-08-27.11',
@@ -1285,7 +1285,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'proposal', 'materialClaims', 'sceneRealization', 'declaredActionPayoff', 'agencyAudit', 'mechanicsAuthority'],
     optional: ['proposedTimeAdvance'],
     temperature: 0.45, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/12',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/13',
     outputProperties: actionDirectedStoryTurnOutput,
     systemInstruction: [
       'Prepare and narrate exactly one action-directed scene handoff from the supplied bounded GMA Story Director packet.',
@@ -1341,7 +1341,7 @@ const seeds: Seed[] = [
     id: 'story.scene-kit.repair', operationClass: 'reasoning_high', tier: 'reasoning',
     required: Object.keys(sceneKitRepairProviderOutput), validators: ['story-scene-kit-repair-rows'],
     temperature: 0.25, maxOutputTokens: 7000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/12',
+    thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/13',
     outputProperties: sceneKitRepairProviderOutput,
     systemInstruction: [
       'Repair one complete proposal.handoff.sceneKit from the supplied bounded GMA focused-repair packet.',
@@ -1361,7 +1361,7 @@ const seeds: Seed[] = [
     id: 'story.turn.repair', operationClass: 'reasoning_high', tier: 'reasoning',
     required: ['schemaVersion', 'correctionId', 'sceneKitPatch', 'patchesJson'],
     temperature: 0.25, maxOutputTokens: 5000, targetBytes: 24_576, hardLimitBytes: 36_864,
-    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/12',
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.story-director-policy/13',
     outputProperties: actionDirectedStoryRepairOutput,
     systemInstruction: [
       'Repair only the failed fields in one bounded GMA Story Director result.',
