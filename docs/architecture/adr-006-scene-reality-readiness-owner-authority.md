@@ -1,6 +1,6 @@
 # ADR-006: GMC-owned Scene reality readiness and atomic emergent expansion
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-08
 - Owners: GMC world, Story, Scene, actor, object, and timeline authority; Studio shared contracts and GM inspection
 - Cross-repository decision: `GameMaster Assistant/docs/adr/011-scene-reality-readiness-and-atomic-emergent-expansion.md`
@@ -11,6 +11,14 @@
 This owner decision and its cross-repository ADR must both be Accepted before
 runtime implementation begins. Until then, only documentation, measurement,
 fixture capture, and read-only inspection are allowed.
+
+Both decisions were accepted on 2026-09-09. The owner implementation is now
+complete behind `GMC_SCENE_REALITY_WRITES=0` by default: immutable records are
+staged and exposed through one compare-and-swap active-bundle pointer;
+coverage, prepared-fact selection, commit and expansion receipts, owner-head
+validation, legacy-unassessed inspection, and bounded history are available.
+Production canary evidence remains a rollout gate, and disabling the flag may
+not restore current-answer-only preparation.
 
 ## Problem and decision
 
@@ -174,9 +182,20 @@ current reality, and 32 KiB certificate and receipts. Oversized Scenes split
 into linked zones or Scenes; required records are not silently dropped.
 
 The readiness examiner receives complete material fields for one certificate
-envelope. If they do not fit the examiner input ceiling, GMC splits and examines
-dependency-closed zone certificates and their transitions. A lossy generated
-summary cannot authorize an unexamined record.
+envelope. One merged proposal is capped at 96,000 UTF-8 bytes so its complete
+build request and dossier remain inside the examiner input ceiling. A larger
+situation is divided at an explicit prepared boundary into linked engagement
+zones or Scenes before certification. A lossy generated summary cannot
+authorize an unexamined record.
+
+The provider-facing builder result uses
+`gma.scene-reality-builder-result/1`. A deep build may checkpoint exactly once
+with `gma.scene-reality-build-checkpoint/1`; GMA deterministically merges that
+checkpoint into the complete owner proposal. The continuation consumes the
+four-operation foreground budget's repair reserve, so an examiner rejection
+after two build chunks fails closed instead of starting a fifth model call.
+GMC never accepts either provider wrapper as owner authority: only the complete
+merged `gma.scene-reality-proposal/1` can be examined and committed.
 
 Public projections expose only already revealed facts, public actor labels,
 and accepted current state. GMA private projections are purpose-bound,

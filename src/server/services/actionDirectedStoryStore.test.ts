@@ -1432,4 +1432,46 @@ describe('D2 action-directed Story authority', () => {
       },
     })).toThrowError(expect.objectContaining({ code: 'STORY_ACCEPTED_SCENE_ANCHOR_MISMATCH' }));
   });
+
+  it('projects a certified Scene-reality /5 kit as the actual current playable and active-state scene', async () => {
+    const store = await preparedStore();
+    const active = await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    const legacyKit = (active!.workspace.sceneKits as JsonObject[]).find((entry) => (
+      entry.sceneKitId === (active!.workspace.activeSceneKitRef as JsonObject).sceneKitId
+    ))!;
+    const sceneKit = {
+      ...structuredClone(legacyKit), schemaVersion: 'gmc.scene-kit/5', sceneKitId: 'scene-kit:certified-shop',
+      sceneId: 'scene:certified-shop', campaignId: 'campaign-a', truthState: 'gm_preparation',
+      playableLocus: { kind: 'canonical_subarea', label: 'Inside the passing cobbler shop', canonicalAnchorRef: 'gmc:location:cobbler-shop', sourceRefs: ['gmc:location:cobbler-shop'] },
+      actorMechanicsBindings: [], observationAccess: [], observables: [], obstructions: [],
+      sceneRealityRef: { realityId: 'scene-reality:certified-shop', revision: 1 },
+      sceneStoryDesignRef: { designId: 'scene-design:certified-shop', revision: 1 },
+    } as JsonObject;
+    const sceneReality = {
+      schemaVersion: 'gmc.scene-reality/1', realityId: 'scene-reality:certified-shop', revision: 1,
+      timelineAnchor: { workspaceRevision: active!.storyWorkspaceRef.revision },
+    } as JsonObject;
+    const readinessCertificate = {
+      schemaVersion: 'gmc.scene-readiness-certificate/1', status: 'certified',
+      dependencySet: [{ owner: 'gmc', ref: 'gmc:story-workspace:campaign-a', revision: active!.storyWorkspaceRef.revision }],
+    } as JsonObject;
+    const contexts = await readCurrentSceneContexts(
+      { userId: 'tenant-a', campaignId: 'campaign-a' },
+      store.records,
+      undefined,
+      async () => ({ bundle: { sceneKit, sceneReality, readinessCertificate } }),
+    );
+    expect(contexts).toMatchObject({
+      playableSceneContext: {
+        schemaVersion: 'gma.playable-scene-context/4',
+        sceneKitRef: { sceneKitId: 'scene-kit:certified-shop' },
+        playableLocus: { label: 'Inside the passing cobbler shop' },
+      },
+      activeSceneContext: {
+        sceneKitRef: { sceneKitId: 'scene-kit:certified-shop' },
+        state: { sceneKitRef: { sceneKitId: 'scene-kit:certified-shop' }, revision: 0 },
+      },
+    });
+
+  });
 });

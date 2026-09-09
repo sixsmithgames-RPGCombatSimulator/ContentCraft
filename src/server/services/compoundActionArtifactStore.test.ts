@@ -3,6 +3,7 @@ import type { Collection, Filter } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
   advanceCompoundActionArtifact,
+  ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION,
   COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
   COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
   COMPOUND_ACTION_CONTRACTS,
@@ -317,6 +318,32 @@ describe('GMC compound-action private artifact store', () => {
     expect((((active?.artifact.program ?? {}) as JsonObject).nodes as JsonObject[]).map((node) => node.parallelWith)).toEqual([
       ['intent-rat-speaking-ruse'], ['intent-telepathic-message'],
     ]);
+  });
+
+  it('durably appends an idempotent world-expansion cursor rebase without changing completed work', async () => {
+    const store = memoryCollection();
+    await createCompoundActionArtifact(createInput(), store.records);
+    const rebaseReceipt = {
+      schemaVersion: ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION,
+      receiptId: 'action-program-rebase:turn-42', campaignId: 'campaign-a', programRef: 'program:turn-42',
+      priorCursorRevision: 1, resultingCursorRevision: 2, worldExpansionReceiptRef: 'world-expansion:turn-42',
+      preservedCompletedNodeRefs: [], preservedReceiptRefs: [],
+      revalidatedNodeRefs: ['node:hide', 'node:search'], invalidatedNodeRefs: [],
+      authorityHead: { activeSceneBundle: 3, readinessCertificate: 3 }, createdAt: new Date().toISOString(),
+    };
+    const advanced = await advanceCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
+      idempotencyKey: 'rebase:turn-42', cursor: cursor(2), appendRebaseReceipts: [rebaseReceipt],
+    }, store.records);
+    expect(advanced.artifactRef.revision).toBe(2);
+    const replay = await advanceCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
+      idempotencyKey: 'rebase:turn-42', cursor: cursor(2), appendRebaseReceipts: [rebaseReceipt],
+    }, store.records);
+    expect(replay).toEqual({ ...advanced, duplicate: true });
+    const active = await readActiveCompoundActionArtifact({ userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42' }, store.records);
+    expect(active?.artifact.rebaseReceipts).toEqual([rebaseReceipt]);
+    expect(active?.artifact.cursor).toMatchObject({ revision: 2, completedNodeRefs: [] });
   });
 
   it('keeps an already-prepared policy-8 reciprocal program /5 readable during the policy-9 rollout', async () => {

@@ -253,6 +253,32 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, sceneKitId: 1, stateRevisionAfter: -1 },
     { unique: true, name: 'unique_gmc_scene_turn_state_revision' },
   );
+  // Scene reality records are immutable staged bundles. Readers follow only the
+  // single campaign pointer, so process loss cannot expose a partial dossier.
+  await database.collection('gmc_scene_reality_bundles').createIndex(
+    { userId: 1, campaignId: 1, bundleId: 1 },
+    { unique: true, name: 'unique_gmc_scene_reality_bundle' },
+  );
+  await database.collection('gmc_scene_reality_bundles').createIndex(
+    { userId: 1, campaignId: 1, sceneKitId: 1, bundleRevision: -1 },
+    { name: 'gmc_scene_reality_scene_history' },
+  );
+  await database.collection('gmc_active_scene_reality').createIndex(
+    { userId: 1, campaignId: 1 },
+    { unique: true, name: 'unique_gmc_active_scene_reality_pointer' },
+  );
+  await database.collection('gmc_scene_reality_operations').createIndex(
+    { userId: 1, campaignId: 1, operationId: 1 },
+    { unique: true, name: 'unique_gmc_scene_reality_operation' },
+  );
+  await database.collection('gmc_scene_reality_operations').createIndex(
+    { userId: 1, campaignId: 1, idempotencyKey: 1 },
+    { unique: true, name: 'unique_gmc_scene_reality_idempotency' },
+  );
+  await database.collection('gmc_scene_fact_selections').createIndex(
+    { userId: 1, campaignId: 1, operationId: 1 },
+    { unique: true, name: 'unique_gmc_scene_fact_selection_operation' },
+  );
   // Exact player instructions and resumable action programs are private,
   // non-canonical interaction artifacts. They are revisioned independently
   // from Story so an incomplete compound action cannot leak into campaign canon.

@@ -215,6 +215,7 @@ describe('durable active Scene state', () => {
     expect(memory.states[0]).toMatchObject({ revision: 1, acceptedTurnCount: 1, revealedInformationRefs: ['info:worker-description'] });
     expect(memory.states[0].actorStates).toHaveLength(1);
     expect(memory.receipts).toHaveLength(1);
+    expect(memory.receipts[0].readinessChangedDimensions).toEqual(['material_actor_objective', 'story_source']);
     await expect(readLatestSceneTurnReceipt({
       userId: 'user-a', campaignId: 'campaign-a', sceneKitId: String((playable.sceneKitRef as JsonObject).sceneKitId),
     }, memory.stores)).resolves.toEqual(first.receipt);

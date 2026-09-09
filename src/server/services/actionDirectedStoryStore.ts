@@ -48,6 +48,7 @@ import {
   readLatestSceneTurnReceipt,
   type ActiveSceneStateCollections,
 } from './activeSceneStateStore.js';
+import { readActiveSceneReality } from './sceneRealityReadinessService.js';
 
 /** D2 authority receipt and service-only projection versions. */
 export const STORY_GRAPH_WRITE_RECEIPT_CONTRACT_VERSION = 'gmc.story-graph-write-receipt/1';
@@ -892,9 +893,7 @@ function findForbiddenProjectionField(value: unknown, path = '$'): string | null
 }
 
 /** Derives the bounded GMA scene context from the one active versioned Scene kit. */
-export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
-  const kit = activeV2SceneKit(workspace);
-  if (!kit) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_UNAVAILABLE', 'No version 2 current Scene kit is available.', {});
+export function buildPlayableSceneContextForKit(workspace: JsonObject, kit: JsonObject): JsonObject {
   const graph = projectStoryGraphV2(workspace);
   const nodesById = new Map(graphNodes(graph).map((node) => [String(node.nodeId), node]));
   const beats = kit.beats as JsonObject[];
@@ -905,7 +904,7 @@ export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
   const availableBeats = beats.filter((beat) => beat.beatId !== activeBeat.beatId && beat.state === 'available').slice(0, 4);
   const participants = kit.participants as JsonObject;
   const typedObservationAuthority = [SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(kit.schemaVersion));
-  const boundedObservationAuthority = kit.schemaVersion === SCENE_KIT_V4_CONTRACT_VERSION;
+  const boundedObservationAuthority = [SCENE_KIT_V4_CONTRACT_VERSION, 'gmc.scene-kit/5'].includes(String(kit.schemaVersion));
   const context: JsonObject = {
     schemaVersion: boundedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION
       : typedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION : PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
@@ -1407,6 +1406,12 @@ export function buildSceneTimeContext(input: {
   return context;
 }
 
+export function buildPlayableSceneContextV2(workspace: JsonObject): JsonObject {
+  const kit = activeV2SceneKit(workspace);
+  if (!kit) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_UNAVAILABLE', 'No version 2 current Scene kit is available.', {});
+  return buildPlayableSceneContextForKit(workspace, kit);
+}
+
 /** Reads the immutable result of one exact Scene-handoff owner operation. */
 export async function readCommittedSceneHandoff(
   input: { userId: string; campaignId: string; idempotencyKey: string },
@@ -1855,13 +1860,17 @@ export async function readCurrentSceneContexts(
   input: { userId: string; campaignId: string },
   records?: StoryWorkspaceRevisionCollection,
   activeSceneStores?: ActiveSceneStateCollections,
+  sceneRealityReader?: (input: { userId: string; campaignId: string }) => Promise<JsonObject | null>,
 ) {
   const active = await readActiveStoryWorkspace(input, records);
   if (!active) return null;
-  const kit = activeV2SceneKit(active.workspace);
+  const sceneReality = sceneRealityReader ? await sceneRealityReader(input) : records ? null : await readActiveSceneReality(input);
+  const sceneRealityBundle = isObject(sceneReality?.bundle) ? sceneReality.bundle as JsonObject : null;
+  const sceneRealityKit = isObject(sceneRealityBundle?.sceneKit) ? sceneRealityBundle.sceneKit as JsonObject : null;
+  const kit = sceneRealityKit ?? activeV2SceneKit(active.workspace);
   if (!kit) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_UNAVAILABLE', 'No version 2 current Scene kit is available.', {});
   const activeSceneContext = activeSceneStores || !records
-    ? await readActiveSceneContext({ ...input, workspace: active.workspace }, activeSceneStores)
+    ? await readActiveSceneContext({ ...input, workspace: active.workspace, sceneKit: kit }, activeSceneStores)
     : buildActiveSceneContext(input.campaignId, kit);
   const latestSceneTurnReceipt = activeSceneStores || !records
     ? await readLatestSceneTurnReceipt({
@@ -1901,13 +1910,19 @@ export async function readCurrentSceneContexts(
           : null,
       }
     : null;
+  const privateSceneContext = buildPrivateSceneDirectorContext(active.workspace);
+  if (sceneRealityKit) {
+    privateSceneContext.sceneKitRef = sceneKitReference(input.campaignId, kit);
+    privateSceneContext.sceneRealityRef = clone((sceneRealityBundle?.sceneReality as JsonObject) ?? {});
+    privateSceneContext.sceneStoryDesign = clone((sceneRealityBundle?.sceneStoryDesign as JsonObject) ?? {});
+  }
   return {
     storyWorkspaceRef: active.storyWorkspaceRef,
     lastSceneHandoffReceipt: lastSceneHandoffReceipt ? clone(lastSceneHandoffReceipt) : null,
     latestStoryMutationReceipt,
     latestSceneTurnReceipt,
-    playableSceneContext: buildPlayableSceneContextV2(active.workspace),
-    privateSceneContext: buildPrivateSceneDirectorContext(active.workspace),
+    playableSceneContext: buildPlayableSceneContextForKit(active.workspace, kit),
+    privateSceneContext,
     activeSceneContext,
     authorityReceiptCatalog: buildStoryAuthorityReceiptCatalog(active.workspace),
   };

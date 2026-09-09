@@ -18,6 +18,16 @@ import {
   StoryWorkspaceStoreError,
 } from '../services/storyWorkspaceStore.js';
 import {
+  commitSceneReality,
+  decideSceneCoverage,
+  readActiveSceneReality,
+  readSceneRealityInspection,
+  readSceneRealityOperation,
+  sceneRealityMatchesStoryHead,
+  sceneRealityHealthAdvertisement,
+  selectPreparedStoryFacts,
+} from '../services/sceneRealityReadinessService.js';
+import {
   ACTIVE_SCENE_CAPABILITIES,
   ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION,
   ACTIVE_SCENE_CONTEXT_MAX_BYTES,
@@ -479,10 +489,22 @@ storyWorkspaceRouter.get('/scene-handoffs/:idempotencyKey', requireServiceIntegr
 
 storyWorkspaceRouter.post('/scene-turns', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
+  const userId = (req as IntegrationRequest).userId;
+  const campaignId = req.params.campaignId;
+  const [activeReality, activeStory] = await Promise.all([
+    readActiveSceneReality({ userId, campaignId }),
+    readActiveStoryWorkspace({ userId, campaignId }),
+  ]);
+  const sceneKit = activeReality && typeof activeReality.bundle === 'object' && activeReality.bundle !== null && !Array.isArray(activeReality.bundle)
+    && typeof activeReality.bundle.sceneKit === 'object' && activeReality.bundle.sceneKit !== null && !Array.isArray(activeReality.bundle.sceneKit)
+    && sceneRealityMatchesStoryHead(activeReality, campaignId, activeStory?.storyWorkspaceRef)
+    ? activeReality.bundle.sceneKit
+    : undefined;
   const result = await commitSceneTurn({
-    userId: (req as IntegrationRequest).userId,
-    campaignId: req.params.campaignId,
+    userId,
+    campaignId,
     proposal: req.body,
+    sceneKit,
   });
   res.status(result.duplicate ? 200 : 201).json(result);
 }));
@@ -792,6 +814,100 @@ storyWorkspaceRouter.get('/projections/:mode', asyncRoute(async (req, res) => {
   });
 }));
 
+storyWorkspaceRouter.get('/scene-reality', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await readActiveSceneReality({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+  });
+  if (!result) {
+    res.status(404).json({
+      error: {
+        code: 'SCENE_READINESS_CERTIFICATE_REQUIRED',
+        message: 'The current Scene has not been prepared and certified for play.',
+        correlationId: correlationId(req),
+        details: {},
+      },
+    });
+    return;
+  }
+  res.json(result);
+}));
+
+storyWorkspaceRouter.get('/scene-reality/inspection', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await readSceneRealityInspection({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+  });
+  if (!result) {
+    res.status(404).json({
+      error: {
+        code: 'SCENE_READINESS_CERTIFICATE_REQUIRED',
+        message: 'The current Scene has no readiness dossier to inspect yet.',
+        correlationId: correlationId(req),
+        details: {},
+      },
+    });
+    return;
+  }
+  res.json(result);
+}));
+
+storyWorkspaceRouter.post('/scene-reality/coverage', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await decideSceneCoverage({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    query: req.body,
+  }));
+}));
+
+storyWorkspaceRouter.post('/scene-reality/commit', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await commitSceneReality({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    expectedPointerRevision: body.expectedPointerRevision,
+    buildRequest: body.buildRequest,
+    proposal: body.proposal,
+    assessment: body.assessment,
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.get('/scene-reality/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await readSceneRealityOperation({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    operationId: req.params.operationId,
+  });
+  if (!result) {
+    res.status(404).json({
+      error: {
+        code: 'SCENE_REALITY_OPERATION_NOT_FOUND',
+        message: 'No matching Scene preparation operation was found.',
+        correlationId: correlationId(req),
+        details: {},
+      },
+    });
+    return;
+  }
+  res.json(result);
+}));
+
+storyWorkspaceRouter.post('/scene-reality/fact-selections', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const result = await selectPreparedStoryFacts({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    proposal: req.body,
+  });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
 storyWorkspaceRouter.get('/contracts', (_req, res) => {
   res.json({
     storyWorkspace: STORY_WORKSPACE_CONTRACT_VERSION,
@@ -846,6 +962,7 @@ storyWorkspaceRouter.get('/contracts', (_req, res) => {
       authority: 'gmc',
       routeEnabled: false,
     },
+    sceneReality: sceneRealityHealthAdvertisement(),
     compoundActions: {
       artifactStore: COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
       readableSemanticActionPrograms: COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,

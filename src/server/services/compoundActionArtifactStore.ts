@@ -19,6 +19,7 @@ export const COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION = 'gmc.comp
 export const COMPOUND_REPLAY_STORY_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/1';
 export const COMPOUND_REPLAY_STORY_CHECKPOINT_V2_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/2';
 export const COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-action-origin-checkpoint/1';
+export const ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION = 'gma.action-program-rebase-receipt/1';
 export const PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION = 'gma.semantic-action-program/5';
 export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'compound-action-program/2',
@@ -63,6 +64,7 @@ export const COMPOUND_ACTION_LIMITS = Object.freeze({
   receiptMaximumBytes: 4_096,
   observationReceiptMaximumBytes: 24_576,
   receiptMaximum: 16,
+  rebaseReceiptMaximum: 8,
   clarificationMaximum: 8,
   parallelRelationshipMaximum: 12,
 });
@@ -88,6 +90,7 @@ export interface CompoundActionArtifactRevisionDocument {
   program: JsonObject;
   cursor: JsonObject;
   receipts: JsonObject[];
+  rebaseReceipts?: JsonObject[];
   clarifications: JsonObject[];
   rootFailure: JsonObject | null;
   saga?: JsonObject | null;
@@ -601,6 +604,37 @@ function validateReceipts(receipts: unknown[], program: JsonObject): JsonObject[
   });
 }
 
+function validateRebaseReceipts(receipts: unknown[], program: JsonObject, cursor: JsonObject): JsonObject[] {
+  if (receipts.length > COMPOUND_ACTION_LIMITS.rebaseReceiptMaximum) {
+    throw new StoryWorkspaceStoreError(413, 'COMPOUND_ACTION_REBASE_RECEIPTS_TOO_LARGE', 'The action program has too many world-expansion rebase receipts.', {});
+  }
+  const nodeIds = new Set((program.nodes as JsonObject[]).map((node) => String(node.nodeId)));
+  const receiptIds = new Set<string>();
+  return receipts.map((receiptValue, index) => {
+    if (!isObject(receiptValue) || receiptValue.schemaVersion !== ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION) {
+      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase receipt is invalid.', { index });
+    }
+    const receiptId = requiredString(receiptValue.receiptId, `rebaseReceipts.${index}.receiptId`);
+    if (receiptIds.has(receiptId) || receiptValue.programRef !== program.programId) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_REBASE_RECEIPT_CONFLICT', 'A world-expansion cursor rebase receipt is duplicated or belongs to another program.', { receiptId });
+    receiptIds.add(receiptId);
+    const prior = requiredRevision(receiptValue.priorCursorRevision, `rebaseReceipts.${index}.priorCursorRevision`);
+    const resulting = requiredRevision(receiptValue.resultingCursorRevision, `rebaseReceipts.${index}.resultingCursorRevision`);
+    if (resulting !== prior + 1 || resulting > Number(cursor.revision)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase must advance exactly one saved revision.', { index });
+    requiredString(receiptValue.worldExpansionReceiptRef, `rebaseReceipts.${index}.worldExpansionReceiptRef`);
+    requiredString(receiptValue.campaignId, `rebaseReceipts.${index}.campaignId`);
+    requiredString(receiptValue.createdAt, `rebaseReceipts.${index}.createdAt`, 80);
+    if (!isObject(receiptValue.authorityHead)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase needs the resulting owner head.', { index });
+    for (const field of ['preservedCompletedNodeRefs', 'revalidatedNodeRefs', 'invalidatedNodeRefs']) {
+      const refs = receiptValue[field];
+      if (!Array.isArray(refs) || refs.some((ref) => typeof ref !== 'string' || !nodeIds.has(ref))) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase references an unavailable action node.', { index, field });
+    }
+    if (!Array.isArray(receiptValue.preservedReceiptRefs) || receiptValue.preservedReceiptRefs.some((ref) => typeof ref !== 'string' || !ref.trim())) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase has invalid preserved receipt references.', { index });
+    if ((receiptValue.preservedCompletedNodeRefs as JsonValue[]).some((ref) => (receiptValue.invalidatedNodeRefs as JsonValue[]).includes(ref))) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A completed action node cannot be invalidated by world expansion.', { index });
+    if (byteLength(receiptValue) > COMPOUND_ACTION_LIMITS.receiptMaximumBytes * 4) throw new StoryWorkspaceStoreError(413, 'COMPOUND_ACTION_REBASE_RECEIPT_TOO_LARGE', 'A world-expansion cursor rebase receipt exceeds its bounded storage contract.', { index });
+    return structuredClone(receiptValue);
+  });
+}
+
 function validateTimelineAnchor(value: unknown): { messageId: string; sequence: number; replayLineageId?: string } | null {
   if (value === null || value === undefined) return null;
   if (!isObject(value)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_TIMELINE_INVALID', 'The timeline anchor is invalid.', {});
@@ -627,12 +661,13 @@ function reference(document: CompoundActionArtifactRevisionDocument) {
 }
 
 function payload(document: Pick<CompoundActionArtifactRevisionDocument,
-  'instruction' | 'program' | 'cursor' | 'receipts' | 'clarifications' | 'rootFailure' | 'timelineAnchor' | 'saga'>): JsonObject {
+  'instruction' | 'program' | 'cursor' | 'receipts' | 'rebaseReceipts' | 'clarifications' | 'rootFailure' | 'timelineAnchor' | 'saga'>): JsonObject {
   return {
     instruction: document.instruction,
     program: document.program,
     cursor: document.cursor,
     receipts: document.receipts,
+    rebaseReceipts: document.rebaseReceipts ?? [],
     clarifications: document.clarifications,
     rootFailure: document.rootFailure,
     saga: document.saga ?? null,
@@ -703,7 +738,7 @@ export async function createCompoundActionArtifact(input: {
     instruction: structuredClone(input.instruction),
     program: structuredClone(input.program),
     cursor: structuredClone(input.cursor),
-    receipts: [] as JsonObject[], clarifications: structuredClone(clarifications), rootFailure: null, saga, timelineAnchor,
+    receipts: [] as JsonObject[], rebaseReceipts: [] as JsonObject[], clarifications: structuredClone(clarifications), rootFailure: null, saga, timelineAnchor,
   };
   const requestHash = sha256(canonicalJson(draft));
   const duplicate = await duplicateForKey(records, input.userId, input.campaignId, input.idempotencyKey, requestHash);
@@ -741,6 +776,7 @@ export async function advanceCompoundActionArtifact(input: {
   program?: JsonObject;
   cursor: JsonObject;
   appendReceipts?: JsonObject[];
+  appendRebaseReceipts?: JsonObject[];
   clarifications?: JsonObject[];
   rootFailure?: JsonObject | null;
   saga?: JsonObject;
@@ -748,6 +784,7 @@ export async function advanceCompoundActionArtifact(input: {
   const priorReplay = await records.findOne({ userId: input.userId, campaignId: input.campaignId, idempotencyKey: input.idempotencyKey });
   if (priorReplay) {
     const receiptsMatch = (input.appendReceipts ?? []).every((candidate) => priorReplay.receipts.some((stored) => canonicalJson(stored) === canonicalJson(candidate)));
+    const rebaseReceiptsMatch = (input.appendRebaseReceipts ?? []).every((candidate) => (priorReplay.rebaseReceipts ?? []).some((stored) => canonicalJson(stored) === canonicalJson(candidate)));
     const matches = priorReplay.programId === input.programId
       && input.expectedRevision === priorReplay.revision - 1
       && canonicalJson(priorReplay.cursor) === canonicalJson(input.cursor)
@@ -755,7 +792,7 @@ export async function advanceCompoundActionArtifact(input: {
       && (input.clarifications === undefined || canonicalJson(priorReplay.clarifications) === canonicalJson(input.clarifications))
       && (input.rootFailure === undefined || canonicalJson(priorReplay.rootFailure) === canonicalJson(input.rootFailure))
       && (input.saga === undefined || canonicalJson(priorReplay.saga ?? null) === canonicalJson(input.saga))
-      && receiptsMatch;
+      && receiptsMatch && rebaseReceiptsMatch;
     if (!matches) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_IDEMPOTENCY_CONFLICT', 'The idempotency key was already used for a different interaction artifact write.', {});
     return { artifactRef: reference(priorReplay), duplicate: true };
   }
@@ -777,13 +814,21 @@ export async function advanceCompoundActionArtifact(input: {
     receiptsById.set(key, structuredClone(receipt));
   }
   const receipts = validateReceipts([...receiptsById.values()], program);
+  const rebaseReceiptsById = new Map((active.rebaseReceipts ?? []).map((receipt) => [String(receipt.receiptId), receipt]));
+  for (const receipt of input.appendRebaseReceipts ?? []) {
+    const key = String(receipt.receiptId ?? '');
+    const existing = rebaseReceiptsById.get(key);
+    if (existing && canonicalJson(existing) !== canonicalJson(receipt)) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_REBASE_RECEIPT_CONFLICT', 'An existing cursor rebase receipt cannot be changed.', { receiptId: key });
+    rebaseReceiptsById.set(key, structuredClone(receipt));
+  }
+  const rebaseReceipts = validateRebaseReceipts([...rebaseReceiptsById.values()], program, input.cursor);
   const clarifications = input.clarifications ?? active.clarifications;
   if (!Array.isArray(clarifications) || clarifications.length > COMPOUND_ACTION_LIMITS.clarificationMaximum || clarifications.some((value) => !isObject(value))) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_CLARIFICATION_INVALID', 'The interaction clarification state is invalid.', {});
   }
   const saga = validateSaga(input.saga === undefined ? active.saga : input.saga, active.instruction, program, input.cursor);
   const draft = {
-    instruction: active.instruction, program: structuredClone(program), cursor: structuredClone(input.cursor), receipts,
+    instruction: active.instruction, program: structuredClone(program), cursor: structuredClone(input.cursor), receipts, rebaseReceipts,
     clarifications: structuredClone(clarifications), rootFailure: input.rootFailure === undefined ? active.rootFailure : input.rootFailure,
     saga,
     timelineAnchor: active.timelineAnchor,

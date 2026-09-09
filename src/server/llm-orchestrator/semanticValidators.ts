@@ -248,6 +248,142 @@ registerSemanticValidator('story-scene-readiness', ({ output }) => {
   return result('story-scene-readiness', issues);
 });
 
+const sceneRealityDepths = ['transit_thumbnail', 'interactive', 'investigative', 'encounter_set_piece'];
+
+registerSemanticValidator('scene-reality-depth-contract', ({ request, output }) => {
+  const issues: Array<{ code: string; message: string; path?: string }> = [];
+  const trusted = request.context?.input?.value as any;
+  const floor = String(trusted?.deterministicMinimumDepth ?? output?.deterministicMinimumDepth ?? '');
+  if (String(output?.deterministicMinimumDepth ?? '') !== floor) {
+    issues.push({ code: 'SCENE_REALITY_DEPTH_FLOOR_CHANGED', message: 'The depth judgment changed the deterministic floor.', path: '/deterministicMinimumDepth' });
+  }
+  const floorIndex = sceneRealityDepths.indexOf(floor);
+  const selectedIndex = sceneRealityDepths.indexOf(String(output?.selectedDepth ?? ''));
+  if (floorIndex < 0 || selectedIndex < floorIndex) {
+    issues.push({ code: 'SCENE_REALITY_DEPTH_BELOW_FLOOR', message: 'The depth judgment selected a shallower preparation profile than allowed.', path: '/selectedDepth' });
+  }
+  return result('scene-reality-depth-contract', issues);
+});
+
+registerSemanticValidator('scene-reality-builder-contract', ({ request, output }) => {
+  const issues: Array<{ code: string; message: string; path?: string }> = [];
+  const trusted = request.context?.input?.value as any;
+  const buildRequest = trusted?.buildRequest ?? trusted;
+  if (String(output?.operationId ?? '') !== String(buildRequest?.operationId ?? '')) {
+    issues.push({ code: 'SCENE_REALITY_OPERATION_CHANGED', message: 'The Scene builder changed the trusted operation ID.', path: '/operationId' });
+  }
+  if (String(output?.campaignId ?? '') !== String(buildRequest?.campaignId ?? '')) {
+    issues.push({ code: 'SCENE_REALITY_CAMPAIGN_CHANGED', message: 'The Scene builder changed the trusted campaign ID.', path: '/campaignId' });
+  }
+  const minimum = sceneRealityDepths.indexOf(String(buildRequest?.deterministicMinimumDepth ?? ''));
+  const selected = sceneRealityDepths.indexOf(String(output?.requestedDepth ?? ''));
+  if (minimum < 0 || selected < minimum) issues.push({ code: 'SCENE_REALITY_DEPTH_BELOW_FLOOR', message: 'The Scene builder returned a shallower dossier than the deterministic floor.', path: '/requestedDepth' });
+  const continuation = output?.status === 'continuation_required';
+  const candidate = continuation ? output?.checkpoint : output?.proposal;
+  const priorCheckpoint = trusted?.buildContinuation?.checkpoint;
+  const effectiveCandidate = !continuation && priorCheckpoint && candidate
+    ? {
+        ...candidate,
+        zones: [...(priorCheckpoint.zones ?? []), ...(candidate.zones ?? [])],
+        actorFrames: [...(priorCheckpoint.actorFrames ?? []), ...(candidate.actorFrames ?? [])],
+        elements: [...(priorCheckpoint.elements ?? []), ...(candidate.elements ?? [])],
+        facts: [...(priorCheckpoint.facts ?? []), ...(candidate.facts ?? [])],
+      }
+    : candidate;
+  if (continuation && trusted?.buildContinuation) {
+    issues.push({ code: 'SCENE_REALITY_BUILD_CHUNK_LIMIT', message: 'Scene construction cannot request a third build chunk.', path: '/status' });
+  }
+  if (continuation && selected < sceneRealityDepths.indexOf('investigative')) {
+    issues.push({ code: 'SCENE_REALITY_BUILD_CONTINUATION_UNNECESSARY', message: 'Only investigative or set-piece construction may use a second build chunk.', path: '/status' });
+  }
+  if ((continuation && (output?.proposal !== null || !candidate)) || (!continuation && (output?.checkpoint !== null || !candidate))) {
+    issues.push({ code: 'SCENE_REALITY_BUILD_RESULT_INCONSISTENT', message: 'The Scene builder result does not match its complete or continuation disposition.', path: '/status' });
+  }
+  if (candidate && (String(candidate.operationId ?? '') !== String(output?.operationId ?? '')
+    || String(candidate.campaignId ?? '') !== String(output?.campaignId ?? '')
+    || String(candidate.requestedDepth ?? '') !== String(output?.requestedDepth ?? ''))) {
+    issues.push({ code: 'SCENE_REALITY_BUILD_IDENTITY_CHANGED', message: 'The Scene build chunk changed its wrapper identity.', path: continuation ? '/checkpoint' : '/proposal' });
+  }
+  if (continuation) {
+    const included = new Set((candidate?.includedDomains ?? []).map(String));
+    const remaining = new Set((candidate?.remainingDomains ?? []).map(String));
+    if ([...included].some((domain) => remaining.has(domain))) issues.push({ code: 'SCENE_REALITY_BUILD_DOMAIN_OVERLAP', message: 'A continued build cannot mark one domain both included and remaining.', path: '/checkpoint/remainingDomains' });
+    if (new Set([...included, ...remaining]).size !== 4) issues.push({ code: 'SCENE_REALITY_BUILD_DOMAIN_GAP', message: 'A continued build must classify every record domain as included or remaining.', path: '/checkpoint/remainingDomains' });
+    for (const [field, domain] of Object.entries({ zones: 'zones', actorFrames: 'actor_frames', elements: 'elements', facts: 'facts' })) {
+      if ((candidate?.[field]?.length ?? 0) > 0 && !included.has(domain)) issues.push({ code: 'SCENE_REALITY_BUILD_DOMAIN_MISMATCH', message: 'Checkpoint records must belong to a declared included domain.', path: `/checkpoint/${field}` });
+    }
+    const rowCount = ['zones', 'actorFrames', 'elements', 'facts'].reduce((count, key) => count + (Array.isArray(candidate?.[key]) ? candidate[key].length : 0), 0);
+    if (rowCount === 0) issues.push({ code: 'SCENE_REALITY_BUILD_CHECKPOINT_EMPTY', message: 'A build checkpoint must preserve completed dossier records.', path: '/checkpoint' });
+  }
+  for (const key of ['certificate', 'readinessCertificate', 'commitReceipt', 'expansionReceipt', 'vcsResult', 'mechanicsResult', 'acceptedReceipt']) {
+    if (Object.prototype.hasOwnProperty.call(output ?? {}, key) || Object.prototype.hasOwnProperty.call(candidate ?? {}, key)) issues.push({ code: 'SCENE_REALITY_AUTHORITY_ARTIFACT_FORBIDDEN', message: `A Scene proposal cannot contain '${key}'.`, path: `/${key}` });
+  }
+  const zones = Array.isArray(effectiveCandidate?.zones) ? effectiveCandidate.zones : [];
+  if (!continuation && zones.length === 0) issues.push({ code: 'SCENE_REALITY_ZONE_REQUIRED', message: 'A Scene reality dossier needs at least one engagement zone.', path: '/proposal/zones' });
+  zones.forEach((zone: any, index: number) => {
+    if (!Array.isArray(zone?.sensorySurface) || zone.sensorySurface.length === 0) issues.push({ code: 'SCENE_REALITY_ZONE_SURFACE_REQUIRED', message: 'Every zone needs a concrete sensory surface.', path: `/proposal/zones/${index}/sensorySurface` });
+    if (!Array.isArray(zone?.ordinaryActivity) || zone.ordinaryActivity.length === 0) issues.push({ code: 'SCENE_REALITY_ZONE_OPERATION_REQUIRED', message: 'Every zone needs ordinary operation or activity.', path: `/proposal/zones/${index}/ordinaryActivity` });
+  });
+  const facts = Array.isArray(effectiveCandidate?.facts) ? effectiveCandidate.facts : [];
+  facts.forEach((fact: any, index: number) => {
+    if (fact?.epistemicState === 'missing_preparation') issues.push({ code: 'SCENE_REALITY_MISSING_PREPARATION_AS_FACT', message: 'Missing preparation cannot be proposed as world truth.', path: `/proposal/facts/${index}/epistemicState` });
+    if (!Array.isArray(fact?.accessVectors) || fact.accessVectors.length === 0) issues.push({ code: 'SCENE_REALITY_FACT_ACCESS_REQUIRED', message: 'Every fact needs at least one prepared access vector.', path: `/proposal/facts/${index}/accessVectors` });
+    if (fact?.valueKind === 'bounded_negative' && !String(fact?.negativeScope ?? '').trim()) issues.push({ code: 'SCENE_REALITY_NEGATIVE_SCOPE_REQUIRED', message: 'A bounded negative needs its exact observed scope.', path: `/proposal/facts/${index}/negativeScope` });
+  });
+  if (!continuation && selected >= sceneRealityDepths.indexOf('interactive') && ((effectiveCandidate?.actorFrames?.length ?? 0) + (effectiveCandidate?.elements?.length ?? 0) === 0)) {
+    issues.push({ code: 'SCENE_REALITY_INTERACTION_SURFACE_REQUIRED', message: 'Interactive preparation needs a material actor or element.', path: '/proposal/actorFrames' });
+  }
+  if (!continuation && selected >= sceneRealityDepths.indexOf('investigative') && facts.length < 2) {
+    issues.push({ code: 'SCENE_REALITY_INVESTIGATIVE_FACTS_REQUIRED', message: 'Investigative preparation needs multiple concrete facts or bounded negatives.', path: '/proposal/facts' });
+  }
+  const knownRefs = new Set<string>([
+    ...zones.map((entry: any) => String(entry?.zoneId ?? '')),
+    ...(Array.isArray(effectiveCandidate?.actorFrames) ? effectiveCandidate.actorFrames.map((entry: any) => String(entry?.actorFrameId ?? '')) : []),
+    ...(Array.isArray(effectiveCandidate?.elements) ? effectiveCandidate.elements.map((entry: any) => String(entry?.elementId ?? '')) : []),
+    ...facts.map((entry: any) => String(entry?.factId ?? '')),
+  ].filter(Boolean));
+  const targets = Array.isArray(candidate?.openingFrame?.presentedTargetManifest?.targets) ? candidate.openingFrame.presentedTargetManifest.targets : [];
+  targets.forEach((target: any, index: number) => {
+    if (target?.materiallyAddressable === true && !knownRefs.has(String(target?.targetRef ?? ''))) issues.push({ code: 'SCENE_REALITY_PRESENTED_TARGET_UNBOUND', message: 'Opening prose introduced a materially addressable target without prepared reality.', path: `/proposal/openingFrame/presentedTargetManifest/targets/${index}/targetRef` });
+  });
+  return result('scene-reality-builder-contract', issues);
+});
+
+registerSemanticValidator('scene-readiness-examiner-contract', ({ request, output }) => {
+  const issues: Array<{ code: string; message: string; path?: string }> = [];
+  const trusted = request.context?.input?.value as any;
+  const proposal = trusted?.proposal ?? trusted?.dossier ?? trusted;
+  if (String(output?.operationId ?? '') !== String(proposal?.operationId ?? '')) issues.push({ code: 'SCENE_READINESS_OPERATION_CHANGED', message: 'The examiner changed the Scene build operation ID.', path: '/operationId' });
+  if (String(output?.campaignId ?? '') !== String(proposal?.campaignId ?? '')) issues.push({ code: 'SCENE_READINESS_CAMPAIGN_CHANGED', message: 'The examiner changed the campaign ID.', path: '/campaignId' });
+  if (String(output?.selectedDepth ?? '') !== String(proposal?.requestedDepth ?? '')) issues.push({ code: 'SCENE_READINESS_DEPTH_CHANGED', message: 'The examiner changed the selected preparation depth.', path: '/selectedDepth' });
+  if (['investigative', 'encounter_set_piece'].includes(String(output?.selectedDepth)) && output?.verdict === 'adequate' && output?.confidence === 'low') issues.push({ code: 'SCENE_READINESS_LOW_CONFIDENCE', message: 'Low-confidence investigative or set-piece preparation requires repair.', path: '/confidence' });
+  const debt = Array.isArray(output?.debt) ? output.debt : [];
+  if (output?.verdict === 'adequate' && debt.some((entry: any) => entry?.blocking === true)) issues.push({ code: 'SCENE_READINESS_BLOCKING_DEBT', message: 'A Scene with blocking debt cannot be adequate.', path: '/verdict' });
+  const probes = Array.isArray(output?.counterfactualProbes) ? output.counterfactualProbes : [];
+  probes.forEach((probe: any, index: number) => {
+    if (probe?.status === 'supported' && (!Array.isArray(probe?.evidenceRefs) || probe.evidenceRefs.length === 0)) issues.push({ code: 'SCENE_READINESS_PROBE_REF_REQUIRED', message: 'A supported probe must cite already prepared evidence.', path: `/counterfactualProbes/${index}/evidenceRefs` });
+  });
+  for (const key of ['facts', 'zones', 'actorFrames', 'elements', 'sceneKit', 'sceneReality', 'narration', 'mechanics', 'certificate', 'receipt']) {
+    if (Object.prototype.hasOwnProperty.call(output ?? {}, key)) issues.push({ code: 'SCENE_READINESS_AUTHORING_FORBIDDEN', message: `The examiner cannot author '${key}'.`, path: `/${key}` });
+  }
+  return result('scene-readiness-examiner-contract', issues);
+});
+
+registerSemanticValidator('scene-reality-repair-contract', ({ request, output }) => {
+  const issues: Array<{ code: string; message: string; path?: string }> = [];
+  const trusted = request.context?.input?.value as any;
+  if (String(output?.correctionId ?? '') !== String(trusted?.correctionId ?? '')) issues.push({ code: 'SCENE_REALITY_REPAIR_CORRECTION_CHANGED', message: 'The repair changed the correction ID.', path: '/correctionId' });
+  const allowedDomains = new Set((Array.isArray(trusted?.failedDomains) ? trusted.failedDomains : []).map(String));
+  for (const [index, domain] of (Array.isArray(output?.failedDomains) ? output.failedDomains : []).entries()) {
+    if (!allowedDomains.has(String(domain))) issues.push({ code: 'SCENE_REALITY_REPAIR_SCOPE_WIDENED', message: 'The repair changed a domain that did not fail.', path: `/failedDomains/${index}` });
+  }
+  const allowedRefs = new Set((Array.isArray(trusted?.allowedRecordRefs) ? trusted.allowedRecordRefs : []).map(String));
+  for (const [index, patch] of (Array.isArray(output?.recordPatches) ? output.recordPatches : []).entries()) {
+    if (!allowedRefs.has(String(patch?.recordRef ?? ''))) issues.push({ code: 'SCENE_REALITY_REPAIR_REF_WIDENED', message: 'The repair replaced a record outside the failed domains.', path: `/recordPatches/${index}/recordRef` });
+  }
+  return result('scene-reality-repair-contract', issues);
+});
+
 function sameStringSet(actual: unknown, expected: unknown): boolean {
   if (!Array.isArray(actual) || !Array.isArray(expected)) return false;
   const left = [...new Set(actual.map(String))].sort();

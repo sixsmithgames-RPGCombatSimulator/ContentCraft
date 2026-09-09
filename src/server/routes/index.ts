@@ -92,6 +92,7 @@ import {
   SCENE_TURN_RECEIPT_CONTRACT_VERSION,
 } from '../services/activeSceneStateStore.js';
 import { CAMPAIGN_CLOCK_MUTATION_RECEIPT_CONTRACT_VERSION } from '../services/campaignClockMutation.js';
+import { sceneRealityHealthAdvertisement } from '../services/sceneRealityReadinessService.js';
 
 export const apiRouter = Router();
 
@@ -212,6 +213,7 @@ apiRouter.get('/health', (_req, res) => {
         routeEnabled: true,
         conformance: true,
       },
+      sceneReality: sceneRealityHealthAdvertisement(),
       storyObligations: {
         capabilities: STORY_OBLIGATION_CAPABILITIES,
         contracts: {

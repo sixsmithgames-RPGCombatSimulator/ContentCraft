@@ -113,6 +113,31 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(schema.required).not.toContain('outcomeProse');
   });
 
+  it('registers Scene reality preparation as first-pass policy, independent examination, and scoped repair', () => {
+    const depth = getOperationDefinition('story.scene-reality.depth');
+    const builder = getOperationDefinition('story.scene-reality.build');
+    const examiner = getOperationDefinition('story.scene-readiness.examine');
+    const repair = getOperationDefinition('story.scene-reality.repair');
+
+    expect(depth.prompt.version).toBe('gma.scene-reality-depth-policy/1');
+    expect(depth.prompt.systemInstruction).toMatch(/Never select a depth shallower than deterministicMinimumDepth/i);
+    expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/1');
+    expect(builder.prompt.systemInstruction).toMatch(/Prepare a playable situation rather than an answer to the current sentence/i);
+    expect(builder.prompt.systemInstruction).toMatch(/one meaningful layer beyond every presented threshold/i);
+    expect(builder.prompt.systemInstruction).toMatch(/ordinary, irrelevant, or bounded-negative reality/i);
+    expect(builder.prompt.systemInstruction).toMatch(/every materially addressable actor, place, threshold, container, vehicle, structure, or distinct object.*presented-target manifest/i);
+    expect(builder.prompt.systemInstruction).toMatch(/cover every causally reachable unfinished node/i);
+    expect(builder.prompt.systemInstruction).toMatch(/proposal only/i);
+    expect(examiner.prompt.version).toBe('gma.scene-readiness-examiner-policy/1');
+    expect(examiner.prompt.systemInstruction).toMatch(/five to ten minutes of plausible play/i);
+    expect(examiner.prompt.systemInstruction).toMatch(/at least three Scene-specific counterfactual probes/i);
+    expect(examiner.prompt.systemInstruction).toMatch(/examiner diagnoses only/i);
+    expect(repair.prompt.version).toBe('gma.scene-reality-repair-policy/1');
+    expect(repair.prompt.systemInstruction).toMatch(/exactly the failed Scene-reality domains/i);
+    expect(repair.prompt.systemInstruction).toMatch(/same positive depth requirements as the first-pass/i);
+    expect(repair.prompt.systemInstruction).toMatch(/Preserve every accepted record/i);
+  });
+
   it('returns the universal response envelope and provider-reported usage', async () => {
     const req = request();
     const provider = new FakeProviderAdapter(() => outputFor(req.operation));
@@ -459,6 +484,62 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(narration.provider.maxAttempts).toBe(1);
     expect(preparation.provider.fallbackAllowed).toBe(false);
     expect(narration.provider.fallbackAllowed).toBe(false);
+  });
+
+  it('publishes exact nested Scene-reality builder, examiner, and repair schemas', () => {
+    const builder = getOperationDefinition('story.scene-reality.build');
+    const examiner = getOperationDefinition('story.scene-readiness.examine');
+    const repair = getOperationDefinition('story.scene-reality.repair');
+    const wrapper = builder.outputSchema.schema.properties as any;
+    const properties = wrapper.proposal.anyOf[0].properties;
+
+    expect(properties.sceneKit).toMatchObject({
+      type: 'object', additionalProperties: false,
+      required: expect.arrayContaining(['playableLocus', 'sceneRealityRef', 'sceneStoryDesignRef']),
+    });
+    expect(properties.sceneReality).toMatchObject({
+      type: 'object', additionalProperties: false,
+      required: expect.arrayContaining(['timelineAnchor', 'zoneRefs', 'actorFrameRefs', 'factRefs', 'preparedBoundaries']),
+    });
+    expect(properties.zones.items).toMatchObject({
+      type: 'object', additionalProperties: false,
+      required: expect.arrayContaining(['zoneId', 'ordinaryActivity', 'thresholds', 'visibleElementRefs']),
+    });
+    expect(properties.actorFrames.items).toMatchObject({
+      type: 'object', additionalProperties: false,
+      required: expect.arrayContaining(['actorFrameId', 'zoneRef', 'count', 'role', 'sharedActivity', 'reasonPresent', 'knowledge', 'ignoranceBoundaries']),
+    });
+    expect(properties.elements.items).toMatchObject({
+      type: 'object', additionalProperties: false,
+      required: expect.arrayContaining(['elementId', 'zoneRef', 'contents', 'interactionSurface']),
+    });
+    expect(properties.facts.items).toMatchObject({
+      type: 'object', additionalProperties: false,
+      required: expect.arrayContaining(['factId', 'targetRef', 'epistemicState', 'accessVectors', 'negativeScope']),
+    });
+    expect(properties.sceneStoryDesign).toMatchObject({
+      type: 'object', additionalProperties: false,
+      required: expect.arrayContaining(['obligations', 'affordances', 'storyAlignment']),
+    });
+    expect(wrapper.checkpoint.anyOf[0]).toMatchObject({
+      type: 'object', additionalProperties: false,
+      required: expect.arrayContaining(['includedDomains', 'remainingDomains', 'requiredSourceRefs', 'zones', 'actorFrames', 'elements', 'facts']),
+    });
+    expect((examiner.outputSchema.schema.properties as any).counterfactualProbes.items).toMatchObject({
+      type: 'object', additionalProperties: false, required: ['probe', 'status', 'evidenceRefs'],
+    });
+    expect((examiner.outputSchema.schema.properties as any).debt.items).toMatchObject({
+      type: 'object', additionalProperties: false, required: ['debtId', 'domain', 'description', 'blocking', 'affectedRefs'],
+    });
+    expect((repair.outputSchema.schema.properties as any).recordPatches.items.properties.replacement.anyOf)
+      .toHaveLength(4);
+    expect((repair.outputSchema.schema.properties as any).assessment).toMatchObject({
+      type: 'object', additionalProperties: false,
+      required: expect.arrayContaining(['dossierFingerprint', 'counterfactualProbes', 'debt']),
+    });
+    expect(builder.prompt.systemInstruction).toMatch(/every actor frame in one exact staged zone/i);
+    expect(builder.prompt.systemInstruction).toMatch(/cohort.*positive count.*shared role.*current activity/i);
+    expect(builder.prompt.systemInstruction).toMatch(/never request a third chunk.*silently omit required material/i);
   });
 
   it('registers the combined action-directed Story turn with the complete first-pass contract', () => {

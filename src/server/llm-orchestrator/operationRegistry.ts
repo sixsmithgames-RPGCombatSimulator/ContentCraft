@@ -8,10 +8,17 @@ import {
   type LlmValidationResult,
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
+import {
+  sceneRealityBuilderResultOutput,
+  sceneRealityDepthOutput,
+  sceneRealityExaminerOutput,
+  sceneRealityRepairOutput,
+} from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-01.9';
+export const OPERATION_REGISTRY_VERSION = '2026-09-09.2';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-01.9',
   '2026-09-01.8',
   '2026-09-01.7',
   '2026-09-01.6',
@@ -1265,6 +1272,69 @@ const seeds: Seed[] = [
       'Each candidate needs a trigger, dramatic question, stakes, pressures, dependencies, exclusions, and preparation horizon.',
       'Prepare situations, never player choices, mandatory paths, guaranteed arrivals, or predetermined outcomes.',
       'Return at most five candidates and at most three ready_soon. Never commit, create mechanics, or narrate play.',
+    ].join(' '),
+  },
+  {
+    id: 'story.scene-reality.depth', operationClass: 'reasoning_high', tier: 'reasoning',
+    required: Object.keys(sceneRealityDepthOutput), validators: ['scene-reality-depth-contract'],
+    temperature: 0.15, maxOutputTokens: 800, targetBytes: 24_000, hardLimitBytes: 32_000,
+    thinkingLevel: 'low', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.scene-reality-depth-policy/1',
+    outputProperties: sceneRealityDepthOutput,
+    systemInstruction: [
+      'Judge the preparation depth for one proposed engagement zone from the supplied trusted Story, location, player-direction, timeline, capability, and continuity inputs.',
+      'Return exactly gma.scene-reality-depth-judgment/1 and copy deterministicMinimumDepth exactly.',
+      'Select transit_thumbnail only for a passing or distant view with no reasonable commitment to engage; interactive when a player may stop, enter, purchase, converse, inspect, take, or interfere; investigative for reconnaissance, mystery, guarded access, hidden contents, social inquiry, surveillance, or an information obligation; encounter_set_piece for expected conflict, chase, infiltration, complex negotiation, hazard sequence, or multi-owner mechanics.',
+      'Never select a depth shallower than deterministicMinimumDepth. When evidence conflicts or uncertainty is high, select the deeper adjacent profile.',
+      'Return a concise reason, expected dwell, and uncertainty. Do not create world facts, plot outcomes, mechanics, narration, certificates, or authority receipts.',
+    ].join(' '),
+  },
+  {
+    id: 'story.scene-reality.build', operationClass: 'world_generation', tier: 'world',
+    required: Object.keys(sceneRealityBuilderResultOutput), validators: ['scene-reality-builder-contract'],
+    temperature: 0.35, maxOutputTokens: 10_000, targetBytes: 96_000, hardLimitBytes: 131_072,
+    thinkingLevel: 'high', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.scene-reality-builder-policy/1',
+    outputProperties: sceneRealityBuilderResultOutput,
+    systemInstruction: [
+      'Build one complete dependency-closed private Scene-reality proposal from only the supplied owner records, accepted receipts, creation policy, depth judgment, and build request. Return exactly gma.scene-reality-builder-result/1. A complete result puts the gma.scene-reality-proposal/1 candidate in proposal and null in checkpoint.',
+      'If and only if an investigative or encounter-set-piece dossier cannot fit safely in one output, the first call may return continuation_required with proposal null and one dependency-closed gma.scene-reality-build-checkpoint/1. Name the exact remaining record domains and source refs. When buildContinuation is supplied, return complete with checkpoint null; never request a third chunk, repeat checkpoint records, or silently omit required material.',
+      'Keep the complete merged certificate envelope at or below 96,000 UTF-8 bytes so the independent examiner can review every material field. If the surrounding situation is larger, stop the current envelope at an explicit reasonable prepared boundary and describe the linked zone or Scene beyond it; never compress away or omit required records.',
+      'Prepare a playable situation rather than an answer to the current sentence: establish where everyone and everything material is, why the place operates, why each material actor is present, what each actor wants, knows, does not know, may disclose, and is likely to do, what material elements contain or concretely lack, what can be learned through multiple suitable routes, what changes with time, and how the Scene is connected, latent, or incidental to the active Story.',
+      'Place every actor frame in one exact staged zone. For an individual, return null count, role, and sharedActivity; for a cohort, return a positive count plus its shared role and current activity.',
+      'At transit_thumbnail depth, establish the route, ordinary activity, stable façade seeds, spatial relationships, and explicit boundaries. At interactive depth, add usable topology, material actors and elements, ordinary engagement consequences, concrete facts, bounded absences, and genuine obstructions. At investigative depth, add the private truth, clues, contradictions, ignorance and concealment boundaries, meaningful space beyond likely thresholds, Story classification, and time-sensitive changes. At encounter_set_piece depth, also add factions, escalation, usable environment, mechanics boundaries, failure, retreat, surrender, pursuit, delay, and aftermath possibilities.',
+      'Prepare at least one meaningful layer beyond every presented threshold or record an owner-backed obstruction. Stop recursive preparation at explicit reasonable boundaries that predate later player instructions.',
+      'Create ordinary, irrelevant, or bounded-negative reality when that is truthful; never make every incidental target a clue. Establish the private truth behind active mysteries rather than disguising authorial absence as secrecy, ignorance, obstruction, or deliberate unknown.',
+      'Reuse supplied stable identities and source refs. Scene-local identities remain stable and include promotion policy. Never join by display name or prose similarity. Never contradict current canon, accepted turn state, timeline, clocks, or VCS mechanics authority.',
+      'For every instruction-independent affordance, bind one exact zone, target, action family, access class or threshold, optional capability class, and prepared fact refs. Arrays are indexes only and never imply target/action cross-products.',
+      'For compound work, cover every causally reachable unfinished node through the supplied next player choice, unresolved mechanic, semantic stop, or program end; do not prepare only the first node or only the requested answer.',
+      'The opening frame may use creative sensory language, but every materially addressable actor, place, threshold, container, vehicle, structure, or distinct object must appear in its presented-target manifest with an exact prepared ref. Do not invent a target in prose and prepare it afterward.',
+      'Do not output a readiness certificate, accepted receipt, VCS result, committed event, resolved mechanic, or authority claim. This result is a proposal only.',
+    ].join(' '),
+  },
+  {
+    id: 'story.scene-readiness.examine', operationClass: 'reasoning_high', tier: 'reasoning',
+    required: Object.keys(sceneRealityExaminerOutput), validators: ['scene-readiness-examiner-contract'],
+    temperature: 0.1, maxOutputTokens: 4_000, targetBytes: 96_000, hardLimitBytes: 131_072,
+    thinkingLevel: 'high', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.scene-readiness-examiner-policy/1',
+    outputProperties: sceneRealityExaminerOutput,
+    systemInstruction: [
+      'Independently examine one validated Scene-reality proposal and return exactly gma.scene-readiness-assessment/1. Judge whether a competent human GM could run roughly five to ten minutes of plausible play at the selected depth, or the longer expected duration for a set piece, without inventing missing fundamentals.',
+      'Review the locus, every zone, adjacency, access relationship, prepared threshold, and space one meaningful layer beyond presented thresholds; every material or presented actor, object, and place; each actor purpose, identity maturity, knowledge, ignorance, disclosure, and likely action; ordinary location operations and time changes; observations, bounded negatives, real obstructions, and access; Story connection or incidentality and false-clue risk; likely action families without prescribing methods; consequences, exits, retreat, waiting, and redirection; relevant player capabilities; deliberate unknowns versus disguised gaps; and source, revision, and timeline consistency.',
+      'Create at least three Scene-specific counterfactual probes. Mark a probe supported only when exact evidenceRefs already answer it or establish a genuine obstruction. Any unsupported fundamental produces repair_required and domain-specific debt.',
+      'Copy the supplied expected dossier fingerprint and versioned policy fingerprint exactly; they bind the assessment to the proposal and policy actually examined.',
+      'Use low confidence as repair_required at investigative or encounter_set_piece depth. Never lower the selected depth.',
+      'Do not author facts, rewrite records, create narration or mechanics, claim authority, or include a certificate or receipt. The examiner diagnoses only.',
+    ].join(' '),
+  },
+  {
+    id: 'story.scene-reality.repair', operationClass: 'reasoning_high', tier: 'reasoning',
+    required: Object.keys(sceneRealityRepairOutput), validators: ['scene-reality-repair-contract'],
+    temperature: 0.15, maxOutputTokens: 6_000, targetBytes: 64_000, hardLimitBytes: 96_000,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.scene-reality-repair-policy/1',
+    outputProperties: sceneRealityRepairOutput,
+    systemInstruction: [
+      'Repair exactly the failed Scene-reality domains named in the supplied correction packet and return gma.scene-reality-repair/1.',
+      'Return replacement records only for the exact allowed record refs, plus a successor assessment. Preserve every accepted record, stable identity, source ref, authority revision, player instruction, Story classification, prepared boundary, and mechanics boundary outside those domains.',
+      'Satisfy the same positive depth requirements as the first-pass Scene-reality builder. Do not invent a current-answer-only fact, broaden the repair, change the requested depth, add narration, commit authority, or include a certificate or receipt.',
     ].join(' '),
   },
   {

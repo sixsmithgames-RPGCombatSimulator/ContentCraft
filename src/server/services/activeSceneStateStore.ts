@@ -72,6 +72,7 @@ export interface SceneTurnReceiptDocument {
   actionSummary: string;
   outcomeSummary: string;
   sourceReceiptRefs: string[];
+  readinessChangedDimensions?: string[];
   committedAt: Date;
 }
 
@@ -642,6 +643,23 @@ function materializeNextState(
 function receiptFromProposal(proposal: JsonObject, requestHash: string): JsonObject {
   const before = Number(proposal.expectedStateRevision);
   const deltaFingerprint = hash(proposal.stateDelta);
+  const delta = proposal.stateDelta as JsonObject;
+  const readinessChangedDimensions = new Set<string>();
+  if ((delta.actorUpdates as JsonObject[]).length) readinessChangedDimensions.add('material_actor_objective');
+  for (const update of delta.continuityUpdates as JsonObject[]) {
+    if (/^(preserved|unchanged|stable)$/i.test(String(update.status))) continue;
+    const aspect = String(update.aspect).toLowerCase();
+    if (/presence|present|absent|arriv|depart/.test(aspect)) readinessChangedDimensions.add('presence');
+    else if (/access|door|lock|threshold|route/.test(aspect)) readinessChangedDimensions.add('access');
+    else if (/zone|location|position/.test(aspect)) readinessChangedDimensions.add('zone');
+    else if (/objective|goal|intent/.test(aspect)) readinessChangedDimensions.add('material_actor_objective');
+    else if (/deadline/.test(aspect)) readinessChangedDimensions.add('deadline_state_change');
+    else if (/clock|time/.test(aspect)) readinessChangedDimensions.add('clock_condition');
+    else if (/story|dramatic|question|thread/.test(aspect)) readinessChangedDimensions.add('story_source');
+    else if (/fact|source|canon/.test(aspect)) readinessChangedDimensions.add('fact_source');
+    else readinessChangedDimensions.add('active_pressure');
+  }
+  if ((delta.threadUpdates as JsonObject[]).some((entry) => entry.status !== 'open')) readinessChangedDimensions.add('story_source');
   const receiptRef = `gmc:scene-turn:${hash({ campaignId: proposal.campaignId, operationId: proposal.operationId, requestHash }).slice(0, 40)}`;
   return {
     schemaVersion: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
@@ -661,6 +679,7 @@ function receiptFromProposal(proposal: JsonObject, requestHash: string): JsonObj
     actionSummary: proposal.actionSummary,
     outcomeSummary: proposal.outcomeSummary,
     sourceReceiptRefs: clone(proposal.sourceReceiptRefs as JsonValue[]),
+    readinessChangedDimensions: [...readinessChangedDimensions],
   } as JsonObject;
 }
 
@@ -706,6 +725,9 @@ async function insertReceiptIfMissing(
     actionSummary: String(receipt.actionSummary),
     outcomeSummary: String(receipt.outcomeSummary),
     sourceReceiptRefs: clone(receipt.sourceReceiptRefs as string[]),
+    ...(Array.isArray(receipt.readinessChangedDimensions)
+      ? { readinessChangedDimensions: clone(receipt.readinessChangedDimensions as string[]) }
+      : {}),
     committedAt: new Date(),
   };
   if (bytes(publicReceipt(document)) > SCENE_TURN_RECEIPT_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_TURN_RECEIPT_TOO_LARGE', 'The scene-turn receipt exceeds its storage bound.', { maximumBytes: SCENE_TURN_RECEIPT_MAX_BYTES });
@@ -719,7 +741,7 @@ async function insertReceiptIfMissing(
 }
 
 export async function readActiveSceneContext(
-  input: { userId: string; campaignId: string; workspace?: JsonObject },
+  input: { userId: string; campaignId: string; workspace?: JsonObject; sceneKit?: JsonObject },
   stores: ActiveSceneStateCollections = collections(),
   storyRecords?: StoryWorkspaceRevisionCollection,
 ): Promise<JsonObject> {
@@ -727,7 +749,7 @@ export async function readActiveSceneContext(
     ? { workspace: input.workspace }
     : await readActiveStoryWorkspace({ userId: input.userId, campaignId: input.campaignId }, storyRecords);
   if (!active) throw new StoryWorkspaceStoreError(404, 'STORY_WORKSPACE_NOT_FOUND', 'No Story workspace has been prepared for this campaign.', {});
-  const kit = activeSceneKit(active.workspace);
+  const kit = input.sceneKit ?? activeSceneKit(active.workspace);
   const state = await stores.states.findOne({ userId: input.userId, campaignId: input.campaignId, sceneKitId: String(kit.sceneKitId) });
   const receipts = await stores.receipts.find({ userId: input.userId, campaignId: input.campaignId, sceneKitId: String(kit.sceneKitId) })
     .sort({ stateRevisionAfter: -1 }).limit(ACTIVE_SCENE_RECENT_RECEIPT_LIMIT).toArray();
@@ -748,13 +770,13 @@ export async function readSceneTurnOperation(
 }
 
 export async function commitSceneTurn(
-  input: { userId: string; campaignId: string; proposal: unknown },
+  input: { userId: string; campaignId: string; proposal: unknown; sceneKit?: JsonObject },
   stores: ActiveSceneStateCollections = collections(),
   storyRecords?: StoryWorkspaceRevisionCollection,
 ): Promise<JsonObject> {
   const active = await readActiveStoryWorkspace({ userId: input.userId, campaignId: input.campaignId }, storyRecords);
   if (!active) throw new StoryWorkspaceStoreError(404, 'STORY_WORKSPACE_NOT_FOUND', 'No Story workspace has been prepared for this campaign.', {});
-  const kit = activeSceneKit(active.workspace);
+  const kit = input.sceneKit ?? activeSceneKit(active.workspace);
   const current = await stores.states.findOne({ userId: input.userId, campaignId: input.campaignId, sceneKitId: String(kit.sceneKitId) });
   const proposal = validateProposal(input.proposal, input.campaignId, active.workspace, kit, current);
   const requestHash = hash(proposal);
