@@ -314,6 +314,13 @@ registerSemanticValidator('scene-reality-builder-contract', ({ request, output }
   if (continuation) {
     const included = new Set((candidate?.includedDomains ?? []).map(String));
     const remaining = new Set((candidate?.remainingDomains ?? []).map(String));
+    const expectedIncluded = new Set((trusted?.buildStrategy?.firstChunkDomains ?? []).map(String));
+    const expectedRemaining = new Set((trusted?.buildStrategy?.secondChunkDomains ?? []).map(String));
+    if (trusted?.buildStrategy?.mode === 'two_chunk_required'
+      && (JSON.stringify([...included].sort()) !== JSON.stringify([...expectedIncluded].sort())
+        || JSON.stringify([...remaining].sort()) !== JSON.stringify([...expectedRemaining].sort()))) {
+      issues.push({ code: 'SCENE_REALITY_BUILD_STRATEGY_CHANGED', message: 'The Scene checkpoint changed the deterministic record-domain partition.', path: '/checkpoint/includedDomains' });
+    }
     if ([...included].some((domain) => remaining.has(domain))) issues.push({ code: 'SCENE_REALITY_BUILD_DOMAIN_OVERLAP', message: 'A continued build cannot mark one domain both included and remaining.', path: '/checkpoint/remainingDomains' });
     if (new Set([...included, ...remaining]).size !== 4) issues.push({ code: 'SCENE_REALITY_BUILD_DOMAIN_GAP', message: 'A continued build must classify every record domain as included or remaining.', path: '/checkpoint/remainingDomains' });
     for (const [field, domain] of Object.entries({ zones: 'zones', actorFrames: 'actor_frames', elements: 'elements', facts: 'facts' })) {

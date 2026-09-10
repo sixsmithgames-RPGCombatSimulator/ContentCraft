@@ -116,12 +116,16 @@ describe('provider-neutral LLM orchestrator', () => {
 
   it('registers Scene reality preparation as first-pass policy, independent examination, and scoped repair', () => {
     const depth = getOperationDefinition('story.scene-reality.depth');
+    const checkpoint = getOperationDefinition('story.scene-reality.build.checkpoint');
     const builder = getOperationDefinition('story.scene-reality.build');
     const examiner = getOperationDefinition('story.scene-readiness.examine');
     const repair = getOperationDefinition('story.scene-reality.repair');
 
     expect(depth.prompt.version).toBe('gma.scene-reality-depth-policy/1');
     expect(depth.prompt.systemInstruction).toMatch(/Never select a depth shallower than deterministicMinimumDepth/i);
+    expect(checkpoint.prompt.version).toBe('gma.scene-reality-builder-checkpoint-policy/1');
+    expect(checkpoint.prompt.systemInstruction).toMatch(/zones and actor_frames domains only/i);
+    expect((checkpoint.outputSchema.schema as any).properties.status).toEqual({ const: 'continuation_required' });
     expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/1');
     expect(builder.prompt.systemInstruction).toMatch(/Prepare a playable situation rather than an answer to the current sentence/i);
     expect(builder.prompt.systemInstruction).toMatch(/one meaningful layer beyond every presented threshold/i);
@@ -152,11 +156,17 @@ describe('provider-neutral LLM orchestrator', () => {
       proposal: { operationId: buildRequest.operationId, campaignId: buildRequest.campaignId, requestedDepth: 'investigative', zones: [], actorFrames: [], elements: [], facts: [] },
       checkpoint: null,
     };
-    const validation = async (input: Record<string, unknown>, output = complete) => validator!({
+    const validation = async (input: Record<string, unknown>, output: any = complete) => validator!({
       request: { context: { input: { value: input } } } as unknown as LlmRequestEnvelope,
       output,
     });
-    const required = await validation({ buildRequest, buildStrategy: { schemaVersion: 'gma.scene-reality-build-strategy/1', mode: 'two_chunk_required' } });
+    const strategy = {
+      schemaVersion: 'gma.scene-reality-build-strategy/1',
+      mode: 'two_chunk_required',
+      firstChunkDomains: ['zones', 'actor_frames'],
+      secondChunkDomains: ['elements', 'facts'],
+    };
+    const required = await validation({ buildRequest, buildStrategy: strategy });
     expect(required.issues.map((issue) => issue.code)).toContain('SCENE_REALITY_BUILD_CHECKPOINT_REQUIRED');
 
     const ordinary = await validation({ buildRequest, buildStrategy: { schemaVersion: 'gma.scene-reality-build-strategy/1', mode: 'single_or_checkpoint' } });
@@ -164,10 +174,34 @@ describe('provider-neutral LLM orchestrator', () => {
 
     const finalChunk = await validation({
       buildRequest,
-      buildStrategy: { schemaVersion: 'gma.scene-reality-build-strategy/1', mode: 'two_chunk_required' },
+      buildStrategy: strategy,
       buildContinuation: { checkpoint: {} },
     });
     expect(finalChunk.issues.map((issue) => issue.code)).not.toContain('SCENE_REALITY_BUILD_CHECKPOINT_REQUIRED');
+
+    const checkpointOutput = {
+      ...complete,
+      status: 'continuation_required',
+      proposal: null,
+      checkpoint: {
+        operationId: buildRequest.operationId,
+        campaignId: buildRequest.campaignId,
+        requestedDepth: 'investigative',
+        includedDomains: ['zones', 'actor_frames'],
+        remainingDomains: ['elements', 'facts'],
+        zones: [{ zoneId: 'zone:one', sensorySurface: ['stone'], ordinaryActivity: ['waiting'] }],
+        actorFrames: [],
+        elements: [],
+        facts: [],
+      },
+    };
+    const exactPartition = await validation({ buildRequest, buildStrategy: strategy }, checkpointOutput);
+    expect(exactPartition.issues.map((issue) => issue.code)).not.toContain('SCENE_REALITY_BUILD_STRATEGY_CHANGED');
+    const changedPartition = await validation({ buildRequest, buildStrategy: strategy }, {
+      ...checkpointOutput,
+      checkpoint: { ...checkpointOutput.checkpoint, includedDomains: ['facts'], remainingDomains: ['zones', 'actor_frames', 'elements'] },
+    });
+    expect(changedPartition.issues.map((issue) => issue.code)).toContain('SCENE_REALITY_BUILD_STRATEGY_CHANGED');
   });
 
   it('returns the universal response envelope and provider-reported usage', async () => {

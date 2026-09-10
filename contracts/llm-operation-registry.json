@@ -1,6 +1,6 @@
 {
   "schemaVersion": "gma-gmc.llm-registry-artifact/1",
-  "registryVersion": "2026-09-09.3",
+  "registryVersion": "2026-09-09.4",
   "modelPolicyVersion": "2026-08-01.1",
   "operations": [
     {
@@ -9719,6 +9719,986 @@
                   "type": "null"
                 }
               ]
+            }
+          }
+        }
+      },
+      "validators": [
+        "authority-boundary",
+        "scene-reality-builder-contract"
+      ],
+      "context": {
+        "allowedKeys": [
+          "policy",
+          "campaign",
+          "canon",
+          "scene",
+          "turn",
+          "input",
+          "mechanics",
+          "workflow",
+          "priorResult"
+        ],
+        "inputTargetBytes": 96000,
+        "inputHardLimitBytes": 131072,
+        "requiredReferenceRevisions": []
+      },
+      "provider": {
+        "temperature": 0.35,
+        "thinkingLevel": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 100000,
+        "maxAttempts": 1,
+        "fallbackAllowed": false,
+        "premiumAllowed": false
+      },
+      "cache": {
+        "enabled": true,
+        "ttlMs": 900000
+      }
+    },
+    {
+      "id": "story.scene-reality.build.checkpoint",
+      "version": "1",
+      "operationClass": "world_generation",
+      "capabilityTier": "world",
+      "authority": {
+        "canon": "GMC",
+        "mechanics": "none",
+        "commit": "proposal_only"
+      },
+      "prompt": {
+        "id": "story.scene-reality.build.checkpoint.prompt",
+        "systemInstruction": "Build only the first dependency-closed record checkpoint for a mature investigative or encounter-set-piece Scene from the supplied owner records, accepted receipt heads, prior Scene bundle, creation policy, depth judgment, build request, and gma.scene-reality-build-strategy/1. Return exactly gma.scene-reality-builder-result/1 with status continuation_required, proposal null, and one gma.scene-reality-build-checkpoint/1. Copy operationId, campaignId, requestedDepth, and build-strategy domain lists exactly. The checkpoint must contain complete zones and actor_frames domains only; elements and facts must be empty and named as remaining domains. Include every current or newly required zone with concrete sensory surface, ordinary operation, topology, thresholds, access, and reasonable prepared boundaries. Include every material actor frame in one exact staged zone with purpose, identity maturity, objective, knowledge, ignorance, disclosure, likely action, and stable owner or scene-local identity. Preserve current canon, Story classification, active turn state, timeline, clock, stable refs, accepted facts, and receipt lineage. Reuse supplied identities and never join by display name. Do not create an answer to the current sentence, choose player actions, resolve mechanics, narrate play, issue a certificate, claim authority, or commit anything. Name elements and facts as the exact remaining domains and cite the source refs they will require. Do not emit any element or fact record, a complete proposal, a second checkpoint, silent omissions, placeholders, or missing preparation disguised as secrecy.",
+        "version": "gma.scene-reality-builder-checkpoint-policy/1"
+      },
+      "outputSchema": {
+        "id": "story.scene-reality.build.checkpoint.result",
+        "version": "1",
+        "schema": {
+          "$id": "story.scene-reality.build.checkpoint.result/1",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "operationId",
+            "campaignId",
+            "requestedDepth",
+            "status",
+            "proposal",
+            "checkpoint"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "gma.scene-reality-builder-result/1"
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "campaignId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "requestedDepth": {
+              "enum": [
+                "transit_thumbnail",
+                "interactive",
+                "investigative",
+                "encounter_set_piece"
+              ]
+            },
+            "status": {
+              "const": "continuation_required"
+            },
+            "proposal": {
+              "type": "null"
+            },
+            "checkpoint": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "schemaVersion",
+                "operationId",
+                "campaignId",
+                "requestedDepth",
+                "chunkIndex",
+                "includedDomains",
+                "remainingDomains",
+                "requiredSourceRefs",
+                "continuationReason",
+                "zones",
+                "actorFrames",
+                "elements",
+                "facts"
+              ],
+              "properties": {
+                "schemaVersion": {
+                  "const": "gma.scene-reality-build-checkpoint/1"
+                },
+                "operationId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                },
+                "campaignId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                },
+                "requestedDepth": {
+                  "enum": [
+                    "transit_thumbnail",
+                    "interactive",
+                    "investigative",
+                    "encounter_set_piece"
+                  ]
+                },
+                "chunkIndex": {
+                  "const": 1
+                },
+                "includedDomains": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "zones",
+                      "actor_frames",
+                      "elements",
+                      "facts"
+                    ]
+                  }
+                },
+                "remainingDomains": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "zones",
+                      "actor_frames",
+                      "elements",
+                      "facts"
+                    ]
+                  }
+                },
+                "requiredSourceRefs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 128,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  }
+                },
+                "continuationReason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "zones": {
+                  "type": "array",
+                  "maxItems": 64,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "schemaVersion",
+                      "zoneId",
+                      "revision",
+                      "campaignId",
+                      "label",
+                      "purpose",
+                      "sensorySurface",
+                      "ordinaryActivity",
+                      "adjacentZoneRefs",
+                      "thresholds",
+                      "accessRelations",
+                      "visibleElementRefs",
+                      "likelyChanges",
+                      "storyClassification",
+                      "sourceRefs"
+                    ],
+                    "properties": {
+                      "schemaVersion": {
+                        "const": "gmc.scene-zone/1"
+                      },
+                      "zoneId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "campaignId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "purpose": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "sensorySurface": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 16,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "ordinaryActivity": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 16,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "adjacentZoneRefs": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 24,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      },
+                      "thresholds": {
+                        "type": "array",
+                        "maxItems": 24,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "boundaryId",
+                            "fromZoneRef",
+                            "kind",
+                            "beyondScope",
+                            "committedBeforeInstructionSequence"
+                          ],
+                          "properties": {
+                            "boundaryId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                            },
+                            "fromZoneRef": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                            },
+                            "kind": {
+                              "enum": [
+                                "spatial",
+                                "social",
+                                "informational",
+                                "temporal",
+                                "capability",
+                                "actor_profile"
+                              ]
+                            },
+                            "beyondScope": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 1000
+                            },
+                            "committedBeforeInstructionSequence": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          }
+                        }
+                      },
+                      "accessRelations": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 24,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "visibleElementRefs": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 64,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      },
+                      "likelyChanges": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 24,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "storyClassification": {
+                        "enum": [
+                          "connected",
+                          "incidental",
+                          "latent"
+                        ]
+                      },
+                      "sourceRefs": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 64,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      }
+                    }
+                  }
+                },
+                "actorFrames": {
+                  "type": "array",
+                  "maxItems": 64,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "schemaVersion",
+                      "actorFrameId",
+                      "revision",
+                      "campaignId",
+                      "kind",
+                      "actorRef",
+                      "zoneRef",
+                      "count",
+                      "role",
+                      "sharedActivity",
+                      "identityMaturity",
+                      "privateName",
+                      "publicLabel",
+                      "appearance",
+                      "reasonPresent",
+                      "currentObjective",
+                      "affiliationRefs",
+                      "knowledge",
+                      "ignoranceBoundaries",
+                      "disclosurePosture",
+                      "hardLimits",
+                      "approachSensitivities",
+                      "likelyActions",
+                      "relationshipRefs",
+                      "promotionPolicy",
+                      "sourceRefs"
+                    ],
+                    "properties": {
+                      "schemaVersion": {
+                        "const": "gmc.scene-actor-frame/1"
+                      },
+                      "actorFrameId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "campaignId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "kind": {
+                        "enum": [
+                          "individual",
+                          "cohort"
+                        ]
+                      },
+                      "actorRef": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "zoneRef": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "count": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "role": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sharedActivity": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "identityMaturity": {
+                        "enum": [
+                          "seed",
+                          "scene_local",
+                          "canonical"
+                        ]
+                      },
+                      "privateName": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "publicLabel": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "appearance": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "reasonPresent": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "currentObjective": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "affiliationRefs": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 16,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      },
+                      "knowledge": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 32,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "domain",
+                            "factRefs",
+                            "evidenceState"
+                          ],
+                          "properties": {
+                            "domain": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 500
+                            },
+                            "factRefs": {
+                              "type": "array",
+                              "minItems": 0,
+                              "maxItems": 32,
+                              "uniqueItems": true,
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                              }
+                            },
+                            "evidenceState": {
+                              "enum": [
+                                "knows",
+                                "believes",
+                                "suspects",
+                                "does_not_know"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "ignoranceBoundaries": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 24,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "disclosurePosture": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "hardLimits": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 24,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "approachSensitivities": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 24,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "likelyActions": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 24,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "relationshipRefs": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 24,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      },
+                      "promotionPolicy": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "sourceRefs": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 64,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      }
+                    }
+                  }
+                },
+                "elements": {
+                  "type": "array",
+                  "maxItems": 128,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "schemaVersion",
+                      "elementId",
+                      "revision",
+                      "campaignId",
+                      "concreteType",
+                      "zoneRef",
+                      "placement",
+                      "controllerRef",
+                      "visibleSurface",
+                      "condition",
+                      "contents",
+                      "interactionSurface",
+                      "accessRelations",
+                      "validity",
+                      "promotionPolicy",
+                      "sourceRefs"
+                    ],
+                    "properties": {
+                      "schemaVersion": {
+                        "const": "gmc.scene-element/1"
+                      },
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "campaignId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "concreteType": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "zoneRef": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "placement": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "controllerRef": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "visibleSurface": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "condition": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "contents": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "kind",
+                          "description",
+                          "factRefs"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "fixed",
+                              "class_bounded",
+                              "empty"
+                            ]
+                          },
+                          "description": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1000
+                          },
+                          "factRefs": {
+                            "type": "array",
+                            "minItems": 0,
+                            "maxItems": 32,
+                            "uniqueItems": true,
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                            }
+                          }
+                        }
+                      },
+                      "interactionSurface": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "accessRelations": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 24,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "validity": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "promotionPolicy": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "sourceRefs": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 64,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      }
+                    }
+                  }
+                },
+                "facts": {
+                  "type": "array",
+                  "maxItems": 256,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "schemaVersion",
+                      "factId",
+                      "revision",
+                      "campaignId",
+                      "targetRef",
+                      "facet",
+                      "valueKind",
+                      "value",
+                      "epistemicState",
+                      "visibility",
+                      "accessVectors",
+                      "observerRestrictions",
+                      "modalityRestrictions",
+                      "storyRelevance",
+                      "validity",
+                      "provenanceRefs",
+                      "revealPolicy",
+                      "negativeScope"
+                    ],
+                    "properties": {
+                      "schemaVersion": {
+                        "const": "gmc.scene-fact/1"
+                      },
+                      "factId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "campaignId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "targetRef": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "facet": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "valueKind": {
+                        "enum": [
+                          "description",
+                          "classification",
+                          "identity_ref",
+                          "measurement",
+                          "measurement_range",
+                          "relation",
+                          "boolean",
+                          "count",
+                          "set",
+                          "statement",
+                          "bounded_negative"
+                        ]
+                      },
+                      "value": {
+                        "not": {
+                          "type": "null"
+                        }
+                      },
+                      "epistemicState": {
+                        "enum": [
+                          "canonical",
+                          "prepared_private_world",
+                          "scene_local_stable",
+                          "prepared_possibility",
+                          "future_contingent",
+                          "revealed",
+                          "deliberate_unknown"
+                        ]
+                      },
+                      "visibility": {
+                        "enum": [
+                          "gm_only",
+                          "revealed",
+                          "public_surface"
+                        ]
+                      },
+                      "accessVectors": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 24,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "observerRestrictions": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 16,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "modalityRestrictions": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 16,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        }
+                      },
+                      "storyRelevance": {
+                        "enum": [
+                          "connected",
+                          "incidental",
+                          "latent"
+                        ]
+                      },
+                      "validity": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      "provenanceRefs": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 64,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      },
+                      "revealPolicy": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "negativeScope": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }

@@ -203,8 +203,10 @@ strategy. GMC's original builder policy requires the first result to be the
 dependency-closed checkpoint, and its semantic validator rejects a complete
 first result in that mode. This makes the existing continuation budget
 deterministic before generation rather than trusting the model to predict its
-own output cutoff. The final build call must complete the remaining domains and
-cannot request a third chunk.
+own output cutoff. The dedicated registered checkpoint operation has no
+complete-proposal branch and uses an exact `zones + actor_frames` first chunk and
+`elements + facts` second chunk; GMC rejects a changed partition. The final
+build call must complete the remaining domains and cannot request a third chunk.
 
 Public projections expose only already revealed facts, public actor labels,
 and accepted current state. GMA private projections are purpose-bound,

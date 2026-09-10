@@ -263,6 +263,16 @@ const sceneRealityBuildCheckpoint = strictObject(
   },
 );
 
+export const sceneRealityBuilderCheckpointResultOutput = {
+  schemaVersion: { const: 'gma.scene-reality-builder-result/1' },
+  operationId: identifier,
+  campaignId: identifier,
+  requestedDepth: depth,
+  status: { const: 'continuation_required' },
+  proposal: { type: 'null' },
+  checkpoint: sceneRealityBuildCheckpoint,
+} as const;
+
 /**
  * Provider-only wrapper. The owner contract remains one complete
  * gma.scene-reality-proposal/1 after GMA deterministically merges at most one

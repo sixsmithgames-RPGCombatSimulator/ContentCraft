@@ -9,15 +9,17 @@ import {
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
 import {
+  sceneRealityBuilderCheckpointResultOutput,
   sceneRealityBuilderResultOutput,
   sceneRealityDepthOutput,
   sceneRealityExaminerOutput,
   sceneRealityRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-09.3';
+export const OPERATION_REGISTRY_VERSION = '2026-09-09.4';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-09.3',
   '2026-09-09.2',
   '2026-09-01.9',
   '2026-09-01.8',
@@ -1287,6 +1289,20 @@ const seeds: Seed[] = [
       'Select transit_thumbnail only for a passing or distant view with no reasonable commitment to engage; interactive when a player may stop, enter, purchase, converse, inspect, take, or interfere; investigative for reconnaissance, mystery, guarded access, hidden contents, social inquiry, surveillance, or an information obligation; encounter_set_piece for expected conflict, chase, infiltration, complex negotiation, hazard sequence, or multi-owner mechanics.',
       'Never select a depth shallower than deterministicMinimumDepth. When evidence conflicts or uncertainty is high, select the deeper adjacent profile.',
       'Return a concise reason, expected dwell, and uncertainty. Do not create world facts, plot outcomes, mechanics, narration, certificates, or authority receipts.',
+    ].join(' '),
+  },
+  {
+    id: 'story.scene-reality.build.checkpoint', operationClass: 'world_generation', tier: 'world',
+    required: Object.keys(sceneRealityBuilderCheckpointResultOutput), validators: ['scene-reality-builder-contract'],
+    temperature: 0.35, maxOutputTokens: 10_000, targetBytes: 96_000, hardLimitBytes: 131_072,
+    thinkingLevel: 'high', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.scene-reality-builder-checkpoint-policy/1',
+    outputProperties: sceneRealityBuilderCheckpointResultOutput,
+    systemInstruction: [
+      'Build only the first dependency-closed record checkpoint for a mature investigative or encounter-set-piece Scene from the supplied owner records, accepted receipt heads, prior Scene bundle, creation policy, depth judgment, build request, and gma.scene-reality-build-strategy/1.',
+      'Return exactly gma.scene-reality-builder-result/1 with status continuation_required, proposal null, and one gma.scene-reality-build-checkpoint/1. Copy operationId, campaignId, requestedDepth, and build-strategy domain lists exactly.',
+      'The checkpoint must contain complete zones and actor_frames domains only; elements and facts must be empty and named as remaining domains. Include every current or newly required zone with concrete sensory surface, ordinary operation, topology, thresholds, access, and reasonable prepared boundaries. Include every material actor frame in one exact staged zone with purpose, identity maturity, objective, knowledge, ignorance, disclosure, likely action, and stable owner or scene-local identity.',
+      'Preserve current canon, Story classification, active turn state, timeline, clock, stable refs, accepted facts, and receipt lineage. Reuse supplied identities and never join by display name. Do not create an answer to the current sentence, choose player actions, resolve mechanics, narrate play, issue a certificate, claim authority, or commit anything.',
+      'Name elements and facts as the exact remaining domains and cite the source refs they will require. Do not emit any element or fact record, a complete proposal, a second checkpoint, silent omissions, placeholders, or missing preparation disguised as secrecy.',
     ].join(' '),
   },
   {
