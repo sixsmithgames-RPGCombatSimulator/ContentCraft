@@ -1016,6 +1016,76 @@ export function sceneRealityMatchesStoryHead(
     && Number(timelineAnchor?.workspaceRevision) === revision;
 }
 
+/**
+ * A Story outcome and its active-Scene state are two halves of one GMA
+ * settlement. The Story write necessarily advances the workspace revision,
+ * which makes the otherwise-current readiness certificate fail the strict
+ * head check before the matching Scene turn can be recorded. Allow that one
+ * narrow successor head only when the current workspace and proposal both
+ * prove the exact outcome operation, its original certified read revision,
+ * its validated source receipts, and the unchanged certified Scene kit.
+ */
+export function sceneRealitySupportsStorySettlement(
+  sceneReality: unknown,
+  campaignId: string,
+  storyWorkspaceRef: unknown,
+  storyWorkspace: unknown,
+  sceneTurnProposal: unknown,
+): boolean {
+  if (sceneRealityMatchesStoryHead(sceneReality, campaignId, storyWorkspaceRef)) return true;
+  if (!object(sceneReality) || !object(sceneReality.bundle) || !object(storyWorkspaceRef)
+    || !object(storyWorkspace) || !object(sceneTurnProposal)) return false;
+  const bundle = sceneReality.bundle;
+  const certificate = object(bundle.readinessCertificate) ? bundle.readinessCertificate : null;
+  const reality = object(bundle.sceneReality) ? bundle.sceneReality : null;
+  const kit = object(bundle.sceneKit) ? bundle.sceneKit : null;
+  const proposalSceneRef = object(sceneTurnProposal.sceneKitRef) ? sceneTurnProposal.sceneKitRef : null;
+  const sourceRevisions = object(storyWorkspace.sourceRevisions) ? storyWorkspace.sourceRevisions : null;
+  if (!certificate || certificate.status !== 'certified' || !reality || !kit || !proposalSceneRef || !sourceRevisions) return false;
+  const interactionId = typeof sceneTurnProposal.interactionId === 'string' ? sceneTurnProposal.interactionId : '';
+  const outcomeRef = interactionId ? `story-outcome:${interactionId}` : '';
+  const proposalReceipts = Array.isArray(sceneTurnProposal.sourceReceiptRefs)
+    ? sceneTurnProposal.sourceReceiptRefs.map(String)
+    : [];
+  const impacts = Array.isArray(storyWorkspace.storyImpactReceipts)
+    ? storyWorkspace.storyImpactReceipts.filter((entry) => object(entry) && entry.deltaId === outcomeRef)
+    : [];
+  const impactSourceReceipts = [...new Set(impacts.flatMap((entry) => (
+    Array.isArray((entry as JsonObject).sourceReceiptRefs)
+      ? ((entry as JsonObject).sourceReceiptRefs as JsonValue[]).map(String)
+      : []
+  )))];
+  const outcomeSourceReceipts = Array.isArray(storyWorkspace.lastStoryDeltaSourceReceiptRefs)
+    ? [...new Set((storyWorkspace.lastStoryDeltaSourceReceiptRefs as JsonValue[]).map(String))]
+    : impactSourceReceipts;
+  const expectedStoryRef = `gmc:story-workspace:${campaignId}`;
+  const storyDependencies = Array.isArray(certificate.dependencySet)
+    ? certificate.dependencySet.filter((entry) => object(entry)
+      && entry.owner === 'gmc'
+      && entry.ref === expectedStoryRef)
+    : [];
+  const certifiedStoryRevision = storyDependencies.length === 1
+    ? Number((storyDependencies[0] as JsonObject).revision)
+    : Number.NaN;
+  const currentStoryRevision = Number(storyWorkspaceRef.revision);
+  const certifiedSceneRevision = Number(kit.revision);
+  return Boolean(outcomeRef)
+    && storyWorkspaceRef.campaignId === campaignId
+    && Number(sceneTurnProposal.expectedWorkspaceRevision) === currentStoryRevision
+    && Number.isSafeInteger(currentStoryRevision) && currentStoryRevision >= 0
+    && Number.isSafeInteger(certifiedStoryRevision) && certifiedStoryRevision >= 0
+    && Number((reality.timelineAnchor as JsonObject | undefined)?.workspaceRevision) === certifiedStoryRevision
+    && Number(sourceRevisions.gmcStory) === certifiedStoryRevision
+    && Number(sourceRevisions.gmcSceneKit) === certifiedSceneRevision
+    && Number(sourceRevisions.timelineSequence) === Number(sceneTurnProposal.timelineSequence)
+    && storyWorkspace.lastStoryDeltaRef === outcomeRef
+    && proposalReceipts.includes(outcomeRef)
+    && outcomeSourceReceipts.length > 0
+    && outcomeSourceReceipts.every((receiptRef) => proposalReceipts.includes(receiptRef))
+    && proposalSceneRef.sceneKitId === kit.sceneKitId
+    && Number(proposalSceneRef.revision) === certifiedSceneRevision;
+}
+
 export async function readSceneRealityOperation(
   input: { userId: string; campaignId: string; operationId: string },
   stores: SceneRealityCollections = collections(),

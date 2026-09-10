@@ -1080,6 +1080,9 @@ describe('D2 action-directed Story authority', () => {
       operationId: 'story-outcome:turn-2',
       interactionId: 'turn-2',
       timelineSequence: 2,
+      originStoryWorkspaceRevision: 3,
+      sourceSceneKitRevision: 1,
+      sourceReceiptRefs: ['gma:validated-story-turn:turn-2'],
       storyWorkspaceRef: expect.objectContaining({ revision: 4 }),
       originSceneHandoffReceiptRef: (committed.sceneHandoffReceipt as Record<string, unknown>).idempotencyKey,
     });

@@ -16,6 +16,7 @@ import {
   STORY_PUBLIC_PROJECTION_CONTRACT_VERSION,
   STORY_WORKSPACE_CONTRACT_VERSION,
   StoryWorkspaceStoreError,
+  type JsonObject,
 } from '../services/storyWorkspaceStore.js';
 import {
   commitSceneReality,
@@ -23,7 +24,7 @@ import {
   readActiveSceneReality,
   readSceneRealityInspection,
   readSceneRealityOperation,
-  sceneRealityMatchesStoryHead,
+  sceneRealitySupportsStorySettlement,
   sceneRealityHealthAdvertisement,
   selectPreparedStoryFacts,
 } from '../services/sceneRealityReadinessService.js';
@@ -495,16 +496,33 @@ storyWorkspaceRouter.post('/scene-turns', requireServiceIntegration, asyncRoute(
     readActiveSceneReality({ userId, campaignId }),
     readActiveStoryWorkspace({ userId, campaignId }),
   ]);
-  const sceneKit = activeReality && typeof activeReality.bundle === 'object' && activeReality.bundle !== null && !Array.isArray(activeReality.bundle)
-    && typeof activeReality.bundle.sceneKit === 'object' && activeReality.bundle.sceneKit !== null && !Array.isArray(activeReality.bundle.sceneKit)
-    && sceneRealityMatchesStoryHead(activeReality, campaignId, activeStory?.storyWorkspaceRef)
-    ? activeReality.bundle.sceneKit
+  const realityBundle = activeReality && typeof activeReality.bundle === 'object'
+    && activeReality.bundle !== null && !Array.isArray(activeReality.bundle)
+    ? activeReality.bundle
+    : null;
+  const certifiedSettlement = realityBundle
+    && typeof realityBundle.sceneKit === 'object' && realityBundle.sceneKit !== null && !Array.isArray(realityBundle.sceneKit)
+    && activeStory
+    && sceneRealitySupportsStorySettlement(
+      activeReality,
+      campaignId,
+      activeStory.storyWorkspaceRef,
+      activeStory.workspace,
+      req.body,
+    );
+  const sceneKit = certifiedSettlement ? realityBundle.sceneKit as JsonObject : undefined;
+  const sceneStoryDesign = certifiedSettlement
+    && typeof realityBundle.sceneStoryDesign === 'object'
+    && realityBundle.sceneStoryDesign !== null
+    && !Array.isArray(realityBundle.sceneStoryDesign)
+    ? realityBundle.sceneStoryDesign as JsonObject
     : undefined;
   const result = await commitSceneTurn({
     userId,
     campaignId,
     proposal: req.body,
     sceneKit,
+    sceneStoryDesign,
   });
   res.status(result.duplicate ? 200 : 201).json(result);
 }));

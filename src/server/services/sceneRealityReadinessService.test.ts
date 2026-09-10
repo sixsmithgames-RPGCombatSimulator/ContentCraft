@@ -9,6 +9,7 @@ import {
   readSceneRealityOperation,
   SCENE_REALITY_CONTRACTS,
   sceneRealityMatchesStoryHead,
+  sceneRealitySupportsStorySettlement,
   selectPreparedStoryFacts,
   type ActiveSceneRealityPointerDocument,
   type SceneFactSelectionDocument,
@@ -225,6 +226,51 @@ async function commitReady(mem = memory()) {
 }
 
 describe('Scene reality owner authority', () => {
+  it('allows only the exact same-interaction Story successor to finish its certified Scene settlement', () => {
+    const campaignId = 'campaign:one';
+    const interactionId = 'interaction:worker-account';
+    const outcomeRef = `story-outcome:${interactionId}`;
+    const validatedRef = 'gma:validated-story-turn:worker-account';
+    const sceneReality = {
+      bundle: {
+        readinessCertificate: {
+          status: 'certified',
+          dependencySet: [{ owner: 'gmc', ref: `gmc:story-workspace:${campaignId}`, revision: 6 }],
+        },
+        sceneReality: { timelineAnchor: { workspaceRevision: 6 } },
+        sceneKit: { sceneKitId: 'scene-kit:second-mouth', revision: 4 },
+      },
+    };
+    const storyWorkspaceRef = { campaignId, revision: 7 };
+    const storyWorkspace = {
+      lastStoryDeltaRef: outcomeRef,
+      lastStoryDeltaSourceReceiptRefs: [validatedRef],
+      sourceRevisions: { gmcStory: 6, gmcSceneKit: 4, timelineSequence: 21 },
+      storyImpactReceipts: [],
+    };
+    const proposal = {
+      interactionId,
+      expectedWorkspaceRevision: 7,
+      timelineSequence: 21,
+      sceneKitRef: { sceneKitId: 'scene-kit:second-mouth', revision: 4, payloadHash: 'a'.repeat(64) },
+      sourceReceiptRefs: [validatedRef, outcomeRef],
+    };
+    expect(sceneRealitySupportsStorySettlement(sceneReality, campaignId, storyWorkspaceRef, storyWorkspace, proposal)).toBe(true);
+    expect(sceneRealitySupportsStorySettlement(sceneReality, campaignId, storyWorkspaceRef, {
+      ...storyWorkspace,
+      lastStoryDeltaSourceReceiptRefs: undefined,
+      storyImpactReceipts: [{ deltaId: outcomeRef, sourceReceiptRefs: [validatedRef] }],
+    }, proposal)).toBe(true);
+    expect(sceneRealitySupportsStorySettlement(sceneReality, campaignId, storyWorkspaceRef, storyWorkspace, {
+      ...proposal, sourceReceiptRefs: [outcomeRef],
+    })).toBe(false);
+    expect(sceneRealitySupportsStorySettlement(sceneReality, campaignId, storyWorkspaceRef, storyWorkspace, {
+      ...proposal, interactionId: 'interaction:other',
+    })).toBe(false);
+    expect(sceneRealitySupportsStorySettlement(sceneReality, campaignId, storyWorkspaceRef, {
+      ...storyWorkspace, sourceRevisions: { ...storyWorkspace.sourceRevisions, gmcStory: 5 },
+    }, proposal)).toBe(false);
+  });
   it('stages a complete dossier and exposes it through one current pointer', async () => {
     const { mem, receipt } = await commitReady();
     expect(receipt.schemaVersion).toBe(SCENE_REALITY_CONTRACTS.commitReceipt);

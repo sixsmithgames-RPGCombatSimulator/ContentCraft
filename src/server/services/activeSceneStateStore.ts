@@ -179,7 +179,12 @@ function addRefs(target: Set<string>, value: unknown): void {
   if (Array.isArray(value)) value.forEach((entry) => addRef(target, entry));
 }
 
-function sceneAuthorityRefs(workspace: JsonObject, kit: JsonObject, state?: ActiveSceneStateDocument | null): {
+function sceneAuthorityRefs(
+  workspace: JsonObject,
+  kit: JsonObject,
+  state?: ActiveSceneStateDocument | null,
+  certifiedDesign?: JsonObject | null,
+): {
   all: Set<string>;
   actorRefs: Set<string>;
   informationRefs: Set<string>;
@@ -233,9 +238,13 @@ function sceneAuthorityRefs(workspace: JsonObject, kit: JsonObject, state?: Acti
     }
   }
   const designs = Array.isArray(workspace.sceneStoryDesigns) ? workspace.sceneStoryDesigns.filter(isObject) as JsonObject[] : [];
-  const design = designs.find((candidate) => isObject(candidate.sceneKitRef)
-    && candidate.sceneKitRef.sceneKitId === kit.sceneKitId
-    && Number(candidate.sceneKitRef.sceneKitRevision) === Number(kit.revision));
+  const design = certifiedDesign && isObject(certifiedDesign.sceneKitRef)
+    && certifiedDesign.sceneKitRef.sceneKitId === kit.sceneKitId
+    && Number(certifiedDesign.sceneKitRef.revision ?? certifiedDesign.sceneKitRef.sceneKitRevision) === Number(kit.revision)
+    ? certifiedDesign
+    : designs.find((candidate) => isObject(candidate.sceneKitRef)
+      && candidate.sceneKitRef.sceneKitId === kit.sceneKitId
+      && Number(candidate.sceneKitRef.sceneKitRevision ?? candidate.sceneKitRef.revision) === Number(kit.revision));
   if (design) {
     addRef(all, design.designId);
     addRefs(all, design.sourceRefs);
@@ -245,6 +254,7 @@ function sceneAuthorityRefs(workspace: JsonObject, kit: JsonObject, state?: Acti
       addRef(all, obligation.obligationId);
       addRef(all, obligation.storyNodeRef);
       addRefs(all, obligation.sourceRefs);
+      addRefs(all, obligation.factRefs);
     }
     for (const affordance of (Array.isArray(design.affordances) ? design.affordances : [])) {
       if (!isObject(affordance)) continue;
@@ -534,7 +544,14 @@ function validateDelta(value: unknown, refs: ReturnType<typeof sceneAuthorityRef
   return clone(value as JsonObject);
 }
 
-function validateProposal(value: unknown, campaignId: string, workspace: JsonObject, kit: JsonObject, state?: ActiveSceneStateDocument | null): JsonObject {
+function validateProposal(
+  value: unknown,
+  campaignId: string,
+  workspace: JsonObject,
+  kit: JsonObject,
+  state?: ActiveSceneStateDocument | null,
+  certifiedDesign?: JsonObject | null,
+): JsonObject {
   if (!isObject(value)) throw new StoryWorkspaceStoreError(400, 'STORY_SCENE_TURN_INVALID', 'The scene-turn proposal must be an object.', {});
   if (bytes(value) > SCENE_TURN_PROPOSAL_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_TURN_TOO_LARGE', 'The scene-turn proposal exceeds its size bound.', { maximumBytes: SCENE_TURN_PROPOSAL_MAX_BYTES });
   exactKeys(value, 'proposal', [
@@ -559,7 +576,7 @@ function validateProposal(value: unknown, campaignId: string, workspace: JsonObj
     || value.sceneKitRef.payloadHash !== currentRef.payloadHash) {
     throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_CONFLICT', 'The current Scene changed before this scene turn.', { expectedSceneKitRef: value.sceneKitRef, actualSceneKitRef: currentRef });
   }
-  const delta = validateDelta(value.stateDelta, sceneAuthorityRefs(workspace, kit, state));
+  const delta = validateDelta(value.stateDelta, sceneAuthorityRefs(workspace, kit, state, certifiedDesign));
   if ((delta.phase === 'owner_confirmed_mechanic')
     && !(value.sourceReceiptRefs as string[]).some((ref) => /^vcs[:.-]/i.test(ref))) {
     throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_TURN_MECHANICS_RECEIPT_REQUIRED', 'An owner-confirmed mechanical result requires its VCS receipt.', {});
@@ -770,7 +787,7 @@ export async function readSceneTurnOperation(
 }
 
 export async function commitSceneTurn(
-  input: { userId: string; campaignId: string; proposal: unknown; sceneKit?: JsonObject },
+  input: { userId: string; campaignId: string; proposal: unknown; sceneKit?: JsonObject; sceneStoryDesign?: JsonObject },
   stores: ActiveSceneStateCollections = collections(),
   storyRecords?: StoryWorkspaceRevisionCollection,
 ): Promise<JsonObject> {
@@ -778,7 +795,7 @@ export async function commitSceneTurn(
   if (!active) throw new StoryWorkspaceStoreError(404, 'STORY_WORKSPACE_NOT_FOUND', 'No Story workspace has been prepared for this campaign.', {});
   const kit = input.sceneKit ?? activeSceneKit(active.workspace);
   const current = await stores.states.findOne({ userId: input.userId, campaignId: input.campaignId, sceneKitId: String(kit.sceneKitId) });
-  const proposal = validateProposal(input.proposal, input.campaignId, active.workspace, kit, current);
+  const proposal = validateProposal(input.proposal, input.campaignId, active.workspace, kit, current, input.sceneStoryDesign);
   const requestHash = hash(proposal);
   const existingReceipt = await stores.receipts.findOne({ userId: input.userId, campaignId: input.campaignId, operationId: String(proposal.operationId) });
   if (existingReceipt) {

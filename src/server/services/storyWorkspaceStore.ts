@@ -1472,6 +1472,7 @@ export function emptyStoryWorkspace(campaignIdValue: string): JsonObject {
     npcReadiness: [],
     activeSceneKitRef: null,
     lastStoryDeltaRef: null,
+    lastStoryDeltaSourceReceiptRefs: [],
     timelineAnchor: null,
   };
 }

@@ -221,6 +221,42 @@ describe('durable active Scene state', () => {
     }, memory.stores)).resolves.toEqual(first.receipt);
   });
 
+  it('uses the certified Scene design to authorize selected version-3 fact refs', async () => {
+    const { story, active, playable } = await prepared();
+    const memory = activeSceneMemory();
+    const certifiedKit = structuredClone((active.workspace.sceneKits as JsonObject[])[0]);
+    certifiedKit.schemaVersion = 'gmc.scene-kit/5';
+    const certifiedRef = buildActiveSceneContext('campaign-a', certifiedKit).sceneKitRef as JsonObject;
+    const certifiedPlayable = { ...structuredClone(playable), sceneKitRef: certifiedRef } as JsonObject;
+    const certifiedDesign = {
+      schemaVersion: 'gmc.scene-story-design/3',
+      designId: 'scene-design:worker-account', revision: 1,
+      sceneKitRef: { sceneKitId: certifiedKit.sceneKitId, revision: certifiedKit.revision },
+      obligations: [{
+        obligationId: 'obligation:worker-account', storyNodeRef: 'story:thread:drain',
+        factRefs: ['fact:worker-saw-rats'],
+      }],
+      affordances: [{
+        affordanceId: 'affordance:ask-worker', targetRef: 'gmc:npc:drain-worker',
+        factRefs: ['fact:worker-saw-rats'], obligationRefs: ['obligation:worker-account'],
+      }],
+    } as JsonObject;
+    const input = proposal(certifiedPlayable, active.storyWorkspaceRef.revision, 0);
+    (input.stateDelta as JsonObject).settledFacts = [{
+      factKey: 'scene-fact:worker-rats', claimText: 'The worker saw ordinary sewer rats.',
+      sourceFactRefs: ['fact:worker-saw-rats'],
+    }];
+    await expect(commitSceneTurn({
+      userId: 'user-a', campaignId: 'campaign-a', proposal: input, sceneKit: certifiedKit,
+    }, memory.stores, story.records)).rejects.toMatchObject({ code: 'STORY_SCENE_STATE_SOURCE_UNBOUND' });
+    await expect(commitSceneTurn({
+      userId: 'user-a', campaignId: 'campaign-a', proposal: input,
+      sceneKit: certifiedKit, sceneStoryDesign: certifiedDesign,
+    }, memory.stores, story.records)).resolves.toMatchObject({
+      status: 'applied', receipt: { stateRevisionBefore: 0, stateRevisionAfter: 1 },
+    });
+  });
+
   it('omits Mongo storage identity when replacing an existing active Scene state', async () => {
     const { story, active, playable } = await prepared();
     const memory = activeSceneMemory();

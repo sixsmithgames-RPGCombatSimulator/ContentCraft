@@ -1859,6 +1859,7 @@ export async function applyStoryDeltaV2(
     changedRefs.push(`scene_story_design:${String(design.designId)}`);
   }
   workspace.lastStoryDeltaRef = delta.deltaId;
+  workspace.lastStoryDeltaSourceReceiptRefs = clone(delta.sourceReceiptRefs as unknown as JsonValue);
   workspace.sourceRevisions = clone(delta.sourceRevisions as unknown as JsonObject);
   const deltaSequence = delta.sourceRevisions.timelineSequence;
   const timelineAnchor = typeof deltaSequence === 'number' && Number.isSafeInteger(deltaSequence) && deltaSequence >= 0
@@ -1916,6 +1917,15 @@ export async function readCurrentSceneContexts(
   const storyInteractionId = lastStoryDeltaRef.startsWith('story-outcome:')
     ? lastStoryDeltaRef.slice('story-outcome:'.length)
     : '';
+  const latestStoryImpactReceipts = Array.isArray(active.workspace.storyImpactReceipts)
+    ? (active.workspace.storyImpactReceipts as JsonObject[]).filter((entry) => entry?.deltaId === lastStoryDeltaRef)
+    : [];
+  const impactSourceReceiptRefs = [...new Set(latestStoryImpactReceipts.flatMap((entry) => (
+    Array.isArray(entry.sourceReceiptRefs) ? (entry.sourceReceiptRefs as JsonValue[]).map(String) : []
+  )))];
+  const latestStorySourceReceiptRefs = Array.isArray(active.workspace.lastStoryDeltaSourceReceiptRefs)
+    ? [...new Set((active.workspace.lastStoryDeltaSourceReceiptRefs as JsonValue[]).map(String))]
+    : impactSourceReceiptRefs;
   const lastSceneHandoffReceipt = isObject(active.workspace.lastSceneHandoffReceipt)
     ? active.workspace.lastSceneHandoffReceipt as JsonObject
     : null;
@@ -1933,6 +1943,9 @@ export async function readCurrentSceneContexts(
         operationId: lastStoryDeltaRef,
         interactionId: storyInteractionId,
         timelineSequence: Math.max(0, Number(sourceRevisionState.timelineSequence ?? 0) || 0),
+        originStoryWorkspaceRevision: Math.max(0, Number(sourceRevisionState.gmcStory ?? 0) || 0),
+        sourceSceneKitRevision: Math.max(0, Number(sourceRevisionState.gmcSceneKit ?? 0) || 0),
+        sourceReceiptRefs: latestStorySourceReceiptRefs,
         storyWorkspaceRef: clone(active.storyWorkspaceRef as unknown as JsonObject),
         originSceneHandoffReceiptRef: lastSceneHandoffReceipt?.interactionId === storyInteractionId
           ? String(lastSceneHandoffReceipt.idempotencyKey ?? '') || null
