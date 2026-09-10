@@ -48,7 +48,7 @@ import {
   readLatestSceneTurnReceipt,
   type ActiveSceneStateCollections,
 } from './activeSceneStateStore.js';
-import { readActiveSceneReality } from './sceneRealityReadinessService.js';
+import { readActiveSceneReality, SCENE_REALITY_CONTRACTS } from './sceneRealityReadinessService.js';
 
 /** D2 authority receipt and service-only projection versions. */
 export const STORY_GRAPH_WRITE_RECEIPT_CONTRACT_VERSION = 'gmc.story-graph-write-receipt/1';
@@ -1703,14 +1703,28 @@ function validateImpactSatisfaction(
   }
   const obligation = obligations.find((candidate) => candidate.obligationId === receipt.obligationRef);
   if (!obligation || obligation.storyNodeRef !== impact.storyNodeRef) throw new StoryWorkspaceStoreError(422, 'STORY_OBLIGATION_REFERENCE_INVALID', 'The Story satisfaction receipt does not identify an obligation in the current scene design.', { obligationRef: receipt.obligationRef });
-  if (!(obligation.allowedContributions as string[]).includes(String(receipt.contributionKind))) throw new StoryWorkspaceStoreError(422, 'STORY_CONTRIBUTION_NOT_PREPARED', 'The Story contribution is not allowed by the prepared obligation.', { obligationRef: receipt.obligationRef, contributionKind: receipt.contributionKind });
+  const realityDesign = design.schemaVersion === SCENE_REALITY_CONTRACTS.storyDesign;
+  const allowedContributions = Array.isArray(obligation.allowedContributions)
+    ? obligation.allowedContributions as string[]
+    : realityDesign
+      ? ['answer', 'confirmation', 'complication', 'consequence', 'decision']
+      : [];
+  if (!allowedContributions.includes(String(receipt.contributionKind))) throw new StoryWorkspaceStoreError(422, 'STORY_CONTRIBUTION_NOT_PREPARED', 'The Story contribution is not allowed by the prepared obligation.', { obligationRef: receipt.obligationRef, contributionKind: receipt.contributionKind });
   if (!EFFECT_OBLIGATION_STATES[impact.effect].includes(String(receipt.obligationState))) throw new StoryWorkspaceStoreError(422, 'STORY_OBLIGATION_STATE_INVALID', 'The Story obligation state does not correspond to the actual impact.', { effect: impact.effect, obligationState: receipt.obligationState });
-  const affordances = (design.affordances as JsonObject[]).filter((affordance) => (affordance.obligationRefs as string[]).includes(String(receipt.obligationRef)));
-  const allowedFactRefs = new Set<string>([
-    ...(obligation.sourceRefs as string[]).map(String),
-    ...affordances.flatMap((affordance) => (affordance.factRefs as string[]).map(String)),
-  ]);
-  for (const factRef of receipt.factRefs as string[]) if (!allowedFactRefs.has(String(factRef))) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_FACT_UNBOUND', 'The Story satisfaction receipt cites a fact that was not prepared for this obligation.', { obligationRef: receipt.obligationRef, factRef });
+  const affordanceRows = Array.isArray(design.affordances) ? design.affordances as JsonObject[] : [];
+  const allowedFactRefs = realityDesign
+    ? new Set<string>((Array.isArray(obligation.factRefs) ? obligation.factRefs : []).map(String).filter((factRef) => (
+        affordanceRows.some((affordance) => Array.isArray(affordance.factRefs) && (affordance.factRefs as string[]).includes(factRef))
+      )))
+    : new Set<string>([
+        ...(Array.isArray(obligation.sourceRefs) ? obligation.sourceRefs : []).map(String),
+        ...affordanceRows.filter((affordance) => Array.isArray(affordance.obligationRefs)
+          && (affordance.obligationRefs as string[]).includes(String(receipt.obligationRef)))
+          .flatMap((affordance) => (Array.isArray(affordance.factRefs) ? affordance.factRefs : []).map(String)),
+      ]);
+  const receiptFactRefs = Array.isArray(receipt.factRefs) ? receipt.factRefs as string[] : [];
+  if (realityDesign && receiptFactRefs.length === 0) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_FACT_UNBOUND', 'A certified Scene Story satisfaction receipt must cite prepared facts for its obligation.', { obligationRef: receipt.obligationRef });
+  for (const factRef of receiptFactRefs) if (!allowedFactRefs.has(String(factRef))) throw new StoryWorkspaceStoreError(422, 'STORY_SATISFACTION_FACT_UNBOUND', 'The Story satisfaction receipt cites a fact that was not prepared for this obligation.', { obligationRef: receipt.obligationRef, factRef });
   return receipt;
 }
 
@@ -1802,11 +1816,13 @@ export async function applyStoryDeltaV2(
     const preparedEffects = potential.get(impact.storyNodeRef);
     if (preparedEffects && preparedEffects.size && !preparedEffects.has(impact.effect)) throw new StoryWorkspaceStoreError(422, 'STORY_IMPACT_NOT_PREPARED', 'The actual Story impact conflicts with this scene’s prepared impact.', { storyNodeRef: impact.storyNodeRef, effect: impact.effect });
     const satisfaction = validateImpactSatisfaction(impact, design);
-    if (satisfaction && design && !realityBackedScene) {
-      const obligation = (design.obligations as JsonObject[]).find((candidate) => candidate.obligationId === satisfaction.obligationRef)!;
-      if (obligation.state !== satisfaction.obligationState) {
-        obligation.state = satisfaction.obligationState;
-        designChanged = true;
+    if (satisfaction && design) {
+      if (!realityBackedScene) {
+        const obligation = (design.obligations as JsonObject[]).find((candidate) => candidate.obligationId === satisfaction.obligationRef)!;
+        if (obligation.state !== satisfaction.obligationState) {
+          obligation.state = satisfaction.obligationState;
+          designChanged = true;
+        }
       }
       // A repeated coarse obligation state is not a design mutation. Spending
       // a design revision here is not helpful because normalization correctly

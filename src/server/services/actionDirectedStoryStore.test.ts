@@ -1493,7 +1493,24 @@ describe('D2 action-directed Story authority', () => {
       }],
       actorMechanicsBindings: [], observationAccess: [], observables: [], obstructions: [],
       sceneRealityRef: { realityId: 'scene-reality:worker-account', revision: 1 },
-      sceneStoryDesignRef: null,
+      sceneStoryDesignRef: { designId: 'scene-design:worker-account', revision: 1 },
+    } as JsonObject;
+    const certifiedDesign = {
+      schemaVersion: 'gmc.scene-story-design/3', designId: 'scene-design:worker-account', revision: 1,
+      campaignId: 'campaign-a', sceneKitRef: { sceneKitId: certifiedKit.sceneKitId, revision: 1 },
+      obligations: [{
+        obligationId: 'obligation:worker-account', storyNodeRef: 'story:arc:flintwake',
+        description: 'Give the complete prepared firsthand account.',
+        factRefs: ['fact:worker-saw-rats', 'fact:worker-saw-surveyors'],
+      }],
+      affordances: [{
+        affordanceId: 'affordance:ask-worker', coverageEntryId: 'coverage:ask-worker',
+        zoneRef: 'zone:outer', targetRef: 'actor-frame:worker', actionFamily: 'social',
+        accessClass: 'cooperative_conversation', thresholdRef: null, capabilityClass: null,
+        factRefs: ['fact:worker-saw-rats', 'fact:worker-saw-surveyors'], condition: 'The worker agreed to answer.',
+      }],
+      storyAlignment: { classification: 'connected', storyNodeRefs: ['story:arc:flintwake'], basis: 'The account develops the anchor investigation.' },
+      sourceRefs: ['story:arc:flintwake'],
     } as JsonObject;
     expect((legacyKit.beats as JsonObject[]).some((beat) => beat.beatId === 'beat:worker-firsthand-account')).toBe(false);
     const delta: StoryDeltaV2 = {
@@ -1510,20 +1527,45 @@ describe('D2 action-directed Story authority', () => {
       actualStoryImpacts: [{
         storyNodeRef: 'story:arc:flintwake', effect: 'advance', reason: 'The prepared account establishes a credible lead.',
         sourceReceiptRefs: ['gma:validated-interaction:worker-account'],
+        satisfactionReceipt: {
+          schemaVersion: 'gma.story-satisfaction-receipt/1', obligationRef: 'obligation:worker-account',
+          storyNodeRef: 'story:arc:flintwake', contributionKind: 'answer',
+          factRefs: ['fact:worker-saw-rats', 'fact:worker-saw-surveyors'],
+          playerFacingEvidence: 'The worker saw ordinary rats and two surveyors.',
+          contributionSummary: 'The worker gives the complete prepared account.',
+          obligationState: 'resolved', remainingQuestion: '',
+        },
       }],
       affectedRecords: [],
     };
 
+    const unbound = structuredClone(delta);
+    unbound.deltaId = 'delta:worker-account-unbound';
+    unbound.operationId = 'operation:worker-account-unbound';
+    unbound.idempotencyKey = 'delta:worker-account-unbound';
+    unbound.actualStoryImpacts[0].satisfactionReceipt!.factRefs = ['fact:invented-account'];
+    await expect(applyStoryDeltaV2(
+      { userId: 'tenant-a', campaignId: 'campaign-a', delta: unbound },
+      store.records,
+      async () => ({ bundle: { sceneKit: certifiedKit, sceneStoryDesign: certifiedDesign } }),
+    )).rejects.toMatchObject({ code: 'STORY_SATISFACTION_FACT_UNBOUND' });
+
     await expect(applyStoryDeltaV2(
       { userId: 'tenant-a', campaignId: 'campaign-a', delta },
       store.records,
-      async () => ({ bundle: { sceneKit: certifiedKit } }),
+      async () => ({ bundle: { sceneKit: certifiedKit, sceneStoryDesign: certifiedDesign } }),
     )).resolves.toMatchObject({ status: 'applied', storyWorkspaceRef: { revision: active!.storyWorkspaceRef.revision + 1 } });
     const updated = (await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records))!.workspace;
     const retainedLegacyKit = (updated.sceneKits as JsonObject[]).find((entry) => entry.sceneKitId === legacyKit.sceneKitId)!;
     expect((retainedLegacyKit.beats as JsonObject[]).some((beat) => beat.beatId === 'beat:worker-firsthand-account')).toBe(false);
     expect(updated.storyImpactReceipts).toEqual([
       expect.objectContaining({ storyNodeRef: 'story:arc:flintwake', effect: 'advance' }),
+    ]);
+    expect(updated.storySatisfactionReceipts).toEqual([
+      expect.objectContaining({
+        deltaId: 'delta:worker-account',
+        receipt: expect.objectContaining({ obligationRef: 'obligation:worker-account', obligationState: 'resolved' }),
+      }),
     ]);
     expect(updated.lastStoryDeltaRef).toBe('delta:worker-account');
   });
