@@ -307,6 +307,24 @@ describe('GMC compound-action private artifact store', () => {
     expect(created).toMatchObject({ duplicate: false, artifactRef: { revision: 1, programId: 'program:turn-42' } });
     const replay = await createCompoundActionArtifact(input, store.records);
     expect(replay).toEqual({ ...created, duplicate: true });
+    const durableCandidate = {
+      schemaVersion: 'gma.compound-story-settlement-candidate/1',
+      programId: 'program:turn-42',
+      responseText: 'The two parallel declarations have one checked presentation.',
+    };
+    const candidateFingerprint = createHash('sha256').update(canonicalJson(durableCandidate), 'utf8').digest('hex');
+    const lazySaga = saga(2, 'unsettled');
+    lazySaga.operations = [];
+    lazySaga.acceptedOwnerReceiptRefs = [];
+    lazySaga.acceptedModelCandidateRefs = [candidateFingerprint];
+    lazySaga.pendingModelCandidate = {
+      schemaVersion: 'gma.accepted-model-candidate/2', kind: 'story_narration', operationKey: 'story-narration:parallel-turn-42',
+      inputFingerprint: 'd'.repeat(64), candidateFingerprint, candidate: durableCandidate,
+    };
+    await expect(advanceCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
+      idempotencyKey: 'checkpoint:parallel-story-candidate:turn-42', cursor: parallelCursor(2), saga: lazySaga,
+    }, store.records)).resolves.toMatchObject({ artifactRef: { revision: 2 } });
     const active = await readActiveCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42',
     }, store.records);
@@ -318,6 +336,10 @@ describe('GMC compound-action private artifact store', () => {
     expect((((active?.artifact.program ?? {}) as JsonObject).nodes as JsonObject[]).map((node) => node.parallelWith)).toEqual([
       ['intent-rat-speaking-ruse'], ['intent-telepathic-message'],
     ]);
+    expect(active?.artifact.saga).toMatchObject({
+      schemaVersion: 'gma.action-saga/1',
+      pendingModelCandidate: { kind: 'story_narration', candidateFingerprint },
+    });
   });
 
   it('durably appends an idempotent world-expansion cursor rebase without changing completed work', async () => {
@@ -603,7 +625,7 @@ describe('GMC compound-action private artifact store', () => {
     };
     await expect(createCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:story-candidate:turn-42',
-      instruction: exact, program: { ...program(exact), schemaVersion: 'gma.semantic-action-program/4' }, cursor: cursor(1), saga: storySaga,
+      instruction: exact, program: program(exact), cursor: cursor(1), saga: storySaga,
     }, memoryCollection().records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
   });
 

@@ -492,15 +492,63 @@ describe('Scene reality owner authority', () => {
     const receiptRef = 'gmc:scene-turn:four';
     const mem = memory();
     mem.activeStates.documents.push({ userId: 'user:one', campaignId: 'campaign:one', sceneKitId, revision: 4, latestReceiptRef: receiptRef });
-    mem.turns.documents.push({ userId: 'user:one', campaignId: 'campaign:one', sceneKitId, stateRevisionBefore: 3, stateRevisionAfter: 4, receiptRef });
+    mem.turns.documents.push({ userId: 'user:one', campaignId: 'campaign:one', sceneKitId, stateRevisionBefore: 3, stateRevisionAfter: 4, receiptRef, sceneKitRef: { sceneKitId, revision: 1 } });
 
     await expect(commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0, buildRequest: request, proposal: candidate, assessment: assessment(candidate, request) }, mem.stores))
       .rejects.toMatchObject({ code: 'SCENE_REALITY_ACTIVE_STATE_CONFLICT' });
 
     candidate.activeSceneState = { revision: 4, receiptChain: [receiptRef] };
     ((candidate.sceneReality as JsonObject).timelineAnchor as JsonObject).activeSceneStateRevision = 4;
+    (candidate.sceneKit as JsonObject).revision = 2;
+    ((candidate.sceneReality as JsonObject).sceneKitRef as JsonObject).revision = 2;
+    ((candidate.sceneStoryDesign as JsonObject).sceneKitRef as JsonObject).revision = 2;
     await expect(commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0, buildRequest: request, proposal: candidate, assessment: assessment(candidate, request) }, mem.stores))
       .resolves.toMatchObject({ resultingOwnerHeads: { activeSceneState: 4 } });
+  });
+
+  it('advances a refreshed Scene kit to the first revision beyond preserved accepted-turn history', async () => {
+    const { mem, candidate } = await commitReady();
+    const active = await readActiveSceneReality({ userId: 'user:one', campaignId: 'campaign:one' }, mem.stores);
+    const certificate = (active?.bundle as JsonObject).readinessCertificate as JsonObject;
+    const sceneKitId = String((candidate.sceneKit as JsonObject).sceneKitId);
+    const receiptRef = 'gmc:scene-turn:historical-fourteen';
+    mem.activeStates.documents.push({ userId: 'user:one', campaignId: 'campaign:one', sceneKitId, revision: 1, latestReceiptRef: receiptRef });
+    mem.turns.documents.push({
+      userId: 'user:one', campaignId: 'campaign:one', sceneKitId,
+      stateRevisionBefore: 0, stateRevisionAfter: 1, receiptRef,
+      sceneKitRef: { sceneKitId, revision: 14 },
+    });
+    const request = buildRequest({
+      operationId: 'operation:scene-reality:history-repair',
+      idempotencyKey: 'idempotency:scene-reality:history-repair',
+      trigger: 'anticipatory_refresh', instructionRef: 'instruction:history-repair',
+      preexistingCertificateRef: { certificateId: certificate.certificateId, revision: certificate.revision },
+    });
+    const successor = structuredClone(candidate);
+    successor.operationId = request.operationId;
+    (successor.sceneKit as JsonObject).revision = 14;
+    (successor.sceneReality as JsonObject).revision = 2;
+    ((successor.sceneReality as JsonObject).sceneKitRef as JsonObject).revision = 14;
+    ((successor.sceneReality as JsonObject).timelineAnchor as JsonObject).activeSceneStateRevision = 1;
+    (successor.sceneStoryDesign as JsonObject).revision = 2;
+    ((successor.sceneStoryDesign as JsonObject).sceneKitRef as JsonObject).revision = 14;
+    ((successor.sceneKit as JsonObject).sceneRealityRef as JsonObject).revision = 2;
+    ((successor.sceneKit as JsonObject).sceneStoryDesignRef as JsonObject).revision = 2;
+    successor.activeSceneState = { revision: 1, receiptChain: [receiptRef] };
+    const manifest = ((successor.openingFrame as JsonObject).presentedTargetManifest as JsonObject);
+    manifest.certificateRef = {
+      certificateId: `scene-ready:${fingerprint({ reality: (successor.sceneReality as JsonObject).realityId, realityRevision: 2, pointerRevision: 2 }).slice(0, 40)}`,
+      revision: 2,
+    };
+
+    await expect(commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 1, buildRequest: request, proposal: successor, assessment: assessment(successor, request) }, mem.stores))
+      .rejects.toMatchObject({ code: 'SCENE_REALITY_SCENE_REVISION_REGRESSION' });
+
+    (successor.sceneKit as JsonObject).revision = 15;
+    ((successor.sceneReality as JsonObject).sceneKitRef as JsonObject).revision = 15;
+    ((successor.sceneStoryDesign as JsonObject).sceneKitRef as JsonObject).revision = 15;
+    await expect(commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 1, buildRequest: request, proposal: successor, assessment: assessment(successor, request) }, mem.stores))
+      .resolves.toMatchObject({ resultingOwnerHeads: { sceneKit: 15, activeSceneState: 1 } });
   });
 
   it('compares the build read-set to the current GMC Story head and keeps duplicate retry idempotent', async () => {

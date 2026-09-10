@@ -134,6 +134,7 @@ interface SceneTurnReceiptLink {
   stateRevisionBefore: number;
   stateRevisionAfter: number;
   receiptRef: string;
+  sceneKitRef: JsonObject;
   readinessChangedDimensions?: string[];
 }
 
@@ -676,18 +677,26 @@ function withoutRevision(value: JsonObject): JsonObject {
   return result;
 }
 
-function validateSuccessorContinuity(proposal: JsonObject, priorBundle: JsonObject | null, trigger: unknown): void {
+function validateSuccessorContinuity(
+  proposal: JsonObject,
+  priorBundle: JsonObject | null,
+  trigger: unknown,
+  greatestReceiptSceneRevision = 0,
+): void {
   if (!priorBundle || !['anticipatory_refresh', 'emergent_expansion'].includes(String(trigger))) return;
   for (const [field, idField] of [
     ['sceneKit', 'sceneKitId'], ['sceneReality', 'realityId'], ['sceneStoryDesign', 'designId'],
   ] as const) {
     const prior = priorBundle[field] as JsonObject;
     const successor = proposal[field] as JsonObject;
-    if (successor[idField] !== prior[idField] || Number(successor.revision) !== Number(prior.revision) + 1) {
-      throw new StoryWorkspaceStoreError(409, 'SCENE_REALITY_SUCCESSOR_IDENTITY_CONFLICT', 'A Scene refresh or expansion must advance the same stable Scene authority exactly one revision.', {
+    const expectedRevision = field === 'sceneKit'
+      ? Math.max(Number(prior.revision) + 1, greatestReceiptSceneRevision + 1)
+      : Number(prior.revision) + 1;
+    if (successor[idField] !== prior[idField] || Number(successor.revision) !== expectedRevision) {
+      throw new StoryWorkspaceStoreError(409, 'SCENE_REALITY_SUCCESSOR_IDENTITY_CONFLICT', 'A Scene refresh or expansion must advance the same stable Scene authority to its exact next safe revision.', {
         field: `proposal.${field}.${idField}`,
         expectedId: prior[idField], actualId: successor[idField],
-        expectedRevision: Number(prior.revision) + 1, actualRevision: successor.revision,
+        expectedRevision, actualRevision: successor.revision,
       });
     }
   }
@@ -1144,7 +1153,6 @@ export async function commitSceneReality(
     if (!matchedBoundary) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_BOUNDARY_NOT_PREEXISTING', 'The requested world expansion did not cross an earlier prepared boundary.', { field: 'buildRequest.crossedBoundaryRef' });
   }
   const proposal = validateProposal(input.proposal, request, input.campaignId);
-  validateSuccessorContinuity(proposal, priorDocument?.bundle ?? null, request.trigger);
   const sceneKit = proposal.sceneKit as JsonObject;
   const proposedActiveState = proposal.activeSceneState as JsonObject;
   const timelineAnchor = (proposal.sceneReality as JsonObject).timelineAnchor as JsonObject;
@@ -1158,10 +1166,20 @@ export async function commitSceneReality(
   const receiptChain = idList(proposedActiveState.receiptChain, 'proposal.activeSceneState.receiptChain', 64);
   if (currentActiveRevision === 0 && receiptChain.length) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_ACTIVE_STATE_CHAIN_INVALID', 'A new Scene cannot claim an earlier accepted turn receipt.', { field: 'proposal.activeSceneState.receiptChain' });
   if (currentActiveState?.latestReceiptRef && !receiptChain.includes(currentActiveState.latestReceiptRef)) throw new StoryWorkspaceStoreError(409, 'SCENE_REALITY_ACTIVE_STATE_CHAIN_INCOMPLETE', 'The Scene preparation omitted the latest accepted turn receipt.', { field: 'proposal.activeSceneState.receiptChain', latestReceiptRef: currentActiveState.latestReceiptRef });
+  let greatestReceiptSceneRevision = 0;
   for (const receiptRef of receiptChain) {
     const receipt = await stores.sceneTurnReceipts.findOne({ userId: input.userId, campaignId: input.campaignId, sceneKitId: String(sceneKit.sceneKitId), receiptRef });
     if (!receipt || receipt.stateRevisionAfter > currentActiveRevision) throw new StoryWorkspaceStoreError(409, 'SCENE_REALITY_ACTIVE_STATE_CHAIN_INVALID', 'The Scene preparation cited an unverified accepted-turn receipt.', { field: 'proposal.activeSceneState.receiptChain', receiptRef });
+    const receiptSceneRevision = Number(receipt.sceneKitRef?.revision ?? 0);
+    if (!Number.isSafeInteger(receiptSceneRevision) || receiptSceneRevision < 1) throw new StoryWorkspaceStoreError(409, 'SCENE_REALITY_ACTIVE_STATE_CHAIN_INVALID', 'The Scene preparation cited a turn without a valid Scene revision.', { field: 'proposal.activeSceneState.receiptChain', receiptRef });
+    greatestReceiptSceneRevision = Math.max(greatestReceiptSceneRevision, receiptSceneRevision);
   }
+  if (greatestReceiptSceneRevision >= Number(sceneKit.revision)) {
+    throw new StoryWorkspaceStoreError(409, 'SCENE_REALITY_SCENE_REVISION_REGRESSION', 'The prepared Scene revision must be newer than every accepted turn it preserves.', {
+      field: 'proposal.sceneKit.revision', greatestReceiptSceneRevision, proposedRevision: sceneKit.revision,
+    });
+  }
+  validateSuccessorContinuity(proposal, priorDocument?.bundle ?? null, request.trigger, greatestReceiptSceneRevision);
   const assessment = validateAssessment(input.assessment, proposal, request);
   const pointerRevision = actualPointerRevision + 1;
   const certificate = certificateFrom(proposal, request, assessment, pointerRevision);
