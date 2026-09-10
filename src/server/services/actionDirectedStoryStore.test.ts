@@ -1474,4 +1474,57 @@ describe('D2 action-directed Story authority', () => {
     });
 
   });
+
+  it('applies a certified Scene-reality beat even when the legacy workspace kit does not contain it', async () => {
+    const store = await preparedStore();
+    const active = await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records);
+    const legacyKit = (active!.workspace.sceneKits as JsonObject[]).find((entry) => (
+      entry.sceneKitId === (active!.workspace.activeSceneKitRef as JsonObject).sceneKitId
+    ))!;
+    const certifiedKit = {
+      ...structuredClone(legacyKit),
+      schemaVersion: 'gmc.scene-kit/5',
+      revision: 1,
+      beats: [{
+        beatId: 'beat:worker-firsthand-account', kind: 'investigation', state: 'active',
+        trigger: 'Kerrigan asks for the worker’s complete firsthand account.',
+        changeSurface: 'The worker distinguishes observation from guesswork.',
+        potentialImpacts: [{ storyNodeRef: 'story:arc:flintwake', outcome: 'credible_lead', effect: 'advance' }],
+      }],
+      actorMechanicsBindings: [], observationAccess: [], observables: [], obstructions: [],
+      sceneRealityRef: { realityId: 'scene-reality:worker-account', revision: 1 },
+      sceneStoryDesignRef: null,
+    } as JsonObject;
+    expect((legacyKit.beats as JsonObject[]).some((beat) => beat.beatId === 'beat:worker-firsthand-account')).toBe(false);
+    const delta: StoryDeltaV2 = {
+      schemaVersion: 'studio.story-delta/2', deltaId: 'delta:worker-account', operationId: 'operation:worker-account',
+      idempotencyKey: 'delta:worker-account', correlationId: 'correlation:worker-account', campaignId: 'campaign-a',
+      initiatedBy: 'gma', sourceSystem: 'gma', targetAuthority: 'gmc', visibility: 'gm_only', classification: 'beat_update',
+      expectedWorkspaceRevision: active!.storyWorkspaceRef.revision, reason: 'The worker gave the complete prepared account.',
+      sourceRevisions: { timelineSequence: 4 }, sourceReceiptRefs: ['gma:validated-interaction:worker-account'],
+      sceneKitRef: String(certifiedKit.sceneKitId),
+      beatChanges: [{
+        beatRef: 'beat:worker-firsthand-account', state: 'resolved',
+        sourceReceiptRefs: ['gma:validated-interaction:worker-account'],
+      }],
+      actualStoryImpacts: [{
+        storyNodeRef: 'story:arc:flintwake', effect: 'advance', reason: 'The prepared account establishes a credible lead.',
+        sourceReceiptRefs: ['gma:validated-interaction:worker-account'],
+      }],
+      affectedRecords: [],
+    };
+
+    await expect(applyStoryDeltaV2(
+      { userId: 'tenant-a', campaignId: 'campaign-a', delta },
+      store.records,
+      async () => ({ bundle: { sceneKit: certifiedKit } }),
+    )).resolves.toMatchObject({ status: 'applied', storyWorkspaceRef: { revision: active!.storyWorkspaceRef.revision + 1 } });
+    const updated = (await readActiveStoryWorkspace({ userId: 'tenant-a', campaignId: 'campaign-a' }, store.records))!.workspace;
+    const retainedLegacyKit = (updated.sceneKits as JsonObject[]).find((entry) => entry.sceneKitId === legacyKit.sceneKitId)!;
+    expect((retainedLegacyKit.beats as JsonObject[]).some((beat) => beat.beatId === 'beat:worker-firsthand-account')).toBe(false);
+    expect(updated.storyImpactReceipts).toEqual([
+      expect.objectContaining({ storyNodeRef: 'story:arc:flintwake', effect: 'advance' }),
+    ]);
+    expect(updated.lastStoryDeltaRef).toBe('delta:worker-account');
+  });
 });

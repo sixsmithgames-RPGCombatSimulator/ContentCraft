@@ -1718,6 +1718,7 @@ function validateImpactSatisfaction(
 export async function applyStoryDeltaV2(
   input: { userId: string; campaignId: string; delta: StoryDeltaV2 },
   records?: StoryWorkspaceRevisionCollection,
+  sceneRealityReader?: (input: { userId: string; campaignId: string }) => Promise<JsonObject | null>,
 ): Promise<JsonObject> {
   const delta = validateStoryDeltaV2(input.delta, input.campaignId);
   const requestHash = hash(delta as unknown as JsonObject);
@@ -1740,9 +1741,19 @@ export async function applyStoryDeltaV2(
   };
   if (!active) throw new StoryWorkspaceStoreError(404, 'STORY_WORKSPACE_NOT_FOUND', 'No Story workspace exists for this delta.', {});
   const workspace = clone(active.workspace);
-  const kit = activeV2SceneKit(workspace);
+  const sceneReality = sceneRealityReader
+    ? await sceneRealityReader(input)
+    : records
+      ? null
+      : await readActiveSceneReality(input);
+  const sceneRealityBundle = isObject(sceneReality?.bundle) ? sceneReality.bundle as JsonObject : null;
+  const sceneRealityKit = isObject(sceneRealityBundle?.sceneKit) ? clone(sceneRealityBundle.sceneKit as JsonObject) : null;
+  const realityBackedScene = Boolean(sceneRealityKit);
+  const kit = sceneRealityKit ?? activeV2SceneKit(workspace);
   if (!kit || ![String(kit.sceneKitId), `${String(kit.sceneKitId)}:r${String(kit.revision)}`].includes(delta.sceneKitRef)) throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_CONFLICT', 'The Story delta does not target the current Scene kit.', { sceneKitRef: delta.sceneKitRef });
-  const acceptedDesign = activeSceneStoryDesign(workspace, kit);
+  const acceptedDesign = isObject(sceneRealityBundle?.sceneStoryDesign)
+    ? sceneRealityBundle.sceneStoryDesign as JsonObject
+    : activeSceneStoryDesign(workspace, kit);
   const design = acceptedDesign ? clone(acceptedDesign) : null;
   let designChanged = false;
   const changedRefs: string[] = [];
@@ -1760,17 +1771,19 @@ export async function applyStoryDeltaV2(
     }
     if (beats.filter((beat) => beat.state === 'active').length > 1) throw new StoryWorkspaceStoreError(422, 'STORY_ACTIVE_BEAT_CONFLICT', 'A Scene kit cannot have more than one active beat.', {});
     kit.beats = beats;
-    kit.revision = Number(kit.revision) + 1;
-    const index = sceneKits(workspace).findIndex((candidate) => candidate.sceneKitId === kit.sceneKitId);
-    const kits = sceneKits(workspace);
-    kits[index] = kit;
-    workspace.sceneKits = kits;
-    const nextActive = beats.find((beat) => beat.state === 'active') ?? beats.find((beat) => beat.state === 'available') ?? beats[0];
-    workspace.activeBeatRef = nextActive.beatId;
-    if (design) {
-      const sceneKitRef = design.sceneKitRef as JsonObject;
-      sceneKitRef.sceneKitRevision = kit.revision;
-      designChanged = true;
+    if (!realityBackedScene) {
+      kit.revision = Number(kit.revision) + 1;
+      const index = sceneKits(workspace).findIndex((candidate) => candidate.sceneKitId === kit.sceneKitId);
+      const kits = sceneKits(workspace);
+      kits[index] = kit;
+      workspace.sceneKits = kits;
+      const nextActive = beats.find((beat) => beat.state === 'active') ?? beats.find((beat) => beat.state === 'available') ?? beats[0];
+      workspace.activeBeatRef = nextActive.beatId;
+      if (design) {
+        const sceneKitRef = design.sceneKitRef as JsonObject;
+        sceneKitRef.sceneKitRevision = kit.revision;
+        designChanged = true;
+      }
     }
   }
   const graph = projectStoryGraphV2(workspace);
@@ -1789,7 +1802,7 @@ export async function applyStoryDeltaV2(
     const preparedEffects = potential.get(impact.storyNodeRef);
     if (preparedEffects && preparedEffects.size && !preparedEffects.has(impact.effect)) throw new StoryWorkspaceStoreError(422, 'STORY_IMPACT_NOT_PREPARED', 'The actual Story impact conflicts with this scene’s prepared impact.', { storyNodeRef: impact.storyNodeRef, effect: impact.effect });
     const satisfaction = validateImpactSatisfaction(impact, design);
-    if (satisfaction && design) {
+    if (satisfaction && design && !realityBackedScene) {
       const obligation = (design.obligations as JsonObject[]).find((candidate) => candidate.obligationId === satisfaction.obligationRef)!;
       if (obligation.state !== satisfaction.obligationState) {
         obligation.state = satisfaction.obligationState;
