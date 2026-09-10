@@ -400,9 +400,13 @@ function validateBoundary(value: JsonObject, field: string): JsonObject {
 function validateProfile(value: unknown, minimumDepth: string): JsonObject {
   if (!object(value)) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_PROFILE_INVALID', 'The Scene preparation profile is missing.', {});
   exactKeys(value, 'preparationProfile', ['depth', 'minimumDepth', 'reason', 'expectedDwell', 'judgmentUncertainty']);
+  const deterministicFloor = depth(minimumDepth, 'buildRequest.deterministicMinimumDepth');
   const selected = depth(value.depth, 'preparationProfile.depth');
   const minimum = depth(value.minimumDepth, 'preparationProfile.minimumDepth');
-  if (minimum !== minimumDepth || DEPTHS.indexOf(selected) < DEPTHS.indexOf(minimum)) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_DEPTH_BELOW_FLOOR', 'The proposed Scene is shallower than its required preparation depth.', { minimumDepth, selectedDepth: selected });
+  const deterministicFloorIndex = DEPTHS.indexOf(deterministicFloor);
+  const effectiveFloorIndex = DEPTHS.indexOf(minimum);
+  const selectedDepthIndex = DEPTHS.indexOf(selected);
+  if (effectiveFloorIndex < deterministicFloorIndex || selectedDepthIndex < effectiveFloorIndex) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_DEPTH_BELOW_FLOOR', 'The proposed Scene is shallower than its required preparation depth.', { deterministicMinimumDepth: deterministicFloor, minimumDepth: minimum, selectedDepth: selected });
   text(value.reason, 'preparationProfile.reason', 1_000);
   if (!['glimpse', 'brief', 'sustained', 'extended'].includes(String(value.expectedDwell))) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_PROFILE_INVALID', 'The expected Scene dwell is invalid.', { field: 'preparationProfile.expectedDwell' });
   if (!['low', 'medium', 'high'].includes(String(value.judgmentUncertainty))) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_PROFILE_INVALID', 'The depth-judgment uncertainty is invalid.', { field: 'preparationProfile.judgmentUncertainty' });

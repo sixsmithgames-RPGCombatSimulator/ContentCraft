@@ -281,6 +281,32 @@ describe('Scene reality owner authority', () => {
     expect((active?.bundle as JsonObject).readinessCertificate).toMatchObject({ status: 'certified' });
   });
 
+  it('accepts a semantic depth judgment that raises the effective preparation floor', async () => {
+    const mem = memory();
+    const request = buildRequest({ deterministicMinimumDepth: 'interactive' });
+    const candidate = proposal(request);
+    await expect(commitSceneReality({
+      userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0,
+      buildRequest: request, proposal: candidate, assessment: assessment(candidate, request),
+    }, mem.stores)).resolves.toMatchObject({
+      schemaVersion: SCENE_REALITY_CONTRACTS.commitReceipt,
+      authoritativeStateChanged: true,
+    });
+  });
+
+  it('rejects an effective preparation floor below the deterministic floor', async () => {
+    const mem = memory();
+    const request = buildRequest({ deterministicMinimumDepth: 'interactive' });
+    const candidate = proposal(request);
+    const loweredProfile = { ...profile, minimumDepth: 'transit_thumbnail' };
+    candidate.preparationProfile = loweredProfile;
+    (candidate.sceneReality as JsonObject).preparationProfile = loweredProfile;
+    await expect(commitSceneReality({
+      userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0,
+      buildRequest: request, proposal: candidate, assessment: assessment(candidate, request),
+    }, mem.stores)).rejects.toMatchObject({ code: 'SCENE_REALITY_DEPTH_BELOW_FLOOR' });
+  });
+
   it('returns the original receipt for duplicate delivery and rejects changed reuse', async () => {
     const { mem, request, candidate } = await commitReady();
     const duplicate = await commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0, buildRequest: request, proposal: candidate, assessment: assessment(candidate, request) }, mem.stores);

@@ -137,6 +137,15 @@ GMC validation order is:
 13. accepted examiner shape, evidence, and verdict; and
 14. player-safe and GM-private projection separation.
 
+`buildRequest.deterministicMinimumDepth` is the algorithmic lower bound, not a
+requirement that the semantic judge remain at that exact depth. The judgment
+may raise the Scene to a deeper profile. The proposal's effective
+`preparationProfile.minimumDepth` must therefore be at least the deterministic
+floor and no deeper than its selected `depth`; equality with the deterministic
+floor is not required. This preserves a legitimate semantic escalation while
+still preventing either the builder or a later refresh from downgrading the
+prepared Scene.
+
 Versioned `/2`, `/3`, and `/4` Scene kits must not bypass owner readiness
 validation. Counts and nonblank text remain structural checks only. They cannot
 issue a certificate.
