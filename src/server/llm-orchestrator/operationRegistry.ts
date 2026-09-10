@@ -16,9 +16,10 @@ import {
   sceneRealityRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-09.5';
+export const OPERATION_REGISTRY_VERSION = '2026-09-09.6';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-09.5',
   '2026-09-09.4',
   '2026-09-09.3',
   '2026-09-09.2',
@@ -1295,8 +1296,8 @@ const seeds: Seed[] = [
   {
     id: 'story.scene-reality.build.checkpoint', operationClass: 'world_generation', tier: 'world',
     required: Object.keys(sceneRealityBuilderCheckpointResultOutput), validators: ['scene-reality-builder-contract'],
-    temperature: 0.35, maxOutputTokens: 10_000, targetBytes: 96_000, hardLimitBytes: 131_072,
-    thinkingLevel: 'high', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.scene-reality-builder-checkpoint-policy/1',
+    temperature: 0.35, maxOutputTokens: 16_000, targetBytes: 96_000, hardLimitBytes: 131_072,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.scene-reality-builder-checkpoint-policy/1',
     outputProperties: sceneRealityBuilderCheckpointResultOutput,
     systemInstruction: [
       'Build only the first dependency-closed record checkpoint for a mature investigative or encounter-set-piece Scene from the supplied owner records, accepted receipt heads, prior Scene bundle, creation policy, depth judgment, build request, and gma.scene-reality-build-strategy/1.',
@@ -1310,8 +1311,8 @@ const seeds: Seed[] = [
   {
     id: 'story.scene-reality.build', operationClass: 'world_generation', tier: 'world',
     required: Object.keys(sceneRealityBuilderResultOutput), validators: ['scene-reality-builder-contract'],
-    temperature: 0.35, maxOutputTokens: 10_000, targetBytes: 96_000, hardLimitBytes: 131_072,
-    thinkingLevel: 'high', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.scene-reality-builder-policy/1',
+    temperature: 0.35, maxOutputTokens: 16_000, targetBytes: 96_000, hardLimitBytes: 131_072,
+    thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false, promptVersion: 'gma.scene-reality-builder-policy/1',
     outputProperties: sceneRealityBuilderResultOutput,
     systemInstruction: [
       'Build one complete dependency-closed private Scene-reality proposal from only the supplied owner records, accepted receipts, creation policy, depth judgment, and build request. Return exactly gma.scene-reality-builder-result/1. A complete result puts the gma.scene-reality-proposal/1 candidate in proposal and null in checkpoint.',

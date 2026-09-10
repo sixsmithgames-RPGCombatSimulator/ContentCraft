@@ -127,6 +127,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(checkpoint.prompt.systemInstruction).toMatch(/zones and actor_frames domains only/i);
     expect(checkpoint.prompt.systemInstruction).toMatch(/recordLimits as hard maxima/i);
     expect((checkpoint.outputSchema.schema as any).properties.status).toEqual({ const: 'continuation_required' });
+    expect(checkpoint.provider).toMatchObject({ thinkingLevel: 'medium', maxOutputTokens: 16_000 });
     expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/1');
     expect(builder.prompt.systemInstruction).toMatch(/Prepare a playable situation rather than an answer to the current sentence/i);
     expect(builder.prompt.systemInstruction).toMatch(/one meaningful layer beyond every presented threshold/i);
@@ -135,6 +136,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(builder.prompt.systemInstruction).toMatch(/cover every causally reachable unfinished node/i);
     expect(builder.prompt.systemInstruction).toMatch(/two_chunk_required.*must return continuation_required/i);
     expect(builder.prompt.systemInstruction).toMatch(/proposal only/i);
+    expect(builder.provider).toMatchObject({ thinkingLevel: 'medium', maxOutputTokens: 16_000 });
     expect(examiner.prompt.version).toBe('gma.scene-readiness-examiner-policy/1');
     expect(examiner.prompt.systemInstruction).toMatch(/five to ten minutes of plausible play/i);
     expect(examiner.prompt.systemInstruction).toMatch(/at least three Scene-specific counterfactual probes/i);

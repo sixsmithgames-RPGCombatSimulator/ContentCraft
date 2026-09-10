@@ -213,6 +213,15 @@ policy. A larger situation uses an explicit prepared boundary or linked Scene;
 the model may not fill broad storage maxima merely because the schema permits
 them.
 
+Gemini counts private reasoning and the returned structured dossier against one
+shared output ceiling. Both builder chunks therefore use medium reasoning and a
+16,000-token shared output reserve. High reasoning inside a 10,000-token
+reserve is prohibited for these operations because it can exhaust the envelope
+before the model closes otherwise valid JSON. The record limits, concise-field
+policy, 96,000-byte merged-proposal ceiling, and independent examination remain
+the completeness controls; the larger provider reserve is not permission to
+broaden the Scene.
+
 Public projections expose only already revealed facts, public actor labels,
 and accepted current state. GMA private projections are purpose-bound,
 action-matched, revisioned, and capped at 64 KiB. Logs contain hashes, counts,

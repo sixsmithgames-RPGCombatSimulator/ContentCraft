@@ -1,6 +1,6 @@
 {
   "schemaVersion": "gma-gmc.llm-registry-artifact/1",
-  "registryVersion": "2026-09-09.5",
+  "registryVersion": "2026-09-09.6",
   "modelPolicyVersion": "2026-08-01.1",
   "operations": [
     {
@@ -9745,8 +9745,8 @@
       },
       "provider": {
         "temperature": 0.35,
-        "thinkingLevel": "high",
-        "maxOutputTokens": 10000,
+        "thinkingLevel": "medium",
+        "maxOutputTokens": 16000,
         "timeoutMs": 100000,
         "maxAttempts": 1,
         "fallbackAllowed": false,
@@ -10725,8 +10725,8 @@
       },
       "provider": {
         "temperature": 0.35,
-        "thinkingLevel": "high",
-        "maxOutputTokens": 10000,
+        "thinkingLevel": "medium",
+        "maxOutputTokens": 16000,
         "timeoutMs": 100000,
         "maxAttempts": 1,
         "fallbackAllowed": false,
