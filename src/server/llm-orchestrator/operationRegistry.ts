@@ -15,9 +15,10 @@ import {
   sceneRealityRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-09.2';
+export const OPERATION_REGISTRY_VERSION = '2026-09-09.3';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-09.2',
   '2026-09-01.9',
   '2026-09-01.8',
   '2026-09-01.7',
@@ -1297,6 +1298,7 @@ const seeds: Seed[] = [
     systemInstruction: [
       'Build one complete dependency-closed private Scene-reality proposal from only the supplied owner records, accepted receipts, creation policy, depth judgment, and build request. Return exactly gma.scene-reality-builder-result/1. A complete result puts the gma.scene-reality-proposal/1 candidate in proposal and null in checkpoint.',
       'If and only if an investigative or encounter-set-piece dossier cannot fit safely in one output, the first call may return continuation_required with proposal null and one dependency-closed gma.scene-reality-build-checkpoint/1. Name the exact remaining record domains and source refs. When buildContinuation is supplied, return complete with checkpoint null; never request a third chunk, repeat checkpoint records, or silently omit required material.',
+      'When the supplied gma.scene-reality-build-strategy/1 has mode two_chunk_required and buildContinuation is absent, you must return continuation_required rather than attempt a complete proposal. Put one or more complete record domains in the checkpoint, leave at least one record domain for the second result, and choose the partition so both results stay within their output reserve. When buildContinuation is present, complete exactly the remaining domains and do not request another checkpoint.',
       'Keep the complete merged certificate envelope at or below 96,000 UTF-8 bytes so the independent examiner can review every material field. If the surrounding situation is larger, stop the current envelope at an explicit reasonable prepared boundary and describe the linked zone or Scene beyond it; never compress away or omit required records.',
       'Prepare a playable situation rather than an answer to the current sentence: establish where everyone and everything material is, why the place operates, why each material actor is present, what each actor wants, knows, does not know, may disclose, and is likely to do, what material elements contain or concretely lack, what can be learned through multiple suitable routes, what changes with time, and how the Scene is connected, latent, or incidental to the active Story.',
       'Place every actor frame in one exact staged zone. For an individual, return null count, role, and sharedActivity; for a cohort, return a positive count plus its shared role and current activity.',

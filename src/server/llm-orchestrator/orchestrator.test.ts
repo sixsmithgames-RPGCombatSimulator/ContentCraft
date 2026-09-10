@@ -9,6 +9,7 @@ import {
   acceptsOperationRegistryClientVersion,
   bindOperationRuntime,
   getOperationDefinition,
+  getSemanticValidator,
   listOperationDefinitions,
   validateOperationOutput,
 } from './operationRegistry.js';
@@ -127,6 +128,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(builder.prompt.systemInstruction).toMatch(/ordinary, irrelevant, or bounded-negative reality/i);
     expect(builder.prompt.systemInstruction).toMatch(/every materially addressable actor, place, threshold, container, vehicle, structure, or distinct object.*presented-target manifest/i);
     expect(builder.prompt.systemInstruction).toMatch(/cover every causally reachable unfinished node/i);
+    expect(builder.prompt.systemInstruction).toMatch(/two_chunk_required.*must return continuation_required/i);
     expect(builder.prompt.systemInstruction).toMatch(/proposal only/i);
     expect(examiner.prompt.version).toBe('gma.scene-readiness-examiner-policy/1');
     expect(examiner.prompt.systemInstruction).toMatch(/five to ten minutes of plausible play/i);
@@ -136,6 +138,36 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(repair.prompt.systemInstruction).toMatch(/exactly the failed Scene-reality domains/i);
     expect(repair.prompt.systemInstruction).toMatch(/same positive depth requirements as the first-pass/i);
     expect(repair.prompt.systemInstruction).toMatch(/Preserve every accepted record/i);
+  });
+
+  it('enforces the explicit mature-dossier checkpoint strategy without changing ordinary or final-chunk builds', async () => {
+    const validator = getSemanticValidator('scene-reality-builder-contract');
+    expect(validator).toBeTypeOf('function');
+    const buildRequest = { operationId: 'scene-reality:one', campaignId: 'campaign:one', deterministicMinimumDepth: 'investigative' };
+    const complete = {
+      operationId: buildRequest.operationId,
+      campaignId: buildRequest.campaignId,
+      requestedDepth: 'investigative',
+      status: 'complete',
+      proposal: { operationId: buildRequest.operationId, campaignId: buildRequest.campaignId, requestedDepth: 'investigative', zones: [], actorFrames: [], elements: [], facts: [] },
+      checkpoint: null,
+    };
+    const validation = async (input: Record<string, unknown>, output = complete) => validator!({
+      request: { context: { input: { value: input } } } as unknown as LlmRequestEnvelope,
+      output,
+    });
+    const required = await validation({ buildRequest, buildStrategy: { schemaVersion: 'gma.scene-reality-build-strategy/1', mode: 'two_chunk_required' } });
+    expect(required.issues.map((issue) => issue.code)).toContain('SCENE_REALITY_BUILD_CHECKPOINT_REQUIRED');
+
+    const ordinary = await validation({ buildRequest, buildStrategy: { schemaVersion: 'gma.scene-reality-build-strategy/1', mode: 'single_or_checkpoint' } });
+    expect(ordinary.issues.map((issue) => issue.code)).not.toContain('SCENE_REALITY_BUILD_CHECKPOINT_REQUIRED');
+
+    const finalChunk = await validation({
+      buildRequest,
+      buildStrategy: { schemaVersion: 'gma.scene-reality-build-strategy/1', mode: 'two_chunk_required' },
+      buildContinuation: { checkpoint: {} },
+    });
+    expect(finalChunk.issues.map((issue) => issue.code)).not.toContain('SCENE_REALITY_BUILD_CHECKPOINT_REQUIRED');
   });
 
   it('returns the universal response envelope and provider-reported usage', async () => {

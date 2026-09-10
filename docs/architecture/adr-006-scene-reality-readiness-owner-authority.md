@@ -197,6 +197,15 @@ after two build chunks fails closed instead of starting a fifth model call.
 GMC never accepts either provider wrapper as owner authority: only the complete
 merged `gma.scene-reality-proposal/1` can be examined and committed.
 
+For a mature investigative or set-piece Scene whose action-matched prior bundle
+exceeds 32,000 UTF-8 bytes, GMA sends a versioned `two_chunk_required` build
+strategy. GMC's original builder policy requires the first result to be the
+dependency-closed checkpoint, and its semantic validator rejects a complete
+first result in that mode. This makes the existing continuation budget
+deterministic before generation rather than trusting the model to predict its
+own output cutoff. The final build call must complete the remaining domains and
+cannot request a third chunk.
+
 Public projections expose only already revealed facts, public actor labels,
 and accepted current state. GMA private projections are purpose-bound,
 action-matched, revisioned, and capped at 64 KiB. Logs contain hashes, counts,

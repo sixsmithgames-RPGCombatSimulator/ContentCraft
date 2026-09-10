@@ -279,6 +279,13 @@ registerSemanticValidator('scene-reality-builder-contract', ({ request, output }
   const selected = sceneRealityDepths.indexOf(String(output?.requestedDepth ?? ''));
   if (minimum < 0 || selected < minimum) issues.push({ code: 'SCENE_REALITY_DEPTH_BELOW_FLOOR', message: 'The Scene builder returned a shallower dossier than the deterministic floor.', path: '/requestedDepth' });
   const continuation = output?.status === 'continuation_required';
+  if (trusted?.buildStrategy?.mode === 'two_chunk_required' && !trusted?.buildContinuation && !continuation) {
+    issues.push({
+      code: 'SCENE_REALITY_BUILD_CHECKPOINT_REQUIRED',
+      message: 'The bounded build strategy requires a dependency-closed first checkpoint.',
+      path: '/status',
+    });
+  }
   const candidate = continuation ? output?.checkpoint : output?.proposal;
   const priorCheckpoint = trusted?.buildContinuation?.checkpoint;
   const effectiveCandidate = !continuation && priorCheckpoint && candidate
