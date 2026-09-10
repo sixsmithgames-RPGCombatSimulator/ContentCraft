@@ -16,9 +16,10 @@ import {
   sceneRealityRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-09.4';
+export const OPERATION_REGISTRY_VERSION = '2026-09-09.5';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-09.4',
   '2026-09-09.3',
   '2026-09-09.2',
   '2026-09-01.9',
@@ -1301,6 +1302,7 @@ const seeds: Seed[] = [
       'Build only the first dependency-closed record checkpoint for a mature investigative or encounter-set-piece Scene from the supplied owner records, accepted receipt heads, prior Scene bundle, creation policy, depth judgment, build request, and gma.scene-reality-build-strategy/1.',
       'Return exactly gma.scene-reality-builder-result/1 with status continuation_required, proposal null, and one gma.scene-reality-build-checkpoint/1. Copy operationId, campaignId, requestedDepth, and build-strategy domain lists exactly.',
       'The checkpoint must contain complete zones and actor_frames domains only; elements and facts must be empty and named as remaining domains. Include every current or newly required zone with concrete sensory surface, ordinary operation, topology, thresholds, access, and reasonable prepared boundaries. Include every material actor frame in one exact staged zone with purpose, identity maturity, objective, knowledge, ignorance, disclosure, likely action, and stable owner or scene-local identity.',
+      'Treat buildStrategy.recordLimits as hard maxima. Return at most eight zones and twelve actor frames in this checkpoint. Preserve supplied records without expanding their prose; keep each newly authored text field concise, normally one or two concrete sentences. Prefer a reasonable prepared boundary over speculative extra records.',
       'Preserve current canon, Story classification, active turn state, timeline, clock, stable refs, accepted facts, and receipt lineage. Reuse supplied identities and never join by display name. Do not create an answer to the current sentence, choose player actions, resolve mechanics, narrate play, issue a certificate, claim authority, or commit anything.',
       'Name elements and facts as the exact remaining domains and cite the source refs they will require. Do not emit any element or fact record, a complete proposal, a second checkpoint, silent omissions, placeholders, or missing preparation disguised as secrecy.',
     ].join(' '),
@@ -1315,6 +1317,7 @@ const seeds: Seed[] = [
       'Build one complete dependency-closed private Scene-reality proposal from only the supplied owner records, accepted receipts, creation policy, depth judgment, and build request. Return exactly gma.scene-reality-builder-result/1. A complete result puts the gma.scene-reality-proposal/1 candidate in proposal and null in checkpoint.',
       'If and only if an investigative or encounter-set-piece dossier cannot fit safely in one output, the first call may return continuation_required with proposal null and one dependency-closed gma.scene-reality-build-checkpoint/1. Name the exact remaining record domains and source refs. When buildContinuation is supplied, return complete with checkpoint null; never request a third chunk, repeat checkpoint records, or silently omit required material.',
       'When the supplied gma.scene-reality-build-strategy/1 has mode two_chunk_required and buildContinuation is absent, you must return continuation_required rather than attempt a complete proposal. Put one or more complete record domains in the checkpoint, leave at least one record domain for the second result, and choose the partition so both results stay within their output reserve. When buildContinuation is present, complete exactly the remaining domains and do not request another checkpoint.',
+      'Treat buildStrategy.recordLimits as hard maxima across the merged dossier: at most eight zones, twelve actor frames, sixteen elements, and thirty-two facts. Preserve supplied records without expanding their prose. Keep newly authored text concise, normally one or two concrete sentences per field, and use a reasonable prepared boundary rather than speculative extra records.',
       'Keep the complete merged certificate envelope at or below 96,000 UTF-8 bytes so the independent examiner can review every material field. If the surrounding situation is larger, stop the current envelope at an explicit reasonable prepared boundary and describe the linked zone or Scene beyond it; never compress away or omit required records.',
       'Prepare a playable situation rather than an answer to the current sentence: establish where everyone and everything material is, why the place operates, why each material actor is present, what each actor wants, knows, does not know, may disclose, and is likely to do, what material elements contain or concretely lack, what can be learned through multiple suitable routes, what changes with time, and how the Scene is connected, latent, or incidental to the active Story.',
       'Place every actor frame in one exact staged zone. For an individual, return null count, role, and sharedActivity; for a cohort, return a positive count plus its shared role and current activity.',

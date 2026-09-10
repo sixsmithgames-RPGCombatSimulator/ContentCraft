@@ -125,6 +125,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(depth.prompt.systemInstruction).toMatch(/Never select a depth shallower than deterministicMinimumDepth/i);
     expect(checkpoint.prompt.version).toBe('gma.scene-reality-builder-checkpoint-policy/1');
     expect(checkpoint.prompt.systemInstruction).toMatch(/zones and actor_frames domains only/i);
+    expect(checkpoint.prompt.systemInstruction).toMatch(/recordLimits as hard maxima/i);
     expect((checkpoint.outputSchema.schema as any).properties.status).toEqual({ const: 'continuation_required' });
     expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/1');
     expect(builder.prompt.systemInstruction).toMatch(/Prepare a playable situation rather than an answer to the current sentence/i);
@@ -165,6 +166,7 @@ describe('provider-neutral LLM orchestrator', () => {
       mode: 'two_chunk_required',
       firstChunkDomains: ['zones', 'actor_frames'],
       secondChunkDomains: ['elements', 'facts'],
+      recordLimits: { zones: 8, actorFrames: 12, elements: 16, facts: 32 },
     };
     const required = await validation({ buildRequest, buildStrategy: strategy });
     expect(required.issues.map((issue) => issue.code)).toContain('SCENE_REALITY_BUILD_CHECKPOINT_REQUIRED');
@@ -202,6 +204,11 @@ describe('provider-neutral LLM orchestrator', () => {
       checkpoint: { ...checkpointOutput.checkpoint, includedDomains: ['facts'], remainingDomains: ['zones', 'actor_frames', 'elements'] },
     });
     expect(changedPartition.issues.map((issue) => issue.code)).toContain('SCENE_REALITY_BUILD_STRATEGY_CHANGED');
+    const tooManyZones = await validation({ buildRequest, buildStrategy: strategy }, {
+      ...checkpointOutput,
+      checkpoint: { ...checkpointOutput.checkpoint, zones: Array.from({ length: 9 }, (_, index) => ({ zoneId: `zone:${index}` })) },
+    });
+    expect(tooManyZones.issues.map((issue) => issue.code)).toContain('SCENE_REALITY_BUILD_RECORD_LIMIT_EXCEEDED');
   });
 
   it('returns the universal response envelope and provider-reported usage', async () => {

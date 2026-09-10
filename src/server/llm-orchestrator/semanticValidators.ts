@@ -287,6 +287,17 @@ registerSemanticValidator('scene-reality-builder-contract', ({ request, output }
     });
   }
   const candidate = continuation ? output?.checkpoint : output?.proposal;
+  const recordLimits = trusted?.buildStrategy?.recordLimits ?? {};
+  for (const field of ['zones', 'actorFrames', 'elements', 'facts']) {
+    const maximum = Number(recordLimits[field]);
+    if (Number.isSafeInteger(maximum) && maximum >= 0 && (candidate?.[field]?.length ?? 0) > maximum) {
+      issues.push({
+        code: 'SCENE_REALITY_BUILD_RECORD_LIMIT_EXCEEDED',
+        message: `The Scene build exceeded its bounded ${field} record limit.`,
+        path: `${continuation ? '/checkpoint' : '/proposal'}/${field}`,
+      });
+    }
+  }
   const priorCheckpoint = trusted?.buildContinuation?.checkpoint;
   const effectiveCandidate = !continuation && priorCheckpoint && candidate
     ? {

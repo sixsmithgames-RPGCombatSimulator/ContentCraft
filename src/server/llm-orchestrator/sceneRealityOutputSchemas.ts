@@ -246,6 +246,12 @@ const buildRecordArrays = {
   elements: { type: 'array', maxItems: 128, items: sceneElement },
   facts: { type: 'array', maxItems: 256, items: sceneFact },
 } as const;
+const checkpointBuildRecordArrays = {
+  zones: { type: 'array', maxItems: 8, items: sceneZone },
+  actorFrames: { type: 'array', maxItems: 12, items: sceneActorFrame },
+  elements: { type: 'array', maxItems: 16, items: sceneElement },
+  facts: { type: 'array', maxItems: 32, items: sceneFact },
+} as const;
 const sceneRealityBuilderCandidate = strictObject(
   Object.keys(sceneRealityBuilderOutput),
   { ...sceneRealityBuilderOutput, ...buildRecordArrays },
@@ -259,7 +265,7 @@ const sceneRealityBuildCheckpoint = strictObject(
     includedDomains: { type: 'array', minItems: 1, maxItems: 4, uniqueItems: true, items: buildChunkDomain },
     remainingDomains: { type: 'array', minItems: 1, maxItems: 4, uniqueItems: true, items: buildChunkDomain },
     requiredSourceRefs: idList(128, 1), continuationReason: text(1_000),
-    ...buildRecordArrays,
+    ...checkpointBuildRecordArrays,
   },
 );
 

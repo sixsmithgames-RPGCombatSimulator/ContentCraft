@@ -207,6 +207,11 @@ own output cutoff. The dedicated registered checkpoint operation has no
 complete-proposal branch and uses an exact `zones + actor_frames` first chunk and
 `elements + facts` second chunk; GMC rejects a changed partition. The final
 build call must complete the remaining domains and cannot request a third chunk.
+The provider packet also carries hard per-envelope maxima of eight zones,
+twelve actor frames, sixteen elements, and thirty-two facts, plus concise-field
+policy. A larger situation uses an explicit prepared boundary or linked Scene;
+the model may not fill broad storage maxima merely because the schema permits
+them.
 
 Public projections expose only already revealed facts, public actor labels,
 and accepted current state. GMA private projections are purpose-bound,
