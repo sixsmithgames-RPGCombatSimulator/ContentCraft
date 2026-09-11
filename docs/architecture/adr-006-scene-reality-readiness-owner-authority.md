@@ -161,15 +161,26 @@ For a new Scene or expansion, GMC:
 3. validates the complete dossier and proposed depth;
 4. obtains and validates an independent readiness assessment;
 5. applies at most one failed-domain repair before commit;
-6. atomically writes all new or changed records, the certificate, history row,
+6. has GMA deterministically bind the exact successor authority revisions before
+   examination and bind them again after any repair: stable top-level identities
+   advance once, an unchanged retained zone/actor/element/fact keeps its revision,
+   a changed retained record advances once, and a new record begins at revision
+   one;
+7. atomically writes all new or changed records, the certificate, history row,
    and owner receipt;
-7. returns resulting heads and an exact changed/invalidated ref list; and
-8. supports lookup by the original operation ID after timeout or lost response.
+8. returns resulting heads and an exact changed/invalidated ref list; and
+9. supports lookup by the original operation ID after timeout or lost response.
 
 No player-facing narration is stored in the owner operation. A failed or
 ambiguous commit leaves the prior authority current. A duplicate request with
 the same identity returns the original receipt; a conflicting duplicate fails
 closed.
+
+The model receives these successor rules in its original checkpoint, builder,
+and repair policies, but model-authored revision numbers are never trusted as
+authority. GMA performs the binding against the complete current bundle, not the
+pruned builder projection, and GMC independently validates the same rules at
+commit. Stable identity conflicts remain errors; neither service rewrites them.
 
 Atomicity applies to GMC-owned records. GMC uses a database transaction when
 available; otherwise it writes one immutable staged bundle and exposes it with

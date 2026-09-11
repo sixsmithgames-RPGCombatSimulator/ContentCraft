@@ -126,6 +126,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(checkpoint.prompt.version).toBe('gma.scene-reality-builder-checkpoint-policy/1');
     expect(checkpoint.prompt.systemInstruction).toMatch(/zones and actor_frames domains only/i);
     expect(checkpoint.prompt.systemInstruction).toMatch(/recordLimits as hard maxima/i);
+    expect(checkpoint.prompt.systemInstruction).toMatch(/unchanged retained record keeps its prior revision.*changed retained record advances exactly once.*new record begins at revision one/i);
     expect((checkpoint.outputSchema.schema as any).properties.status).toEqual({ const: 'continuation_required' });
     expect(checkpoint.provider).toMatchObject({ thinkingLevel: 'medium', maxOutputTokens: 16_000 });
     expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/1');
@@ -135,6 +136,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(builder.prompt.systemInstruction).toMatch(/every materially addressable actor, place, threshold, container, vehicle, structure, or distinct object.*presented-target manifest/i);
     expect(builder.prompt.systemInstruction).toMatch(/cover every causally reachable unfinished node/i);
     expect(builder.prompt.systemInstruction).toMatch(/two_chunk_required.*must return continuation_required/i);
+    expect(builder.prompt.systemInstruction).toMatch(/preserve its sceneKitId, realityId, and designId.*unchanged retained zone, actor frame, element, or fact keeps its prior revision.*changed retained record advances exactly once.*new record begins at revision one/i);
     expect(builder.prompt.systemInstruction).toMatch(/proposal only/i);
     expect(builder.provider).toMatchObject({ thinkingLevel: 'medium', maxOutputTokens: 16_000 });
     expect(examiner.prompt.version).toBe('gma.scene-readiness-examiner-policy/1');
@@ -145,6 +147,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(repair.prompt.systemInstruction).toMatch(/exactly the failed Scene-reality domains/i);
     expect(repair.prompt.systemInstruction).toMatch(/same positive depth requirements as the first-pass/i);
     expect(repair.prompt.systemInstruction).toMatch(/Preserve every accepted record/i);
+    expect(repair.prompt.systemInstruction).toMatch(/advance its revision exactly once if its body changes.*unchanged replacement at its prior revision/i);
   });
 
   it('enforces the explicit mature-dossier checkpoint strategy without changing ordinary or final-chunk builds', async () => {

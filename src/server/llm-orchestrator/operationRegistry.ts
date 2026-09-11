@@ -16,9 +16,10 @@ import {
   sceneRealityRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-09.7';
+export const OPERATION_REGISTRY_VERSION = '2026-09-09.8';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-09.7',
   '2026-09-09.5',
   '2026-09-09.4',
   '2026-09-09.3',
@@ -1304,6 +1305,7 @@ const seeds: Seed[] = [
       'Return exactly gma.scene-reality-builder-result/1 with status continuation_required, proposal null, and one gma.scene-reality-build-checkpoint/1. Copy operationId, campaignId, requestedDepth, and build-strategy domain lists exactly.',
       'The checkpoint must contain complete zones and actor_frames domains only; elements and facts must be empty and named as remaining domains. Include every current or newly required zone with concrete sensory surface, ordinary operation, topology, thresholds, access, and reasonable prepared boundaries. Include every material actor frame in one exact staged zone with purpose, identity maturity, objective, knowledge, ignorance, disclosure, likely action, and stable owner or scene-local identity.',
       'Treat buildStrategy.recordLimits as hard maxima. Return at most eight zones and twelve actor frames in this checkpoint. Preserve supplied records without expanding their prose; keep each newly authored text field concise, normally one or two concrete sentences. Prefer a reasonable prepared boundary over speculative extra records.',
+      'For every supplied prior zone or actor frame, keep its stable ID and actor identity. An unchanged retained record keeps its prior revision; a changed retained record advances exactly once; a new record begins at revision one. Never renumber a retained record merely because the Scene is being refreshed. GMA deterministically verifies and binds this owner metadata after the complete dossier is merged.',
       'Preserve current canon, Story classification, active turn state, timeline, clock, stable refs, accepted facts, and receipt lineage. Reuse supplied identities and never join by display name. Do not create an answer to the current sentence, choose player actions, resolve mechanics, narrate play, issue a certificate, claim authority, or commit anything.',
       'Name elements and facts as the exact remaining domains and cite the source refs they will require. Do not emit any element or fact record, a complete proposal, a second checkpoint, silent omissions, placeholders, or missing preparation disguised as secrecy.',
     ].join(' '),
@@ -1327,6 +1329,7 @@ const seeds: Seed[] = [
       'Prepare at least one meaningful layer beyond every presented threshold or record an owner-backed obstruction. Stop recursive preparation at explicit reasonable boundaries that predate later player instructions.',
       'Create ordinary, irrelevant, or bounded-negative reality when that is truthful; never make every incidental target a clue. Establish the private truth behind active mysteries rather than disguising authorial absence as secrecy, ignorance, obstruction, or deliberate unknown.',
       'Reuse supplied stable identities and source refs. Scene-local identities remain stable and include promotion policy. Never join by display name or prose similarity. Never contradict current canon, accepted turn state, timeline, clocks, or VCS mechanics authority.',
+      'When a prior Scene bundle is supplied for refresh or expansion, preserve its sceneKitId, realityId, and designId. An unchanged retained zone, actor frame, element, or fact keeps its prior revision; a changed retained record advances exactly once; and a new record begins at revision one. Never renumber a retained record merely because the Scene is refreshed. GMA deterministically binds the exact next safe top-level and record revisions before examination and commit.',
       'For every instruction-independent affordance, bind one exact zone, target, action family, access class or threshold, optional capability class, and prepared fact refs. Arrays are indexes only and never imply target/action cross-products.',
       'For compound work, cover every causally reachable unfinished node through the supplied next player choice, unresolved mechanic, semantic stop, or program end; do not prepare only the first node or only the requested answer.',
       'The opening frame may use creative sensory language, but every materially addressable actor, place, threshold, container, vehicle, structure, or distinct object must appear in its presented-target manifest with an exact prepared ref. Do not invent a target in prose and prepare it afterward.',
@@ -1357,6 +1360,7 @@ const seeds: Seed[] = [
     systemInstruction: [
       'Repair exactly the failed Scene-reality domains named in the supplied correction packet and return gma.scene-reality-repair/1.',
       'Return replacement records only for the exact allowed record refs, plus a successor assessment. Preserve every accepted record, stable identity, source ref, authority revision, player instruction, Story classification, prepared boundary, and mechanics boundary outside those domains.',
+      'For a replacement of a retained zone, actor frame, element, or fact, keep its stable identity and advance its revision exactly once if its body changes; leave an unchanged replacement at its prior revision. GMA deterministically rebinds this owner metadata before recomputing the repaired dossier fingerprint.',
       'Satisfy the same positive depth requirements as the first-pass Scene-reality builder. Do not invent a current-answer-only fact, broaden the repair, change the requested depth, add narration, commit authority, or include a certificate or receipt.',
     ].join(' '),
   },
