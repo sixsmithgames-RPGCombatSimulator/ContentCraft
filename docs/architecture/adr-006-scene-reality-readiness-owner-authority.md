@@ -208,6 +208,14 @@ situation is divided at an explicit prepared boundary into linked engagement
 zones or Scenes before certification. A lossy generated summary cannot
 authorize an unexamined record.
 
+A supported counterfactual probe may cite only exact zone, actor-frame,
+element, or fact refs indexed by the proposed Scene reality. Obligations,
+affordances, boundaries, Story nodes, sources, Scene kits, and prose can guide
+the examiner's reasoning but are not probe evidence. The original examiner
+policy states this positive requirement, the provider semantic validator
+enforces it before accepting model output, GMA narrows manual citations to the
+same catalog, and GMC independently enforces closure at commit.
+
 The provider-facing builder result uses
 `gma.scene-reality-builder-result/1`. A deep build may checkpoint exactly once
 with `gma.scene-reality-build-checkpoint/1`; GMA deterministically merges that

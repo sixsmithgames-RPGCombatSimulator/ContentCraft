@@ -142,12 +142,37 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(examiner.prompt.version).toBe('gma.scene-readiness-examiner-policy/1');
     expect(examiner.prompt.systemInstruction).toMatch(/five to ten minutes of plausible play/i);
     expect(examiner.prompt.systemInstruction).toMatch(/at least three Scene-specific counterfactual probes/i);
+    expect(examiner.prompt.systemInstruction).toMatch(/exact zone, actor-frame, element, or fact ref.*Do not cite obligation, affordance, boundary, Story, source, Scene-kit, or prose refs/i);
     expect(examiner.prompt.systemInstruction).toMatch(/examiner diagnoses only/i);
     expect(repair.prompt.version).toBe('gma.scene-reality-repair-policy/1');
     expect(repair.prompt.systemInstruction).toMatch(/exactly the failed Scene-reality domains/i);
     expect(repair.prompt.systemInstruction).toMatch(/same positive depth requirements as the first-pass/i);
     expect(repair.prompt.systemInstruction).toMatch(/Preserve every accepted record/i);
     expect(repair.prompt.systemInstruction).toMatch(/advance its revision exactly once if its body changes.*unchanged replacement at its prior revision/i);
+  });
+
+  it('rejects readiness probe citations outside the indexed Scene record catalog', async () => {
+    const validator = getSemanticValidator('scene-readiness-examiner-contract');
+    expect(validator).toBeTypeOf('function');
+    const proposal = {
+      operationId: 'scene-reality:one', campaignId: 'campaign:one', requestedDepth: 'investigative',
+      sceneReality: {
+        zoneRefs: ['zone:street'], actorFrameRefs: ['actor-frame:clerk'],
+        elementRefs: ['element:window'], factRefs: ['fact:display'],
+      },
+    };
+    const output = {
+      operationId: proposal.operationId, campaignId: proposal.campaignId, selectedDepth: proposal.requestedDepth,
+      verdict: 'adequate', confidence: 'high', debt: [],
+      counterfactualProbes: [{ status: 'supported', evidenceRefs: ['zone:street', 'affordance:window'] }],
+    };
+    const validation = await validator!({
+      request: { context: { input: { value: { proposal } } } } as unknown as LlmRequestEnvelope,
+      output,
+    });
+    expect(validation.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'SCENE_READINESS_PROBE_REF_UNBOUND', path: '/counterfactualProbes/0/evidenceRefs/1' }),
+    ]));
   });
 
   it('enforces the explicit mature-dossier checkpoint strategy without changing ordinary or final-chunk builds', async () => {

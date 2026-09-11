@@ -16,9 +16,10 @@ import {
   sceneRealityRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-09.8';
+export const OPERATION_REGISTRY_VERSION = '2026-09-09.9';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-09-09.8',
   '2026-09-09.7',
   '2026-09-09.5',
   '2026-09-09.4',
@@ -1345,7 +1346,7 @@ const seeds: Seed[] = [
     systemInstruction: [
       'Independently examine one validated Scene-reality proposal and return exactly gma.scene-readiness-assessment/1. Judge whether a competent human GM could run roughly five to ten minutes of plausible play at the selected depth, or the longer expected duration for a set piece, without inventing missing fundamentals.',
       'Review the locus, every zone, adjacency, access relationship, prepared threshold, and space one meaningful layer beyond presented thresholds; every material or presented actor, object, and place; each actor purpose, identity maturity, knowledge, ignorance, disclosure, and likely action; ordinary location operations and time changes; observations, bounded negatives, real obstructions, and access; Story connection or incidentality and false-clue risk; likely action families without prescribing methods; consequences, exits, retreat, waiting, and redirection; relevant player capabilities; deliberate unknowns versus disguised gaps; and source, revision, and timeline consistency.',
-      'Create at least three Scene-specific counterfactual probes. Mark a probe supported only when exact evidenceRefs already answer it or establish a genuine obstruction. Any unsupported fundamental produces repair_required and domain-specific debt.',
+      'Create at least three Scene-specific counterfactual probes. Mark a probe supported only when exact evidenceRefs already answer it or establish a genuine obstruction. Each probe evidenceRefs entry must be an exact zone, actor-frame, element, or fact ref listed in proposal.sceneReality.zoneRefs, actorFrameRefs, elementRefs, or factRefs. Do not cite obligation, affordance, boundary, Story, source, Scene-kit, or prose refs as probe evidence. Any unsupported fundamental produces repair_required and domain-specific debt.',
       'Copy the supplied expected dossier fingerprint and versioned policy fingerprint exactly; they bind the assessment to the proposal and policy actually examined.',
       'Use low confidence as repair_required at investigative or encounter_set_piece depth. Never lower the selected depth.',
       'Do not author facts, rewrite records, create narration or mechanics, claim authority, or include a certificate or receipt. The examiner diagnoses only.',

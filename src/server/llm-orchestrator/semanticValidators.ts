@@ -385,8 +385,17 @@ registerSemanticValidator('scene-readiness-examiner-contract', ({ request, outpu
   const debt = Array.isArray(output?.debt) ? output.debt : [];
   if (output?.verdict === 'adequate' && debt.some((entry: any) => entry?.blocking === true)) issues.push({ code: 'SCENE_READINESS_BLOCKING_DEBT', message: 'A Scene with blocking debt cannot be adequate.', path: '/verdict' });
   const probes = Array.isArray(output?.counterfactualProbes) ? output.counterfactualProbes : [];
+  const probeEvidenceCatalog = new Set([
+    ...(Array.isArray(proposal?.sceneReality?.zoneRefs) ? proposal.sceneReality.zoneRefs : []),
+    ...(Array.isArray(proposal?.sceneReality?.actorFrameRefs) ? proposal.sceneReality.actorFrameRefs : []),
+    ...(Array.isArray(proposal?.sceneReality?.elementRefs) ? proposal.sceneReality.elementRefs : []),
+    ...(Array.isArray(proposal?.sceneReality?.factRefs) ? proposal.sceneReality.factRefs : []),
+  ].map(String));
   probes.forEach((probe: any, index: number) => {
     if (probe?.status === 'supported' && (!Array.isArray(probe?.evidenceRefs) || probe.evidenceRefs.length === 0)) issues.push({ code: 'SCENE_READINESS_PROBE_REF_REQUIRED', message: 'A supported probe must cite already prepared evidence.', path: `/counterfactualProbes/${index}/evidenceRefs` });
+    for (const [refIndex, evidenceRef] of (Array.isArray(probe?.evidenceRefs) ? probe.evidenceRefs : []).entries()) {
+      if (!probeEvidenceCatalog.has(String(evidenceRef))) issues.push({ code: 'SCENE_READINESS_PROBE_REF_UNBOUND', message: 'A readiness probe may cite only an indexed zone, actor frame, element, or fact.', path: `/counterfactualProbes/${index}/evidenceRefs/${refIndex}` });
+    }
   });
   for (const key of ['facts', 'zones', 'actorFrames', 'elements', 'sceneKit', 'sceneReality', 'narration', 'mechanics', 'certificate', 'receipt']) {
     if (Object.prototype.hasOwnProperty.call(output ?? {}, key)) issues.push({ code: 'SCENE_READINESS_AUTHORING_FORBIDDEN', message: `The examiner cannot author '${key}'.`, path: `/${key}` });
