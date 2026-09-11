@@ -83,7 +83,19 @@ GMC owns:
 - `gmc.scene-story-design/3` instruction-independent affordances;
 - validation of `gma.story-fact-selection-proposal/1` and persistence of
   `gmc.story-fact-selection-receipt/1`; and
-- compound artifact storage of `gma.action-program-rebase-receipt/1`.
+- compound artifact storage of `gma.action-program-rebase-receipt/2`, with
+  historical `/1` world-expansion receipts retained as read-compatible data.
+
+The `/2` receipt applies to every certified Scene-head change beneath an
+unfinished compound action, including activation, refresh, readiness repair,
+and expansion. It carries the exact Scene owner receipt, the detailed
+Scene-reality head, and the resulting compound cursor authority head. GMC
+rejects a fresh `/2` append unless that authority head exactly matches the
+cursor written in the same artifact revision. A recovered, unfinished program
+may use the same receipt to catch up to an already-current certified head only
+after GMA revalidates the exact pending action window through read-only
+coverage; pending model candidates, mechanics, and clarifications remain
+ineligible.
 
 Scene-reality facts use canonical, prepared-private-world,
 scene-local-stable, prepared-possibility, future-contingent, revealed,
@@ -263,6 +275,10 @@ before write support. Existing Scenes become `legacy_unassessed`; GMC performs
 a full contextual assessment before their next player-facing turn rather than
 certifying existing counts or accepting a current-question patch.
 
+Historical `gma.action-program-rebase-receipt/1` rows remain readable. New
+writes use `/2`; the migration is lazy because each receipt is immutable audit
+history and does not need rewriting.
+
 Observed or receipt-referenced scene-local material retains its stable identity.
 Historical receipts and Story-design bindings remain valid. Unknown versions
 and stale certificates fail closed.
@@ -307,6 +323,10 @@ Cross-service tests must prove:
 - compatible active-state changes retain certificates only through a verified
   receipt chain or owner compaction receipt;
 - compound cursor, receipts, and resulting owner heads settle atomically;
+- every certified Scene-head change beneath an unfinished action writes one
+  `/2` rebase whose authority head exactly equals the resulting cursor;
+- a covered stale cursor catches up before Story recovery, while historical
+  `/1` rebase receipts remain readable;
 - SECOND MOUTH supports the full social-and-familiar reconnaissance action;
 - a street thumbnail expands one selected shop without generating every shop;
 - mundane and bounded-negative results remain concrete and non-misleading;

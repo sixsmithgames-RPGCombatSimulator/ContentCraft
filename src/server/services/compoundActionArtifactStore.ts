@@ -19,7 +19,8 @@ export const COMPOUND_ACTION_REQUIREMENT_PROJECTION_CONTRACT_VERSION = 'gmc.comp
 export const COMPOUND_REPLAY_STORY_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/1';
 export const COMPOUND_REPLAY_STORY_CHECKPOINT_V2_CONTRACT_VERSION = 'gmc.compound-replay-story-checkpoint/2';
 export const COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-action-origin-checkpoint/1';
-export const ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION = 'gma.action-program-rebase-receipt/1';
+export const ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION = 'gma.action-program-rebase-receipt/2';
+export const LEGACY_ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION = 'gma.action-program-rebase-receipt/1';
 export const PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION = 'gma.semantic-action-program/5';
 export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'compound-action-program/2',
@@ -611,8 +612,11 @@ function validateRebaseReceipts(receipts: unknown[], program: JsonObject, cursor
   const nodeIds = new Set((program.nodes as JsonObject[]).map((node) => String(node.nodeId)));
   const receiptIds = new Set<string>();
   return receipts.map((receiptValue, index) => {
-    if (!isObject(receiptValue) || receiptValue.schemaVersion !== ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION) {
-      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase receipt is invalid.', { index });
+    if (!isObject(receiptValue) || ![
+      ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION,
+      LEGACY_ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION,
+    ].includes(String(receiptValue.schemaVersion))) {
+      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A Scene-authority cursor rebase receipt is invalid.', { index });
     }
     const receiptId = requiredString(receiptValue.receiptId, `rebaseReceipts.${index}.receiptId`);
     if (receiptIds.has(receiptId) || receiptValue.programRef !== program.programId) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_REBASE_RECEIPT_CONFLICT', 'A world-expansion cursor rebase receipt is duplicated or belongs to another program.', { receiptId });
@@ -620,16 +624,30 @@ function validateRebaseReceipts(receipts: unknown[], program: JsonObject, cursor
     const prior = requiredRevision(receiptValue.priorCursorRevision, `rebaseReceipts.${index}.priorCursorRevision`);
     const resulting = requiredRevision(receiptValue.resultingCursorRevision, `rebaseReceipts.${index}.resultingCursorRevision`);
     if (resulting !== prior + 1 || resulting > Number(cursor.revision)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase must advance exactly one saved revision.', { index });
-    requiredString(receiptValue.worldExpansionReceiptRef, `rebaseReceipts.${index}.worldExpansionReceiptRef`);
+    if (receiptValue.schemaVersion === LEGACY_ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION) {
+      requiredString(receiptValue.worldExpansionReceiptRef, `rebaseReceipts.${index}.worldExpansionReceiptRef`);
+    } else {
+      requiredString(receiptValue.sceneRealityReceiptRef, `rebaseReceipts.${index}.sceneRealityReceiptRef`);
+      requiredString(receiptValue.sceneRealityReceiptSchemaVersion, `rebaseReceipts.${index}.sceneRealityReceiptSchemaVersion`);
+      if (!['scene_preparation_commit', 'emergent_expansion', 'certified_head_catch_up'].includes(String(receiptValue.reason))) {
+        throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A Scene-authority cursor rebase needs an exact reason.', { index });
+      }
+      if (!isObject(receiptValue.sceneRealityAuthorityHead)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A Scene-authority cursor rebase needs the resulting Scene owner head.', { index });
+    }
     requiredString(receiptValue.campaignId, `rebaseReceipts.${index}.campaignId`);
     requiredString(receiptValue.createdAt, `rebaseReceipts.${index}.createdAt`, 80);
-    if (!isObject(receiptValue.authorityHead)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase needs the resulting owner head.', { index });
+    if (!isObject(receiptValue.authorityHead)) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A Scene-authority cursor rebase needs the resulting action owner head.', { index });
+    if (receiptValue.schemaVersion === ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION) {
+      for (const authorityField of ['storyWorkspaceRevision', 'sceneRevision', 'vcsCharacterRevision']) {
+        requiredRevision(receiptValue.authorityHead[authorityField], `rebaseReceipts.${index}.authorityHead.${authorityField}`);
+      }
+    }
     for (const field of ['preservedCompletedNodeRefs', 'revalidatedNodeRefs', 'invalidatedNodeRefs']) {
       const refs = receiptValue[field];
       if (!Array.isArray(refs) || refs.some((ref) => typeof ref !== 'string' || !nodeIds.has(ref))) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase references an unavailable action node.', { index, field });
     }
     if (!Array.isArray(receiptValue.preservedReceiptRefs) || receiptValue.preservedReceiptRefs.some((ref) => typeof ref !== 'string' || !ref.trim())) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A world-expansion cursor rebase has invalid preserved receipt references.', { index });
-    if ((receiptValue.preservedCompletedNodeRefs as JsonValue[]).some((ref) => (receiptValue.invalidatedNodeRefs as JsonValue[]).includes(ref))) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A completed action node cannot be invalidated by world expansion.', { index });
+    if ((receiptValue.preservedCompletedNodeRefs as JsonValue[]).some((ref) => (receiptValue.invalidatedNodeRefs as JsonValue[]).includes(ref))) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'A completed action node cannot be invalidated by a Scene-authority rebase.', { index });
     if (byteLength(receiptValue) > COMPOUND_ACTION_LIMITS.receiptMaximumBytes * 4) throw new StoryWorkspaceStoreError(413, 'COMPOUND_ACTION_REBASE_RECEIPT_TOO_LARGE', 'A world-expansion cursor rebase receipt exceeds its bounded storage contract.', { index });
     return structuredClone(receiptValue);
   });
@@ -822,6 +840,13 @@ export async function advanceCompoundActionArtifact(input: {
     rebaseReceiptsById.set(key, structuredClone(receipt));
   }
   const rebaseReceipts = validateRebaseReceipts([...rebaseReceiptsById.values()], program, input.cursor);
+  const appendedCurrentRebase = (input.appendRebaseReceipts ?? []).find((receipt) => (
+    receipt.schemaVersion === ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION
+    && Number(receipt.resultingCursorRevision) === Number(input.cursor.revision)
+  ));
+  if (appendedCurrentRebase && canonicalJson(appendedCurrentRebase.authorityHead) !== canonicalJson(input.cursor.authorityHead)) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'The saved action cursor does not use the owner head certified by its Scene-authority rebase.', {});
+  }
   const clarifications = input.clarifications ?? active.clarifications;
   if (!Array.isArray(clarifications) || clarifications.length > COMPOUND_ACTION_LIMITS.clarificationMaximum || clarifications.some((value) => !isObject(value))) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_CLARIFICATION_INVALID', 'The interaction clarification state is invalid.', {});

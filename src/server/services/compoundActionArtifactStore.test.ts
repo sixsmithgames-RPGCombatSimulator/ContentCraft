@@ -342,30 +342,70 @@ describe('GMC compound-action private artifact store', () => {
     });
   });
 
-  it('durably appends an idempotent world-expansion cursor rebase without changing completed work', async () => {
+  it('durably appends an idempotent Scene-authority cursor rebase and binds its owner head', async () => {
     const store = memoryCollection();
     await createCompoundActionArtifact(createInput(), store.records);
+    const rebasedCursor = {
+      ...cursor(2),
+      authorityHead: { storyWorkspaceRevision: 7, sceneRevision: 5, vcsCharacterRevision: 12 },
+    };
     const rebaseReceipt = {
       schemaVersion: ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION,
       receiptId: 'action-program-rebase:turn-42', campaignId: 'campaign-a', programRef: 'program:turn-42',
+      priorCursorRevision: 1, resultingCursorRevision: 2,
+      sceneRealityReceiptRef: 'scene-reality-commit:turn-42',
+      sceneRealityReceiptSchemaVersion: 'gmc.scene-reality-commit-receipt/1',
+      reason: 'scene_preparation_commit',
+      preservedCompletedNodeRefs: [], preservedReceiptRefs: [],
+      revalidatedNodeRefs: ['node:hide', 'node:search'], invalidatedNodeRefs: [],
+      authorityHead: structuredClone(rebasedCursor.authorityHead),
+      sceneRealityAuthorityHead: { activeSceneBundle: 3, sceneKit: 5, sceneReality: 3, readinessCertificate: 3, activeSceneState: 1 },
+      createdAt: new Date().toISOString(),
+    };
+    const advanced = await advanceCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
+      idempotencyKey: 'rebase:turn-42', cursor: rebasedCursor, appendRebaseReceipts: [rebaseReceipt],
+    }, store.records);
+    expect(advanced.artifactRef.revision).toBe(2);
+    const replay = await advanceCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
+      idempotencyKey: 'rebase:turn-42', cursor: rebasedCursor, appendRebaseReceipts: [rebaseReceipt],
+    }, store.records);
+    expect(replay).toEqual({ ...advanced, duplicate: true });
+    const active = await readActiveCompoundActionArtifact({ userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42' }, store.records);
+    expect(active?.artifact.rebaseReceipts).toEqual([rebaseReceipt]);
+    expect(active?.artifact.cursor).toMatchObject({ revision: 2, completedNodeRefs: [], authorityHead: rebasedCursor.authorityHead });
+
+    await expect(advanceCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 2,
+      idempotencyKey: 'rebase:mismatched-head', cursor: cursor(3), appendRebaseReceipts: [{
+        ...rebaseReceipt,
+        receiptId: 'action-program-rebase:mismatched-head',
+        priorCursorRevision: 2,
+        resultingCursorRevision: 3,
+      }],
+    }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID' });
+  });
+
+  it('keeps historical world-expansion rebase receipts readable during the Scene-authority receipt rollout', async () => {
+    const store = memoryCollection();
+    await createCompoundActionArtifact(createInput(), store.records);
+    const legacyReceipt = {
+      schemaVersion: 'gma.action-program-rebase-receipt/1',
+      receiptId: 'action-program-rebase:legacy-turn-42', campaignId: 'campaign-a', programRef: 'program:turn-42',
       priorCursorRevision: 1, resultingCursorRevision: 2, worldExpansionReceiptRef: 'world-expansion:turn-42',
       preservedCompletedNodeRefs: [], preservedReceiptRefs: [],
       revalidatedNodeRefs: ['node:hide', 'node:search'], invalidatedNodeRefs: [],
       authorityHead: { activeSceneBundle: 3, readinessCertificate: 3 }, createdAt: new Date().toISOString(),
     };
-    const advanced = await advanceCompoundActionArtifact({
+    await expect(advanceCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
-      idempotencyKey: 'rebase:turn-42', cursor: cursor(2), appendRebaseReceipts: [rebaseReceipt],
+      idempotencyKey: 'rebase:legacy-turn-42', cursor: cursor(2), appendRebaseReceipts: [legacyReceipt],
+    }, store.records)).resolves.toMatchObject({ artifactRef: { revision: 2 } });
+    const active = await readActiveCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42',
     }, store.records);
-    expect(advanced.artifactRef.revision).toBe(2);
-    const replay = await advanceCompoundActionArtifact({
-      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
-      idempotencyKey: 'rebase:turn-42', cursor: cursor(2), appendRebaseReceipts: [rebaseReceipt],
-    }, store.records);
-    expect(replay).toEqual({ ...advanced, duplicate: true });
-    const active = await readActiveCompoundActionArtifact({ userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42' }, store.records);
-    expect(active?.artifact.rebaseReceipts).toEqual([rebaseReceipt]);
-    expect(active?.artifact.cursor).toMatchObject({ revision: 2, completedNodeRefs: [] });
+    expect(active?.artifact.rebaseReceipts).toEqual([legacyReceipt]);
   });
 
   it('keeps an already-prepared policy-8 reciprocal program /5 readable during the policy-9 rollout', async () => {

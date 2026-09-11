@@ -23,7 +23,7 @@ export const SCENE_REALITY_CONTRACTS = Object.freeze({
   storyDesign: 'gmc.scene-story-design/3',
   factSelectionProposal: 'gma.story-fact-selection-proposal/1',
   factSelectionReceipt: 'gmc.story-fact-selection-receipt/1',
-  rebaseReceipt: 'gma.action-program-rebase-receipt/1',
+  rebaseReceipt: 'gma.action-program-rebase-receipt/2',
   presentedTargetManifest: 'gma.presented-target-manifest/1',
   inspection: 'gmc.scene-reality-inspection/1',
 } as const);
