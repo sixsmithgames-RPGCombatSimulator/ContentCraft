@@ -16,7 +16,7 @@ import {
   sceneRealityRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-09-09.6';
+export const OPERATION_REGISTRY_VERSION = '2026-09-09.7';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-09-09.5',
