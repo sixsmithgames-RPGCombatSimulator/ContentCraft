@@ -335,6 +335,21 @@ describe('Scene reality owner authority', () => {
     const social = ((active?.bundle as JsonObject).sceneStoryDesign as JsonObject).affordances as JsonObject[];
     const requirement = { coverageEntryId: 'requirement:one', zoneRef: social[0].zoneRef, targetRef: social[0].targetRef, actionFamily: social[0].actionFamily, accessClass: social[0].accessClass, thresholdRef: social[0].thresholdRef, capabilityClass: social[0].capabilityClass };
     expect(await decideSceneCoverage({ userId: 'user:one', campaignId: 'campaign:one', query: { ...base, requirements: [requirement] } }, mem.stores)).toMatchObject({ decision: 'covered' });
+    const currentZone = String(social[0].zoneRef);
+    const ordinaryObserve = { coverageEntryId: 'coverage-query:ordinary-look', zoneRef: currentZone, targetRef: currentZone, actionFamily: 'observe', accessClass: 'ordinary', thresholdRef: null, capabilityClass: null };
+    const ordinaryMove = { ...ordinaryObserve, coverageEntryId: 'coverage-query:ordinary-move', actionFamily: 'move' };
+    expect(await decideSceneCoverage({ userId: 'user:one', campaignId: 'campaign:one', query: { ...base, requirements: [ordinaryObserve, ordinaryMove] } }, mem.stores)).toMatchObject({
+      decision: 'covered',
+      matchingCoverageEntryRefs: ['coverage-query:ordinary-look', 'coverage-query:ordinary-move'],
+    });
+    expect(await decideSceneCoverage({ userId: 'user:one', campaignId: 'campaign:one', query: {
+      ...base,
+      requirements: [{ ...ordinaryObserve, coverageEntryId: 'coverage-query:foreign-look', zoneRef: 'scene-zone:foreign', targetRef: 'scene-zone:foreign' }],
+    } }, mem.stores)).toMatchObject({ decision: 'inside_envelope_defect', mutationApplied: false });
+    expect(await decideSceneCoverage({ userId: 'user:one', campaignId: 'campaign:one', query: {
+      ...base,
+      requirements: [{ ...ordinaryObserve, coverageEntryId: 'coverage-query:ordinary-manipulate', actionFamily: 'manipulate' }],
+    } }, mem.stores)).toMatchObject({ decision: 'inside_envelope_defect', mutationApplied: false });
     expect(await decideSceneCoverage({ userId: 'user:one', campaignId: 'campaign:one', query: { ...base, requirements: [{ ...requirement, actionFamily: 'investigate' }] } }, mem.stores)).toMatchObject({ decision: 'inside_envelope_defect', mutationApplied: false });
   });
 

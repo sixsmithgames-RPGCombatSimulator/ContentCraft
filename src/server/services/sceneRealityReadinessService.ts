@@ -1273,6 +1273,16 @@ function sameCoverage(left: JsonObject, right: JsonObject): boolean {
     && left.capabilityClass === right.capabilityClass;
 }
 
+function intrinsicCertifiedZoneCoverage(requirement: JsonObject, bundle: JsonObject): boolean {
+  if (requirement.zoneRef !== requirement.targetRef
+    || requirement.accessClass !== 'ordinary'
+    || requirement.thresholdRef !== null
+    || requirement.capabilityClass !== null
+    || !['move', 'observe'].includes(String(requirement.actionFamily))) return false;
+  return ((bundle.zones as JsonObject[]) ?? [])
+    .some((zone) => zone.zoneId === requirement.zoneRef);
+}
+
 async function activeReceiptChainStatus(
   certificate: JsonObject,
   query: JsonObject,
@@ -1364,6 +1374,7 @@ export async function decideSceneCoverage(
   for (const requirement of requirements) {
     const found = entries.find((entry) => sameCoverage(entry, requirement));
     if (found) matched.push(String(found.coverageEntryId));
+    else if (intrinsicCertifiedZoneCoverage(requirement, bundle)) matched.push(String(requirement.coverageEntryId));
     else missing.push(requirement);
   }
   if (missing.length === 0) return { ...decisionBase, decision: 'covered', matchingCoverageEntryRefs: matched } as JsonObject;
