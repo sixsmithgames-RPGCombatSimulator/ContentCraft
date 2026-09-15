@@ -953,7 +953,7 @@ const seeds: Seed[] = [
     required: ['schemaVersion', 'interactionId', 'instructionRef', 'instructionFingerprint', 'windowText', 'continuationExpected', 'semanticIntent', 'review'],
     targetBytes: 20_000, hardLimitBytes: 24_576, maxOutputTokens: 12_000,
     temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
-    promptVersion: 'gma.semantic-intent-policy/17',
+    promptVersion: 'gma.semantic-intent-policy/18',
     outputProperties: {
       schemaVersion: { const: 'gma.semantic-plan-window/1' },
       interactionId: { type: 'string', minLength: 1, maxLength: 240 },

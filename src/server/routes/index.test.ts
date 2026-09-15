@@ -137,6 +137,6 @@ describe('API health', () => {
     expect(ACTION_DIRECTED_STORY_PLAYABLE_SCENE_CONTEXT_READ_VERSIONS).toEqual([
       'gma.playable-scene-context/2', 'gma.playable-scene-context/3', 'gma.playable-scene-context/4',
     ]);
-    expect(OBSERVATION_SAGA_SHARED_CONTRACTS.semanticActionCompilerPolicy).toBe('gma.semantic-action-compiler-policy/9');
+    expect(OBSERVATION_SAGA_SHARED_CONTRACTS.semanticActionCompilerPolicy).toBe('gma.semantic-action-compiler-policy/10');
   });
 });

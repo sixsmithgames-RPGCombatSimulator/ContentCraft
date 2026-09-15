@@ -159,7 +159,7 @@ function parallelProgram(boundInstruction = instruction()) {
     ...base,
     schemaVersion: 'gma.semantic-action-program/5',
     planner: {
-      source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/9',
+      source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/10',
       confidence: 0.99, evidenceAnchorNormalizationCount: 0, parallelInformationGroupCount: 0,
     },
     nodes: [
@@ -330,7 +330,7 @@ describe('GMC compound-action private artifact store', () => {
     }, store.records);
     expect(active?.artifact.program).toMatchObject({
       schemaVersion: 'gma.semantic-action-program/5',
-      planner: { policyVersion: 'gma.semantic-action-compiler-policy/9' },
+      planner: { policyVersion: 'gma.semantic-action-compiler-policy/10' },
       limits: { parallelRelationshipCount: 1 },
     });
     expect((((active?.artifact.program ?? {}) as JsonObject).nodes as JsonObject[]).map((node) => node.parallelWith)).toEqual([
@@ -408,7 +408,7 @@ describe('GMC compound-action private artifact store', () => {
     expect(active?.artifact.rebaseReceipts).toEqual([legacyReceipt]);
   });
 
-  it('keeps an already-prepared policy-8 reciprocal program /5 readable during the policy-9 rollout', async () => {
+  it('keeps an already-prepared policy-8 reciprocal program /5 readable during the policy-10 rollout', async () => {
     const exact = instruction();
     const historicalProgram = parallelProgram(exact);
     historicalProgram.planner.policyVersion = 'gma.semantic-action-compiler-policy/8';

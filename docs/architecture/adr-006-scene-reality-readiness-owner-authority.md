@@ -336,3 +336,31 @@ Cross-service tests must prove:
 Acceptance requires this ADR and ADR-011 to be reviewed together, all shared
 and owner tests to pass, GMC-first capability deployment, production canaries,
 and verified commit/deployment status before GMA enables certificate gating.
+
+## Accepted implementation clarification: role-qualified semantic referent persistence
+
+The 2026-09-15 SECOND MOUTH continuation proved that an exact current-Scene
+binding can survive semantic planning while an older GMA readiness reader still
+misclassifies the movement as referent-free. It also proved that exact social
+recipient refs were not preserved on compiled requirements. This is an
+implementation gap within the accepted exact-tuple design, not permission for
+GMC or GMA to join by display name.
+
+GMC's compound artifact store therefore accepts fresh
+`gma.semantic-action-compiler-policy/10` programs and preserves additive
+`targetRole` plus nullable exact `targetRef` fields on data requirements. GMC
+does not interpret those fields as canon and does not relax program, artifact,
+cursor, saga, tenant, or compare-and-swap validation. GMA may use the refs only
+after validating them against the owner-supplied Scene catalog; actor aliases
+close through exact `actorRef`/`actorFrameId` records, never prose.
+
+Policy-before-`/10` programs may be replaced only by the existing bounded
+compatibility rebase when every node and saga boundary is wholly unsettled.
+GMC atomically stores the replacement program, next cursor revision, empty or
+rebased saga, and `semantic_referent_rebase` audit row. Any receipt, completed
+or skipped node, owner/model candidate, queued append, or revision mismatch
+fails closed. Fresh semantic operation policy `/18` is registered owner-first
+and explicitly requires exact refs for unambiguous recipients, subjects, and
+same-Scene positions. Tests and rollout must prove `/9` readability, `/10`
+write acceptance, atomic untouched-program replacement, and rejection of every
+settled-work variant before GMA production activation.
