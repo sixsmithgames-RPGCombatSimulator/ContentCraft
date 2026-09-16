@@ -364,3 +364,39 @@ and explicitly requires exact refs for unambiguous recipients, subjects, and
 same-Scene positions. Tests and rollout must prove `/9` readability, `/10`
 write acceptance, atomic untouched-program replacement, and rejection of every
 settled-work variant before GMA production activation.
+
+## Accepted implementation clarification: qualified coverage and mandatory rebase audit
+
+The 2026-09-16 SECOND MOUTH canary showed that actor-plus-action-family is not
+enough to select prepared reality. Different social opportunities on one actor
+are different authority tuples, and movement through one zone cannot be
+represented as ordinary movement inside the starting zone. GMC therefore
+publishes a bounded private affordance catalog for semantic planning. GMA
+semantic policy `/19` may copy an exact `coverageEntryRef`; compiler `/11`
+persists it additively on the role-qualified requirement. GMC stores `/11`
+programs while retaining `/8`, `/9`, and `/10` read compatibility. It does not
+interpret prose or infer a ref.
+
+Coverage remains exact over zone, target, action family, access class,
+threshold, and capability. An explicit catalog ref selects only its immutable
+affordance. In its absence, several rows sharing only actor and action family
+are not a cohort and cannot be returned as a union. Ordinary certified-zone
+coverage remains limited to same-zone structural move/observe. Cross-zone
+movement and dependent observer position are supplied by GMA's exact semantic
+destination and prospective dependency-window projection; GMC still verifies
+every submitted tuple and never invents reachability.
+
+The artifact store now enforces the audit boundary independently of transport:
+if any cursor authority-head field changes, that same compare-and-swap write
+must append exactly one current `gma.action-program-rebase-receipt/2` whose
+program, prior cursor revision, resulting cursor revision, and authority head
+match the saved cursor. The Story workspace route forwards
+`appendRebaseReceipts` unchanged. Missing, stale, mismatched, or legacy receipts
+cannot authorize a new head. Byte-identical idempotent replay remains valid.
+
+Cross-service tests must include the production-shaped four-node SECOND MOUTH
+window, exact selection of the firsthand-account social affordance without the
+entry-negotiation affordance, cross-zone familiar movement, dependent observer
+position, foreign coverage-ref nulling, zero-based transport normalization at
+GMA's boundary, route-level receipt forwarding, and owner-store rejection of
+an unaudited authority-head change.

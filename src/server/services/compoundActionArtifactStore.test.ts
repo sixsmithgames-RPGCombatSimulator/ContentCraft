@@ -159,7 +159,7 @@ function parallelProgram(boundInstruction = instruction()) {
     ...base,
     schemaVersion: 'gma.semantic-action-program/5',
     planner: {
-      source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/10',
+      source: 'semantic_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/11',
       confidence: 0.99, evidenceAnchorNormalizationCount: 0, parallelInformationGroupCount: 0,
     },
     nodes: [
@@ -330,7 +330,7 @@ describe('GMC compound-action private artifact store', () => {
     }, store.records);
     expect(active?.artifact.program).toMatchObject({
       schemaVersion: 'gma.semantic-action-program/5',
-      planner: { policyVersion: 'gma.semantic-action-compiler-policy/10' },
+      planner: { policyVersion: 'gma.semantic-action-compiler-policy/11' },
       limits: { parallelRelationshipCount: 1 },
     });
     expect((((active?.artifact.program ?? {}) as JsonObject).nodes as JsonObject[]).map((node) => node.parallelWith)).toEqual([
@@ -362,6 +362,10 @@ describe('GMC compound-action private artifact store', () => {
       sceneRealityAuthorityHead: { activeSceneBundle: 3, sceneKit: 5, sceneReality: 3, readinessCertificate: 3, activeSceneState: 1 },
       createdAt: new Date().toISOString(),
     };
+    await expect(advanceCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
+      idempotencyKey: 'rebase:missing-receipt', cursor: rebasedCursor,
+    }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_REBASE_RECEIPT_REQUIRED' });
     const advanced = await advanceCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 1,
       idempotencyKey: 'rebase:turn-42', cursor: rebasedCursor, appendRebaseReceipts: [rebaseReceipt],
@@ -408,7 +412,7 @@ describe('GMC compound-action private artifact store', () => {
     expect(active?.artifact.rebaseReceipts).toEqual([legacyReceipt]);
   });
 
-  it('keeps an already-prepared policy-8 reciprocal program /5 readable during the policy-10 rollout', async () => {
+  it('keeps already-prepared policy-8 and policy-10 reciprocal programs readable during the policy-11 rollout', async () => {
     const exact = instruction();
     const historicalProgram = parallelProgram(exact);
     historicalProgram.planner.policyVersion = 'gma.semantic-action-compiler-policy/8';
@@ -666,6 +670,12 @@ describe('GMC compound-action private artifact store', () => {
     await expect(createCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:story-candidate:turn-42',
       instruction: exact, program: program(exact), cursor: cursor(1), saga: storySaga,
+    }, memoryCollection().records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
+    const policy10 = parallelProgram(exact);
+    policy10.planner.policyVersion = 'gma.semantic-action-compiler-policy/10';
+    await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:historical-parallel-policy-10:turn-42',
+      instruction: exact, program: policy10, cursor: parallelCursor(),
     }, memoryCollection().records)).resolves.toMatchObject({ artifactRef: { revision: 1 } });
   });
 

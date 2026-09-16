@@ -2,7 +2,7 @@ import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { IntegrationRequest } from '../middleware/integrationAuth.js';
-import { storyWorkspaceRouter } from './storyWorkspace.js';
+import { compoundActionAdvanceInput, storyWorkspaceRouter } from './storyWorkspace.js';
 
 const servers: Array<ReturnType<ReturnType<typeof express>['listen']>> = [];
 
@@ -13,6 +13,16 @@ afterEach(async () => {
 });
 
 describe('D2 Story authority routes', () => {
+  it('forwards Scene-authority rebase receipts through the compound artifact route mapping', () => {
+    const receipt = { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: 'rebase:one' };
+    const mapped = compoundActionAdvanceInput({
+      userId: 'user-1', campaignId: 'campaign-1', programId: 'program-1', idempotencyKey: 'header-key',
+      body: { expectedRevision: 4, cursor: { revision: 5 }, appendRebaseReceipts: [receipt] },
+    });
+    expect(mapped.appendRebaseReceipts).toEqual([receipt]);
+    expect(mapped.idempotencyKey).toBe('header-key');
+  });
+
   it('rejects direct Clerk calls before private reads or authority mutations run', async () => {
     const app = express();
     app.use(express.json());

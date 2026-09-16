@@ -381,7 +381,7 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
   }
   if (program.schemaVersion === PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION) {
     const planner = isObject(program.planner) ? program.planner : null;
-    if (!['gma.semantic-action-compiler-policy/8', 'gma.semantic-action-compiler-policy/9', 'gma.semantic-action-compiler-policy/10'].includes(String(planner?.policyVersion ?? ''))) {
+    if (!['gma.semantic-action-compiler-policy/8', 'gma.semantic-action-compiler-policy/9', 'gma.semantic-action-compiler-policy/10', 'gma.semantic-action-compiler-policy/11'].includes(String(planner?.policyVersion ?? ''))) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The parallel action program compiler policy is invalid.', {});
     }
     const relationPairs = new Set<string>();
@@ -844,6 +844,19 @@ export async function advanceCompoundActionArtifact(input: {
     receipt.schemaVersion === ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION
     && Number(receipt.resultingCursorRevision) === Number(input.cursor.revision)
   ));
+  const authorityHeadChanged = canonicalJson(active.cursor.authorityHead) !== canonicalJson(input.cursor.authorityHead);
+  const currentRebases = (input.appendRebaseReceipts ?? []).filter((receipt) => (
+    receipt.schemaVersion === ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION
+    && receipt.programRef === program.programId
+    && Number(receipt.priorCursorRevision) === Number(active.cursor.revision)
+    && Number(receipt.resultingCursorRevision) === Number(input.cursor.revision)
+  ));
+  if (authorityHeadChanged && currentRebases.length !== 1) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_REQUIRED', 'A changed action authority head requires one matching Scene-authority rebase receipt in the same write.', {});
+  }
+  if (appendedCurrentRebase && currentRebases.length !== 1) {
+    throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'The current Scene-authority rebase does not match the prior and resulting cursor revisions.', {});
+  }
   if (appendedCurrentRebase && canonicalJson(appendedCurrentRebase.authorityHead) !== canonicalJson(input.cursor.authorityHead)) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'The saved action cursor does not use the owner head certified by its Scene-authority rebase.', {});
   }

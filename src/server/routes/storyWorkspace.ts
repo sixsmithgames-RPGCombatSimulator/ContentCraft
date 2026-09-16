@@ -644,22 +644,50 @@ storyWorkspaceRouter.get('/interaction-artifacts/:programId', requireServiceInte
   res.json(result);
 }));
 
-storyWorkspaceRouter.put('/interaction-artifacts/:programId', requireServiceIntegration, asyncRoute(async (req, res) => {
-  if (!await requireCampaign(req, res)) return;
-  const body = req.body ?? {};
-  const result = await advanceCompoundActionArtifact({
-    userId: (req as IntegrationRequest).userId,
-    campaignId: req.params.campaignId,
-    programId: req.params.programId,
+export function compoundActionAdvanceInput(input: {
+  userId: string;
+  campaignId: string;
+  programId: string;
+  body: {
+    expectedRevision: number;
+    idempotencyKey?: string;
+    program?: JsonObject;
+    cursor: JsonObject;
+    appendReceipts?: JsonObject[];
+    appendRebaseReceipts?: JsonObject[];
+    clarifications?: JsonObject[];
+    rootFailure?: JsonObject | null;
+    saga?: JsonObject;
+  };
+  idempotencyKey?: string;
+}) {
+  const body = input.body;
+  return {
+    userId: input.userId,
+    campaignId: input.campaignId,
+    programId: input.programId,
     expectedRevision: body.expectedRevision,
-    idempotencyKey: body.idempotencyKey ?? req.header('Idempotency-Key'),
+    idempotencyKey: body.idempotencyKey ?? input.idempotencyKey ?? '',
     program: body.program,
     cursor: body.cursor,
     appendReceipts: body.appendReceipts,
+    appendRebaseReceipts: body.appendRebaseReceipts,
     clarifications: body.clarifications,
     rootFailure: body.rootFailure,
     saga: body.saga,
-  });
+  };
+}
+
+storyWorkspaceRouter.put('/interaction-artifacts/:programId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const body = req.body ?? {};
+  const result = await advanceCompoundActionArtifact(compoundActionAdvanceInput({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    programId: req.params.programId,
+    body,
+    idempotencyKey: req.header('Idempotency-Key') ?? undefined,
+  }));
   res.status(result.duplicate ? 200 : 201).json(result);
 }));
 
