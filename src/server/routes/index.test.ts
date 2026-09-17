@@ -22,9 +22,13 @@ import {
   ACTIVE_SCENE_CAPABILITIES,
   ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION,
   ACTIVE_SCENE_STATE_CONTRACT_VERSION,
+  CONVERSATION_HISTORY_CONTRACT_VERSION,
+  PUBLISHED_EXCHANGE_CONTRACT_VERSION,
   SCENE_STATE_DELTA_CONTRACT_VERSION,
   SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
+  SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION,
   SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+  SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION,
 } from '../services/activeSceneStateStore.js';
 import { apiRouter } from './index.js';
 
@@ -51,7 +55,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.12.12',
+      version: '1.13.0',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -84,6 +88,10 @@ describe('API health', () => {
             sceneStateDelta: SCENE_STATE_DELTA_CONTRACT_VERSION,
             sceneTurnProposal: SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
             sceneTurnReceipt: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+            sceneTurnProposalV2: SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION,
+            sceneTurnReceiptV2: SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION,
+            publishedExchange: PUBLISHED_EXCHANGE_CONTRACT_VERSION,
+            conversationHistory: CONVERSATION_HISTORY_CONTRACT_VERSION,
           },
           authority: 'gmc',
           mechanicsAuthority: 'vcs',

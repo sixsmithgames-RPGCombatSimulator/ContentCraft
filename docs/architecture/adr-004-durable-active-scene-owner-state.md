@@ -32,11 +32,13 @@ actor states, continuity states, revealed information refs, settled material
 facts, open prepared threads, recent event summaries, latest receipt ref, and
 compaction counters. It is capped at 32 KiB.
 
-`gmc_scene_turn_receipts` stores immutable `gmc.scene-turn-receipt/1` documents.
+`gmc_scene_turn_receipts` stores immutable `gmc.scene-turn-receipt/1` and
+compatible `gmc.scene-turn-receipt/2` documents.
 Unique indexes cover user/campaign/idempotency key and
 user/campaign/Scene-kit/state-after revision. Receipts contain hashes and
-bounded summaries, never full prompts, private Story context, exact player
-speech, or full narration.
+bounded summaries. Version 1 contains no exact exchange. Version 2 may contain
+only the exact final player-visible exchange; neither version may contain full
+prompts, hidden model work, rejected drafts, or private Story context.
 
 GMC accepts `gma.scene-turn-proposal/1` with `gma.scene-state-delta/1`. The
 proposal is capped at 24 KiB. The delta may update only refs already present in
@@ -114,3 +116,92 @@ compaction over 500 turns, scene transition, operation lookup, stored privacy,
 and route/health advertisement. Existing Story workspace, handoff, observation,
 history, Replay, Rewind, and migration tests remain green. Complete GMC checks
 must pass before the GMC commit is pushed and deployed ahead of GMA.
+
+## Accepted durable published-conversation addendum — 2026-09-17
+
+The repository owner requested a better conversation record, bounded to the
+latest fifty interactions, and then explicitly directed careful implementation
+without regressions. This addendum is Accepted and authorizes the corresponding
+owner changes.
+
+### Problem, goals, and non-goals
+
+The version 1 receipt summaries preserve authority but cannot restore the
+actual conversation after browser storage is cleared. GMC will therefore retain
+the exact player message and exact narration that were actually published for
+new accepted turns. The goal is reload-safe presentation continuity without a
+second write or a new authority source. This does not persist prompts, hidden
+reasoning, alternate drafts, corrections that were rejected, tool payloads,
+private Story preparation, or arbitrary chat outside an accepted scene turn.
+The stored exchange is not canon and is never supplied to a model as owner fact.
+
+### Contracts, authority, and lifetimes
+
+`gma.scene-turn-proposal/2` extends version 1 with one required
+`publishedExchange:gma.published-exchange/1`. It contains the exact bounded
+`playerMessage`, exact bounded `assistantNarration`, and response mode. GMC
+validates that the player-message and narration fingerprints match the proposal
+before accepting it. `gmc.scene-turn-receipt/2` stores that exchange inside the
+same immutable receipt and active-state compare-and-swap recovery record.
+Consequently a successful turn cannot save fictional state while losing its
+published exchange, and an ambiguous response recovers both with the original
+operation ID. The history reader repairs a missing append-only receipt from
+that bounded recovery record before it projects the conversation.
+
+`gmc.conversation-history/1` is a service-only, player-safe presentation
+projection over accepted version 2 receipts. It returns no more than fifty
+active exchanges, oldest first, with receipt, interaction, Scene-kit, phase,
+sequence, and commit metadata. Version 1 receipts remain readable and their
+existing summaries remain available through active Scene context. Each v2
+receipt carries the current owner conversation-lineage ID. A separate
+append-only rewind marker records rewind ID, parent lineage, and boundary
+sequence; its rewind ID becomes the next lineage. A receipt is suppressed only
+when it is beyond the boundary of a descendant lineage marker. Later branch
+receipts remain visible independently of wall-clock timing. Receipts and markers are audit
+history; the read window, not the immutable audit ledger, is limited to fifty.
+
+### Flow, budgets, validation, and recovery
+
+GMA compiles the final validated player-facing strings before the existing turn
+commit. GMC accepts both strings only inside that commit, validates exact keys,
+versions, fingerprints, control characters, and byte limits, then performs the
+existing revision/idempotency checks. Version 2 proposals are capped at 64 KiB,
+receipts at 48 KiB, player messages at 8 KiB, and narration at 24 KiB. The
+history projection is capped at fifty exchanges and 2 MiB. It is never added to
+the narration prompt; prompt and operation budgets from the parent decision are
+unchanged.
+
+If a history read is unavailable, gameplay remains safe because it is a
+read-only presentation projection. GMA labels the degraded view, says no game
+state changed, offers one refresh, and uses existing owner summaries rather than
+inventing prose. The second consecutive identical failure follows GMA's support
+boundary. A failed version 2 commit releases no narration. Duplicate identical
+input returns the original receipt and exact exchange; different input under an
+existing key fails.
+
+### Compatibility, migration, rollback, and observability
+
+GMC deploys first, continues accepting version 1, advertises
+`durable-conversation-history/1` plus the v2 contract versions, and exposes an
+additive history route. GMA emits v2 only after exact capability negotiation.
+No legacy backfill is attempted because old exact prose is unavailable; the UI
+continues to show version 1 summaries. Rollback disables v2 writers first and
+leaves v1 readers, all receipts, and markers intact.
+
+Metrics may record versions, counts, byte sizes, truncation, duplicate/recovery
+outcomes, rewind-marker outcomes, and latency. Logs, traces, errors, and support
+codes must not record the player message or narration. Access remains scoped by
+user and campaign through the existing service integration boundary.
+
+### Required tests and release gates
+
+Tests cover v1 unchanged behavior; v2 first commit, exact replay, conflicting
+replay, hash mismatch, size/control-character rejection, and crash recovery;
+mixed v1/v2 projection, chronological order, fifty-entry and byte bounds,
+campaign isolation, no private fields, and no prompt injection; rewind,
+duplicate rewind, and new-branch visibility; route and capability advertisement;
+and GMA dashboard reload/degraded-copy behavior. Existing Story, active Scene,
+observation, action-directed, mechanics, Manual AI, Replay, Rewind, migration,
+and 500-turn suites remain green. Complete GMC and GMA checks and Studio
+compatibility validation are release gates; deployment order is GMC, GMA, then
+Studio pinning.

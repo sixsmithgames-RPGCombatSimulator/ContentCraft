@@ -34,12 +34,21 @@ import {
   ACTIVE_SCENE_CONTEXT_MAX_BYTES,
   ACTIVE_SCENE_STATE_CONTRACT_VERSION,
   ACTIVE_SCENE_STATE_MAX_BYTES,
+  CONVERSATION_HISTORY_CONTRACT_VERSION,
+  CONVERSATION_HISTORY_LIMIT,
+  CONVERSATION_HISTORY_MAX_BYTES,
   commitSceneTurn,
+  PUBLISHED_EXCHANGE_CONTRACT_VERSION,
+  readConversationHistory,
+  recordConversationHistoryRewind,
   readSceneTurnOperation,
   SCENE_STATE_DELTA_CONTRACT_VERSION,
   SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
   SCENE_TURN_PROPOSAL_MAX_BYTES,
+  SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION,
+  SCENE_TURN_PROPOSAL_V2_MAX_BYTES,
   SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+  SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION,
 } from '../services/activeSceneStateStore.js';
 import {
   commitObservationAuthority,
@@ -548,6 +557,15 @@ storyWorkspaceRouter.get('/scene-turns/operations/:operationId', requireServiceI
   res.json(result);
 }));
 
+storyWorkspaceRouter.get('/conversation-history', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await readConversationHistory({
+    userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId,
+    limit: Number(req.query.limit ?? CONVERSATION_HISTORY_LIMIT),
+  }));
+}));
+
 storyWorkspaceRouter.get('/observation-authority/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   res.json(await readObservationAuthorityOperation({
@@ -768,14 +786,17 @@ storyWorkspaceRouter.get('/history', asyncRoute(async (req, res) => {
 
 storyWorkspaceRouter.post('/rewind', asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
-  res.json(await rewindStoryWorkspace({
+  const input = {
     userId: (req as IntegrationRequest).userId,
     campaignId: req.params.campaignId,
     expectedRevision: req.body?.expectedRevision,
     boundarySequence: req.body?.boundarySequence,
     rewindId: req.body?.rewindId,
     restoreStoryWorkspaceRef: req.body?.restoreStoryWorkspaceRef ?? null,
-  }));
+  };
+  const result = await rewindStoryWorkspace(input);
+  const conversationHistoryRewind = await recordConversationHistoryRewind(input);
+  res.json({ ...result, conversationHistoryRewind });
 }));
 
 storyWorkspaceRouter.post('/import-legacy-scene-plan', asyncRoute(async (req, res) => {
@@ -981,9 +1002,16 @@ storyWorkspaceRouter.get('/contracts', (_req, res) => {
       sceneStateDelta: SCENE_STATE_DELTA_CONTRACT_VERSION,
       sceneTurnProposal: SCENE_TURN_PROPOSAL_CONTRACT_VERSION,
       sceneTurnReceipt: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+      sceneTurnProposalV2: SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION,
+      sceneTurnReceiptV2: SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION,
+      publishedExchange: PUBLISHED_EXCHANGE_CONTRACT_VERSION,
+      conversationHistory: CONVERSATION_HISTORY_CONTRACT_VERSION,
       maximumStateBytes: ACTIVE_SCENE_STATE_MAX_BYTES,
       maximumContextBytes: ACTIVE_SCENE_CONTEXT_MAX_BYTES,
       maximumProposalBytes: SCENE_TURN_PROPOSAL_MAX_BYTES,
+      maximumProposalV2Bytes: SCENE_TURN_PROPOSAL_V2_MAX_BYTES,
+      maximumConversationHistoryBytes: CONVERSATION_HISTORY_MAX_BYTES,
+      maximumConversationHistoryInteractions: CONVERSATION_HISTORY_LIMIT,
       authority: 'gmc',
       routeEnabled: true,
     },

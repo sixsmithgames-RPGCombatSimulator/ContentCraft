@@ -253,6 +253,18 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, sceneKitId: 1, stateRevisionAfter: -1 },
     { unique: true, name: 'unique_gmc_scene_turn_state_revision' },
   );
+  await database.collection('gmc_scene_turn_receipts').createIndex(
+    { userId: 1, campaignId: 1, schemaVersion: 1, conversationLineageId: 1, timelineSequence: 1, committedAt: -1 },
+    { name: 'gmc_conversation_history_lookup' },
+  );
+  await database.collection('gmc_conversation_history_rewinds').createIndex(
+    { userId: 1, campaignId: 1, rewindId: 1 },
+    { unique: true, name: 'unique_gmc_conversation_history_rewind' },
+  );
+  await database.collection('gmc_conversation_history_rewinds').createIndex(
+    { userId: 1, campaignId: 1, committedAt: -1 },
+    { name: 'gmc_conversation_history_rewind_lookup' },
+  );
   // Scene reality records are immutable staged bundles. Readers follow only the
   // single campaign pointer, so process loss cannot expose a partial dossier.
   await database.collection('gmc_scene_reality_bundles').createIndex(

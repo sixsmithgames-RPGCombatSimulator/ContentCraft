@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Collection, Filter } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { ObjectId } from 'mongodb';
@@ -7,12 +8,19 @@ import {
   ACTIVE_SCENE_STATE_MAX_BYTES,
   buildActiveSceneContext,
   commitSceneTurn,
+  CONVERSATION_HISTORY_CONTRACT_VERSION,
+  CONVERSATION_HISTORY_LIMIT,
+  PUBLISHED_EXCHANGE_CONTRACT_VERSION,
   readActiveSceneContext,
+  readConversationHistory,
   readLatestSceneTurnReceipt,
   readSceneTurnOperation,
+  recordConversationHistoryRewind,
   SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+  SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION,
   type ActiveSceneStateCollections,
   type ActiveSceneStateDocument,
+  type ConversationHistoryRewindDocument,
   type SceneTurnReceiptDocument,
 } from './activeSceneStateStore.js';
 import {
@@ -32,7 +40,20 @@ function valueAt(record: Record<string, unknown>, path: string): unknown {
 }
 
 function matches<T extends Record<string, unknown>>(record: T, filter: Filter<T>): boolean {
-  return Object.entries(filter).every(([key, expected]) => valueAt(record, key) === expected);
+  return Object.entries(filter).every(([key, expected]) => {
+    if (key === '$or') {
+      return Array.isArray(expected) && expected.some((branch) => (
+        branch && typeof branch === 'object'
+          ? matches(record, branch as Filter<T>)
+          : false
+      ));
+    }
+    const actual = valueAt(record, key);
+    if (expected && typeof expected === 'object' && '$lte' in expected) {
+      return Number(actual) <= Number((expected as { $lte: unknown }).$lte);
+    }
+    return actual === expected;
+  });
 }
 
 function storyMemory() {
@@ -66,6 +87,7 @@ function storyMemory() {
 function activeSceneMemory() {
   const states: ActiveSceneStateDocument[] = [];
   const receipts: SceneTurnReceiptDocument[] = [];
+  const rewinds: ConversationHistoryRewindDocument[] = [];
   const stateCollection = {
     async findOne(filter: Filter<ActiveSceneStateDocument>) {
       return structuredClone(states.find((entry) => matches(entry as unknown as Record<string, unknown>, filter as Filter<Record<string, unknown>>)) ?? null);
@@ -91,10 +113,22 @@ function activeSceneMemory() {
       }
       return null;
     },
+    find(filter: Filter<ActiveSceneStateDocument>) {
+      let selected = states.filter((entry) => matches(entry as unknown as Record<string, unknown>, filter as Filter<Record<string, unknown>>));
+      const cursor = {
+        sort(sort: { updatedAt?: number }) { if (sort.updatedAt) selected.sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime()); return cursor; },
+        limit(limit: number) { selected = selected.slice(0, limit); return cursor; },
+        async toArray() { return structuredClone(selected); },
+      };
+      return cursor;
+    },
   };
   const receiptCollection = {
-    async findOne(filter: Filter<SceneTurnReceiptDocument>) {
-      return structuredClone(receipts.find((entry) => matches(entry as unknown as Record<string, unknown>, filter as Filter<Record<string, unknown>>)) ?? null);
+    async findOne(filter: Filter<SceneTurnReceiptDocument>, options?: { sort?: { stateRevisionAfter?: number; committedAt?: number } }) {
+      const found = receipts.filter((entry) => matches(entry as unknown as Record<string, unknown>, filter as Filter<Record<string, unknown>>));
+      if (options?.sort?.stateRevisionAfter) found.sort((left, right) => right.stateRevisionAfter - left.stateRevisionAfter);
+      if (options?.sort?.committedAt) found.sort((left, right) => right.committedAt.getTime() - left.committedAt.getTime());
+      return structuredClone(found[0] ?? null);
     },
     async insertOne(document: SceneTurnReceiptDocument) {
       if (receipts.some((entry) => entry.userId === document.userId && entry.campaignId === document.campaignId
@@ -108,7 +142,36 @@ function activeSceneMemory() {
     find(filter: Filter<SceneTurnReceiptDocument>) {
       let selected = receipts.filter((entry) => matches(entry as unknown as Record<string, unknown>, filter as Filter<Record<string, unknown>>));
       const cursor = {
-        sort(sort: { stateRevisionAfter?: number }) { if (sort.stateRevisionAfter) selected.sort((left, right) => right.stateRevisionAfter - left.stateRevisionAfter); return cursor; },
+        sort(sort: { stateRevisionAfter?: number; committedAt?: number }) {
+          if (sort.committedAt || sort.stateRevisionAfter) selected.sort((left, right) => (
+            (sort.committedAt ? right.committedAt.getTime() - left.committedAt.getTime() : 0)
+            || (sort.stateRevisionAfter ? right.stateRevisionAfter - left.stateRevisionAfter : 0)
+          ));
+          return cursor;
+        },
+        limit(limit: number) { selected = selected.slice(0, limit); return cursor; },
+        async toArray() { return structuredClone(selected); },
+      };
+      return cursor;
+    },
+  };
+  const rewindCollection = {
+    async findOne(filter: Filter<ConversationHistoryRewindDocument>, options?: { sort?: { committedAt?: number } }) {
+      const found = rewinds.filter((entry) => matches(entry as unknown as Record<string, unknown>, filter as Filter<Record<string, unknown>>));
+      if (options?.sort?.committedAt) found.sort((left, right) => right.committedAt.getTime() - left.committedAt.getTime());
+      return structuredClone(found[0] ?? null);
+    },
+    async insertOne(document: ConversationHistoryRewindDocument) {
+      if (rewinds.some((entry) => entry.userId === document.userId && entry.campaignId === document.campaignId && entry.rewindId === document.rewindId)) {
+        throw Object.assign(new Error('duplicate'), { code: 11000 });
+      }
+      rewinds.push(structuredClone(document));
+      return { acknowledged: true };
+    },
+    find(filter: Filter<ConversationHistoryRewindDocument>) {
+      let selected = rewinds.filter((entry) => matches(entry as unknown as Record<string, unknown>, filter as Filter<Record<string, unknown>>));
+      const cursor = {
+        sort(sort: { committedAt?: number }) { if (sort.committedAt) selected.sort((left, right) => right.committedAt.getTime() - left.committedAt.getTime()); return cursor; },
         limit(limit: number) { selected = selected.slice(0, limit); return cursor; },
         async toArray() { return structuredClone(selected); },
       };
@@ -116,9 +179,14 @@ function activeSceneMemory() {
     },
   };
   return {
-    stores: { states: stateCollection as unknown as Collection<ActiveSceneStateDocument>, receipts: receiptCollection as unknown as Collection<SceneTurnReceiptDocument> } satisfies ActiveSceneStateCollections,
+    stores: {
+      states: stateCollection as unknown as Collection<ActiveSceneStateDocument>,
+      receipts: receiptCollection as unknown as Collection<SceneTurnReceiptDocument>,
+      rewinds: rewindCollection as unknown as Collection<ConversationHistoryRewindDocument>,
+    } satisfies ActiveSceneStateCollections,
     states,
     receipts,
+    rewinds,
   };
 }
 
@@ -187,6 +255,22 @@ function proposal(playable: JsonObject, workspaceRevision: number, stateRevision
     },
   };
   return { ...core, ...overrides } as JsonObject;
+}
+
+function proposalV2(playable: JsonObject, workspaceRevision: number, stateRevision: number, turn = 1): JsonObject {
+  const playerMessage = `I keep watching on turn ${turn}.`;
+  const assistantNarration = `The worker makes a concrete move on turn ${turn}.`;
+  return proposal(playable, workspaceRevision, stateRevision, turn, {
+    schemaVersion: 'gma.scene-turn-proposal/2',
+    narrationFingerprint: createHash('sha256').update(assistantNarration, 'utf8').digest('hex'),
+    publishedExchange: {
+      schemaVersion: PUBLISHED_EXCHANGE_CONTRACT_VERSION,
+      playerMessage,
+      playerMessageFingerprint: createHash('sha256').update(playerMessage, 'utf8').digest('hex'),
+      assistantNarration,
+      responseMode: 'in_character',
+    },
+  });
 }
 
 describe('durable active Scene state', () => {
@@ -328,6 +412,123 @@ describe('durable active Scene state', () => {
     const recovered = await readSceneTurnOperation({ userId: 'user-a', campaignId: 'campaign-a', operationId: 'scene-turn:interaction-1:result' }, memory.stores);
     expect(recovered).toMatchObject({ duplicate: true, receipt: { receiptRef: (saved.receipt as JsonObject).receiptRef } });
     expect(memory.receipts).toHaveLength(1);
+  });
+
+  it('stores and replays the exact published exchange in the same version-2 turn receipt', async () => {
+    const { story, active, playable } = await prepared();
+    const memory = activeSceneMemory();
+    const input = proposalV2(playable, active.storyWorkspaceRef.revision, 0);
+    const saved = await commitSceneTurn({ userId: 'user-a', campaignId: 'campaign-a', proposal: input }, memory.stores, story.records);
+    const replay = await commitSceneTurn({ userId: 'user-a', campaignId: 'campaign-a', proposal: input }, memory.stores, story.records);
+    expect(saved).toMatchObject({
+      contractVersion: SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION,
+      duplicate: false,
+      receipt: {
+        schemaVersion: SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION,
+        conversationLineageId: 'root',
+        publishedExchange: {
+          playerMessage: 'I keep watching on turn 1.',
+          assistantNarration: 'The worker makes a concrete move on turn 1.',
+        },
+      },
+    });
+    expect(replay).toMatchObject({ duplicate: true, receipt: saved.receipt });
+    const history = await readConversationHistory({ userId: 'user-a', campaignId: 'campaign-a' }, memory.stores);
+    expect(history).toMatchObject({
+      schemaVersion: CONVERSATION_HISTORY_CONTRACT_VERSION,
+      interactions: [{
+        interactionId: 'interaction-1',
+        playerMessage: 'I keep watching on turn 1.',
+        assistantNarration: 'The worker makes a concrete move on turn 1.',
+      }],
+      authority: { owner: 'gmc', presentationOnly: true, transcriptIsAuthority: false },
+    });
+    expect(JSON.stringify(history)).not.toContain('narrationEvidence');
+  });
+
+  it('recovers exact history after interruption between the state write and receipt insert', async () => {
+    const { story, active, playable } = await prepared();
+    const memory = activeSceneMemory();
+    await commitSceneTurn({
+      userId: 'user-a', campaignId: 'campaign-a',
+      proposal: proposalV2(playable, active.storyWorkspaceRef.revision, 0),
+    }, memory.stores, story.records);
+    memory.receipts.splice(0, 1);
+
+    const history = await readConversationHistory({ userId: 'user-a', campaignId: 'campaign-a' }, memory.stores);
+
+    expect(memory.receipts).toHaveLength(1);
+    expect(history).toMatchObject({
+      interactions: [{
+        interactionId: 'interaction-1',
+        playerMessage: 'I keep watching on turn 1.',
+        assistantNarration: 'The worker makes a concrete move on turn 1.',
+      }],
+    });
+  });
+
+  it('rejects a version-2 exchange whose exact text does not match its fingerprints', async () => {
+    const { story, active, playable } = await prepared();
+    const memory = activeSceneMemory();
+    const input = proposalV2(playable, active.storyWorkspaceRef.revision, 0);
+    (input.publishedExchange as JsonObject).assistantNarration = 'Different published narration.';
+    await expect(commitSceneTurn({ userId: 'user-a', campaignId: 'campaign-a', proposal: input }, memory.stores, story.records))
+      .rejects.toMatchObject({ code: 'STORY_PUBLISHED_EXCHANGE_FINGERPRINT_MISMATCH' });
+    expect(memory.states).toHaveLength(0);
+    expect(memory.receipts).toHaveLength(0);
+  });
+
+  it('bounds history to fifty interactions and keeps a new rewind lineage visible', async () => {
+    const { story, active, playable } = await prepared();
+    const memory = activeSceneMemory();
+    for (let turn = 1; turn <= 55; turn += 1) {
+      await commitSceneTurn({
+        userId: 'user-a', campaignId: 'campaign-a',
+        proposal: proposalV2(playable, active.storyWorkspaceRef.revision, turn - 1, turn),
+      }, memory.stores, story.records);
+    }
+    const bounded = await readConversationHistory({ userId: 'user-a', campaignId: 'campaign-a', limit: 500 }, memory.stores);
+    expect(bounded.limit).toBe(CONVERSATION_HISTORY_LIMIT);
+    expect(bounded.interactions).toHaveLength(CONVERSATION_HISTORY_LIMIT);
+    expect((bounded.interactions as JsonObject[])[0].interactionId).toBe('interaction-6');
+
+    const rewind = await recordConversationHistoryRewind({
+      userId: 'user-a', campaignId: 'campaign-a', rewindId: 'rewind:after-52', boundarySequence: 52,
+    }, memory.stores);
+    expect(rewind).toMatchObject({ duplicate: false, parentLineageId: 'root' });
+    await commitSceneTurn({
+      userId: 'user-a', campaignId: 'campaign-a',
+      proposal: proposalV2(playable, active.storyWorkspaceRef.revision, 55, 56),
+    }, memory.stores, story.records);
+    const after = await readConversationHistory({ userId: 'user-a', campaignId: 'campaign-a' }, memory.stores);
+    const interactions = after.interactions as JsonObject[];
+    expect(interactions.some((entry) => entry.interactionId === 'interaction-53')).toBe(false);
+    expect(interactions.some((entry) => entry.interactionId === 'interaction-54')).toBe(false);
+    expect(interactions.some((entry) => entry.interactionId === 'interaction-55')).toBe(false);
+    expect(interactions.at(-1)).toMatchObject({ interactionId: 'interaction-56', conversationLineageId: 'rewind:after-52' });
+    await expect(recordConversationHistoryRewind({
+      userId: 'user-a', campaignId: 'campaign-a', rewindId: 'rewind:after-52', boundarySequence: 52,
+    }, memory.stores)).resolves.toMatchObject({ duplicate: true, parentLineageId: 'root' });
+  });
+
+  it('recovers the last fifty valid interactions after more than 250 later turns are rewound', async () => {
+    const { story, active, playable } = await prepared();
+    const memory = activeSceneMemory();
+    for (let turn = 1; turn <= 300; turn += 1) {
+      await commitSceneTurn({
+        userId: 'user-a', campaignId: 'campaign-a',
+        proposal: proposalV2(playable, active.storyWorkspaceRef.revision, turn - 1, turn),
+      }, memory.stores, story.records);
+    }
+    await recordConversationHistoryRewind({
+      userId: 'user-a', campaignId: 'campaign-a', rewindId: 'rewind:to-50', boundarySequence: 50,
+    }, memory.stores);
+
+    const history = await readConversationHistory({ userId: 'user-a', campaignId: 'campaign-a' }, memory.stores);
+    const interactions = history.interactions as JsonObject[];
+    expect(interactions).toHaveLength(50);
+    expect(interactions[0].interactionId).toBe('interaction-1');
+    expect(interactions.at(-1)?.interactionId).toBe('interaction-50');
   });
 
   it('keeps a 500-turn Scene snapshot bounded while retaining all append-only receipts', async () => {

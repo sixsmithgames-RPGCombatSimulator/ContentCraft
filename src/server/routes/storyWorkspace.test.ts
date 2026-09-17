@@ -49,6 +49,7 @@ describe('D2 Story authority routes', () => {
       ['GET', '/scene-context'],
       ['POST', '/scene-turns'],
       ['GET', '/scene-turns/operations/scene-turn%3Aturn-1%3Aresult'],
+      ['GET', '/conversation-history'],
       ['GET', '/observation-authority'],
       ['POST', '/observation-authority/commit'],
       ['GET', '/observation-authority/operations/operation-1'],

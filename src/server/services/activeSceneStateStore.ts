@@ -14,15 +14,27 @@ export const ACTIVE_SCENE_CONTEXT_CONTRACT_VERSION = 'gma.active-scene-context/1
 export const SCENE_STATE_DELTA_CONTRACT_VERSION = 'gma.scene-state-delta/1';
 export const SCENE_TURN_PROPOSAL_CONTRACT_VERSION = 'gma.scene-turn-proposal/1';
 export const SCENE_TURN_RECEIPT_CONTRACT_VERSION = 'gmc.scene-turn-receipt/1';
+export const SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION = 'gma.scene-turn-proposal/2';
+export const SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION = 'gmc.scene-turn-receipt/2';
+export const PUBLISHED_EXCHANGE_CONTRACT_VERSION = 'gma.published-exchange/1';
+export const CONVERSATION_HISTORY_CONTRACT_VERSION = 'gmc.conversation-history/1';
+export const CONVERSATION_HISTORY_REWIND_CONTRACT_VERSION = 'gmc.conversation-history-rewind/1';
 export const ACTIVE_SCENE_STATE_MAX_BYTES = 32_768;
 export const ACTIVE_SCENE_CONTEXT_MAX_BYTES = 24_576;
 export const SCENE_TURN_PROPOSAL_MAX_BYTES = 24_576;
 export const SCENE_TURN_RECEIPT_MAX_BYTES = 8_192;
+export const SCENE_TURN_PROPOSAL_V2_MAX_BYTES = 65_536;
+export const SCENE_TURN_RECEIPT_V2_MAX_BYTES = 49_152;
+export const PUBLISHED_PLAYER_MESSAGE_MAX_BYTES = 8_192;
+export const PUBLISHED_NARRATION_MAX_BYTES = 24_576;
+export const CONVERSATION_HISTORY_LIMIT = 50;
+export const CONVERSATION_HISTORY_MAX_BYTES = 2_097_152;
 export const ACTIVE_SCENE_RECENT_RECEIPT_LIMIT = 8;
 export const ACTIVE_SCENE_CAPABILITIES = Object.freeze([
   'durable-active-scene/1',
   'scene-turn-receipts/1',
   'latest-scene-turn-receipt/1',
+  'durable-conversation-history/1',
 ] as const);
 
 type ScenePhase = 'completed' | 'pending_mechanic' | 'owner_confirmed_mechanic';
@@ -58,7 +70,7 @@ export interface SceneTurnReceiptDocument {
   operationId: string;
   idempotencyKey: string;
   requestHash: string;
-  schemaVersion: typeof SCENE_TURN_RECEIPT_CONTRACT_VERSION;
+  schemaVersion: typeof SCENE_TURN_RECEIPT_CONTRACT_VERSION | typeof SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION;
   receiptRef: string;
   interactionId: string;
   playerActionFingerprint: string;
@@ -72,19 +84,33 @@ export interface SceneTurnReceiptDocument {
   actionSummary: string;
   outcomeSummary: string;
   sourceReceiptRefs: string[];
+  publishedExchange?: JsonObject;
+  conversationLineageId?: string;
   readinessChangedDimensions?: string[];
+  committedAt: Date;
+}
+
+export interface ConversationHistoryRewindDocument {
+  userId: string;
+  campaignId: string;
+  schemaVersion: typeof CONVERSATION_HISTORY_REWIND_CONTRACT_VERSION;
+  rewindId: string;
+  parentLineageId: string;
+  boundarySequence: number;
   committedAt: Date;
 }
 
 export interface ActiveSceneStateCollections {
   states: Collection<ActiveSceneStateDocument>;
   receipts: Collection<SceneTurnReceiptDocument>;
+  rewinds?: Collection<ConversationHistoryRewindDocument>;
 }
 
 function collections(): ActiveSceneStateCollections {
   return {
     states: getDb().collection<ActiveSceneStateDocument>('gmc_active_scene_states'),
     receipts: getDb().collection<SceneTurnReceiptDocument>('gmc_scene_turn_receipts'),
+    rewinds: getDb().collection<ConversationHistoryRewindDocument>('gmc_conversation_history_rewinds'),
   };
 }
 
@@ -107,6 +133,10 @@ function canonicalJson(value: unknown): string {
 
 function hash(value: unknown): string {
   return createHash('sha256').update(canonicalJson(value), 'utf8').digest('hex');
+}
+
+function hashText(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
 function bytes(value: unknown): number {
@@ -132,6 +162,14 @@ function boundedText(value: unknown, field: string, maximum: number): string {
     throw new StoryWorkspaceStoreError(400, 'STORY_VALIDATION_FAILED', `${field} is invalid.`, { field });
   }
   return result;
+}
+
+function exactPublishedText(value: unknown, field: string, maximumBytes: number): string {
+  if (typeof value !== 'string' || !value.trim() || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(value)
+    || Buffer.byteLength(value, 'utf8') > maximumBytes) {
+    throw new StoryWorkspaceStoreError(400, 'STORY_VALIDATION_FAILED', `${field} is invalid.`, { field, maximumBytes });
+  }
+  return value;
 }
 
 function wholeNumber(value: unknown, field: string, minimum = 0): number {
@@ -391,7 +429,7 @@ function receiptSummary(receipt: SceneTurnReceiptDocument | JsonObject): JsonObj
 
 function publicReceipt(receipt: SceneTurnReceiptDocument | JsonObject): JsonObject {
   return {
-    schemaVersion: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+    schemaVersion: receipt.schemaVersion as JsonValue,
     receiptRef: receipt.receiptRef as JsonValue,
     operationId: receipt.operationId as JsonValue,
     idempotencyKey: receipt.idempotencyKey as JsonValue,
@@ -407,6 +445,12 @@ function publicReceipt(receipt: SceneTurnReceiptDocument | JsonObject): JsonObje
     actionSummary: receipt.actionSummary as JsonValue,
     outcomeSummary: receipt.outcomeSummary as JsonValue,
     sourceReceiptRefs: clone(receipt.sourceReceiptRefs as JsonValue[]),
+    ...(isObject(receipt.publishedExchange)
+      ? { publishedExchange: clone(receipt.publishedExchange) }
+      : {}),
+    ...(typeof receipt.conversationLineageId === 'string'
+      ? { conversationLineageId: receipt.conversationLineageId }
+      : {}),
   };
 }
 
@@ -544,6 +588,34 @@ function validateDelta(value: unknown, refs: ReturnType<typeof sceneAuthorityRef
   return clone(value as JsonObject);
 }
 
+function validatePublishedExchange(value: unknown, proposal: Record<string, unknown>): JsonObject {
+  if (!isObject(value)) throw new StoryWorkspaceStoreError(422, 'STORY_PUBLISHED_EXCHANGE_INVALID', 'The published exchange must be an object.', { field: 'proposal.publishedExchange' });
+  exactKeys(value, 'proposal.publishedExchange', [
+    'schemaVersion', 'playerMessage', 'playerMessageFingerprint', 'assistantNarration', 'responseMode',
+  ]);
+  if (value.schemaVersion !== PUBLISHED_EXCHANGE_CONTRACT_VERSION) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_PUBLISHED_EXCHANGE_INVALID', 'The published exchange version is unsupported.', { field: 'proposal.publishedExchange.schemaVersion' });
+  }
+  const playerMessage = exactPublishedText(value.playerMessage, 'proposal.publishedExchange.playerMessage', PUBLISHED_PLAYER_MESSAGE_MAX_BYTES);
+  const assistantNarration = exactPublishedText(value.assistantNarration, 'proposal.publishedExchange.assistantNarration', PUBLISHED_NARRATION_MAX_BYTES);
+  const playerMessageFingerprint = stableId(value.playerMessageFingerprint, 'proposal.publishedExchange.playerMessageFingerprint', 64);
+  if (!/^[a-f0-9]{64}$/.test(playerMessageFingerprint) || playerMessageFingerprint !== hashText(playerMessage)) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_PUBLISHED_EXCHANGE_FINGERPRINT_MISMATCH', 'The published player message does not match its fingerprint.', { field: 'proposal.publishedExchange.playerMessageFingerprint' });
+  }
+  const narrationFingerprint = String(proposal.narrationFingerprint ?? '');
+  if (narrationFingerprint !== hashText(assistantNarration.trim().slice(0, 16_000))) {
+    throw new StoryWorkspaceStoreError(422, 'STORY_PUBLISHED_EXCHANGE_FINGERPRINT_MISMATCH', 'The published narration does not match the accepted narration fingerprint.', { field: 'proposal.publishedExchange.assistantNarration' });
+  }
+  const responseMode = stableId(value.responseMode, 'proposal.publishedExchange.responseMode', 80);
+  return {
+    schemaVersion: PUBLISHED_EXCHANGE_CONTRACT_VERSION,
+    playerMessage,
+    playerMessageFingerprint,
+    assistantNarration,
+    responseMode,
+  };
+}
+
 function validateProposal(
   value: unknown,
   campaignId: string,
@@ -553,13 +625,17 @@ function validateProposal(
   certifiedDesign?: JsonObject | null,
 ): JsonObject {
   if (!isObject(value)) throw new StoryWorkspaceStoreError(400, 'STORY_SCENE_TURN_INVALID', 'The scene-turn proposal must be an object.', {});
-  if (bytes(value) > SCENE_TURN_PROPOSAL_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_TURN_TOO_LARGE', 'The scene-turn proposal exceeds its size bound.', { maximumBytes: SCENE_TURN_PROPOSAL_MAX_BYTES });
+  const isV2 = value.schemaVersion === SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION;
+  const maximumProposalBytes = isV2 ? SCENE_TURN_PROPOSAL_V2_MAX_BYTES : SCENE_TURN_PROPOSAL_MAX_BYTES;
+  if (bytes(value) > maximumProposalBytes) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_TURN_TOO_LARGE', 'The scene-turn proposal exceeds its size bound.', { maximumBytes: maximumProposalBytes });
   exactKeys(value, 'proposal', [
     'schemaVersion', 'operationId', 'idempotencyKey', 'correlationId', 'campaignId', 'interactionId',
     'playerActionFingerprint', 'expectedWorkspaceRevision', 'expectedStateRevision', 'sceneKitRef',
     'timelineSequence', 'narrationFingerprint', 'actionSummary', 'outcomeSummary', 'sourceReceiptRefs', 'stateDelta',
+    ...(isV2 ? ['publishedExchange'] : []),
   ]);
-  if (value.schemaVersion !== SCENE_TURN_PROPOSAL_CONTRACT_VERSION || value.campaignId !== campaignId) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_TURN_ENVELOPE_INVALID', 'The scene-turn proposal does not match this campaign.', {});
+  if (![SCENE_TURN_PROPOSAL_CONTRACT_VERSION, SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION].includes(String(value.schemaVersion))
+    || value.campaignId !== campaignId) throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_TURN_ENVELOPE_INVALID', 'The scene-turn proposal does not match this campaign.', {});
   for (const field of ['operationId', 'idempotencyKey', 'correlationId', 'campaignId', 'interactionId', 'playerActionFingerprint', 'narrationFingerprint']) stableId(value[field], `proposal.${field}`);
   const workspaceRevision = wholeNumber(value.expectedWorkspaceRevision, 'proposal.expectedWorkspaceRevision');
   if (workspaceRevision !== Number(workspace.revision)) throw new StoryWorkspaceStoreError(409, 'STORY_WORKSPACE_REVISION_CONFLICT', 'The Story workspace changed before this scene turn.', { expectedRevision: workspaceRevision, actualRevision: workspace.revision });
@@ -581,7 +657,9 @@ function validateProposal(
     && !(value.sourceReceiptRefs as string[]).some((ref) => /^vcs[:.-]/i.test(ref))) {
     throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_TURN_MECHANICS_RECEIPT_REQUIRED', 'An owner-confirmed mechanical result requires its VCS receipt.', {});
   }
-  return clone(value as JsonObject);
+  const validated = clone(value as JsonObject);
+  if (isV2) validated.publishedExchange = validatePublishedExchange(value.publishedExchange, value);
+  return validated;
 }
 
 function keyedMerge(current: JsonObject[], updates: JsonObject[], key: string, maximum: number): JsonObject[] {
@@ -657,7 +735,7 @@ function materializeNextState(
   return next;
 }
 
-function receiptFromProposal(proposal: JsonObject, requestHash: string): JsonObject {
+function receiptFromProposal(proposal: JsonObject, requestHash: string, conversationLineageId = 'root'): JsonObject {
   const before = Number(proposal.expectedStateRevision);
   const deltaFingerprint = hash(proposal.stateDelta);
   const delta = proposal.stateDelta as JsonObject;
@@ -678,8 +756,11 @@ function receiptFromProposal(proposal: JsonObject, requestHash: string): JsonObj
   }
   if ((delta.threadUpdates as JsonObject[]).some((entry) => entry.status !== 'open')) readinessChangedDimensions.add('story_source');
   const receiptRef = `gmc:scene-turn:${hash({ campaignId: proposal.campaignId, operationId: proposal.operationId, requestHash }).slice(0, 40)}`;
+  const schemaVersion = proposal.schemaVersion === SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION
+    ? SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION
+    : SCENE_TURN_RECEIPT_CONTRACT_VERSION;
   return {
-    schemaVersion: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+    schemaVersion,
     receiptRef,
     operationId: proposal.operationId,
     idempotencyKey: proposal.idempotencyKey,
@@ -696,13 +777,19 @@ function receiptFromProposal(proposal: JsonObject, requestHash: string): JsonObj
     actionSummary: proposal.actionSummary,
     outcomeSummary: proposal.outcomeSummary,
     sourceReceiptRefs: clone(proposal.sourceReceiptRefs as JsonValue[]),
+    ...(isObject(proposal.publishedExchange)
+      ? { publishedExchange: clone(proposal.publishedExchange) }
+      : {}),
+    ...(schemaVersion === SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION
+      ? { conversationLineageId }
+      : {}),
     readinessChangedDimensions: [...readinessChangedDimensions],
   } as JsonObject;
 }
 
 function receiptResponse(receipt: JsonObject, state: ActiveSceneStateDocument, kit: JsonObject, duplicate: boolean): JsonObject {
   return {
-    contractVersion: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+    contractVersion: receipt.schemaVersion,
     status: 'applied',
     duplicate,
     authoritativeStateChanged: !duplicate,
@@ -713,7 +800,7 @@ function receiptResponse(receipt: JsonObject, state: ActiveSceneStateDocument, k
 
 async function insertReceiptIfMissing(
   receipt: JsonObject,
-  identity: { userId: string; campaignId: string; sceneKitId: string },
+  identity: { userId: string; campaignId: string; sceneKitId: string; committedAt?: Date },
   records: Collection<SceneTurnReceiptDocument>,
 ): Promise<void> {
   const existing = await records.findOne({ userId: identity.userId, campaignId: identity.campaignId, operationId: String(receipt.operationId) });
@@ -728,7 +815,9 @@ async function insertReceiptIfMissing(
     operationId: String(receipt.operationId),
     idempotencyKey: String(receipt.idempotencyKey),
     requestHash: String(receipt.requestHash),
-    schemaVersion: SCENE_TURN_RECEIPT_CONTRACT_VERSION,
+    schemaVersion: receipt.schemaVersion === SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION
+      ? SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION
+      : SCENE_TURN_RECEIPT_CONTRACT_VERSION,
     receiptRef: String(receipt.receiptRef),
     interactionId: String(receipt.interactionId),
     playerActionFingerprint: String(receipt.playerActionFingerprint),
@@ -742,12 +831,21 @@ async function insertReceiptIfMissing(
     actionSummary: String(receipt.actionSummary),
     outcomeSummary: String(receipt.outcomeSummary),
     sourceReceiptRefs: clone(receipt.sourceReceiptRefs as string[]),
+    ...(isObject(receipt.publishedExchange)
+      ? { publishedExchange: clone(receipt.publishedExchange) }
+      : {}),
+    ...(typeof receipt.conversationLineageId === 'string'
+      ? { conversationLineageId: String(receipt.conversationLineageId) }
+      : {}),
     ...(Array.isArray(receipt.readinessChangedDimensions)
       ? { readinessChangedDimensions: clone(receipt.readinessChangedDimensions as string[]) }
       : {}),
-    committedAt: new Date(),
+    committedAt: identity.committedAt ?? new Date(),
   };
-  if (bytes(publicReceipt(document)) > SCENE_TURN_RECEIPT_MAX_BYTES) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_TURN_RECEIPT_TOO_LARGE', 'The scene-turn receipt exceeds its storage bound.', { maximumBytes: SCENE_TURN_RECEIPT_MAX_BYTES });
+  const maximumReceiptBytes = document.schemaVersion === SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION
+    ? SCENE_TURN_RECEIPT_V2_MAX_BYTES
+    : SCENE_TURN_RECEIPT_MAX_BYTES;
+  if (bytes(publicReceipt(document)) > maximumReceiptBytes) throw new StoryWorkspaceStoreError(413, 'STORY_SCENE_TURN_RECEIPT_TOO_LARGE', 'The scene-turn receipt exceeds its storage bound.', { maximumBytes: maximumReceiptBytes });
   try {
     await records.insertOne(document);
   } catch (error: unknown) {
@@ -779,11 +877,194 @@ export async function readSceneTurnOperation(
 ): Promise<JsonObject | null> {
   const operationId = stableId(input.operationId, 'operationId');
   const receipt = await stores.receipts.findOne({ userId: input.userId, campaignId: input.campaignId, operationId });
-  if (receipt) return { contractVersion: SCENE_TURN_RECEIPT_CONTRACT_VERSION, status: 'applied', duplicate: true, authoritativeStateChanged: false, receipt: publicReceipt(receipt) };
+  if (receipt) return { contractVersion: receipt.schemaVersion, status: 'applied', duplicate: true, authoritativeStateChanged: false, receipt: publicReceipt(receipt) };
   const state = await stores.states.findOne({ userId: input.userId, campaignId: input.campaignId, latestOperationId: operationId });
   if (!state?.latestReceipt) return null;
-  await insertReceiptIfMissing(state.latestReceipt, { userId: input.userId, campaignId: input.campaignId, sceneKitId: state.sceneKitId }, stores.receipts);
-  return { contractVersion: SCENE_TURN_RECEIPT_CONTRACT_VERSION, status: 'applied', duplicate: true, authoritativeStateChanged: false, receipt: publicReceipt(state.latestReceipt) };
+  await insertReceiptIfMissing(state.latestReceipt, {
+    userId: input.userId,
+    campaignId: input.campaignId,
+    sceneKitId: state.sceneKitId,
+    committedAt: state.updatedAt,
+  }, stores.receipts);
+  return { contractVersion: state.latestReceipt.schemaVersion as JsonValue, status: 'applied', duplicate: true, authoritativeStateChanged: false, receipt: publicReceipt(state.latestReceipt) };
+}
+
+function publicConversationExchange(receipt: SceneTurnReceiptDocument): JsonObject | null {
+  if (receipt.schemaVersion !== SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION || !isObject(receipt.publishedExchange)) return null;
+  return {
+    receiptRef: receipt.receiptRef,
+    interactionId: receipt.interactionId,
+    sceneKitRef: clone(receipt.sceneKitRef),
+    stateRevisionAfter: receipt.stateRevisionAfter,
+    timelineSequence: receipt.timelineSequence,
+    phase: receipt.phase,
+    playerMessage: receipt.publishedExchange.playerMessage as JsonValue,
+    assistantNarration: receipt.publishedExchange.assistantNarration as JsonValue,
+    responseMode: receipt.publishedExchange.responseMode as JsonValue,
+    conversationLineageId: receipt.conversationLineageId ?? 'root',
+    committedAt: receipt.committedAt.toISOString(),
+  };
+}
+
+function currentConversationLineage(rewinds: ConversationHistoryRewindDocument[]): ConversationHistoryRewindDocument[] {
+  if (!rewinds.length) return [];
+  const byId = new Map(rewinds.map((rewind) => [rewind.rewindId, rewind]));
+  const chain: ConversationHistoryRewindDocument[] = [];
+  let current = rewinds[0];
+  const visited = new Set<string>();
+  while (current && !visited.has(current.rewindId)) {
+    visited.add(current.rewindId);
+    chain.unshift(current);
+    if (current.parentLineageId === 'root') break;
+    const parent = byId.get(current.parentLineageId);
+    if (!parent) {
+      throw new StoryWorkspaceStoreError(
+        503,
+        'STORY_CONVERSATION_HISTORY_LINEAGE_INCOMPLETE',
+        'Conversation history lineage could not be resolved safely.',
+        {},
+      );
+    }
+    current = parent;
+  }
+  if (current.parentLineageId !== 'root' && visited.has(current.rewindId)) {
+    throw new StoryWorkspaceStoreError(
+      503,
+      'STORY_CONVERSATION_HISTORY_LINEAGE_INVALID',
+      'Conversation history lineage could not be resolved safely.',
+      {},
+    );
+  }
+  return chain;
+}
+
+/** Returns bounded player-visible history. This projection is never prompt authority. */
+export async function readConversationHistory(
+  input: { userId: string; campaignId: string; limit?: number },
+  stores: ActiveSceneStateCollections = collections(),
+): Promise<JsonObject> {
+  const userId = boundedText(input.userId, 'userId', 254);
+  const campaignId = stableId(input.campaignId, 'campaignId');
+  const limit = Math.max(1, Math.min(CONVERSATION_HISTORY_LIMIT, Math.floor(Number(input.limit ?? CONVERSATION_HISTORY_LIMIT) || CONVERSATION_HISTORY_LIMIT)));
+  const scanLimit = Math.max(250, limit * 10);
+  const recoverableStates = await stores.states.find({
+    userId,
+    campaignId,
+    'latestReceipt.schemaVersion': SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION,
+  }).sort({ updatedAt: -1 }).limit(CONVERSATION_HISTORY_LIMIT).toArray();
+  for (const state of recoverableStates) {
+    if (!state.latestReceipt) continue;
+    await insertReceiptIfMissing(state.latestReceipt, {
+      userId,
+      campaignId,
+      sceneKitId: state.sceneKitId,
+      committedAt: state.updatedAt,
+    }, stores.receipts);
+  }
+  const rewinds = stores.rewinds
+    ? await stores.rewinds.find({ userId, campaignId }).sort({ committedAt: -1, _id: -1 }).limit(1_000).toArray()
+    : [];
+  const lineage = currentConversationLineage(rewinds);
+  const segments = [
+    { lineageId: 'root', boundarySequence: lineage[0]?.boundarySequence },
+    ...lineage.map((rewind, index) => ({
+      lineageId: rewind.rewindId,
+      boundarySequence: lineage[index + 1]?.boundarySequence,
+    })),
+  ];
+  const active = await stores.receipts.find({
+    userId,
+    campaignId,
+    schemaVersion: SCENE_TURN_RECEIPT_V2_CONTRACT_VERSION,
+    $or: segments.map((segment) => ({
+      conversationLineageId: segment.lineageId,
+      ...(segment.boundarySequence === undefined
+        ? {}
+        : { timelineSequence: { $lte: segment.boundarySequence } }),
+    })),
+  }).sort({ committedAt: -1, stateRevisionAfter: -1 }).limit(scanLimit).toArray();
+  const byInteraction = new Map<string, SceneTurnReceiptDocument>();
+  for (const receipt of active) {
+    if (!byInteraction.has(receipt.interactionId)) byInteraction.set(receipt.interactionId, receipt);
+  }
+  const selected = [...byInteraction.values()].slice(0, limit).reverse();
+  const interactions = selected.map(publicConversationExchange).filter((entry): entry is JsonObject => Boolean(entry));
+  const result: JsonObject = {
+    schemaVersion: CONVERSATION_HISTORY_CONTRACT_VERSION,
+    campaignId,
+    limit,
+    interactions,
+    truncated: byInteraction.size > limit || active.length === scanLimit,
+    authority: {
+      owner: 'gmc',
+      presentationOnly: true,
+      transcriptIsAuthority: false,
+    },
+  };
+  if (bytes(result) > CONVERSATION_HISTORY_MAX_BYTES) {
+    throw new StoryWorkspaceStoreError(413, 'STORY_CONVERSATION_HISTORY_TOO_LARGE', 'The conversation history exceeds its read bound.', { maximumBytes: CONVERSATION_HISTORY_MAX_BYTES });
+  }
+  return result;
+}
+
+/** Appends an idempotent presentation supersession after an owner-confirmed rewind. */
+export async function recordConversationHistoryRewind(
+  input: { userId: string; campaignId: string; boundarySequence: number; rewindId: string },
+  stores: ActiveSceneStateCollections = collections(),
+): Promise<JsonObject> {
+  if (!stores.rewinds) throw new StoryWorkspaceStoreError(503, 'STORY_CONVERSATION_HISTORY_REWIND_UNAVAILABLE', 'Conversation history rewind storage is unavailable.', {});
+  const userId = boundedText(input.userId, 'userId', 254);
+  const campaignId = stableId(input.campaignId, 'campaignId');
+  const rewindId = stableId(input.rewindId, 'rewindId');
+  const boundarySequence = wholeNumber(input.boundarySequence, 'boundarySequence');
+  const existing = await stores.rewinds.findOne({ userId, campaignId, rewindId });
+  if (existing) {
+    if (existing.boundarySequence !== boundarySequence) throw new StoryWorkspaceStoreError(409, 'STORY_CONVERSATION_HISTORY_REWIND_CONFLICT', 'The rewind identifier was already used for a different conversation boundary.', {});
+    return {
+      schemaVersion: CONVERSATION_HISTORY_REWIND_CONTRACT_VERSION,
+      rewindId,
+      parentLineageId: existing.parentLineageId,
+      boundarySequence,
+      duplicate: true,
+      committedAt: existing.committedAt.toISOString(),
+    };
+  }
+  const latest = await stores.rewinds.findOne(
+    { userId, campaignId },
+    { sort: { committedAt: -1, _id: -1 } },
+  );
+  const document: ConversationHistoryRewindDocument = {
+    userId,
+    campaignId,
+    schemaVersion: CONVERSATION_HISTORY_REWIND_CONTRACT_VERSION,
+    rewindId,
+    parentLineageId: latest?.rewindId ?? 'root',
+    boundarySequence,
+    committedAt: new Date(),
+  };
+  try {
+    await stores.rewinds.insertOne(document);
+  } catch (error: unknown) {
+    if ((error as { code?: number })?.code !== 11000) throw error;
+    const replay = await stores.rewinds.findOne({ userId, campaignId, rewindId });
+    if (!replay || replay.boundarySequence !== boundarySequence) throw new StoryWorkspaceStoreError(409, 'STORY_CONVERSATION_HISTORY_REWIND_CONFLICT', 'The rewind identifier was already used for a different conversation boundary.', {});
+    return {
+      schemaVersion: CONVERSATION_HISTORY_REWIND_CONTRACT_VERSION,
+      rewindId,
+      parentLineageId: replay.parentLineageId,
+      boundarySequence,
+      duplicate: true,
+      committedAt: replay.committedAt.toISOString(),
+    };
+  }
+  return {
+    schemaVersion: CONVERSATION_HISTORY_REWIND_CONTRACT_VERSION,
+    rewindId,
+    parentLineageId: document.parentLineageId,
+    boundarySequence,
+    duplicate: false,
+    committedAt: document.committedAt.toISOString(),
+  };
 }
 
 export async function commitSceneTurn(
@@ -808,13 +1089,24 @@ export async function commitSceneTurn(
   const expectedStateRevision = Number(proposal.expectedStateRevision);
   if (previous.revision !== expectedStateRevision) {
     if (previous.latestOperationId === proposal.operationId && previous.latestRequestHash === requestHash && previous.latestReceipt) {
-      await insertReceiptIfMissing(previous.latestReceipt, { userId: input.userId, campaignId: input.campaignId, sceneKitId: String(kit.sceneKitId) }, stores.receipts);
+      await insertReceiptIfMissing(previous.latestReceipt, {
+        userId: input.userId,
+        campaignId: input.campaignId,
+        sceneKitId: String(kit.sceneKitId),
+        committedAt: previous.updatedAt,
+      }, stores.receipts);
       return receiptResponse(previous.latestReceipt, previous, kit, true);
     }
     throw new StoryWorkspaceStoreError(409, 'STORY_ACTIVE_SCENE_STATE_REVISION_CONFLICT', 'The active Scene changed before this turn was saved.', { expectedRevision: expectedStateRevision, actualRevision: previous.revision });
   }
   if (Number(proposal.timelineSequence) < previous.lastTurnSequence) throw new StoryWorkspaceStoreError(409, 'STORY_SCENE_TURN_SEQUENCE_CONFLICT', 'The scene turn is older than the current active Scene state.', { lastTurnSequence: previous.lastTurnSequence, suppliedSequence: proposal.timelineSequence });
-  const receipt = receiptFromProposal(proposal, requestHash);
+  const latestConversationRewind = proposal.schemaVersion === SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION && stores.rewinds
+    ? await stores.rewinds.findOne(
+      { userId: input.userId, campaignId: input.campaignId },
+      { sort: { committedAt: -1, _id: -1 } },
+    )
+    : null;
+  const receipt = receiptFromProposal(proposal, requestHash, latestConversationRewind?.rewindId ?? 'root');
   const next = materializeNextState(previous, proposal, receipt, input.campaignId, kit);
   let written: WithId<ActiveSceneStateDocument> | ActiveSceneStateDocument | null = null;
   try {
@@ -829,11 +1121,21 @@ export async function commitSceneTurn(
   if (!written) {
     const raced = await stores.states.findOne({ userId: input.userId, campaignId: input.campaignId, sceneKitId: String(kit.sceneKitId) });
     if (raced?.latestOperationId === proposal.operationId && raced.latestRequestHash === requestHash && raced.latestReceipt) {
-      await insertReceiptIfMissing(raced.latestReceipt, { userId: input.userId, campaignId: input.campaignId, sceneKitId: String(kit.sceneKitId) }, stores.receipts);
+      await insertReceiptIfMissing(raced.latestReceipt, {
+        userId: input.userId,
+        campaignId: input.campaignId,
+        sceneKitId: String(kit.sceneKitId),
+        committedAt: raced.updatedAt,
+      }, stores.receipts);
       return receiptResponse(raced.latestReceipt, raced, kit, true);
     }
     throw new StoryWorkspaceStoreError(409, 'STORY_ACTIVE_SCENE_STATE_REVISION_CONFLICT', 'The active Scene changed before this turn was saved.', { expectedRevision: expectedStateRevision, actualRevision: raced?.revision ?? 0 });
   }
-  await insertReceiptIfMissing(receipt, { userId: input.userId, campaignId: input.campaignId, sceneKitId: String(kit.sceneKitId) }, stores.receipts);
+  await insertReceiptIfMissing(receipt, {
+    userId: input.userId,
+    campaignId: input.campaignId,
+    sceneKitId: String(kit.sceneKitId),
+    committedAt: written.updatedAt,
+  }, stores.receipts);
   return receiptResponse(receipt, next, kit, false);
 }
