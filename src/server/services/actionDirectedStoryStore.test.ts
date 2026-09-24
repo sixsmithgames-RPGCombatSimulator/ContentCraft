@@ -1469,6 +1469,9 @@ describe('D2 action-directed Story authority', () => {
         schemaVersion: 'gma.playable-scene-context/4',
         sceneKitRef: { sceneKitId: 'scene-kit:certified-shop' },
         playableLocus: { label: 'Inside the passing cobbler shop' },
+        observationAccess: [],
+        observables: [],
+        obstructions: [],
       },
       activeSceneContext: {
         sceneKitRef: { sceneKitId: 'scene-kit:certified-shop' },

@@ -903,8 +903,13 @@ export function buildPlayableSceneContextForKit(workspace: JsonObject, kit: Json
     ?? beats[0];
   const availableBeats = beats.filter((beat) => beat.beatId !== activeBeat.beatId && beat.state === 'available').slice(0, 4);
   const participants = kit.participants as JsonObject;
-  const typedObservationAuthority = [SCENE_KIT_CONTRACT_VERSION, SCENE_KIT_V4_CONTRACT_VERSION].includes(String(kit.schemaVersion));
-  const boundedObservationAuthority = [SCENE_KIT_V4_CONTRACT_VERSION, 'gmc.scene-kit/5'].includes(String(kit.schemaVersion));
+  const typedObservationAuthority = [
+    SCENE_KIT_CONTRACT_VERSION,
+    SCENE_KIT_V4_CONTRACT_VERSION,
+    SCENE_REALITY_CONTRACTS.sceneKit,
+  ].includes(String(kit.schemaVersion));
+  const boundedObservationAuthority = [SCENE_KIT_V4_CONTRACT_VERSION, SCENE_REALITY_CONTRACTS.sceneKit]
+    .includes(String(kit.schemaVersion));
   const context: JsonObject = {
     schemaVersion: boundedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_V4_CONTRACT_VERSION
       : typedObservationAuthority ? PLAYABLE_SCENE_CONTEXT_CONTRACT_VERSION : PLAYABLE_SCENE_CONTEXT_V2_CONTRACT_VERSION,
