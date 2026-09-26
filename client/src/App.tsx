@@ -22,6 +22,7 @@ import { ProjectSubNav } from './components/layout/ProjectSubNav';
 import { AiAssistantProvider } from './contexts/AiAssistantContext';
 import AiAssistantPanel from './components/ai-assistant/AiAssistantPanel';
 import RequireAuth from './components/auth/RequireAuth';
+import OwnerOnlyProductGate from './components/auth/OwnerOnlyProductGate';
 import { getProductConfig } from './config/products';
 
 const PROJECT_SUBNAV_PATTERN = /^\/projects\/[^/]+(\/|$)/;
@@ -56,16 +57,18 @@ function App() {
         <Route path="/sign-up" element={<SignUp />} />
 
         {/* Protected routes with full app layout */}
-        <Route element={<RequireAuth />}>
-          <Route element={<AuthenticatedLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/generator" element={<ManualGenerator />} />
-            <Route path="/projects/new" element={<CreateProject />} />
-            <Route path="/projects/:id" element={<ProjectDetail />} />
-            <Route path="/projects/:id/world" element={<WorldBible />} />
-            <Route path="/projects/:id/notes" element={<SessionNotes />} />
-            <Route path="/projects/:id/timeline" element={<ProjectTimeline />} />
-            <Route path="/projects/:id/canon" element={<CanonManagement />} />
+        <Route element={<OwnerOnlyProductGate />}>
+          <Route element={<RequireAuth />}>
+            <Route element={<AuthenticatedLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/generator" element={<ManualGenerator />} />
+              <Route path="/projects/new" element={<CreateProject />} />
+              <Route path="/projects/:id" element={<ProjectDetail />} />
+              <Route path="/projects/:id/world" element={<WorldBible />} />
+              <Route path="/projects/:id/notes" element={<SessionNotes />} />
+              <Route path="/projects/:id/timeline" element={<ProjectTimeline />} />
+              <Route path="/projects/:id/canon" element={<CanonManagement />} />
+            </Route>
           </Route>
         </Route>
       </Routes>
