@@ -42,6 +42,16 @@ persist a second world model.
 
 ## Goals and non-goals
 
+The October 2026 Manual response correction clarifies this accepted design;
+it does not change the owner contract. Versioned builder policies require the
+full provider wrapper and exact checkpoint and record fields on the first
+pass. GMA reuses the existing provider-free Manual validation endpoint before
+advancing a builder reply to continuation or examination. Validation remains
+proposal-only and adds no generation, commit, or model-operation budget.
+Malformed records are rejected rather than completed from guesses. Existing
+in-flight proposals remain compatible with their original stored examiner
+fingerprints; newly prepared examinations bind the clarified builder policy.
+
 Goals:
 
 - make GMC's ready state mean human-GM-playable at the selected depth;

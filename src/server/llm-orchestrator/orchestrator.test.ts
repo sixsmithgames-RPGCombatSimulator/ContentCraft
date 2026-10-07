@@ -123,13 +123,13 @@ describe('provider-neutral LLM orchestrator', () => {
 
     expect(depth.prompt.version).toBe('gma.scene-reality-depth-policy/1');
     expect(depth.prompt.systemInstruction).toMatch(/Never select a depth shallower than deterministicMinimumDepth/i);
-    expect(checkpoint.prompt.version).toBe('gma.scene-reality-builder-checkpoint-policy/1');
+    expect(checkpoint.prompt.version).toBe('gma.scene-reality-builder-checkpoint-policy/2');
     expect(checkpoint.prompt.systemInstruction).toMatch(/zones and actor_frames domains only/i);
     expect(checkpoint.prompt.systemInstruction).toMatch(/recordLimits as hard maxima/i);
     expect(checkpoint.prompt.systemInstruction).toMatch(/unchanged retained record keeps its prior revision.*changed retained record advances exactly once.*new record begins at revision one/i);
     expect((checkpoint.outputSchema.schema as any).properties.status).toEqual({ const: 'continuation_required' });
     expect(checkpoint.provider).toMatchObject({ thinkingLevel: 'medium', maxOutputTokens: 16_000 });
-    expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/1');
+    expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/2');
     expect(builder.prompt.systemInstruction).toMatch(/Prepare a playable situation rather than an answer to the current sentence/i);
     expect(builder.prompt.systemInstruction).toMatch(/one meaningful layer beyond every presented threshold/i);
     expect(builder.prompt.systemInstruction).toMatch(/ordinary, irrelevant, or bounded-negative reality/i);
