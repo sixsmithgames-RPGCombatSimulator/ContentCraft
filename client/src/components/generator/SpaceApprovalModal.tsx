@@ -346,7 +346,7 @@ export default function SpaceApprovalModal({
       const validation = validateIncomingLocationSpace(parsed, {
         requireFeaturePositionAnchor: true,
       });
-      if (!validation.ok) {
+      if (validation.ok === false) {
         setJsonError(validation.error);
         return;
       }

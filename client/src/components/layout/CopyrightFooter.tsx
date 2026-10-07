@@ -5,6 +5,8 @@
  * This software and associated documentation files are proprietary and confidential.
  */
 
+import { getProductConfig } from '../../config/products';
+
 export default function CopyrightFooter() {
   const currentYear = new Date().getFullYear();
 
@@ -15,7 +17,7 @@ export default function CopyrightFooter() {
           <span>© {currentYear} Sixsmith Games. All rights reserved.</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-gray-500">ContentCraft v1.0.0</span>
+          <span className="text-gray-500">{getProductConfig().name}</span>
           <span className="text-gray-400">|</span>
           <span className="text-gray-500">Proprietary & Confidential</span>
         </div>

@@ -86,8 +86,8 @@ api.interceptors.response.use(
 );
 
 export const projectApi = {
-  getAll: async ({ token }: AuthOptions = {}): Promise<PaginatedResponse<Project>> => {
-    const response = await api.get(`/projects?page=1&limit=20`, {
+  getAll: async ({ token, page = 1, limit = 20 }: AuthOptions & { page?: number; limit?: number } = {}): Promise<PaginatedResponse<Project>> => {
+    const response = await api.get(`/projects?page=${page}&limit=${limit}`, {
       headers: authHeaders(token),
     });
     return response.data;

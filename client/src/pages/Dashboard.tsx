@@ -1,242 +1,145 @@
-/**
- * © 2025 Sixsmith Games. All rights reserved.
- * This software and associated documentation files are proprietary and confidential.
- */
-
-import React, { useState, useEffect } from 'react';
+/** © 2025 Sixsmith Games. All rights reserved. */
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { PlusIcon, Search, Filter, BookOpen, ArrowUpRight, Layers, ClipboardCopy } from 'lucide-react';
+import { PlusIcon, Search } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
 import { Project, ProjectType } from '../types';
 import { projectApi, setApiAuthToken } from '../services/api';
 import { getProductConfig } from '../config/products';
 import { useAppAuth } from '../utils/useLocalAuth';
 import { isLocalMode } from '../utils/localMode';
+import { recentProjects, workspaceFailure, type WorkspaceFailure } from '../utils/workspacePresentation';
+
+const TYPE_LABELS: Record<string, string> = {
+  fiction: 'Fiction', nonfiction: 'Non-fiction', 'dnd-adventure': 'Adventure',
+  'dnd-homebrew': 'Homebrew world', 'story-arc': 'Story arc', scene: 'Scene',
+  outline: 'Outline', chapter: 'Chapter', memoir: 'Memoir', 'journal-entry': 'Journal', 'other-writing': 'Other writing',
+};
 
 export const Dashboard: React.FC = () => {
   const localMode = isLocalMode();
   const { isLoaded, isSignedIn, getToken } = useAppAuth();
+  const product = getProductConfig();
+  const gaming = product.key === 'gamemastercraft';
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<WorkspaceFailure | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<ProjectType | 'all'>('all');
-  const product = getProductConfig();
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const readSequence = useRef(0);
+  const pendingDelete = useRef<string | null>(null);
+  const unconfirmedDeletes = useRef(new Set<string>());
+
+  const loadProjects = useCallback(async () => {
+    const sequence = ++readSequence.current;
+    setLoading(true);
+    let cause: 'sign-in' | 'unavailable' = 'unavailable';
+    try {
+      const token = localMode ? null : await getToken();
+      if (!localMode && !token) { cause = 'sign-in'; throw new Error('Sign-in unavailable'); }
+      setApiAuthToken(token);
+      const response = await projectApi.getAll({ token, page });
+      if (!response.success || !response.data) throw new Error(response.error || 'Workspace read failed');
+      if (sequence !== readSequence.current) return;
+      const currentTotalPages = Math.max(1, response.pagination?.totalPages || 1);
+      if (page > currentTotalPages) { setPage(currentTotalPages); return; }
+      setProjects(recentProjects(response.data));
+      setTotalPages(currentTotalPages);
+      setTotal(response.pagination?.total ?? response.data.length);
+      setFailure(null);
+      unconfirmedDeletes.current.clear();
+    } catch (error) {
+      console.error('Workspace list check failed:', error);
+      if (sequence === readSequence.current) {
+        setFailure(previous => workspaceFailure(previous, 'load', cause, product.name, product.workspaceNounPlural));
+      }
+    } finally {
+      if (sequence === readSequence.current) setLoading(false);
+    }
+  }, [getToken, localMode, page, product.name, product.workspaceNounPlural]);
 
   useEffect(() => {
     if (!isLoaded) return;
-
-    if (!localMode && !isSignedIn) {
-      setProjects([]);
-      setLoading(false);
-      return;
-    }
-
-    loadProjects();
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const loadProjects = async () => {
-    try {
-      setLoading(true);
-      const token = localMode ? null : await getToken();
-      setApiAuthToken(token);
-
-      if (!localMode && !token) {
-        throw new Error("Clerk loaded, user signed in, but no token was returned.");
-      }
-
-      const response = await projectApi.getAll({ token });
-      if (response.success && response.data) {
-        setProjects(response.data);
-      } else {
-        setError(response.error || 'Failed to load projects');
-      }
-    } catch (err) {
-      setError('Failed to load projects');
-      console.error('Error loading projects:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (!localMode && !isSignedIn) { setProjects([]); setLoading(false); return; }
+    void loadProjects();
+    return () => { readSequence.current += 1; };
+  }, [isLoaded, isSignedIn, localMode, loadProjects]);
 
   const handleDeleteProject = async (id: string) => {
+    if (pendingDelete.current || unconfirmedDeletes.current.has(id) || failure) return;
+    const sequence = readSequence.current;
+    pendingDelete.current = id;
+    setDeletingId(id);
+    let cause: 'sign-in' | 'unavailable' = 'unavailable';
     try {
       const token = localMode ? null : await getToken();
+      if (!localMode && !token) { cause = 'sign-in'; throw new Error('Sign-in unavailable'); }
+      if (sequence !== readSequence.current) return;
       setApiAuthToken(token);
       const response = await projectApi.delete(id, { token });
-      if (response.success) {
-        setProjects(projects.filter(p => p.id !== id));
-      } else {
-        alert(response.error || 'Failed to delete project');
-      }
-    } catch (err) {
-      alert('Failed to delete project');
-      console.error('Error deleting project:', err);
+      if (!response.success) throw new Error(response.error || 'Workspace deletion not confirmed');
+      if (sequence !== readSequence.current) return;
+      setProjects(previous => previous.filter(project => project.id !== id));
+      // Re-read pagination as well, especially when the last card on a page was removed.
+      void loadProjects();
+      setFailure(null);
+    } catch (error) {
+      console.error('Workspace deletion check failed:', error);
+      if (sequence !== readSequence.current) return;
+      unconfirmedDeletes.current.add(id);
+      setFailure(previous => workspaceFailure(previous, 'delete', cause, product.name, product.workspaceNounPlural));
+    } finally {
+      pendingDelete.current = null;
+      setDeletingId(null);
     }
   };
 
   const filteredProjects = projects.filter(project => {
-    const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || project.type === filterType;
-    return matchesSearch && matchesType;
+    const query = searchTerm.trim().toLowerCase();
+    return (project.title.toLowerCase().includes(query) || (project.description || '').toLowerCase().includes(query))
+      && (filterType === 'all' || project.type === filterType);
   });
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-red-600 mb-4">{error}</p>
-        <button
-          onClick={loadProjects}
-          className="btn-primary"
-        >
-          Try Again
-        </button>
-      </div>
-    );
-  }
+  // Keep legacy types discoverable without advertising unrelated writing types to GMs.
+  const types = [...new Set([...product.projectTypes, ...projects.map(project => project.type)])];
+  const clearFilters = () => { setSearchTerm(''); setFilterType('all'); };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Your {product.workspaceNounPlural}</h1>
-        <p className="text-gray-600 mt-2">Manage and organize your content creation {product.workspaceNounPlural.toLowerCase()}</p>
-      </div>
-
-      {projects.length > 0 && (
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder={`Search ${product.workspaceNounPlural.toLowerCase()}...`}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="input pl-10"
-              />
-            </div>
-
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value as ProjectType | 'all')}
-                className="input pl-10 min-w-40"
-              >
-                <option value="all">All Types</option>
-                <option value={ProjectType.FICTION}>Fiction</option>
-                <option value={ProjectType.NON_FICTION}>Non-Fiction</option>
-                <option value={ProjectType.DND_ADVENTURE}>D&D Adventure</option>
-                <option value={ProjectType.DND_HOMEBREW}>D&D Homebrew</option>
-                <option value={ProjectType.STORY_ARC}>Story Arc</option>
-                <option value={ProjectType.SCENE}>Scene</option>
-                <option value={ProjectType.OUTLINE}>Outline</option>
-                <option value={ProjectType.CHAPTER}>Chapter</option>
-                <option value={ProjectType.MEMOIR}>Memoir</option>
-                <option value={ProjectType.JOURNAL}>Journal Entry</option>
-                <option value={ProjectType.OTHER_WRITING}>Other Writing</option>
-              </select>
-            </div>
-          </div>
-
-          <Link
-            to="/projects/new"
-            className="group relative min-h-[132px] overflow-hidden rounded-2xl border border-dashed border-primary-200 bg-gradient-to-br from-primary-50 via-white to-slate-50 p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-primary-300 hover:shadow-lg dark:border-primary-500/20 dark:from-slate-900 dark:via-slate-900 dark:to-primary-950/30"
-          >
-            <div className="absolute right-5 top-1 text-[6rem] font-extralight leading-none text-primary-100 transition-colors group-hover:text-primary-200 dark:text-primary-400/10 dark:group-hover:text-primary-300/20">
-              +
-            </div>
-            <div className="relative flex h-full flex-col justify-between">
-              <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/80 bg-white/80 text-primary-600 shadow-sm dark:border-slate-700 dark:bg-slate-800/80 dark:text-blue-300">
-                <PlusIcon className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">New {product.workspaceNoun}</h3>
-                <p className="mt-1 max-w-[16rem] text-sm leading-relaxed text-gray-600 dark:text-slate-400">
-                  Start something new without leaving your {product.workspaceNoun.toLowerCase()} overview.
-                </p>
-              </div>
-            </div>
-          </Link>
-        </div>
-      )}
-
-      {filteredProjects.length === 0 ? (
-        <div className="py-12">
-          {projects.length === 0 ? (
-            <div className="max-w-2xl mx-auto">
-              <div className="text-center mb-10">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary-50 mb-5">
-                  <BookOpen className="w-8 h-8 text-primary-600" />
-                </div>
-                <h3 className="text-2xl font-semibold text-gray-900 mb-3">Welcome to {product.name}</h3>
-                <p className="text-gray-500 text-base leading-relaxed">
-                  {product.emptyStateBody}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Link
-                  to="/projects/new"
-                  className="group relative overflow-hidden rounded-xl border border-dashed border-primary-200 bg-gradient-to-br from-primary-50 via-white to-primary-50/60 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md dark:border-primary-500/20 dark:from-slate-900 dark:via-slate-900 dark:to-primary-950/40"
-                >
-                  <div className="absolute right-4 top-2 text-7xl font-light leading-none text-primary-200/70 transition-colors group-hover:text-primary-300 dark:text-primary-400/20 dark:group-hover:text-primary-300/30">
-                    +
-                  </div>
-                  <div className="relative">
-                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80 text-primary-600 shadow-sm dark:bg-slate-800/80 dark:text-blue-300">
-                      <PlusIcon className="w-5 h-5" />
-                    </div>
-                    <h4 className="mt-6 font-semibold text-gray-900 dark:text-slate-100">New {product.workspaceNoun}</h4>
-                    <p className="mt-1 text-sm leading-relaxed text-gray-600 dark:text-slate-400">
-                      Start a fresh workspace for your next story, campaign, or research build.
-                    </p>
-                  </div>
-                </Link>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-                  <Layers className="w-5 h-5 text-primary-500 mb-3" />
-                  <h4 className="font-medium text-gray-900 mb-1 text-sm">Organize Content</h4>
-                  <p className="text-gray-500 text-xs leading-relaxed">Structure your project with content blocks — scenes, chapters, NPCs, locations, and more.</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-                  <ClipboardCopy className="w-5 h-5 text-primary-500 mb-3" />
-                  <h4 className="font-medium text-gray-900 mb-1 text-sm">Copy to AI</h4>
-                  <p className="text-gray-500 text-xs leading-relaxed">Generate prompts from your content and paste them directly into your preferred AI assistant.</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-                  <ArrowUpRight className="w-5 h-5 text-primary-500 mb-3" />
-                  <h4 className="font-medium text-gray-900 mb-1 text-sm">Iterate Fast</h4>
-                  <p className="text-gray-500 text-xs leading-relaxed">Refine AI responses, fact-check content, and build your world across multiple sessions.</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No {product.workspaceNounPlural.toLowerCase()} match your filters</h3>
-              <p className="text-gray-600">Try adjusting your search or filter criteria</p>
-            </div>
-          )}
-        </div>
-      ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProjects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onDelete={handleDeleteProject}
-              />
-            ))}
-          </div>
-      )}
+    <div className="space-y-6 workspace-dashboard" aria-busy={loading}>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div><h1 className="text-3xl font-bold">Your {product.workspaceNounPlural}</h1>
+          <p className="text-gray-600 mt-2">{gaming ? 'Prepare less. Keep your world consistent. Get back to the table.' : product.emptyStateBody}</p></div>
+        {projects.length > 0 && <Link to="/projects/new" className="btn-secondary inline-flex items-center gap-2"><PlusIcon size={18} aria-hidden="true" />New {product.workspaceNoun.toLowerCase()}</Link>}
+      </header>
+      {failure && <section role="alert" className="card border-red-300 space-y-3">
+        <h2 className="text-lg font-semibold">Saved work needs a check</h2>
+        <p>{failure.message}</p>
+        <p className="text-sm text-gray-500">Support code: <code>{failure.supportCode}</code></p>
+        {!failure.escalated && <button type="button" className="btn-secondary" disabled={loading} onClick={() => void loadProjects()}>Check saved work</button>}
+        {failure.escalated && <a className="btn-secondary inline-flex" href="mailto:info@sixsmithgames.com">Email support</a>}
+      </section>}
+      {loading && <p role="status">Checking your saved {product.workspaceNounPlural.toLowerCase()}…</p>}
+      {!loading && !failure && projects.length === 0 && total === 0 && <section className="card max-w-2xl space-y-4">
+        <h2 className="text-2xl font-semibold">{product.emptyStateHeadline}</h2>
+        <p>{gaming ? 'No campaigns are saved here yet. Create a campaign, add a person or place, then prepare your next session. Nothing is required before you are ready.' : product.emptyStateBody}</p>
+        <Link to="/projects/new" className="btn-primary inline-flex">Create {gaming ? 'a campaign' : 'a workspace'}</Link>
+      </section>}
+      {projects.length > 0 && <>
+        <section className="flex flex-col sm:flex-row gap-4" aria-label={'Find a ' + product.workspaceNoun.toLowerCase()}>
+          <label className="flex-1"><span className="block text-sm mb-2">Search {product.workspaceNounPlural.toLowerCase()}{totalPages > 1 ? ' on this page' : ''}</span><div className="relative"><Search size={18} aria-hidden="true" className="absolute left-3 top-3 text-gray-500" /><input type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="input pl-10" placeholder="Name or description" /></div></label>
+          <label><span className="block text-sm mb-2">Type</span><select className="input" value={filterType} onChange={event => setFilterType(event.target.value as ProjectType | 'all')}><option value="all">All types</option>{types.map(type => <option value={type} key={type}>{TYPE_LABELS[type] || type}</option>)}</select></label>
+        </section>
+        <div className="flex justify-between gap-3 text-sm text-gray-600"><p>{filteredProjects.length} {product.workspaceNounPlural.toLowerCase()} · most recently updated first{failure ? ' · last loaded list, not checked' : ''}</p>{(searchTerm || filterType !== 'all') && <button type="button" onClick={clearFilters} className="text-primary-600">Clear filters</button>}</div>
+        {filteredProjects.length === 0 ? <section className="card space-y-3"><h2 className="text-lg font-semibold">No matches in this list</h2><p>No saved work was changed. Clear the search and type filter to see all loaded {product.workspaceNounPlural.toLowerCase()}.</p><button type="button" className="btn-secondary" onClick={clearFilters}>Clear filters</button></section> : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">{filteredProjects.map(project => <ProjectCard key={project.id} project={project} onDelete={handleDeleteProject} deleteDisabled={loading || Boolean(failure) || Boolean(deletingId)} />)}</div>}
+      </>}
+      {totalPages > 1 && <nav className="flex flex-wrap items-center justify-between gap-3" aria-label="Campaign list pages">
+        <button type="button" className="btn-secondary" disabled={loading || Boolean(failure) || page <= 1} onClick={() => { clearFilters(); setPage(value => value - 1); }}>Previous page</button>
+        <span className="text-sm text-gray-600">Page {page} of {totalPages} · {total} saved {product.workspaceNounPlural.toLowerCase()}</span>
+        <button type="button" className="btn-secondary" disabled={loading || Boolean(failure) || page >= totalPages} onClick={() => { clearFilters(); setPage(value => value + 1); }}>Next page</button>
+      </nav>}
     </div>
   );
 };

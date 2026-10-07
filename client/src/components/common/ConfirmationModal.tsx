@@ -10,6 +10,7 @@
  */
 
 import { AlertTriangle, X } from 'lucide-react';
+import { useEffect, useId, useRef } from 'react';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -32,6 +33,18 @@ export default function ConfirmationModal({
   onConfirm,
   onCancel,
 }: ConfirmationModalProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const messageId = useId();
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog || !isOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    dialog.showModal();
+    cancelRef.current?.focus();
+    return () => { dialog.close(); previousFocus?.focus(); };
+  }, [isOpen]);
   if (!isOpen) return null;
 
   const colorClasses = {
@@ -61,11 +74,11 @@ export default function ConfirmationModal({
   const colors = colorClasses[variant];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full overflow-hidden">
+    <dialog ref={dialogRef} aria-labelledby={titleId} aria-describedby={messageId} onCancel={event => { event.preventDefault(); onCancel(); }} className="workspace-confirmation bg-white rounded-lg shadow-xl max-w-md w-full p-0">
+      <div>
         {/* Header */}
         <div className={`${colors.header} text-white p-4 flex items-center justify-between`}>
-          <h2 className="text-lg font-bold">{title}</h2>
+          <h2 id={titleId} className="text-lg font-bold">{title}</h2>
           <button
             onClick={onCancel}
             className="text-white hover:text-gray-200 transition-colors"
@@ -79,13 +92,14 @@ export default function ConfirmationModal({
         <div className="p-6">
           <div className={`flex items-start gap-3 p-3 ${colors.bg} border ${colors.border} rounded-md`}>
             <AlertTriangle className={`w-5 h-5 ${colors.icon} flex-shrink-0 mt-0.5`} />
-            <p className="text-sm text-gray-700">{message}</p>
+            <p id={messageId} className="text-sm text-gray-700">{message}</p>
           </div>
         </div>
 
         {/* Actions */}
         <div className="border-t border-gray-200 p-4 bg-gray-50 flex gap-3 justify-end">
           <button
+            ref={cancelRef}
             onClick={onCancel}
             className="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 transition-colors"
           >
@@ -100,6 +114,6 @@ export default function ConfirmationModal({
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

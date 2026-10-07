@@ -13,6 +13,7 @@ import { API_BASE_URL, apiFetch, setApiAuthToken } from '../services/api';
 import { getProductConfig } from '../config/products';
 import CanonEntityEditor, { type CanonBase } from '../components/canon/CanonEntityEditor';
 import LibraryBrowserModal from '../components/canon/LibraryBrowserModal';
+import WorldEntryReader from '../components/canon/WorldEntryReader';
 import { useAppAuth } from '../utils/useLocalAuth';
 import { isLocalMode } from '../utils/localMode';
 
@@ -79,6 +80,7 @@ export const WorldBible: React.FC = () => {
   const [activeTab, setActiveTab] = useState<EntityType | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [editingEntity, setEditingEntity] = useState<CanonEntity | null>(null);
+  const [readingEntity, setReadingEntity] = useState<CanonEntity | null>(null);
   const [showLibraryBrowser, setShowLibraryBrowser] = useState(false);
   const [libraryBrowserTypeFilter, setLibraryBrowserTypeFilter] = useState<string>('');
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
@@ -170,6 +172,7 @@ export const WorldBible: React.FC = () => {
   }, [projectId, loadAuthToken]);
 
   useEffect(() => {
+    setReadingEntity(null);
     void loadEntities();
   }, [loadEntities]);
 
@@ -255,7 +258,7 @@ export const WorldBible: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
-            World Bible
+            {product.key === 'gamemastercraft' ? 'Campaign world' : 'World Bible'}
           </h1>
           <p className="text-gray-500 dark:text-slate-400 text-sm mt-0.5">
             All characters, locations, factions, lore, and timeline entries for this {product.workspaceNoun.toLowerCase()}.
@@ -286,6 +289,7 @@ export const WorldBible: React.FC = () => {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
         <input
           type="text"
+          aria-label="Search world names, facts, or tags"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search names, facts, or tags…"
@@ -300,6 +304,7 @@ export const WorldBible: React.FC = () => {
           return (
             <button
               key={tab.key}
+              aria-pressed={activeTab === tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-2 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
                 activeTab === tab.key
@@ -340,7 +345,7 @@ export const WorldBible: React.FC = () => {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
         </div>
       ) : filteredEntities.length === 0 ? (
-        <EmptyTabState
+        searchQuery ? <section className="card space-y-3"><h2 className="text-lg font-semibold">No matches in this view</h2><p>No world entries were changed. Clear the search to see this category again, or choose All to search every category.</p><button type="button" className="btn-secondary" onClick={() => setSearchQuery('')}>Clear search</button></section> : <EmptyTabState
           tab={currentTab}
           projectId={projectId}
           onAddFromLibrary={() => openLibraryBrowserForTab(currentTab)}
@@ -352,6 +357,7 @@ export const WorldBible: React.FC = () => {
               key={entity._id}
               entity={entity}
               isUnlinking={unlinkingId === entity._id}
+              onRead={() => setReadingEntity(entity)}
               onEdit={() => setEditingEntity(entity)}
               onUnlink={() => void handleUnlink(entity)}
             />
@@ -360,6 +366,7 @@ export const WorldBible: React.FC = () => {
       )}
 
       {/* Entity editor */}
+      {readingEntity && <WorldEntryReader entity={readingEntity} onClose={() => setReadingEntity(null)} />}
       {editingEntity && (
         <CanonEntityEditor
           isOpen
@@ -376,7 +383,7 @@ export const WorldBible: React.FC = () => {
           projectId={projectId}
           initialTypeFilter={libraryBrowserTypeFilter}
           onClose={() => setShowLibraryBrowser(false)}
-          onEntitiesLinked={(_ids) => {
+          onEntitiesLinked={() => {
             setShowLibraryBrowser(false);
             void loadEntities();
           }}
@@ -393,11 +400,12 @@ export const WorldBible: React.FC = () => {
 interface EntityCardProps {
   entity: CanonEntity;
   isUnlinking: boolean;
+  onRead: () => void;
   onEdit: () => void;
   onUnlink: () => void;
 }
 
-const EntityCard: React.FC<EntityCardProps> = ({ entity, isUnlinking, onEdit, onUnlink }) => {
+const EntityCard: React.FC<EntityCardProps> = ({ entity, isUnlinking, onRead, onEdit, onUnlink }) => {
   const summary = claimSummary(entity);
 
   return (
@@ -409,7 +417,7 @@ const EntityCard: React.FC<EntityCardProps> = ({ entity, isUnlinking, onEdit, on
             {entity.type}
           </span>
           <h3 className="font-semibold text-gray-900 dark:text-slate-100 text-sm leading-snug truncate">
-            {entity.canonical_name}
+            <button type="button" onClick={onRead} className="text-left hover:underline">{entity.canonical_name}</button>
           </h3>
           {entity.aliases && entity.aliases.length > 0 && (
             <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 truncate">
@@ -418,11 +426,12 @@ const EntityCard: React.FC<EntityCardProps> = ({ entity, isUnlinking, onEdit, on
           )}
         </div>
         {/* Actions */}
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <details className="workspace-card-menu shrink-0"><summary className="btn-secondary">More<span className="sr-only"> actions for {entity.canonical_name}</span></summary><div className="flex gap-1">
           <button
             onClick={onEdit}
             className="p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:text-primary-400 dark:hover:bg-primary-900/20 transition-colors"
             title="Edit entity"
+            aria-label={`Edit ${entity.canonical_name}`}
           >
             <Edit2 className="w-3.5 h-3.5" />
           </button>
@@ -431,10 +440,11 @@ const EntityCard: React.FC<EntityCardProps> = ({ entity, isUnlinking, onEdit, on
             disabled={isUnlinking}
             className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
             title="Remove from project"
+            aria-label={`Remove ${entity.canonical_name} from this campaign`}
           >
             <Unlink className="w-3.5 h-3.5" />
           </button>
-        </div>
+        </div></details>
       </div>
 
       {/* Claim summary */}
@@ -445,6 +455,7 @@ const EntityCard: React.FC<EntityCardProps> = ({ entity, isUnlinking, onEdit, on
       )}
 
       {/* Footer */}
+      <button type="button" className="btn-secondary self-start" onClick={onRead}>Read entry</button>
       <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100 dark:border-slate-800">
         {/* Tags */}
         <div className="flex flex-wrap gap-1 flex-1 min-w-0">

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, FileText, BookOpen, Wand2, Eye, Search, Filter, Copy, GripVertical, ArrowUpDown, Check, X, AlertCircle, RotateCw } from 'lucide-react';
 import { Project, ContentBlock, ProjectType, ContentType } from '../types';
 import { projectApi, contentApi, API_BASE_URL, apiFetch, setApiAuthToken } from '../services/api';
@@ -21,6 +21,7 @@ import type {
 import { getWritingCanonBadge, getWritingCanonBlockSummary, getWritingCanonProjectSummary } from '../services/writingCanonPresentation';
 import { useAppAuth } from '../utils/useLocalAuth';
 import { isLocalMode } from '../utils/localMode';
+import { getProductConfig } from '../config/products';
 
 const PROJECT_TYPE_LABELS: Record<string, string> = {
   [ProjectType.FICTION]: 'Fiction',
@@ -944,6 +945,16 @@ export const ProjectDetail: React.FC = () => {
       </div>
 
       {/* Project Action Buttons */}
+      {getProductConfig().key === 'gamemastercraft' && <section className="card space-y-4" aria-label="Campaign overview">
+        <div><h2 className="text-xl font-semibold">What would you like to do next?</h2><p className="text-gray-600 mt-2">Your campaign reference and saved content live here. Open a world entry, prepare a draft, or record what happened at the table.</p></div>
+        <nav className="flex flex-wrap gap-3" aria-label="Campaign next steps">
+          <Link className="btn-primary inline-flex" to={`/projects/${id}/world`}>Open campaign world</Link>
+          <Link className="btn-secondary inline-flex" to={`/generator?projectId=${id}`}>Prepare a draft</Link>
+          <Link className="btn-secondary inline-flex" to={`/projects/${id}/notes`}>Session notes</Link>
+          <Link className="btn-secondary inline-flex" to={`/projects/${id}/timeline`}>Campaign history</Link>
+        </nav>
+        <p className="text-sm text-gray-500">{contentBlocks.length} saved content block{contentBlocks.length === 1 ? '' : 's'} · Updated {new Date(project.updatedAt).toLocaleDateString()}. This is campaign preparation, not a live scene or play status.</p>
+      </section>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button
           onClick={() => navigate(`/projects/${id}/canon`)}

@@ -9,10 +9,12 @@ import { Calendar, Trash2 } from 'lucide-react';
 import { Project, ProjectType, ProjectStatus } from '../types';
 import { clsx } from 'clsx';
 import ConfirmationModal from './common/ConfirmationModal';
+import { getProductConfig } from '../config/products';
 
 interface ProjectCardProps {
   project: Project;
   onDelete?: (id: string) => void;
+  deleteDisabled?: boolean;
 }
 
 const PROJECT_TYPE_LABELS: Record<string, string> = {
@@ -45,7 +47,8 @@ const STATUS_LABELS = {
   [ProjectStatus.PUBLISHED]: 'Published',
 };
 
-export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete }) => {
+export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete, deleteDisabled = false }) => {
+  const product = getProductConfig();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
@@ -55,6 +58,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete }) =
   };
 
   const handleConfirmDelete = () => {
+    if (deleteDisabled) return;
     setShowDeleteConfirm(false);
     onDelete?.(project.id);
   };
@@ -67,7 +71,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete }) =
     <>
       <ConfirmationModal
         isOpen={showDeleteConfirm}
-        title="Delete Project"
+        title={`Delete ${product.workspaceNoun.toLowerCase()}`}
         message={`Are you sure you want to delete "${project.title}"? This action cannot be undone.`}
         confirmLabel="Delete"
         cancelLabel="Cancel"
@@ -76,12 +80,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete }) =
         onCancel={handleCancelDelete}
       />
 
-      <Link to={`/projects/${project.id}`} className="block group">
-      <div className="card hover:shadow-md transition-shadow duration-200">
+      <article className="card group hover:shadow-md transition-shadow duration-200 flex flex-col gap-4">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
-              {project.title}
+            <h3 className="text-lg font-semibold text-gray-900 group-hover:text-primary-600 transition-colors break-words">
+              <Link to={`/projects/${project.id}`}>{project.title}</Link>
             </h3>
             <p className="text-sm text-gray-600 mt-1">
               {PROJECT_TYPE_LABELS[project.type]}
@@ -101,24 +104,21 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete }) =
               {STATUS_LABELS[project.status]}
             </span>
 
-            {onDelete && (
-              <button
-                onClick={handleDeleteClick}
-                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all"
-                title="Delete project"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 
-        <div className="mt-4 flex items-center text-xs text-gray-500">
+        <div className="mt-auto flex items-center text-sm text-gray-500">
           <Calendar className="w-3 h-3 mr-1" />
           <span>Updated {new Date(project.updatedAt).toLocaleDateString()}</span>
         </div>
-      </div>
-    </Link>
+        <div className="flex items-start justify-between gap-3">
+          <Link to={`/projects/${project.id}`} className="btn-primary inline-flex">Open {product.workspaceNoun.toLowerCase()}</Link>
+          {onDelete && <details className="workspace-card-menu">
+            <summary className="btn-secondary">More<span className="sr-only"> actions for {project.title}</span></summary>
+            <button type="button" disabled={deleteDisabled} onClick={handleDeleteClick} className="flex items-center gap-2 text-red-600 px-3 py-2" aria-label={`Delete ${project.title}`}><Trash2 className="w-4 h-4" aria-hidden="true" />Delete</button>
+          </details>}
+        </div>
+      </article>
     </>
   );
 };

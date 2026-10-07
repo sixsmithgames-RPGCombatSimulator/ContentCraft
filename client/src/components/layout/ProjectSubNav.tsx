@@ -25,12 +25,12 @@ export const ProjectSubNav: React.FC = () => {
 
   const items: NavItem[] = [
     {
-      label: 'Content',
+      label: product.key === 'gamemastercraft' ? 'Overview' : 'Content',
       href: `/projects/${id}`,
       icon: <LayoutGrid className="w-4 h-4" />,
     },
     {
-      label: product.navigationLabels.lore,
+      label: product.key === 'gamemastercraft' ? 'World' : product.navigationLabels.lore,
       href: `/projects/${id}/world`,
       icon: <BookOpen className="w-4 h-4" />,
     },
@@ -45,7 +45,7 @@ export const ProjectSubNav: React.FC = () => {
       icon: <Clock className="w-4 h-4" />,
     },
     {
-      label: 'Canon',
+      label: product.key === 'gamemastercraft' ? 'Saved facts' : 'Canon',
       href: `/projects/${id}/canon`,
       icon: <Library className="w-4 h-4" />,
     },
@@ -61,7 +61,7 @@ export const ProjectSubNav: React.FC = () => {
   return (
     <div className="border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm mb-6">
       <div className="container mx-auto px-4">
-        <div className="flex items-center gap-1 overflow-x-auto">
+        <nav className="flex items-center gap-1 overflow-x-auto" aria-label={`${product.workspaceNoun} navigation`}>
           <Link
             to="/"
             className="flex items-center gap-1.5 px-3 py-3 text-sm text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors shrink-0 mr-2"
@@ -76,6 +76,7 @@ export const ProjectSubNav: React.FC = () => {
             <Link
               key={item.href}
               to={item.href}
+              aria-current={isActive(item.href) ? 'page' : undefined}
               className={clsx(
                 'flex items-center gap-2 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0',
                 isActive(item.href)
@@ -87,7 +88,7 @@ export const ProjectSubNav: React.FC = () => {
               {item.label}
             </Link>
           ))}
-        </div>
+        </nav>
       </div>
     </div>
   );
