@@ -33,6 +33,8 @@ describe('protected compact intake HTTP boundaries', () => {
       expect(await response.json()).toMatchObject({ error: { code: 'SERVICE_AUTH_REQUIRED' } });
     }
     expect(project).not.toHaveBeenCalled(); expect(database).not.toHaveBeenCalled();
+    const context = await fetch(base + '/freeform-tickets/fictional/context?campaignId=fictional-campaign');
+    expect(context.status).toBe(403); expect(database).not.toHaveBeenCalled();
   });
   it('does not turn a missing Manual reply into integrated model execution', async () => {
     const execute = vi.spyOn(orchestrator, 'executeLlmOperation');

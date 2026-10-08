@@ -3,6 +3,8 @@ import type { FreeformTicketCollection, FreeformTicketRecord } from '../llm-orch
 import { freeformJsonDigest, freeformPlanBindingIssues } from '../../shared/llm/freeformPlanBinding.js';
 import { StoryWorkspaceStoreError, type JsonObject } from './storyWorkspaceStore.js';
 import type { CompoundActionInstructionDocument } from './compoundActionArtifactStore.js';
+import { readCurrentSceneContexts } from './actionDirectedStoryStore.js';
+import { assertFreeformCatalogCurrent } from '../llm-orchestrator/freeformSceneCatalog.js';
 
 export function validateFreeformBinding(binding: JsonObject, instruction: JsonObject, program: JsonObject) {
   const issues = freeformPlanBindingIssues(binding, instruction, program, true);
@@ -14,12 +16,13 @@ export function validateFreeformBinding(binding: JsonObject, instruction: JsonOb
 export async function verifyFreeformBindingAcceptance(input: {
   userId: string; campaignId: string; binding: JsonObject; instruction: JsonObject; program: JsonObject;
   staged: CompoundActionInstructionDocument | null;
-}, tickets: FreeformTicketCollection = getDb().collection<FreeformTicketRecord>('llm_freeform_tickets'), now = new Date()) {
+}, tickets: FreeformTicketCollection = getDb().collection<FreeformTicketRecord>('llm_freeform_tickets'), now = new Date(), readSceneContext = readCurrentSceneContexts) {
   const { binding, instruction, program, staged } = input;
   const ticket = await tickets.findOne({ _id: String(binding.ticket), userId: input.userId, campaignId: input.campaignId });
   const proposal = ticket?.response?.output as JsonObject | undefined;
   const requestInput = ticket?.request.context.input?.value as JsonObject | undefined;
-  const expectedSources = ticket?.selectedActorRef ? [{ key: 'selected_actor', kind: 'actor', ref: ticket.selectedActorRef }] : [];
+  const expectedSources = ticket?.catalogContextRef ? ticket.catalogBindings
+    : ticket?.selectedActorRef ? [{ key: 'selected_actor', kind: 'actor', ref: ticket.selectedActorRef }] : [];
   if (!staged?.originCheckpoint || freeformJsonDigest(staged.instruction) !== freeformJsonDigest(instruction)
     || (binding.authorityBase as JsonObject).campaignId !== input.campaignId
     || staged.originCheckpoint.storyWorkspaceRef.revision !== (binding.authorityBase as JsonObject).storyWorkspaceRevision
@@ -39,5 +42,12 @@ export async function verifyFreeformBindingAcceptance(input: {
   }
   if (freeformJsonDigest(binding.compiledStepIds) !== freeformJsonDigest(proposal.steps.map((_, index) => `freeform:step:${index}`))) {
     throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'The compiled step identities do not match the accepted window.', {});
+  }
+  if (ticket.catalogContextRef) {
+    if (!expectedSources || freeformJsonDigest(staged.originCheckpoint?.storyWorkspaceRef) !== freeformJsonDigest(ticket.catalogContextRef.storyWorkspaceRef)
+      || Number((binding.authorityBase as JsonObject).sceneRevision) !== Number(ticket.catalogContextRef.sceneKitRef.revision)) {
+      throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'The plan does not retain the issued Scene identity.', {});
+    }
+    assertFreeformCatalogCurrent(ticket.catalogContextRef, await readSceneContext(input));
   }
 }

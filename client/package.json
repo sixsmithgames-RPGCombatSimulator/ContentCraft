@@ -1,7 +1,7 @@
 {
   "name": "client",
   "private": true,
-  "version": "1.14.3",
+  "version": "1.14.4",
   "author": "Sixsmith Games",
   "license": "UNLICENSED",
   "type": "module",

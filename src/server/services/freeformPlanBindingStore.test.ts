@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { freeformJsonDigest, freeformPlanBindingIssues, freeformTextDigest } from '../../shared/llm/freeformPlanBinding.js';
 import { validateFreeformBinding, verifyFreeformBindingAcceptance } from './freeformPlanBindingStore.js';
 import type { FreeformTicketCollection } from '../llm-orchestrator/freeformTickets.js';
@@ -30,6 +30,21 @@ function fixture() {
     input: { userId: ticket.userId, campaignId: authorityBase.campaignId, binding, instruction, program, staged } };
 }
 describe('closed owner-accepted freeform plan provenance', () => {
+  it('requires the issued catalog map and current owner head, not a caller map or stale Scene', async () => {
+    const f = fixture();
+    f.ticket.catalogBindings = [{ key: 'scene_element_0', kind: 'subject', ref: 'gmc:element:tunnel' }];
+    f.ticket.catalogContextRef = { storyWorkspaceRef: f.input.staged.originCheckpoint.storyWorkspaceRef, sceneKitRef: { sceneKitId: 'scene:fictional', revision: 4 } };
+    f.binding.sourceReferences = structuredClone(f.ticket.catalogBindings);
+    const read = vi.fn(async () => ({ storyWorkspaceRef: { revision: 7 }, playableSceneContext: { sceneKitRef: { sceneKitId: 'scene:fictional', revision: 4 } } })) as unknown as Parameters<typeof verifyFreeformBindingAcceptance>[3];
+    await expect(verifyFreeformBindingAcceptance(f.input, f.records, new Date(), read)).resolves.toBeUndefined();
+    f.binding.sourceReferences[0].ref = 'gmc:element:invented';
+    await expect(verifyFreeformBindingAcceptance(f.input, f.records, new Date(), read)).rejects.toMatchObject({ code: 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH' });
+    f.binding.sourceReferences = structuredClone(f.ticket.catalogBindings);
+    f.ticket.catalogContextRef.sceneKitRef.revision++;
+    await expect(verifyFreeformBindingAcceptance(f.input, f.records, new Date(), read)).rejects.toMatchObject({ code: 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH' });
+    f.binding.authorityBase.sceneRevision++;
+    await expect(verifyFreeformBindingAcceptance(f.input, f.records, new Date(), read)).rejects.toMatchObject({ code: 'FREEFORM_SCENE_CONTEXT_STALE' });
+  });
   it('shares the existing canonical JSON digest without changing exact text hashing', () => {
     expect(freeformJsonDigest({ a: 1, b: 2 })).toBe(freeformJsonDigest({ b: 2, a: 1 }));
     expect(freeformTextDigest(' I wait.\r\n')).not.toBe(freeformTextDigest('I wait.\n'));

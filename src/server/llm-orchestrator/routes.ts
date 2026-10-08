@@ -3,7 +3,7 @@ import { requireServiceIntegration, type IntegrationRequest } from '../middlewar
 import { ProjectModel } from '../models/Project.js';
 import { getDb } from '../config/mongo.js';
 import { collections } from '../services/gmcIntegrationStore.js';
-import { issueFreeformTicket, freeformTicketError, retireFreeformTicket, validateFreeformTicketInput } from './freeformTickets.js';
+import { issueFreeformTicket, freeformTicketError, retireFreeformTicket, validateFreeformTicketInput, readFreeformTicketContext } from './freeformTickets.js';
 import type { LlmRequestEnvelope } from '../../shared/llm/orchestratorContracts.js';
 import { executeLlmOperation, executeShadowComparison } from './orchestrator.js';
 import { MongoExecutionStore } from './executionStore.js';
@@ -28,7 +28,7 @@ export const llmOrchestratorRouter = Router();
 llmOrchestratorRouter.post('/freeform-tickets', requireServiceIntegration, async (req, res, next) => {
   try {
     const body = req.body ?? {};
-    const allowed = ['campaignId', 'interactionId', 'issuanceKey', 'mode', 'transport', 'selectedActorRef', 'previousTicket'];
+    const allowed = ['campaignId', 'interactionId', 'issuanceKey', 'mode', 'transport', 'selectedActorRef', 'previousTicket', 'includeSceneCatalog'];
     if (Object.keys(body).some((key) => !allowed.includes(key))) freeformTicketError('FREEFORM_TICKET_INPUT_INVALID', 422);
     const authenticatedUser = (req as IntegrationRequest).userId;
     validateFreeformTicketInput({ ...body, userId: authenticatedUser });
@@ -44,6 +44,13 @@ llmOrchestratorRouter.post('/freeform-tickets', requireServiceIntegration, async
       interactionId: body.interactionId })) freeformTicketError('FREEFORM_PLAN_ALREADY_STORED');
     const result = await issueFreeformTicket({ ...body, userId: authenticatedUser });
     res.status(result.duplicate ? 200 : 201).json(result);
+  } catch (error) { next(error); }
+});
+
+llmOrchestratorRouter.get('/freeform-tickets/:ticket/context', requireServiceIntegration, async (req, res, next) => {
+  try {
+    if (typeof req.query.campaignId !== 'string' || Object.keys(req.query).some((key) => key !== 'campaignId')) freeformTicketError('FREEFORM_TICKET_INPUT_INVALID', 422);
+    res.json(await readFreeformTicketContext({ userId: (req as IntegrationRequest).userId, campaignId: req.query.campaignId, ticket: req.params.ticket }));
   } catch (error) { next(error); }
 });
 

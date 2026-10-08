@@ -37,6 +37,7 @@ export const GMC_COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'durable-story-settlement-candidate/1',
   'freeform-intent-compiler-reader/1',
   'freeform-plan-binding/1',
+  'freeform-scene-catalog/1',
 ] as const);
 export const COMPOUND_ACTION_CONTRACTS = Object.freeze({
   playerInstructionArtifact: 'gma.player-instruction-artifact/1',
@@ -56,6 +57,7 @@ export const GMC_COMPOUND_ACTION_CONTRACTS = Object.freeze({
   compoundStorySettlementCandidate: 'gma.compound-story-settlement-candidate/1',
   freeformIntentCompilerPolicy: FREEFORM_INTENT_COMPILER_POLICY_VERSION,
   freeformPlanBinding: 'gma.freeform-plan-binding/1',
+  freeformSceneCatalog: 'gmc.freeform-scene-catalog/1',
 });
 export const COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS: readonly string[] = Object.freeze([
   COMPOUND_ACTION_CONTRACTS.semanticActionProgram,
@@ -745,7 +747,7 @@ export async function createCompoundActionArtifact(input: {
   freeformBinding?: JsonObject;
   originCheckpoint?: CompoundActionInstructionDocument['originCheckpoint'] | null;
   timelineAnchor?: { messageId: string; sequence: number; replayLineageId?: string } | null;
-}, records: CompoundActionArtifactCollection = artifactCollection(), stagedInstructions?: CompoundActionInstructionCollection, freeformTickets?: FreeformTicketCollection) {
+}, records: CompoundActionArtifactCollection = artifactCollection(), stagedInstructions?: CompoundActionInstructionCollection, freeformTickets?: FreeformTicketCollection, readSceneContext = readCurrentSceneContexts) {
   requiredString(input.userId, 'userId');
   requiredString(input.campaignId, 'campaignId');
   requiredString(input.idempotencyKey, 'idempotencyKey');
@@ -787,7 +789,7 @@ export async function createCompoundActionArtifact(input: {
   if (input.freeformBinding) {
     if (!input.originCheckpoint) throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'Intake persistence requires the verified instruction origin.', {});
     const staged = await (stagedInstructions ?? instructionCollection()).findOne({ userId: input.userId, campaignId: input.campaignId, interactionId: String(input.instruction.interactionId) });
-    await verifyFreeformBindingAcceptance({ ...input, binding: input.freeformBinding, staged }, freeformTickets);
+    await verifyFreeformBindingAcceptance({ ...input, binding: input.freeformBinding, staged }, freeformTickets, new Date(), readSceneContext);
   }
   const document: CompoundActionArtifactRevisionDocument = {
     userId: input.userId, campaignId: input.campaignId,

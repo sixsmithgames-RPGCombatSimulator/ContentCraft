@@ -26,6 +26,15 @@ compiler, browser flow, prepared-fact retrieval, settled turn or human canary.
 
 ## Initial delivery boundary
 
+The 2026-10-08 owner-authorized next increment follows ADR 012's bounded
+current-Scene catalog design. Opt-in Manual service issuance derives a compact
+public-only catalog from the current owned Scene; the protected ticket retains
+its exact source map and workspace/Scene refs. An authenticated context reader
+supplies the compiler's map. Initial saves verify issued sources, revisions and
+the current owner head. Historical selected-actor-only tickets and durable
+replay remain unchanged. This publishes a reader, not live intake or gameplay
+certification. Hidden preparation, anticipated actors and facts are not exported.
+
 GMC registers `input.freeform.interpret` with proposal-only authority and a
 closed `gma.freeform-intent-proposal/1` schema generated into the shared
 registry. Its first-pass policy is `gma.freeform-intake-policy/1`. The operation
@@ -96,3 +105,12 @@ no-provider Manual acceptance/rejection, existing reader regression, full GMC
 checks, and exact deployment status. Real-provider acceptance, fictional GMA
 end-to-end settlement, human canary and quality evaluation remain activation
 gates; registration or a Ready deployment is not a release certificate.
+
+The 1.14.4 catalog increment passes the full GMC check: 881 tests,
+typecheck, lint, contract/provider guards and server/client production builds.
+Compiled server and serverless entrypoints import successfully. The fictional
+Studio rehearsal crosses real ticket issuance, zero-provider Manual acceptance,
+compilation, initial owner save and reload using an unedited blind reply that
+selects a current prepared passage. Existing rat-form observation preparation
+requires no activation. No campaign or gameplay state was changed; movement,
+Scene Reality certificate execution, settlement and narration remain gates.

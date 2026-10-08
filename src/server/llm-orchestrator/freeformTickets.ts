@@ -8,6 +8,8 @@ import { readStagedCompoundActionInstruction } from '../services/compoundActionA
 import { OrchestratorError } from './errors.js';
 import { getOperationDefinition, OPERATION_REGISTRY_VERSION } from './operationRegistry.js';
 import { resolveOperationContext } from './contextResolver.js';
+import { readCurrentSceneContexts } from '../services/actionDirectedStoryStore.js';
+import { buildFreeformSceneCatalog, type FreeformCatalogBinding, type FreeformCatalogContextRef } from './freeformSceneCatalog.js';
 
 export const FREEFORM_TICKET_LIFETIME_MS = 86_400_000;
 export const freeformDigest = freeformJsonDigest;
@@ -30,6 +32,8 @@ export interface FreeformTicketRecord {
   mode: 'action';
   transport: 'manual' | 'integrated';
   selectedActorRef: string | null;
+  catalogBindings?: FreeformCatalogBinding[];
+  catalogContextRef?: FreeformCatalogContextRef;
   attempt: 1 | 2;
   previousTicket: string | null;
   status: 'active' | 'running' | 'accepted' | 'retired';
@@ -55,6 +59,7 @@ export interface IssueFreeformTicketInput {
   transport: 'manual' | 'integrated';
   selectedActorRef: string | null;
   previousTicket?: string | null;
+  includeSceneCatalog?: boolean;
 }
 
 export function validateFreeformTicketInput(input: IssueFreeformTicketInput) {
@@ -62,6 +67,8 @@ export function validateFreeformTicketInput(input: IssueFreeformTicketInput) {
     if (typeof input[key] !== 'string' || !input[key].trim() || input[key].length > 240) freeformTicketError('FREEFORM_TICKET_INPUT_INVALID', 422);
   }
   if (input.mode !== 'action' || !['manual', 'integrated'].includes(input.transport)
+    || input.includeSceneCatalog !== undefined && typeof input.includeSceneCatalog !== 'boolean'
+    || input.includeSceneCatalog === true && input.transport !== 'manual'
     || input.selectedActorRef !== null && (typeof input.selectedActorRef !== 'string' || !input.selectedActorRef.length
       || input.selectedActorRef.length > 240)
     || input.previousTicket !== undefined && input.previousTicket !== null
@@ -73,6 +80,7 @@ export function validateFreeformTicketInput(input: IssueFreeformTicketInput) {
 export async function issueFreeformTicket(input: IssueFreeformTicketInput, options: {
   records?: FreeformTicketCollection;
   readInstruction?: typeof readStagedCompoundActionInstruction;
+  readSceneContext?: typeof readCurrentSceneContexts;
   now?: Date;
 } = {}) {
   validateFreeformTicketInput(input);
@@ -87,7 +95,7 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
   const existing = await records.findOne({ ...scope, issuanceKey: input.issuanceKey });
   if (existing) {
     if (existing.issuanceDigest !== issuanceDigest) freeformTicketError('FREEFORM_TICKET_ISSUANCE_CONFLICT');
-    return { ticket: existing._id, request: structuredClone(existing.request), expiresAt: existing.expiresAt, duplicate: true };
+    return issuedTicket(existing, true);
   }
   let previous: FreeformTicketRecord | null = null;
   if (input.previousTicket) {
@@ -99,6 +107,9 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
   }
   const ticket = randomUUID();
   const operation = getOperationDefinition(FREEFORM_INTAKE_OPERATION);
+  const sceneCatalog = input.includeSceneCatalog === true ? buildFreeformSceneCatalog(
+    await (options.readSceneContext ?? readCurrentSceneContexts)(input), input.selectedActorRef, staged.originCheckpoint?.storyWorkspaceRef,
+  ) : null;
   const request: LlmRequestEnvelope = {
     schemaVersion: LLM_REQUEST_SCHEMA_VERSION,
     taskId: `freeform:${ticket}`, correlationId: `freeform:${ticket}`, idempotencyKey: `freeform:${ticket}`,
@@ -106,7 +117,7 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
     references: { campaignId: input.campaignId },
     context: { input: { label: 'user_text', value: {
       ticket, instruction: instruction.exactText, mode: input.mode, selectedActorRef: input.selectedActorRef,
-      catalog: input.selectedActorRef ? [{ key: 'selected_actor', kind: 'actor' }] : [],
+      catalog: sceneCatalog?.catalog ?? (input.selectedActorRef ? [{ key: 'selected_actor', kind: 'actor' }] : []),
     } } },
     constraints: { registryVersion: OPERATION_REGISTRY_VERSION, policyVersion: FREEFORM_INTAKE_POLICY_VERSION,
       maxProviderAttempts: 1, allowProviderFallback: false },
@@ -119,6 +130,7 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
     instructionFingerprint: String(instruction.instructionFingerprint), policyVersion: FREEFORM_INTAKE_POLICY_VERSION,
     registryVersion: OPERATION_REGISTRY_VERSION, mode: input.mode, transport: input.transport,
     selectedActorRef: input.selectedActorRef, attempt: previous ? 2 : 1, previousTicket: previous?._id ?? null,
+    ...(sceneCatalog ? { catalogBindings: sceneCatalog.catalogBindings, catalogContextRef: sceneCatalog.catalogContextRef } : {}),
     status: 'active', request, requestDigest: freeformDigest(request), createdAt: now,
     expiresAt: new Date(now.getTime() + FREEFORM_TICKET_LIFETIME_MS),
   };
@@ -127,9 +139,24 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
     if (Number((error as { code?: number })?.code) !== 11000) throw error;
     const replay = await records.findOne({ ...scope, issuanceKey: input.issuanceKey });
     if (!replay || replay.issuanceDigest !== issuanceDigest) freeformTicketError('FREEFORM_TICKET_ISSUANCE_CONFLICT');
-    return { ticket: replay._id, request: structuredClone(replay.request), expiresAt: replay.expiresAt, duplicate: true };
+    return issuedTicket(replay, true);
   }
-  return { ticket, request: structuredClone(request), expiresAt: record.expiresAt, duplicate: false };
+  return issuedTicket(record, false);
+}
+
+function issuedTicket(record: FreeformTicketRecord, duplicate: boolean) {
+  return { ticket: record._id, request: structuredClone(record.request), expiresAt: record.expiresAt, duplicate,
+    ...(record.catalogContextRef ? { schemaVersion: 'gmc.freeform-scene-catalog/1', catalogBindings: structuredClone(record.catalogBindings), catalogContextRef: structuredClone(record.catalogContextRef) } : {}) };
+}
+
+/** Service-scoped read of the immutable compiler map; never accept a caller map. */
+export async function readFreeformTicketContext(input: { userId: string; campaignId: string; ticket: string }, records = freeformTicketCollection()): Promise<ReturnType<typeof issuedTicket>> {
+  if ([input.userId, input.campaignId, input.ticket].some((value) => typeof value !== 'string' || !value.trim() || value.length > 240)) freeformTicketError('FREEFORM_TICKET_INPUT_INVALID', 422);
+  const record = await records.findOne({ _id: input.ticket, userId: input.userId, campaignId: input.campaignId });
+  if (!record) freeformTicketError('FREEFORM_TICKET_NOT_FOUND', 404);
+  if (record.expiresAt <= new Date()) freeformTicketError('FREEFORM_TICKET_EXPIRED');
+  if (!['active', 'accepted'].includes(record.status)) freeformTicketError('FREEFORM_TICKET_RETIRED');
+  return issuedTicket(record, true);
 }
 
 export async function loadBoundFreeformTicket(input: {
