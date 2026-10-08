@@ -24,6 +24,7 @@
     "guard:llm-contract": "tsx scripts/generate-llm-contract.ts --check",
     "eval:llm": "vitest run src/server/llm-orchestrator/qualityEval.test.ts",
     "benchmark:llm-context": "tsx scripts/benchmark-llm-context.ts",
+    "rehearse:freeform:manual": "vitest run src/server/llm-orchestrator/freeformManualRehearsal.test.ts src/server/llm-orchestrator/freeformIntake.test.ts src/server/llm-orchestrator/freeformRoutes.test.ts",
     "guard:providers": "node scripts/guard-provider-boundary.mjs",
     "check": "npm run guard:providers && npm run guard:llm-contract && npm run typecheck && npm run lint && npm test -- --run && npm run build",
     "canon:waterdeep": "tsx src/server/scripts/importWaterdeepLibrary.ts",

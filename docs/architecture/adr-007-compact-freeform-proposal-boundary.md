@@ -10,6 +10,20 @@ This owner record adopts ADR 012, including its authority, schema, budget,
 privacy, repair, compatibility, rollback, evaluation, and release requirements.
 It does not authorize any departure from that decision.
 
+On 2026-10-08 the owner accepted the governing ADR's Manual-first amendment:
+development uses an external-LLM subagent and zero-provider Manual validation.
+Native-provider acceptance is deferred, not passed, and remains a future
+integrated-activation gate. The blind rehearsal does not certify gameplay,
+human quality or production activation; all protected ticket, owner authority,
+recovery and Manual rollout gates remain unchanged.
+
+The first blind Manual development rehearsal now passes six unedited fictional
+external-LLM replies through the actual schema/semantic checks and protected
+ticket acceptance/replay/reconciliation with memory-only storage and no provider
+calls. See `npm run rehearse:freeform:manual` and the governing GMA plan for
+the evidence and limits. This does not enable the operation or certify a
+compiler, browser flow, prepared-fact retrieval, settled turn or human canary.
+
 ## Initial delivery boundary
 
 GMC registers `input.freeform.interpret` with proposal-only authority and a

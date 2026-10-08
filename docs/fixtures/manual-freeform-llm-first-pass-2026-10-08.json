@@ -1,0 +1,366 @@
+[
+  {
+    "caseId": "familiar-scout",
+    "input": {
+      "mode": "action",
+      "selectedActorRef": null,
+      "catalog": [],
+      "ticket": "fictional-manual-familiar-scout",
+      "instruction": "I send my familiar into the tunnel, stay behind cover, and watch through its eyes."
+    },
+    "output": {
+      "schemaVersion": "gma.freeform-intent-proposal/1",
+      "ticket": "fictional-manual-familiar-scout",
+      "windowText": "I send my familiar into the tunnel, stay behind cover, and watch through its eyes.",
+      "referents": [
+        { "kind": "actor", "text": "I", "catalogKey": null, "methodKind": null },
+        { "kind": "actor", "text": "my familiar", "catalogKey": null, "methodKind": null },
+        { "kind": "place", "text": "the tunnel", "catalogKey": null, "methodKind": null },
+        { "kind": "place", "text": "cover", "catalogKey": null, "methodKind": null },
+        { "kind": "method", "text": "watching through my familiar's eyes", "catalogKey": null, "methodKind": "capability" }
+      ],
+      "steps": [
+        {
+          "kind": "action",
+          "purpose": "relocate_actor",
+          "goal": "Send my familiar into the tunnel.",
+          "evidence": ["I send my familiar into the tunnel"],
+          "actor": 1,
+          "targets": [{ "ref": 2, "role": "destination" }],
+          "method": null,
+          "results": ["Move my familiar into the tunnel."],
+          "after": [],
+          "parallel": [1],
+          "when": null
+        },
+        {
+          "kind": "action",
+          "purpose": "other",
+          "goal": "Stay behind cover.",
+          "evidence": ["stay behind cover"],
+          "actor": 0,
+          "targets": [{ "ref": 3, "role": "area" }],
+          "method": null,
+          "results": ["Remain behind cover."],
+          "after": [],
+          "parallel": [0],
+          "when": null
+        },
+        {
+          "kind": "action",
+          "purpose": "observe_situation",
+          "goal": "Watch the tunnel through my familiar's eyes while remaining behind cover.",
+          "evidence": ["watch through its eyes", "stay behind cover"],
+          "actor": 0,
+          "targets": [{ "ref": 2, "role": "subject" }],
+          "method": 4,
+          "results": [],
+          "after": [0, 1],
+          "parallel": [],
+          "when": null
+        }
+      ],
+      "observations": [
+        {
+          "step": 2,
+          "observer": 1,
+          "observerKind": "familiar",
+          "method": 4,
+          "form": null,
+          "viewpointAfter": 0,
+          "subject": 2,
+          "origin": 2,
+          "facet": "surface_description",
+          "valueKind": "description",
+          "precision": "ordinary",
+          "evidence": ["watch through its eyes"]
+        }
+      ],
+      "clarification": null
+    }
+  },
+  {
+    "caseId": "unicode-look",
+    "input": {
+      "mode": "action",
+      "selectedActorRef": null,
+      "catalog": [],
+      "ticket": "fictional-manual-unicode-look",
+      "instruction": "I look 👁️ at the gate, then leave through the arch."
+    },
+    "output": {
+      "schemaVersion": "gma.freeform-intent-proposal/1",
+      "ticket": "fictional-manual-unicode-look",
+      "windowText": "I look 👁️ at the gate, then leave through the arch.",
+      "referents": [
+        { "kind": "actor", "text": "I", "catalogKey": null, "methodKind": null },
+        { "kind": "object", "text": "the gate", "catalogKey": null, "methodKind": null },
+        { "kind": "place", "text": "the arch", "catalogKey": null, "methodKind": null },
+        { "kind": "method", "text": "looking visually", "catalogKey": null, "methodKind": "approach" },
+        { "kind": "method", "text": "leaving through the arch", "catalogKey": null, "methodKind": "approach" }
+      ],
+      "steps": [
+        {
+          "kind": "action",
+          "purpose": "observe_situation",
+          "goal": "Look at the gate.",
+          "evidence": ["I look 👁️ at the gate"],
+          "actor": 0,
+          "targets": [{ "ref": 1, "role": "subject" }],
+          "method": 3,
+          "results": [],
+          "after": [],
+          "parallel": [],
+          "when": null
+        },
+        {
+          "kind": "action",
+          "purpose": "relocate_actor",
+          "goal": "Leave through the arch after looking at the gate.",
+          "evidence": ["then leave through the arch."],
+          "actor": 0,
+          "targets": [{ "ref": 2, "role": "area" }],
+          "method": 4,
+          "results": ["Pass through the arch to leave."],
+          "after": [0],
+          "parallel": [],
+          "when": null
+        }
+      ],
+      "observations": [
+        {
+          "step": 0,
+          "observer": 0,
+          "observerKind": "character",
+          "method": 3,
+          "form": null,
+          "viewpointAfter": null,
+          "subject": 1,
+          "origin": null,
+          "facet": "surface_description",
+          "valueKind": "description",
+          "precision": "ordinary",
+          "evidence": ["I look 👁️ at the gate"]
+        }
+      ],
+      "clarification": null
+    }
+  },
+  {
+    "caseId": "ambiguous-container",
+    "input": {
+      "mode": "action",
+      "selectedActorRef": null,
+      "catalog": [],
+      "ticket": "fictional-manual-ambiguous-container",
+      "instruction": "I open it."
+    },
+    "output": {
+      "schemaVersion": "gma.freeform-intent-proposal/1",
+      "ticket": "fictional-manual-ambiguous-container",
+      "windowText": "I open it.",
+      "referents": [
+        { "kind": "actor", "text": "I", "catalogKey": null, "methodKind": null },
+        { "kind": "object", "text": "the container meant by 'it'", "catalogKey": null, "methodKind": null }
+      ],
+      "steps": [
+        {
+          "kind": "action",
+          "purpose": "manipulate_object",
+          "goal": "Open the intended container.",
+          "evidence": ["I open it."],
+          "actor": 0,
+          "targets": [{ "ref": 1, "role": "object" }],
+          "method": null,
+          "results": ["Open the container meant by 'it'."],
+          "after": [],
+          "parallel": [],
+          "when": null
+        }
+      ],
+      "observations": [],
+      "clarification": "Do you want to open the chest or the sealed box?"
+    }
+  },
+  {
+    "caseId": "npc-quotation",
+    "input": {
+      "mode": "action",
+      "selectedActorRef": null,
+      "catalog": [],
+      "ticket": "fictional-manual-npc-quotation",
+      "instruction": "I ask the guard, \"Who told you to say ‘attack the captain’ ?\" I do not attack anyone."
+    },
+    "output": {
+      "schemaVersion": "gma.freeform-intent-proposal/1",
+      "ticket": "fictional-manual-npc-quotation",
+      "windowText": "I ask the guard, \"Who told you to say ‘attack the captain’ ?\" I do not attack anyone.",
+      "referents": [
+        { "kind": "actor", "text": "I", "catalogKey": null, "methodKind": null },
+        { "kind": "actor", "text": "the guard", "catalogKey": null, "methodKind": null },
+        { "kind": "subject", "text": "who told the guard to say ‘attack the captain’", "catalogKey": null, "methodKind": null }
+      ],
+      "steps": [
+        {
+          "kind": "action",
+          "purpose": "exchange_information",
+          "goal": "Ask the guard who told them to say ‘attack the captain’, without attacking anyone.",
+          "evidence": ["I ask the guard, \"Who told you to say ‘attack the captain’ ?\"", "I do not attack anyone."],
+          "actor": 0,
+          "targets": [{ "ref": 1, "role": "recipient" }, { "ref": 2, "role": "subject" }],
+          "method": null,
+          "results": ["Put the quoted question to the guard without attacking anyone."],
+          "after": [],
+          "parallel": [],
+          "when": null
+        }
+      ],
+      "observations": [],
+      "clarification": null
+    }
+  },
+  {
+    "caseId": "conditional-exchange",
+    "input": {
+      "mode": "action",
+      "selectedActorRef": null,
+      "catalog": [],
+      "ticket": "fictional-manual-conditional-exchange",
+      "instruction": "I ask the merchant to sell me the lantern. If he refuses, I leave; otherwise I pay the agreed price."
+    },
+    "output": {
+      "schemaVersion": "gma.freeform-intent-proposal/1",
+      "ticket": "fictional-manual-conditional-exchange",
+      "windowText": "I ask the merchant to sell me the lantern. If he refuses, I leave; otherwise I pay the agreed price.",
+      "referents": [
+        { "kind": "actor", "text": "I", "catalogKey": null, "methodKind": null },
+        { "kind": "actor", "text": "the merchant", "catalogKey": null, "methodKind": null },
+        { "kind": "object", "text": "the lantern", "catalogKey": null, "methodKind": null }
+      ],
+      "steps": [
+        {
+          "kind": "action",
+          "purpose": "influence_actor",
+          "goal": "Ask the merchant to agree to sell me the lantern.",
+          "evidence": ["I ask the merchant to sell me the lantern."],
+          "actor": 0,
+          "targets": [{ "ref": 1, "role": "recipient" }, { "ref": 2, "role": "object" }],
+          "method": null,
+          "results": ["Obtain the merchant's agreement to sell me the lantern."],
+          "after": [],
+          "parallel": [],
+          "when": null
+        },
+        {
+          "kind": "action",
+          "purpose": "relocate_actor",
+          "goal": "Leave if the merchant refuses the requested sale.",
+          "evidence": ["If he refuses, I leave"],
+          "actor": 0,
+          "targets": [],
+          "method": null,
+          "results": ["Leave."],
+          "after": [0],
+          "parallel": [],
+          "when": { "predicate": "declined", "step": 0, "requirement": null }
+        },
+        {
+          "kind": "action",
+          "purpose": "change_resource",
+          "goal": "Pay the agreed price if the merchant agrees to the requested sale.",
+          "evidence": ["otherwise I pay the agreed price."],
+          "actor": 0,
+          "targets": [{ "ref": 1, "role": "recipient" }, { "ref": 2, "role": "object" }],
+          "method": null,
+          "results": ["Pay the agreed price for the lantern."],
+          "after": [0],
+          "parallel": [],
+          "when": { "predicate": "succeeded", "step": 0, "requirement": null }
+        }
+      ],
+      "observations": [],
+      "clarification": null
+    }
+  },
+  {
+    "caseId": "simultaneous-watch",
+    "input": {
+      "mode": "action",
+      "selectedActorRef": null,
+      "catalog": [],
+      "ticket": "fictional-manual-simultaneous-watch",
+      "instruction": "While I watch the arch, my ally watches the worker."
+    },
+    "output": {
+      "schemaVersion": "gma.freeform-intent-proposal/1",
+      "ticket": "fictional-manual-simultaneous-watch",
+      "windowText": "While I watch the arch, my ally watches the worker.",
+      "referents": [
+        { "kind": "actor", "text": "I", "catalogKey": null, "methodKind": null },
+        { "kind": "actor", "text": "my ally", "catalogKey": null, "methodKind": null },
+        { "kind": "place", "text": "the arch", "catalogKey": null, "methodKind": null },
+        { "kind": "actor", "text": "the worker", "catalogKey": null, "methodKind": null },
+        { "kind": "method", "text": "watching visually", "catalogKey": null, "methodKind": "approach" }
+      ],
+      "steps": [
+        {
+          "kind": "action",
+          "purpose": "observe_situation",
+          "goal": "Watch the arch while my ally watches the worker.",
+          "evidence": ["While I watch the arch"],
+          "actor": 0,
+          "targets": [{ "ref": 2, "role": "subject" }],
+          "method": 4,
+          "results": [],
+          "after": [],
+          "parallel": [1],
+          "when": null
+        },
+        {
+          "kind": "action",
+          "purpose": "observe_situation",
+          "goal": "Have my ally watch the worker while I watch the arch.",
+          "evidence": ["my ally watches the worker."],
+          "actor": 1,
+          "targets": [{ "ref": 3, "role": "subject" }],
+          "method": 4,
+          "results": [],
+          "after": [],
+          "parallel": [0],
+          "when": null
+        }
+      ],
+      "observations": [
+        {
+          "step": 0,
+          "observer": 0,
+          "observerKind": "character",
+          "method": 4,
+          "form": null,
+          "viewpointAfter": null,
+          "subject": 2,
+          "origin": null,
+          "facet": "activity",
+          "valueKind": "description",
+          "precision": "ordinary",
+          "evidence": ["watch the arch"]
+        },
+        {
+          "step": 1,
+          "observer": 1,
+          "observerKind": "ally",
+          "method": 4,
+          "form": null,
+          "viewpointAfter": null,
+          "subject": 3,
+          "origin": null,
+          "facet": "activity",
+          "valueKind": "description",
+          "precision": "ordinary",
+          "evidence": ["my ally watches the worker."]
+        }
+      ],
+      "clarification": null
+    }
+  }
+]
