@@ -78,6 +78,17 @@ proposal issuance or interpretation. Support-facing diagnostics remain behind
 the integration boundary; the later GMA recovery layer must supply ADR 012's
 player-safe copy and stopping boundary before any player-facing activation.
 
+The disabled Manual persistence increment adopts ADR 012's closed durable
+`freeformBinding` projection and 65,536-byte metadata ceiling. The existing
+compound artifact saves it atomically with the initial program/cursor after
+checking the actual accepted Manual ticket and staged instruction. It carries
+unchanged through advances, settlement and replay; historical records without
+it remain readable. JSON digests use the canonical ticket digest, while text
+fingerprints bind exact UTF-8 bytes. Initial writes require an unexpired accepted
+ticket; exact already-durable replay/reload does not. The GMC-only capability
+`freeform-plan-binding/1` is additive and does not change VCS's writer bundle or
+enable fresh intake. This is a persistence gate, not a gameplay certificate.
+
 Required release evidence: closed-schema and semantic fixtures, isolation,
 expiry, duplicate/concurrent issuance and replay, one replacement, second-stop,
 no rejected-payload retention, native projection, original-policy inclusion,

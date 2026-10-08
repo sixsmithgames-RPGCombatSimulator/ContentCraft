@@ -585,6 +585,7 @@ storyWorkspaceRouter.post('/interaction-artifacts', requireServiceIntegration, a
     instruction: body.instruction,
     program: body.program,
     cursor: body.cursor,
+    freeformBinding: body.freeformBinding,
     clarifications: body.clarifications,
     saga: body.saga,
     originCheckpoint: body.originCheckpoint,

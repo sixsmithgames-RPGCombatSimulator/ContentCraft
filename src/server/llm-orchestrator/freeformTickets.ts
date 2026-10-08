@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { freeformJsonDigest } from '../../shared/llm/freeformPlanBinding.js';
 import type { Collection } from 'mongodb';
 import { LLM_REQUEST_SCHEMA_VERSION, type LlmRequestEnvelope, type LlmResponseEnvelope } from '../../shared/llm/orchestratorContracts.js';
 import { FREEFORM_INTAKE_OPERATION, FREEFORM_INTAKE_POLICY_VERSION } from '../../shared/llm/freeformIntakePolicy.js';
@@ -9,15 +10,7 @@ import { getOperationDefinition, OPERATION_REGISTRY_VERSION } from './operationR
 import { resolveOperationContext } from './contextResolver.js';
 
 export const FREEFORM_TICKET_LIFETIME_MS = 86_400_000;
-export function freeformDigest(value: unknown): string {
-  const stable = (entry: unknown): string => {
-    if (Array.isArray(entry)) return `[${entry.map(stable).join(',')}]`;
-    if (entry && typeof entry === 'object') return `{${Object.entries(entry).filter(([, nested]) => nested !== undefined)
-      .sort(([a], [b]) => a.localeCompare(b)).map(([key, nested]) => `${JSON.stringify(key)}:${stable(nested)}`).join(',')}}`;
-    return JSON.stringify(entry);
-  };
-  return createHash('sha256').update(stable(value)).digest('hex');
-}
+export const freeformDigest = freeformJsonDigest;
 
 export function freeformTicketError(code: string, status = 409): never {
   throw new OrchestratorError({ code, category: 'policy', status, retryable: false,

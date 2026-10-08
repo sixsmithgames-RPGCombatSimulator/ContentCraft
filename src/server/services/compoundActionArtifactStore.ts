@@ -3,6 +3,9 @@ import type { Collection, Filter } from 'mongodb';
 import { getDb } from '../config/mongo.js';
 import { readCurrentSceneContexts } from './actionDirectedStoryStore.js';
 import { collections } from './gmcIntegrationStore.js';
+import { validateFreeformBinding, verifyFreeformBindingAcceptance } from './freeformPlanBindingStore.js';
+import type { FreeformTicketCollection } from '../llm-orchestrator/freeformTickets.js';
+import { freeformPlanBindingIssues } from '../../shared/llm/freeformPlanBinding.js';
 import {
   readActiveStoryWorkspace,
   readStoryWorkspaceRevision,
@@ -33,6 +36,7 @@ export const GMC_COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   ...COMPOUND_ACTION_CAPABILITIES,
   'durable-story-settlement-candidate/1',
   'freeform-intent-compiler-reader/1',
+  'freeform-plan-binding/1',
 ] as const);
 export const COMPOUND_ACTION_CONTRACTS = Object.freeze({
   playerInstructionArtifact: 'gma.player-instruction-artifact/1',
@@ -51,6 +55,7 @@ export const GMC_COMPOUND_ACTION_CONTRACTS = Object.freeze({
   acceptedModelCandidateV2: 'gma.accepted-model-candidate/2',
   compoundStorySettlementCandidate: 'gma.compound-story-settlement-candidate/1',
   freeformIntentCompilerPolicy: FREEFORM_INTENT_COMPILER_POLICY_VERSION,
+  freeformPlanBinding: 'gma.freeform-plan-binding/1',
 });
 export const COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS: readonly string[] = Object.freeze([
   COMPOUND_ACTION_CONTRACTS.semanticActionProgram,
@@ -98,6 +103,7 @@ export interface CompoundActionArtifactRevisionDocument {
   clarifications: JsonObject[];
   rootFailure: JsonObject | null;
   saga?: JsonObject | null;
+  freeformBinding?: JsonObject;
   timelineAnchor: { messageId: string; sequence: number; replayLineageId?: string } | null;
   createdAt: Date;
   supersededAt?: Date;
@@ -692,7 +698,7 @@ function reference(document: CompoundActionArtifactRevisionDocument) {
 }
 
 function payload(document: Pick<CompoundActionArtifactRevisionDocument,
-  'instruction' | 'program' | 'cursor' | 'receipts' | 'rebaseReceipts' | 'clarifications' | 'rootFailure' | 'timelineAnchor' | 'saga'>): JsonObject {
+  'instruction' | 'program' | 'cursor' | 'receipts' | 'rebaseReceipts' | 'clarifications' | 'rootFailure' | 'timelineAnchor' | 'saga' | 'freeformBinding'>): JsonObject {
   return {
     instruction: document.instruction,
     program: document.program,
@@ -703,6 +709,7 @@ function payload(document: Pick<CompoundActionArtifactRevisionDocument,
     rootFailure: document.rootFailure,
     saga: document.saga ?? null,
     timelineAnchor: document.timelineAnchor,
+    ...(document.freeformBinding ? { freeformBinding: document.freeformBinding } : {}),
   };
 }
 
@@ -735,15 +742,17 @@ export async function createCompoundActionArtifact(input: {
   cursor: JsonObject;
   clarifications?: JsonObject[];
   saga?: JsonObject;
+  freeformBinding?: JsonObject;
   originCheckpoint?: CompoundActionInstructionDocument['originCheckpoint'] | null;
   timelineAnchor?: { messageId: string; sequence: number; replayLineageId?: string } | null;
-}, records: CompoundActionArtifactCollection = artifactCollection(), stagedInstructions?: CompoundActionInstructionCollection) {
+}, records: CompoundActionArtifactCollection = artifactCollection(), stagedInstructions?: CompoundActionInstructionCollection, freeformTickets?: FreeformTicketCollection) {
   requiredString(input.userId, 'userId');
   requiredString(input.campaignId, 'campaignId');
   requiredString(input.idempotencyKey, 'idempotencyKey');
   validateInstruction(input.instruction);
   validateProgram(input.program, input.instruction);
   validateCursor(input.cursor, input.program, 1);
+  if (input.freeformBinding !== undefined) validateFreeformBinding(input.freeformBinding, input.instruction, input.program);
   const clarifications = input.clarifications ?? [];
   if (!Array.isArray(clarifications) || clarifications.length > COMPOUND_ACTION_LIMITS.clarificationMaximum || clarifications.some((value) => !isObject(value))) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_CLARIFICATION_INVALID', 'The interaction clarification state is invalid.', {});
@@ -767,6 +776,7 @@ export async function createCompoundActionArtifact(input: {
   const saga = validateSaga(input.saga, input.instruction, input.program, input.cursor);
   const draft = {
     instruction: structuredClone(input.instruction),
+    ...(input.freeformBinding ? { freeformBinding: structuredClone(input.freeformBinding) } : {}),
     program: structuredClone(input.program),
     cursor: structuredClone(input.cursor),
     receipts: [] as JsonObject[], rebaseReceipts: [] as JsonObject[], clarifications: structuredClone(clarifications), rootFailure: null, saga, timelineAnchor,
@@ -774,6 +784,11 @@ export async function createCompoundActionArtifact(input: {
   const requestHash = sha256(canonicalJson(draft));
   const duplicate = await duplicateForKey(records, input.userId, input.campaignId, input.idempotencyKey, requestHash);
   if (duplicate) return duplicate;
+  if (input.freeformBinding) {
+    if (!input.originCheckpoint) throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'Intake persistence requires the verified instruction origin.', {});
+    const staged = await (stagedInstructions ?? instructionCollection()).findOne({ userId: input.userId, campaignId: input.campaignId, interactionId: String(input.instruction.interactionId) });
+    await verifyFreeformBindingAcceptance({ ...input, binding: input.freeformBinding, staged }, freeformTickets);
+  }
   const document: CompoundActionArtifactRevisionDocument = {
     userId: input.userId, campaignId: input.campaignId,
     programId: String(input.program.programId), interactionId: String(input.instruction.interactionId),
@@ -834,6 +849,9 @@ export async function advanceCompoundActionArtifact(input: {
   }
   const program = input.program ?? active.program;
   validateProgram(program, active.instruction);
+  if (active.freeformBinding && freeformPlanBindingIssues(active.freeformBinding, active.instruction, program).length) {
+    throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_BINDING_INVALID', 'An update cannot replace the original intake identities.', {});
+  }
   validateCursor(input.cursor, program, active.revision + 1);
   const receiptsById = new Map(active.receipts.map((receipt) => [String(receipt.receiptId), receipt]));
   for (const receipt of input.appendReceipts ?? []) {
@@ -880,6 +898,7 @@ export async function advanceCompoundActionArtifact(input: {
   const saga = validateSaga(input.saga === undefined ? active.saga : input.saga, active.instruction, program, input.cursor);
   const draft = {
     instruction: active.instruction, program: structuredClone(program), cursor: structuredClone(input.cursor), receipts, rebaseReceipts,
+    ...(active.freeformBinding ? { freeformBinding: active.freeformBinding } : {}),
     clarifications: structuredClone(clarifications), rootFailure: input.rootFailure === undefined ? active.rootFailure : input.rootFailure,
     saga,
     timelineAnchor: active.timelineAnchor,

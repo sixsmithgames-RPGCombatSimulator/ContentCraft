@@ -1,18 +1,36 @@
 import type { AddressInfo } from 'node:net';
 import express from 'express';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ProjectModel } from '../models/Project.js';
+import * as artifacts from '../services/compoundActionArtifactStore.js';
 import type { IntegrationRequest } from '../middleware/integrationAuth.js';
 import { compoundActionAdvanceInput, storyWorkspaceRouter } from './storyWorkspace.js';
 
 const servers: Array<ReturnType<ReturnType<typeof express>['listen']>> = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve, reject) => {
     server.close((error) => error ? reject(error) : resolve());
   })));
 });
 
 describe('D2 Story authority routes', () => {
+  it('forwards protected freeform provenance to the owner rather than dropping the binding', async () => {
+    vi.spyOn(ProjectModel, 'findById').mockResolvedValue({ _id: 'fictional-campaign' } as any);
+    const create = vi.spyOn(artifacts, 'createCompoundActionArtifact').mockResolvedValue({ artifactRef: {} as any, duplicate: false });
+    const app = express(); app.use(express.json());
+    app.use((req, _res, next) => { (req as IntegrationRequest).userId = 'fictional-user'; (req as IntegrationRequest).integrationAuth = 'service'; next(); });
+    app.use('/campaigns/:campaignId/story', storyWorkspaceRouter);
+    const server = app.listen(0); servers.push(server);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const binding = { schemaVersion: 'gma.freeform-plan-binding/1', ticket: 'fictional-ticket' };
+    const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/campaigns/fictional-campaign/story/interaction-artifacts`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idempotencyKey: 'fictional-key', freeformBinding: binding }),
+    });
+    expect(response.status).toBe(201);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ userId: 'fictional-user', campaignId: 'fictional-campaign', freeformBinding: binding }));
+  });
   it('forwards Scene-authority rebase receipts through the compound artifact route mapping', () => {
     const receipt = { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: 'rebase:one' };
     const mapped = compoundActionAdvanceInput({
