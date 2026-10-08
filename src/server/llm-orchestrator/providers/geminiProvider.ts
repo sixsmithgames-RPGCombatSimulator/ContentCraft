@@ -155,7 +155,7 @@ function geminiSystemInstructionForRequest(
 
 export class GeminiProviderAdapter implements LlmProviderAdapter {
   readonly id = 'gemini';
-  readonly version = '5';
+  readonly version = '6';
 
   isAvailable() {
     return Boolean(process.env.GEMINI_API_KEY);
@@ -184,6 +184,10 @@ export class GeminiProviderAdapter implements LlmProviderAdapter {
         maxOutputTokens: request.maxOutputTokens,
       };
       const responseJsonSchema = geminiResponseJsonSchemaForRequest(request.outputSchema);
+      if (request.operation === 'input.freeform.interpret' && responseJsonSchema === undefined) {
+        throw new OrchestratorError({ code: 'FREEFORM_NATIVE_SCHEMA_REQUIRED', category: 'policy', status: 422,
+          message: 'The compact intake schema must fit native provider constraints.', retryable: false, source: 'provider.gemini' });
+      }
       if (responseJsonSchema !== undefined) generationConfig.responseJsonSchema = responseJsonSchema;
       const systemInstruction = geminiSystemInstructionForRequest(
         request.systemInstruction,

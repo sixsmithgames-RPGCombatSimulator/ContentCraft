@@ -360,6 +360,15 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, 'saga.operations.operationId': 1, revision: -1 },
     { sparse: true, name: 'gmc_action_saga_operation_lookup' },
   );
+  await database.collection('llm_freeform_tickets').createIndex(
+    { userId: 1, campaignId: 1, interactionId: 1, attempt: 1 },
+    { unique: true, name: 'unique_llm_freeform_ticket_attempt' },
+  );
+  await database.collection('llm_freeform_tickets').createIndex(
+    { userId: 1, campaignId: 1, issuanceKey: 1 },
+    { unique: true, name: 'unique_llm_freeform_ticket_issuance' },
+  );
+  await database.collection('llm_freeform_tickets').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await database.collection('llm_generation_workflows').createIndex(
     { userId: 1, workflowId: 1 },
     { unique: true, name: 'unique_llm_generation_workflow' },

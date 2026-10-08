@@ -22,6 +22,7 @@ export const COMPOUND_ACTION_ORIGIN_CHECKPOINT_CONTRACT_VERSION = 'gmc.compound-
 export const ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION = 'gma.action-program-rebase-receipt/2';
 export const LEGACY_ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION = 'gma.action-program-rebase-receipt/1';
 export const PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION = 'gma.semantic-action-program/5';
+export const FREEFORM_INTENT_COMPILER_POLICY_VERSION = 'gma.semantic-action-compiler-policy/12';
 export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'compound-action-program/2',
   'compound-action-artifact-store/1',
@@ -31,6 +32,7 @@ export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
 export const GMC_COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   ...COMPOUND_ACTION_CAPABILITIES,
   'durable-story-settlement-candidate/1',
+  'freeform-intent-compiler-reader/1',
 ] as const);
 export const COMPOUND_ACTION_CONTRACTS = Object.freeze({
   playerInstructionArtifact: 'gma.player-instruction-artifact/1',
@@ -48,6 +50,7 @@ export const GMC_COMPOUND_ACTION_CONTRACTS = Object.freeze({
   ...COMPOUND_ACTION_CONTRACTS,
   acceptedModelCandidateV2: 'gma.accepted-model-candidate/2',
   compoundStorySettlementCandidate: 'gma.compound-story-settlement-candidate/1',
+  freeformIntentCompilerPolicy: FREEFORM_INTENT_COMPILER_POLICY_VERSION,
 });
 export const COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS: readonly string[] = Object.freeze([
   COMPOUND_ACTION_CONTRACTS.semanticActionProgram,
@@ -350,6 +353,16 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The semantic action program is invalid.', {});
   }
   requiredString(program.programId, 'program.programId');
+  const planner = isObject(program.planner) ? program.planner : null;
+  const freeformCompiler = planner?.source === 'freeform_intent_compiler';
+  if (freeformCompiler || planner?.policyVersion === FREEFORM_INTENT_COMPILER_POLICY_VERSION) {
+    if (!freeformCompiler || planner?.policyVersion !== FREEFORM_INTENT_COMPILER_POLICY_VERSION
+      || Object.prototype.hasOwnProperty.call(planner, 'confidence')
+      || Object.prototype.hasOwnProperty.call(planner, 'review')
+      || ![COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4, PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION].includes(String(program.schemaVersion))) {
+      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The compact action compiler binding is invalid.', {});
+    }
+  }
   if (program.interactionId !== instruction.interactionId
     || program.instructionRef !== instruction.instructionRef
     || program.instructionFingerprint !== instruction.instructionFingerprint
@@ -381,7 +394,7 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
   }
   if (program.schemaVersion === PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION) {
     const planner = isObject(program.planner) ? program.planner : null;
-    if (!['gma.semantic-action-compiler-policy/8', 'gma.semantic-action-compiler-policy/9', 'gma.semantic-action-compiler-policy/10', 'gma.semantic-action-compiler-policy/11'].includes(String(planner?.policyVersion ?? ''))) {
+    if (!freeformCompiler && !['gma.semantic-action-compiler-policy/8', 'gma.semantic-action-compiler-policy/9', 'gma.semantic-action-compiler-policy/10', 'gma.semantic-action-compiler-policy/11'].includes(String(planner?.policyVersion ?? ''))) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The parallel action program compiler policy is invalid.', {});
     }
     const relationPairs = new Set<string>();

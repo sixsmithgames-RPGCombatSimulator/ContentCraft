@@ -1,5 +1,9 @@
 import { Router, type Request } from 'express';
-import type { IntegrationRequest } from '../middleware/integrationAuth.js';
+import { requireServiceIntegration, type IntegrationRequest } from '../middleware/integrationAuth.js';
+import { ProjectModel } from '../models/Project.js';
+import { getDb } from '../config/mongo.js';
+import { collections } from '../services/gmcIntegrationStore.js';
+import { issueFreeformTicket, freeformTicketError, retireFreeformTicket, validateFreeformTicketInput } from './freeformTickets.js';
 import type { LlmRequestEnvelope } from '../../shared/llm/orchestratorContracts.js';
 import { executeLlmOperation, executeShadowComparison } from './orchestrator.js';
 import { MongoExecutionStore } from './executionStore.js';
@@ -18,6 +22,39 @@ import { deleteUserOrchestratorData } from './retention.js';
 import { findMechanicsLedger, upsertMechanicsLedger } from './mechanicsLedger.js';
 
 export const llmOrchestratorRouter = Router();
+
+// Service-only during the initial action milestone. No private world context
+// is exported and the protected packet is built from the owner's staged text.
+llmOrchestratorRouter.post('/freeform-tickets', requireServiceIntegration, async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const allowed = ['campaignId', 'interactionId', 'issuanceKey', 'mode', 'transport', 'selectedActorRef', 'previousTicket'];
+    if (Object.keys(body).some((key) => !allowed.includes(key))) freeformTicketError('FREEFORM_TICKET_INPUT_INVALID', 422);
+    const authenticatedUser = (req as IntegrationRequest).userId;
+    validateFreeformTicketInput({ ...body, userId: authenticatedUser });
+    if (typeof body.campaignId !== 'string' || !await ProjectModel.findById(authenticatedUser, body.campaignId)) {
+      freeformTicketError('FREEFORM_CAMPAIGN_NOT_OWNED', 404);
+    }
+    if (body.selectedActorRef !== null && (typeof body.selectedActorRef !== 'string'
+      || !await collections.entities().findOne({ _id: body.selectedActorRef, userId: authenticatedUser,
+        project_id: body.campaignId, type: { $in: ['npc', 'monster'] }, status: { $ne: 'superseded' } }))) {
+      freeformTicketError('FREEFORM_ACTOR_NOT_OWNED', 404);
+    }
+    if (await getDb().collection('gmc_compound_action_artifact_revisions').findOne({ userId: authenticatedUser, campaignId: body.campaignId,
+      interactionId: body.interactionId })) freeformTicketError('FREEFORM_PLAN_ALREADY_STORED');
+    const result = await issueFreeformTicket({ ...body, userId: authenticatedUser });
+    res.status(result.duplicate ? 200 : 201).json(result);
+  } catch (error) { next(error); }
+});
+
+llmOrchestratorRouter.post('/freeform-tickets/:ticket/retire', requireServiceIntegration, async (req, res, next) => {
+  try {
+    if (typeof req.body?.campaignId !== 'string' || Object.keys(req.body).some((key) => key !== 'campaignId')) {
+      freeformTicketError('FREEFORM_TICKET_INPUT_INVALID', 422);
+    }
+    res.json(await retireFreeformTicket({ userId: userId(req), campaignId: req.body.campaignId, ticket: req.params.ticket }));
+  } catch (error) { next(error); }
+});
 
 function userId(req: Request) {
   return (req as IntegrationRequest).userId;
@@ -80,6 +117,10 @@ llmOrchestratorRouter.post('/execute', async (req, res, next) => {
 
 llmOrchestratorRouter.post('/validate-manual', async (req, res, next) => {
   try {
+    if (!Object.prototype.hasOwnProperty.call(req.body ?? {}, 'output') || req.body.output === undefined) {
+      res.status(422).json({ error: { code: 'MANUAL_OUTPUT_REQUIRED', message: 'A Manual reply is required before validation.' } });
+      return;
+    }
     const response = await executeLlmOperation(req.body?.request as LlmRequestEnvelope, {
       userId: userId(req),
       manualOutput: req.body?.output,

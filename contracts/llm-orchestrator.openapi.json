@@ -2,9 +2,146 @@
   "openapi": "3.1.0",
   "info": {
     "title": "GameMasterCraft LLM Orchestrator API",
-    "version": "2026-10-07.1"
+    "version": "2026-10-07.2"
   },
   "paths": {
+    "/api/gmc/v1/llm/freeform-tickets": {
+      "post": {
+        "operationId": "issueFreeformIntakeTicket",
+        "description": "Service integration only. Builds an immutable action packet from an owned staged instruction; no gameplay effects.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "campaignId",
+                  "interactionId",
+                  "issuanceKey",
+                  "mode",
+                  "transport",
+                  "selectedActorRef"
+                ],
+                "properties": {
+                  "campaignId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "interactionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "issuanceKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "mode": {
+                    "const": "action"
+                  },
+                  "transport": {
+                    "enum": [
+                      "manual",
+                      "integrated"
+                    ]
+                  },
+                  "selectedActorRef": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 240
+                  },
+                  "previousTicket": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 80
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact issuance replay"
+          },
+          "201": {
+            "description": "Protected ticket, immutable request and expiry"
+          },
+          "403": {
+            "description": "Service integration authentication required"
+          },
+          "409": {
+            "description": "Issuance or disposition conflict"
+          },
+          "413": {
+            "description": "Indivisible instruction exceeds provider envelope budget"
+          },
+          "422": {
+            "description": "Invalid issuance fields"
+          }
+        }
+      }
+    },
+    "/api/gmc/v1/llm/freeform-tickets/{ticket}/retire": {
+      "post": {
+        "operationId": "retireFreeformIntakeTicket",
+        "description": "Service integration only. Retires an owned ticket; cancellation does not authorize replacement.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "campaignId"
+                ],
+                "properties": {
+                  "campaignId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Retired disposition or exact retirement replay"
+          },
+          "403": {
+            "description": "Service integration authentication required"
+          },
+          "404": {
+            "description": "Owned ticket not found"
+          },
+          "409": {
+            "description": "Concurrent settlement conflict"
+          }
+        }
+      }
+    },
     "/api/gmc/v1/llm/contract": {
       "get": {
         "operationId": "getLlmOrchestratorContract",

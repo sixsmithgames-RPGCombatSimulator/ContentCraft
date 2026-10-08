@@ -1,6 +1,6 @@
 {
   "schemaVersion": "gma-gmc.llm-rollout-policy/1",
-  "version": "2026-07-26.2",
+  "version": "2026-10-07.1",
   "effectiveFrom": "2026-07-26T00:00:00.000Z",
   "default": {
     "mode": "compatibility",
@@ -8,6 +8,11 @@
     "rollbackTarget": "compatibility_adapter"
   },
   "operations": {
+    "input.freeform.interpret": {
+      "mode": "disabled",
+      "canaryPercent": 100,
+      "rollbackTarget": "disabled"
+    },
     "intent.classify": {
       "mode": "compatibility",
       "canaryPercent": 100
@@ -30,6 +35,10 @@
     }
   },
   "history": [
+    {
+      "at": "2026-10-07T00:00:00.000Z",
+      "change": "Registered compact freeform proposals under Accepted ADR 012. Disabled pending provider and end-to-end activation gates."
+    },
     {
       "at": "2026-07-26T00:00:00.000Z",
       "change": "Created operation-scoped rollout policy after compatibility adapters were routed through the universal orchestrator."

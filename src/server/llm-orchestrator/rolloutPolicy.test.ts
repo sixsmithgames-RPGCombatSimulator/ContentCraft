@@ -26,7 +26,7 @@ describe('LLM rollout policy', () => {
 
   it('records an operation-scoped policy version and rollback target', () => {
     const decision = resolveRolloutDecision('canon.extract', 'correlation-2');
-    expect(decision.policyVersion).toBe('2026-07-26.2');
+    expect(decision.policyVersion).toBe('2026-10-07.1');
     expect(decision.rollbackTarget).toBe('compatibility_adapter');
   });
 

@@ -3,6 +3,8 @@ import type { LlmContextLayer, LlmRequestEnvelope } from '../../shared/llm/orche
 import { OrchestratorError } from './errors.js';
 import { OPERATION_REGISTRY_VERSION, type LlmOperationDefinition } from './operationRegistry.js';
 import { loadModelPolicy } from './modelPolicy.js';
+import { FREEFORM_INTAKE_OPERATION } from '../../shared/llm/freeformIntakePolicy.js';
+import { geminiResponseJsonSchemaForRequest } from './providers/geminiProvider.js';
 
 export interface ResolvedContext {
   providerInput: Record<string, unknown>;
@@ -83,7 +85,19 @@ export function resolveOperationContext(request: LlmRequestEnvelope, operation: 
   providerInput.references = request.references;
   providerInput.constraints = request.constraints;
   providerInput.outputContract = request.outputSchema;
-  const totalBytes = Buffer.byteLength(JSON.stringify(providerInput), 'utf8');
+  const totalBytes = operation.id === FREEFORM_INTAKE_OPERATION
+    ? Math.max(Buffer.byteLength(JSON.stringify({ systemInstruction: { parts: [{ text: operation.prompt.systemInstruction }] },
+      contents: [{ role: 'user', parts: [{ text: JSON.stringify(providerInput) }] }],
+      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: operation.provider.maxOutputTokens,
+        responseJsonSchema: geminiResponseJsonSchemaForRequest(operation.outputSchema.schema),
+        temperature: operation.provider.temperature, thinkingConfig: { thinkingLevel: operation.provider.thinkingLevel } } }), 'utf8'),
+      // Reserve 256 bytes for a model name, then recheck the exact OpenAI body
+      // in the adapter before sending. Neither framing estimate is a token count.
+      Buffer.byteLength(JSON.stringify({ model: 'x'.repeat(256), instructions: operation.prompt.systemInstruction,
+        input: JSON.stringify(providerInput), text: { format: { type: 'json_schema',
+          name: operation.id.replace(/[^a-zA-Z0-9_-]/g, '_'), strict: true, schema: operation.outputSchema.schema } },
+        max_output_tokens: operation.provider.maxOutputTokens }), 'utf8'))
+    : Buffer.byteLength(JSON.stringify(providerInput), 'utf8');
   if (totalBytes > operation.context.inputHardLimitBytes) {
     throw new OrchestratorError({
       code: 'LLM_CONTEXT_HARD_LIMIT_EXCEEDED',

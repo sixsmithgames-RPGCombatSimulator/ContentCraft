@@ -8,6 +8,8 @@ import {
   type LlmValidationResult,
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
+import { FREEFORM_INTENT_PROPOSAL_SCHEMA } from '../../shared/llm/freeformIntentSchema.js';
+import { FREEFORM_INTAKE_OPERATION, FREEFORM_INTAKE_POLICY, FREEFORM_INTAKE_POLICY_VERSION } from '../../shared/llm/freeformIntakePolicy.js';
 import {
   sceneRealityBuilderCheckpointResultOutput,
   sceneRealityBuilderResultOutput,
@@ -16,9 +18,10 @@ import {
   sceneRealityRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-10-07.1';
+export const OPERATION_REGISTRY_VERSION = '2026-10-07.2';
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-10-07.1',
   '2026-09-09.9',
   '2026-09-09.8',
   '2026-09-09.7',
@@ -945,9 +948,17 @@ type Seed = {
   systemInstruction?: string;
   promptVersion?: string;
   outputProperties?: Record<string, Record<string, unknown>>;
+  logicalSchema?: Record<string, unknown>;
 };
 
 const seeds: Seed[] = [
+  {
+    id: FREEFORM_INTAKE_OPERATION, operationClass: 'reasoning_high', tier: 'reasoning',
+    required: [...FREEFORM_INTENT_PROPOSAL_SCHEMA.required], logicalSchema: FREEFORM_INTENT_PROPOSAL_SCHEMA,
+    validators: ['freeform-intake'], systemInstruction: FREEFORM_INTAKE_POLICY,
+    promptVersion: FREEFORM_INTAKE_POLICY_VERSION, targetBytes: 8192, hardLimitBytes: 24576,
+    maxOutputTokens: 6000, temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
+  },
   { id: 'intent.classify', operationClass: 'structured_low', tier: 'structured', required: ['intentType', 'confidence', 'structuredIntent', 'requiresVcs', 'requiresGameMasterCraft'], optional: ['actionPlan', 'ambiguities', 'dataRequirements'], targetBytes: 8_000, hardLimitBytes: 16_000, maxOutputTokens: 700, thinkingLevel: 'minimal', maxAttempts: 1, fallbackAllowed: false },
   {
     id: 'action.intent.interpret', operationClass: 'reasoning_high', tier: 'reasoning',
@@ -1552,11 +1563,11 @@ for (const seed of seeds) {
     outputSchema: {
       id: `${seed.id}.result`,
       version: '1',
-      schema: objectOutputSchema(`${seed.id}.result`, seed.required, seed.outputProperties ?? {}, seed.optional, seed.openOutput),
+      schema: seed.logicalSchema ?? objectOutputSchema(`${seed.id}.result`, seed.required, seed.outputProperties ?? {}, seed.optional, seed.openOutput),
     },
     validators: ['authority-boundary', ...(seed.validators ?? [])],
     context: {
-      allowedKeys: ['policy', 'campaign', 'canon', 'scene', 'turn', 'input', 'mechanics', 'workflow', 'priorResult'],
+      allowedKeys: seed.id === FREEFORM_INTAKE_OPERATION ? ['input'] : ['policy', 'campaign', 'canon', 'scene', 'turn', 'input', 'mechanics', 'workflow', 'priorResult'],
       inputTargetBytes: seed.targetBytes ?? (seed.tier === 'structured' ? 24_000 : 64_000),
       inputHardLimitBytes: seed.hardLimitBytes ?? (seed.tier === 'structured' ? 64_000 : 256_000),
       requiredReferenceRevisions: [],
@@ -1571,7 +1582,7 @@ for (const seed of seeds) {
       premiumAllowed: seed.operationClass === 'reasoning_high',
     },
     cache: {
-      enabled: seed.operationClass !== 'narrative',
+      enabled: seed.operationClass !== 'narrative' && seed.id !== FREEFORM_INTAKE_OPERATION,
       ttlMs: seed.operationClass === 'world_generation' || seed.operationClass === 'reasoning_high' ? 900_000 : 300_000,
     },
   };

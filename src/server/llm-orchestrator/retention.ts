@@ -5,6 +5,7 @@ import { OrchestratorError } from './errors.js';
 const RETAINED_COLLECTIONS = [
   'llm_executions',
   'llm_generation_workflows',
+  'llm_freeform_tickets',
   'authority_operations',
   'authority_outbox',
   'gma_mechanics_ledger',

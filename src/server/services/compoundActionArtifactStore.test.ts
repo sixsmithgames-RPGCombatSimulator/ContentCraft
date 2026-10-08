@@ -7,6 +7,8 @@ import {
   COMPOUND_ACTION_ARTIFACT_STORE_CONTRACT_VERSION,
   COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
   COMPOUND_ACTION_CONTRACTS,
+  GMC_COMPOUND_ACTION_CAPABILITIES,
+  GMC_COMPOUND_ACTION_CONTRACTS,
   compileCompoundActionRequirementProjection,
   createCompoundActionArtifact,
   readActiveCompoundActionArtifact,
@@ -177,6 +179,31 @@ function parallelCursor(revision = 1) {
     remainingNodeRefs: [],
   };
 }
+
+describe('additive compact freeform compiler reader', () => {
+  it('advertises the paired reader/policy and accepts a valid /5 without confidence or review', async () => {
+    expect(GMC_COMPOUND_ACTION_CAPABILITIES).toContain('freeform-intent-compiler-reader/1');
+    expect(GMC_COMPOUND_ACTION_CONTRACTS.freeformIntentCompilerPolicy).toBe('gma.semantic-action-compiler-policy/12');
+    const store = memoryCollection();
+    const input = createInput();
+    const compact = parallelProgram(input.instruction);
+    compact.planner = { source: 'freeform_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/12' } as any;
+    const result = await createCompoundActionArtifact({ ...input, program: compact, cursor: parallelCursor() }, store.records);
+    expect(result.duplicate).toBe(false);
+  });
+  it.each(['confidence', 'review', 'wrong_source', 'wrong_policy', 'legacy_program'])('rejects partial or manufactured compact binding: %s', async (invalid) => {
+    const input = createInput();
+    const compact: any = parallelProgram(input.instruction);
+    compact.planner = { source: 'freeform_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/12' };
+    if (invalid === 'confidence') compact.planner.confidence = 1;
+    if (invalid === 'review') compact.planner.review = { noActionsInvented: true };
+    if (invalid === 'wrong_source') compact.planner.source = 'semantic_intent_compiler';
+    if (invalid === 'wrong_policy') compact.planner.policyVersion = 'gma.semantic-action-compiler-policy/11';
+    if (invalid === 'legacy_program') compact.schemaVersion = 'gma.semantic-action-program/2';
+    await expect(createCompoundActionArtifact({ ...input, program: compact, cursor: parallelCursor() }, memoryCollection().records))
+      .rejects.toMatchObject({ code: 'COMPOUND_ACTION_PROGRAM_INVALID' });
+  });
+});
 
 function cursor(revision: number, completedNodeRefs: string[] = []) {
   return {

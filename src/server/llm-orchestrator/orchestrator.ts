@@ -37,6 +37,9 @@ import { OpenAiProviderAdapter } from './providers/openAiProvider.js';
 import { resolveRolloutDecision } from './rolloutPolicy.js';
 import { MongoReferenceContextLoader } from './mongoContextLoader.js';
 import './semanticValidators.js';
+import { FREEFORM_INTAKE_OPERATION } from '../../shared/llm/freeformIntakePolicy.js';
+import { executeTicketedFreeform } from './freeformExecution.js';
+import type { FreeformTicketCollection } from './freeformTickets.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 const validateRequest = ajv.compile(llmRequestJsonSchema);
@@ -191,9 +194,18 @@ export interface ExecuteOptions {
   shadow?: boolean;
   runtimeOverride?: LlmOperationRuntimeOverride;
   contextLoader?: ReferenceContextLoader;
+  freeformTickets?: FreeformTicketCollection;
 }
 
 export async function executeLlmOperation(request: LlmRequestEnvelope, options: ExecuteOptions): Promise<LlmResponseEnvelope> {
+  if (request?.operation === FREEFORM_INTAKE_OPERATION) {
+    validateContract(request);
+    return executeTicketedFreeform(request, options, () => executeOperation(request, { ...options, runtimeOverride: undefined }));
+  }
+  return executeOperation(request, options);
+}
+
+async function executeOperation(request: LlmRequestEnvelope, options: ExecuteOptions): Promise<LlmResponseEnvelope> {
   const requestFingerprint = fingerprint(request);
   const key = operationKey(options.userId, request);
   const existingFlight = inFlight.get(key);
@@ -451,7 +463,9 @@ async function executeClaimed(
     response.error = {
       code: normalized.code,
       category: normalized.category,
-      message: normalized.message,
+      message: request.operation === FREEFORM_INTAKE_OPERATION
+        ? 'The compact interpretation attempt did not complete successfully.'
+        : normalized.message,
       retryable: normalized.retryable,
       source: normalized.source,
       providerStatus: normalized.providerStatus,

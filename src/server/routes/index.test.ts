@@ -55,7 +55,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.14.1',
+      version: '1.14.2',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -146,5 +146,7 @@ describe('API health', () => {
       'gma.playable-scene-context/2', 'gma.playable-scene-context/3', 'gma.playable-scene-context/4',
     ]);
     expect(OBSERVATION_SAGA_SHARED_CONTRACTS.semanticActionCompilerPolicy).toBe('gma.semantic-action-compiler-policy/11');
+    expect(GMC_COMPOUND_ACTION_CAPABILITIES).toContain('freeform-intent-compiler-reader/1');
+    expect(GMC_COMPOUND_ACTION_CONTRACTS.freeformIntentCompilerPolicy).toBe('gma.semantic-action-compiler-policy/12');
   });
 });

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { FREEFORM_INTAKE_OPERATION } from '../../../shared/llm/freeformIntakePolicy.js';
 import { OrchestratorError } from '../errors.js';
 import type {
   LlmProviderAdapter,
@@ -8,7 +9,7 @@ import type {
 
 export class OpenAiProviderAdapter implements LlmProviderAdapter {
   readonly id = 'openai';
-  readonly version = '1';
+  readonly version = '2';
 
   isAvailable() {
     return Boolean(process.env.OPENAI_API_KEY);
@@ -26,21 +27,28 @@ export class OpenAiProviderAdapter implements LlmProviderAdapter {
       });
     }
     try {
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const response = await client.responses.create({
+      const compactIntake = request.operation === FREEFORM_INTAKE_OPERATION;
+      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY,
+        ...(compactIntake ? { maxRetries: 0 } : {}) });
+      const body = {
         model: request.model,
         instructions: request.systemInstruction,
         input: JSON.stringify(request.input),
         text: {
           format: {
-            type: 'json_schema',
+            type: 'json_schema' as const,
             name: request.operation.replace(/[^a-zA-Z0-9_-]/g, '_'),
-            strict: true,
+            strict: true as const,
             schema: request.outputSchema,
           },
         },
         max_output_tokens: request.maxOutputTokens,
-      }, { signal: request.signal, timeout: request.timeoutMs });
+      };
+      if (compactIntake && Buffer.byteLength(JSON.stringify(body), 'utf8') > 24576) {
+        throw new OrchestratorError({ code: 'LLM_CONTEXT_HARD_LIMIT_EXCEEDED', category: 'context',
+          message: 'The compact intake request exceeds its provider envelope budget.', status: 413 });
+      }
+      const response = await client.responses.create(body, { signal: request.signal, timeout: request.timeoutMs });
       const rawText = response.output_text;
       return {
         output: JSON.parse(rawText),
@@ -57,6 +65,7 @@ export class OpenAiProviderAdapter implements LlmProviderAdapter {
         },
       };
     } catch (error) {
+      if (error instanceof OrchestratorError) throw error;
       const status = Number((error as any)?.status ?? 0);
       const message = error instanceof Error ? error.message : 'The alternate provider failed.';
       const spendCap = status === 429

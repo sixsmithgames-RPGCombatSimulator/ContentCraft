@@ -1,5 +1,6 @@
 import type { LlmValidationResult } from '../../shared/llm/orchestratorContracts.js';
 import Ajv from 'ajv';
+import { validateFreeformIntake } from './freeformIntakeValidation.js';
 import {
   registerSemanticValidator,
   STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA,
@@ -9,6 +10,8 @@ import {
 function result(id: string, issues: Array<{ code: string; message: string; path?: string }>): LlmValidationResult {
   return { validatorId: id, version: '1', valid: issues.length === 0, issues };
 }
+
+registerSemanticValidator('freeform-intake', ({ request, output }) => validateFreeformIntake(request, output));
 
 function outputText(output: any) {
   return [output?.narration, output?.correctedNarration, output?.response, output?.dialogue]
