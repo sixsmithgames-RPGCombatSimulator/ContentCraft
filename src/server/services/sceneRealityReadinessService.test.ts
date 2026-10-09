@@ -323,6 +323,40 @@ describe('Scene reality owner authority', () => {
     await expect(commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0, buildRequest: request, proposal: { ...candidate, openingFrame: { ...opening, presentedTargetManifest: { ...manifest, targets: [{ surfaceText: 'an unexplained door', targetRef: 'scene-element:invented-door', targetKind: 'object', materiallyAddressable: true }] } } }, assessment: assessment(candidate, request) }, mem.stores)).rejects.toMatchObject({ code: 'SCENE_REALITY_PRESENTED_TARGET_UNBOUND' });
   });
 
+  it('commits an opening with the exact prepared actor alias and zone-local threshold without inventing authority', async () => {
+    const mem = memory(); const request = buildRequest(); const candidate = proposal(request);
+    (candidate.actorFrames as JsonObject[])[0].actorRef = 'actor:owner:worker';
+    const entry = { ...boundary, boundaryId: 'boundary:local-entry', fromZoneRef: 'scene-zone:second-mouth:approach:one' };
+    (candidate.zones as JsonObject[])[0].thresholds = [entry];
+    const prose = 'The drain worker waits beside the tunnel entry.';
+    const opening = candidate.openingFrame as JsonObject;
+    const manifest = opening.presentedTargetManifest as JsonObject;
+    candidate.openingFrame = { prose, presentedTargetManifest: { ...manifest, proseFingerprint: fingerprint(prose), targets: [
+      { surfaceText: 'drain worker', targetRef: 'actor:owner:worker', targetKind: 'actor', materiallyAddressable: true },
+      { surfaceText: 'tunnel entry', targetRef: entry.boundaryId, targetKind: 'threshold', materiallyAddressable: true },
+    ] } };
+    const input = { userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0, buildRequest: request,
+      proposal: candidate, assessment: assessment(candidate, request) };
+    const receipt = await commitSceneReality(input, mem.stores);
+    expect(receipt.duplicate).toBe(false);
+    expect((await commitSceneReality(input, mem.stores)).duplicate).toBe(true);
+    expect(mem.operations.documents).toHaveLength(1);
+    expect(mem.pointers.documents).toHaveLength(1);
+  });
+
+  it.each(['drain worker', 'gmc:location:second-mouth', 'actor:forged', 'boundary:unprepared'])(
+    'rejects unprepared opening identity %s before staging or exposing a bundle', async (targetRef) => {
+      const mem = memory(); const request = buildRequest(); const candidate = proposal(request);
+      const opening = candidate.openingFrame as JsonObject;
+      (opening.presentedTargetManifest as JsonObject).targets = [{ surfaceText: 'target', targetRef, targetKind: 'actor', materiallyAddressable: true }];
+      await expect(commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0,
+        buildRequest: request, proposal: candidate, assessment: assessment(candidate, request) }, mem.stores)).rejects.toMatchObject({
+        code: targetRef === 'drain worker' ? 'SCENE_REALITY_ID_INVALID' : 'SCENE_REALITY_PRESENTED_TARGET_UNBOUND',
+      });
+      expect(mem.bundles.documents).toHaveLength(0); expect(mem.pointers.documents).toHaveLength(0); expect(mem.operations.documents).toHaveLength(0);
+    },
+  );
+
   it('matches coverage by exact tuple and treats an ordinary gap as a readiness defect', async () => {
     const { mem } = await commitReady();
     const active = await readActiveSceneReality({ userId: 'user:one', campaignId: 'campaign:one' }, mem.stores);

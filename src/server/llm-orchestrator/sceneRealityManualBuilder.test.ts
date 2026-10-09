@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryExecutionStore } from './executionStore.js';
-import { getOperationDefinition, validateOperationOutput } from './operationRegistry.js';
+import { getOperationDefinition, getSemanticValidator, validateOperationOutput } from './operationRegistry.js';
 import { createUniversalRequest, executeLlmOperation } from './orchestrator.js';
 import { FakeProviderAdapter } from './providers/fakeProvider.js';
 
@@ -27,6 +27,33 @@ function checkpointResult() {
 }
 
 describe('Manual scene builder first-pass contract', () => {
+  it('teaches exact prepared actor and threshold refs in the original policy', () => {
+    expect(getOperationDefinition('story.scene-reality.build').prompt.systemInstruction).toMatch(
+      /every materially addressable actor, place, threshold.*presented-target manifest with an exact prepared ref/,
+    );
+  });
+
+  it('accepts prepared actor aliases and thresholds but rejects prose-only and source-only refs', async () => {
+    const identity = { operationId: 'scene-reality:targets', campaignId: 'campaign:targets', requestedDepth: 'interactive' };
+    const proposal = { ...identity,
+      zones: [{ zoneId: 'zone:entrance', sensorySurface: ['Stone'], ordinaryActivity: ['Access'], thresholds: [{ boundaryId: 'boundary:entry' }] }],
+      actorFrames: [{ actorFrameId: 'frame:familiar', actorRef: 'actor:familiar', publicLabel: 'Rat familiar' }],
+      elements: [], facts: [], preparedBoundaries: [{ boundaryId: 'boundary:deep' }], sourceRefs: ['source:unprepared'],
+    };
+    const request = createUniversalRequest({ operation: 'story.scene-reality.build', taskId: 'targets', correlationId: 'targets', idempotencyKey: 'targets',
+      references: {}, context: { input: { label: 'user_text', value: { buildRequest: { ...identity, deterministicMinimumDepth: 'interactive' },
+        depthJudgment: { selectedDepth: 'interactive' } } } } });
+    const validator = getSemanticValidator('scene-reality-builder-contract');
+    expect(validator).toBeTypeOf('function');
+    for (const targetRef of ['frame:familiar', 'actor:familiar', 'boundary:entry', 'boundary:deep', 'Rat familiar', 'source:unprepared', 'actor:forged']) {
+      const output = { schemaVersion: 'gma.scene-reality-builder-result/1', ...identity, status: 'complete', checkpoint: null,
+        proposal: { ...proposal, openingFrame: { presentedTargetManifest: { targets: [{ targetRef, materiallyAddressable: true }] } } } };
+      const result = await validator!({ request, output });
+      expect(result.valid, targetRef).toBe(['frame:familiar', 'actor:familiar', 'boundary:entry', 'boundary:deep'].includes(targetRef));
+      if (!result.valid) expect(result.issues.map((issue) => issue.code)).toContain('SCENE_REALITY_PRESENTED_TARGET_UNBOUND');
+    }
+  });
+
   for (const operation of ['story.scene-reality.build', 'story.scene-reality.build.checkpoint']) {
     it(`${operation} teaches the complete wrapper, checkpoint names and nested records before the first reply`, () => {
       const policy = getOperationDefinition(operation).prompt.systemInstruction;

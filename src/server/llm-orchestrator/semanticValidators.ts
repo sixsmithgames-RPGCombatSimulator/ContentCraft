@@ -1,6 +1,7 @@
 import type { LlmValidationResult } from '../../shared/llm/orchestratorContracts.js';
 import Ajv from 'ajv';
 import { validateFreeformIntake } from './freeformIntakeValidation.js';
+import { scenePresentedTargetRefs } from '../services/scenePresentedTargetRefs.js';
 import {
   registerSemanticValidator,
   STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA,
@@ -364,12 +365,7 @@ registerSemanticValidator('scene-reality-builder-contract', ({ request, output }
   if (!continuation && selected >= sceneRealityDepths.indexOf('investigative') && facts.length < 2) {
     issues.push({ code: 'SCENE_REALITY_INVESTIGATIVE_FACTS_REQUIRED', message: 'Investigative preparation needs multiple concrete facts or bounded negatives.', path: '/proposal/facts' });
   }
-  const knownRefs = new Set<string>([
-    ...zones.map((entry: any) => String(entry?.zoneId ?? '')),
-    ...(Array.isArray(effectiveCandidate?.actorFrames) ? effectiveCandidate.actorFrames.map((entry: any) => String(entry?.actorFrameId ?? '')) : []),
-    ...(Array.isArray(effectiveCandidate?.elements) ? effectiveCandidate.elements.map((entry: any) => String(entry?.elementId ?? '')) : []),
-    ...facts.map((entry: any) => String(entry?.factId ?? '')),
-  ].filter(Boolean));
+  const knownRefs = scenePresentedTargetRefs(effectiveCandidate);
   const targets = Array.isArray(candidate?.openingFrame?.presentedTargetManifest?.targets) ? candidate.openingFrame.presentedTargetManifest.targets : [];
   targets.forEach((target: any, index: number) => {
     if (target?.materiallyAddressable === true && !knownRefs.has(String(target?.targetRef ?? ''))) issues.push({ code: 'SCENE_REALITY_PRESENTED_TARGET_UNBOUND', message: 'Opening prose introduced a materially addressable target without prepared reality.', path: `/proposal/openingFrame/presentedTargetManifest/targets/${index}/targetRef` });

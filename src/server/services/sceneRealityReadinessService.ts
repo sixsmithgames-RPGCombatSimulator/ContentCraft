@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Collection } from 'mongodb';
 import { getDb } from '../config/mongo.js';
 import { readActiveStoryWorkspace, StoryWorkspaceStoreError, validateSceneKitV4, type JsonObject, type JsonValue } from './storyWorkspaceStore.js';
+import { scenePresentedTargetRefs } from './scenePresentedTargetRefs.js';
 
 export const SCENE_REALITY_CONTRACTS = Object.freeze({
   buildRequest: 'gma.scene-reality-build-request/1',
@@ -666,7 +667,7 @@ function validateProposal(value: unknown, request: JsonObject, campaignId: strin
     if (!currentRefs.has(String(coverage.zoneRef)) || !currentRefs.has(String(coverage.targetRef))) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_AFFORDANCE_REF_UNBOUND', 'A Scene affordance points outside the proposed dossier.', { field: `proposal.sceneStoryDesign.affordances[${index}]` });
     idList(coverage.factRefs, `proposal.sceneStoryDesign.affordances[${index}].factRefs`, 32, 1).forEach((factRef) => { if (!currentRefs.has(factRef)) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_AFFORDANCE_REF_UNBOUND', 'A Scene affordance points to an unprepared fact.', { factRef }); });
   });
-  validatePresentedTargets(value.openingFrame, currentRefs, campaignId);
+  validatePresentedTargets(value.openingFrame, new Set([...currentRefs, ...scenePresentedTargetRefs(value)]), campaignId);
   if (!object(value.activeSceneState)) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_ACTIVE_STATE_INVALID', 'The Scene proposal needs an active-state initialization or compatible patch.', {});
   exactKeys(value.activeSceneState, 'proposal.activeSceneState', ['revision', 'receiptChain']);
   whole(value.activeSceneState.revision, 'proposal.activeSceneState.revision');

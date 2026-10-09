@@ -137,6 +137,13 @@ result, or semantic stop; checking only the first ready node is invalid.
 
 ## Owner contracts and validation
 
+Presented opening targets may cite either exact `actorFrameId` or its prepared
+`actorRef`, and a threshold's exact `boundaryId` in a prepared boundary or zone
+threshold record. Semantic validation and owner commit use one dossier-derived
+catalog for these identities. A label or arbitrary source ref never establishes
+an addressable target. This implements the existing actor-alias and threshold
+closure rules, not a new identity inference or mechanics authority.
+
 The complete logical schemas, depth profiles, budgets, flows, migration,
 examples, and acceptance gates are normative in ADR-011. Shared JSON Schemas
 must express exact versions, keys, enums, sizes, identities, refs, visibility,
