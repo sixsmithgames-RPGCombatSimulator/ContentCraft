@@ -26,6 +26,7 @@ export const SCENE_REALITY_CONTRACTS = Object.freeze({
   factSelectionReceipt: 'gmc.story-fact-selection-receipt/1',
   rebaseReceipt: 'gma.action-program-rebase-receipt/2',
   presentedTargetManifest: 'gma.presented-target-manifest/1',
+  modelMetadataBinding: 'gma.scene-model-metadata-binding/1',
   inspection: 'gmc.scene-reality-inspection/1',
 } as const);
 
@@ -39,6 +40,7 @@ export const SCENE_REALITY_CAPABILITIES = Object.freeze([
   'presented-target-closure/1',
   'compound-window-coverage/1',
   'scene-reality-inspection/1',
+  'application-owned-scene-prose-fingerprint/1',
 ] as const);
 
 export const SCENE_REALITY_LIMITS = Object.freeze({

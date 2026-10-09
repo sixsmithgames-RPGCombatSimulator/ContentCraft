@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "gma.scene-model-metadata-binding/1",
+  "builderPolicyVersion": "gma.scene-reality-builder-policy/3",
+  "repairPolicyVersion": "gma.scene-reality-repair-policy/2",
+  "proseFingerprintOwner": "application",
+  "proseFingerprintAlgorithm": "sha256-canonical-json-string-utf8",
+  "proseFingerprintPlaceholder": "0000000000000000000000000000000000000000000000000000000000000000"
+}

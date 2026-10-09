@@ -137,6 +137,22 @@ result, or semantic stop; checking only the first ready node is invalid.
 
 ## Owner contracts and validation
 
+The owner approved GMA ADR 013 (application-owned Scene prose fingerprints) on
+2026-10-08. GMC publishes the exact metadata marker and fresh builder `/3` and
+repair `/2` policies. Marked builds must return the declared zero placeholder;
+unmarked historical replies retain their original checks. GMA binds canonical
+JSON-string SHA-256 before examination. GMC's existing strict independent hash,
+assessment and atomic commit checks are unchanged. This adds no provider call,
+world-authority permission or model-operation reserve. The subordinate sequence
+is marker/policy publication, GMA binding and compatibility tests, exact Studio
+pins, complete checks, then production verification with fresh intake disabled.
+
+Owner validation for this increment: the complete GMC check passes 897 tests,
+provider/contract guards, typecheck, lint and both production builds. Compiled
+server and serverless imports pass. Raw-text hashes, placeholders and late prose
+edits remain rejected before staging; canonical escaped/Unicode prose commits
+without alteration. These are owner boundaries, not a full gameplay certificate.
+
 Presented opening targets may cite either exact `actorFrameId` or its prepared
 `actorRef`, and a threshold's exact `boundaryId` in a prepared boundary or zone
 threshold record. Semantic validation and owner commit use one dossier-derived

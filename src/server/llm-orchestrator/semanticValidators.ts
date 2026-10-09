@@ -2,6 +2,7 @@ import type { LlmValidationResult } from '../../shared/llm/orchestratorContracts
 import Ajv from 'ajv';
 import { validateFreeformIntake } from './freeformIntakeValidation.js';
 import { scenePresentedTargetRefs } from '../services/scenePresentedTargetRefs.js';
+import { SCENE_MODEL_METADATA_BINDING, validSceneModelMetadataBinding } from './sceneModelMetadataBinding.js';
 import {
   registerSemanticValidator,
   STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA,
@@ -291,6 +292,11 @@ registerSemanticValidator('scene-reality-builder-contract', ({ request, output }
     });
   }
   const candidate = continuation ? output?.checkpoint : output?.proposal;
+  if (!validSceneModelMetadataBinding(trusted?.modelMetadataBinding)) issues.push({ code: 'SCENE_REALITY_MODEL_METADATA_BINDING_INVALID', message: 'The Scene metadata policy marker does not match the registered policy.', path: '/modelMetadataBinding' });
+  else if (!continuation && trusted?.modelMetadataBinding !== undefined
+    && candidate?.openingFrame?.presentedTargetManifest?.proseFingerprint !== SCENE_MODEL_METADATA_BINDING.proseFingerprintPlaceholder) {
+    issues.push({ code: 'SCENE_REALITY_PROSE_PLACEHOLDER_REQUIRED', message: 'The application-owned prose fingerprint must use the declared placeholder.', path: '/proposal/openingFrame/presentedTargetManifest/proseFingerprint' });
+  }
   const recordLimits = trusted?.buildStrategy?.recordLimits ?? {};
   for (const field of ['zones', 'actorFrames', 'elements', 'facts']) {
     const maximum = Number(recordLimits[field]);
@@ -405,6 +411,7 @@ registerSemanticValidator('scene-readiness-examiner-contract', ({ request, outpu
 registerSemanticValidator('scene-reality-repair-contract', ({ request, output }) => {
   const issues: Array<{ code: string; message: string; path?: string }> = [];
   const trusted = request.context?.input?.value as any;
+  if (!validSceneModelMetadataBinding(trusted?.modelMetadataBinding)) issues.push({ code: 'SCENE_REALITY_MODEL_METADATA_BINDING_INVALID', message: 'The Scene metadata policy marker does not match the registered policy.', path: '/modelMetadataBinding' });
   if (String(output?.correctionId ?? '') !== String(trusted?.correctionId ?? '')) issues.push({ code: 'SCENE_REALITY_REPAIR_CORRECTION_CHANGED', message: 'The repair changed the correction ID.', path: '/correctionId' });
   const allowedDomains = new Set((Array.isArray(trusted?.failedDomains) ? trusted.failedDomains : []).map(String));
   for (const [index, domain] of (Array.isArray(output?.failedDomains) ? output.failedDomains : []).entries()) {

@@ -3,6 +3,7 @@ import { MemoryExecutionStore } from './executionStore.js';
 import { getOperationDefinition, getSemanticValidator, validateOperationOutput } from './operationRegistry.js';
 import { createUniversalRequest, executeLlmOperation } from './orchestrator.js';
 import { FakeProviderAdapter } from './providers/fakeProvider.js';
+import { SCENE_MODEL_METADATA_BINDING, validSceneModelMetadataBinding } from './sceneModelMetadataBinding.js';
 
 // Fictional structural reproductions only: never retain a player's private reply.
 function checkpointResult() {
@@ -27,6 +28,50 @@ function checkpointResult() {
 }
 
 describe('Manual scene builder first-pass contract', () => {
+  it('declares application-owned metadata in the original versioned build and repair policies', () => {
+    const build = getOperationDefinition('story.scene-reality.build').prompt;
+    expect(build.version).toBe(SCENE_MODEL_METADATA_BINDING.builderPolicyVersion);
+    expect(build.systemInstruction).toMatch(/exactly 64 zero characters.*Do not calculate a checksum/);
+    expect(build.systemInstruction).toMatch(/canonical JSON string encoded as UTF-8 before examination.*independently verifies it at commit/);
+    const repair = getOperationDefinition('story.scene-reality.repair').prompt;
+    expect(repair.version).toBe(SCENE_MODEL_METADATA_BINDING.repairPolicyVersion);
+    expect(repair.systemInstruction).toMatch(/GMA owns the opening prose checksum/i);
+    expect(repair.systemInstruction).toMatch(/opening prose.*target mapping/i);
+  });
+
+  it('recognizes only the exact metadata contract and historical absence', () => {
+    expect(validSceneModelMetadataBinding(undefined)).toBe(true);
+    expect(validSceneModelMetadataBinding({ ...SCENE_MODEL_METADATA_BINDING })).toBe(true);
+    for (const marker of [null, [], {}, { ...SCENE_MODEL_METADATA_BINDING, extra: true },
+      { ...SCENE_MODEL_METADATA_BINDING, proseFingerprintAlgorithm: 'sha256-raw-text' },
+      { ...SCENE_MODEL_METADATA_BINDING, builderPolicyVersion: 'gma.scene-reality-builder-policy/2' }]) {
+      expect(validSceneModelMetadataBinding(marker)).toBe(false);
+    }
+  });
+
+  it('requires the placeholder only for marked complete builds and preserves unmarked validation', async () => {
+    const identity = { operationId: 'scene-reality:metadata', campaignId: 'campaign:metadata', requestedDepth: 'interactive' };
+    const validator = getSemanticValidator('scene-reality-builder-contract')!;
+    const validate = (binding: unknown, hash: unknown) => validator({
+      request: createUniversalRequest({ operation: 'story.scene-reality.build', taskId: 'metadata', correlationId: 'metadata', idempotencyKey: 'metadata',
+        references: {}, context: { input: { label: 'user_text', value: { buildRequest: { ...identity, deterministicMinimumDepth: 'interactive' },
+          ...(binding !== undefined ? { modelMetadataBinding: binding } : {}) } } } }),
+      output: { ...identity, status: 'complete', checkpoint: null, proposal: { ...identity,
+        zones: [{ zoneId: 'zone:one', sensorySurface: ['Stone.'], ordinaryActivity: ['A passage.'] }],
+        actorFrames: [{ actorFrameId: 'frame:one', actorRef: 'actor:one' }], elements: [], facts: [], openingFrame: { prose: 'Stone.', presentedTargetManifest: { proseFingerprint: hash, targets: [] } } } },
+    });
+    expect((await validate(SCENE_MODEL_METADATA_BINDING, '0'.repeat(64))).valid).toBe(true);
+    for (const hash of ['a'.repeat(64), '0'.repeat(63), null]) {
+      expect((await validate(SCENE_MODEL_METADATA_BINDING, hash)).issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'SCENE_REALITY_PROSE_PLACEHOLDER_REQUIRED' }),
+      ]));
+    }
+    expect((await validate(undefined, 'a'.repeat(64))).valid).toBe(true);
+    expect((await validate({ ...SCENE_MODEL_METADATA_BINDING, extra: true }, '0'.repeat(64))).issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'SCENE_REALITY_MODEL_METADATA_BINDING_INVALID' }),
+    ]));
+  });
+
   it('teaches exact prepared actor and threshold refs in the original policy', () => {
     expect(getOperationDefinition('story.scene-reality.build').prompt.systemInstruction).toMatch(
       /every materially addressable actor, place, threshold.*presented-target manifest with an exact prepared ref/,

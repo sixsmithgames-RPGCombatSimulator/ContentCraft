@@ -129,7 +129,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(checkpoint.prompt.systemInstruction).toMatch(/unchanged retained record keeps its prior revision.*changed retained record advances exactly once.*new record begins at revision one/i);
     expect((checkpoint.outputSchema.schema as any).properties.status).toEqual({ const: 'continuation_required' });
     expect(checkpoint.provider).toMatchObject({ thinkingLevel: 'medium', maxOutputTokens: 16_000 });
-    expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/2');
+    expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/3');
     expect(builder.prompt.systemInstruction).toMatch(/Prepare a playable situation rather than an answer to the current sentence/i);
     expect(builder.prompt.systemInstruction).toMatch(/one meaningful layer beyond every presented threshold/i);
     expect(builder.prompt.systemInstruction).toMatch(/ordinary, irrelevant, or bounded-negative reality/i);
@@ -144,7 +144,7 @@ describe('provider-neutral LLM orchestrator', () => {
     expect(examiner.prompt.systemInstruction).toMatch(/at least three Scene-specific counterfactual probes/i);
     expect(examiner.prompt.systemInstruction).toMatch(/exact zone, actor-frame, element, or fact ref.*Do not cite obligation, affordance, boundary, Story, source, Scene-kit, or prose refs/i);
     expect(examiner.prompt.systemInstruction).toMatch(/examiner diagnoses only/i);
-    expect(repair.prompt.version).toBe('gma.scene-reality-repair-policy/1');
+    expect(repair.prompt.version).toBe('gma.scene-reality-repair-policy/2');
     expect(repair.prompt.systemInstruction).toMatch(/exactly the failed Scene-reality domains/i);
     expect(repair.prompt.systemInstruction).toMatch(/same positive depth requirements as the first-pass/i);
     expect(repair.prompt.systemInstruction).toMatch(/Preserve every accepted record/i);
