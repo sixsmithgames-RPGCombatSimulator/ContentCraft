@@ -433,3 +433,36 @@ entry-negotiation affordance, cross-zone familiar movement, dependent observer
 position, foreign coverage-ref nulling, zero-based transport normalization at
 GMA's boundary, route-level receipt forwarding, and owner-store rejection of
 an unaudited authority-head change.
+
+## ADR 014 pending-intent foundation, approved 2026-10-09
+
+The owner approved GMA ADR 014,
+`GameMaster Assistant/docs/adr/014-prepared-scene-pending-intent-bindings.md`.
+It governs the new exact pending-window bindings without changing completed
+work or the original plan. Its complete authority, schema, prompt, budget,
+repair, persistence, compatibility, rollback, failure and acceptance design
+remains normative; this appendix does not authorize a different design.
+
+The first delivery provides only canonical application-generated
+`gma.pending-intent-window/1` construction and owner-input comparison in
+`src/shared/llm/pendingIntentWindow.ts`. It preserves explicit nulls, stable
+node/requirement/group identities, exact instruction evidence, owner heads,
+the dependency-closed pending window and completed prerequisite receipt
+fingerprints. It rejects omitted pending work, changed instruction/revision,
+cycles, missing dependency receipts and excess bytes. Maximums remain eight
+nodes, thirty-two requirements and 24,576 UTF-8 bytes for this projection;
+future provider-envelope measurements must include the projection, not add it
+outside existing ceilings. GMA generates its reader from this canonical source.
+
+This is not an LLM-output validator, permission check, binding application,
+database operation or gameplay receipt. No route, health capability, policy,
+model response wrapper, current Manual packet or rollout setting advertises
+the unfinished binding feature. Those versioned changes, combined independent
+examination, immutable pending binding persistence, strict coverage, atomic
+artifact binding/rebase, execution and reload remain subsequent delivery gates.
+The original fictional scout captures remain unchanged and gameplay BLOCKED.
+
+The 1.14.7 required check passes 921 tests, including twenty-four new canonical
+window tests, provider/contract guards, typecheck, lint and both production
+builds. Compiled application and serverless imports pass. This verifies the
+foundation and existing behavior, not model binding or completed scout play.
