@@ -25,10 +25,17 @@ DATABASE_URL=sqlite:./database.sqlite
 ```
 
 ### SagaCraft (sagacraft.sixsmithgames.com)
+
+SagaCraft is owner-only while it is hidden from the public catalog. The
+production deployment must keep `CLERK_SECRET_KEY` configured so API requests
+can verify the Clerk token and fetch the verified primary email. Set
+`CLERK_AUTHORIZED_PARTIES` to the exact SagaCraft origin to bind accepted
+session tokens to this deployment.
 ```bash
 NODE_ENV=production
 VITE_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
 CLERK_SECRET_KEY=sk_live_...
+CLERK_AUTHORIZED_PARTIES=https://sagacraft.sixsmithgames.com
 CORS_ORIGIN=https://contentcraft.sixsmithgames.com,https://gmcraft.sixsmithgames.com,https://sagacraft.sixsmithgames.com
 MONGODB_URI=mongodb+srv://[username]:[password]@cluster.mongodb.net/sagacraft
 DATABASE_URL=sqlite:./database.sqlite
