@@ -1,3 +1,5 @@
+import { SCENE_PENDING_INTENT_BINDINGS_SCHEMA } from '../../shared/llm/scenePendingIntentBindings.js';
+
 const identifier = { type: 'string', minLength: 1, maxLength: 240, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' } as const;
 const revision = { type: 'integer', minimum: 1 } as const;
 const nonNegativeRevision = { type: 'integer', minimum: 0 } as const;
@@ -326,3 +328,32 @@ export const sceneRealityRepairOutput = {
   },
   assessment: sceneReadinessAssessmentOutput,
 } as const;
+
+/** ADR 014 staged schemas only. Not registered/emitted until owner persistence,
+ * atomic application, rollback readers and combined orchestration are ready. */
+export const sceneRealityPendingBuilderResultOutput = {
+  ...sceneRealityBuilderResultOutput,
+  schemaVersion: { const: 'gma.scene-reality-builder-result/2' },
+  intentWindowFingerprint: sha256,
+  pendingIntentBindings: { anyOf: [SCENE_PENDING_INTENT_BINDINGS_SCHEMA, { type: 'null' }] },
+} as const;
+export const sceneReadinessPendingAssessmentOutput = strictObject(
+  [...sceneReadinessAssessmentOutput.required, 'intentWindowFingerprint', 'bindingFingerprint', 'ownerReadSetFingerprint', 'pendingIntentPolicyFingerprint', 'bindingReviews'],
+  {
+    ...sceneReadinessAssessmentOutput.properties,
+    schemaVersion: { const: 'gma.scene-readiness-assessment/2' }, intentWindowFingerprint: sha256,
+    bindingFingerprint: sha256, ownerReadSetFingerprint: sha256, pendingIntentPolicyFingerprint: sha256,
+    debt: {
+      type: 'array', maxItems: 32,
+      items: strictObject(['debtId', 'domain', 'description', 'blocking', 'affectedRefs'], {
+        debtId: identifier, domain: { enum: ['locus', 'topology', 'actors', 'elements', 'information', 'operations', 'story_alignment', 'consequences', 'capabilities', 'unknowns', 'timeline', 'pending_intent'] },
+        description: text(), blocking: { type: 'boolean' }, affectedRefs: idList(32, 1),
+      }),
+    },
+    bindingReviews: { type: 'array', minItems: 1, maxItems: 8, items: strictObject(
+      ['nodeRef', 'bindingRowFingerprint', 'verdict', 'rationale', 'evidenceRefs', 'mechanicsState'],
+      { nodeRef: identifier, bindingRowFingerprint: sha256, verdict: { enum: ['supported', 'unsupported'] },
+        rationale: text(), evidenceRefs: idList(32, 1), mechanicsState: { const: 'not_resolved' } },
+    ) },
+  },
+);

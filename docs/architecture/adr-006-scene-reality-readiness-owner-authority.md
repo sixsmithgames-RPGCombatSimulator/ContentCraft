@@ -466,3 +466,22 @@ The 1.14.7 required check passes 921 tests, including twenty-four new canonical
 window tests, provider/contract guards, typecheck, lint and both production
 builds. Compiled application and serverless imports pass. This verifies the
 foundation and existing behavior, not model binding or completed scout play.
+
+## ADR 014 staged binding contracts, 2026-10-13
+
+GMA's accepted ADR 014 and its staged wire-contract detail govern this increment.
+GMC provides a canonical pure binding schema, original versioned binding and
+independent examiner policy components, exact reference/coverage slots, owner
+evidence closure, combined `/2` assessment checks and failed-node-only repair.
+Builder result `/2` and assessment `/2` schemas remain unregistered. Existing
+registered operations, policy versions, Manual packets, assessments and captures
+are unchanged. GMA generates its contract mirror from this owner source.
+
+The helper requires already-authenticated, validated owner inputs. It does not
+authenticate a caller, validate the full world proposal, create binding records,
+revalidate owner state at a write, apply a rebase, execute an action or issue a
+certificate. Structurally closed but semantically wrong bindings still require
+independent rejection; tests explicitly demonstrate that distinction. No new
+route or health capability advertises unfinished binding support. Persistence,
+atomic application, complete packet sizing, new blind Manual execution and all
+remaining rollout gates remain required; fresh intake stays disabled.
