@@ -357,3 +357,9 @@ export const sceneReadinessPendingAssessmentOutput = strictObject(
     ) },
   },
 );
+
+export const scenePendingIntentRepairOutput = {
+  schemaVersion: { const: 'gma.scene-pending-intent-repair/1' }, correctionId: identifier,
+  recordPatches: { ...sceneRealityRepairOutput.recordPatches, minItems: 0 },
+  bindingReplacements: { type: 'array', maxItems: 8, items: SCENE_PENDING_INTENT_BINDINGS_SCHEMA.properties.nodes.items },
+} as const;

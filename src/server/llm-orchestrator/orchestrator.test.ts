@@ -58,6 +58,16 @@ function request(operation = 'experience.evaluate', suffix = '1', input: unknown
   });
 }
 
+it('never calls a provider for new pending-Scene Manual operations, even when explicitly requested', async () => {
+  const provider = new AlternateConformanceAdapter();
+  for (const operation of ['story.scene-reality.build.pending', 'story.scene-reality.build.checkpoint.pending',
+    'story.scene-readiness.examine.pending', 'story.scene-reality.repair.pending']) {
+    await expect(executeLlmOperation(request(operation, operation), { userId: 'manual-user', store: new MemoryExecutionStore(), providers: [provider] }))
+      .rejects.toMatchObject({ code: 'MANUAL_SCENE_OPERATION_REQUIRED', status: 403 });
+  }
+  expect(provider.calls).toBe(0);
+});
+
 class AlternateConformanceAdapter implements LlmProviderAdapter {
   readonly id = 'fake';
   readonly version = 'alternate-test';

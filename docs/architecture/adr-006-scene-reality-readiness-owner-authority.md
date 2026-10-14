@@ -485,3 +485,50 @@ independent rejection; tests explicitly demonstrate that distinction. No new
 route or health capability advertises unfinished binding support. Persistence,
 atomic application, complete packet sizing, new blind Manual execution and all
 remaining rollout gates remain required; fresh intake stays disabled.
+
+## ADR 014 runtime implementation and accepted budget clarification
+
+The owner approved a maximum of five operations for the new pending-binding
+flow on 2026-10-13. A single-chunk build may repair named failed records/rows
+on operation four, then obtain a separate independent full-successor assessment
+on operation five. The repair output cannot contain an assessment. The app
+computes its successor fingerprints before independent examination. A two-chunk
+build stops on blocking debt at operation four. Historical four-call flows and
+their exact prompts remain unchanged; no sixth operation or second repair.
+
+The new owner context route derives the exact window from the authenticated
+stored artifact and observation evidence from current GMC records. GMA freshly
+checks reciprocal VCS subject revision, its embedded character fingerprint and
+required capabilities through its existing read-only projection. Both VCS
+revisions are opaque hashes; neither is equated with the old cursor's numeric
+compatibility counter. A changed character fingerprint changes the subject
+revision and fails its exact expected-head check. GMC re-reads
+its own context at Scene commit and binding application; it does not claim to
+own VCS state. Binding records are immutable members of the staged Scene bundle
+and become current only with its pointer swap. Application appends the exact
+binding receipt and existing authority rebase together in the artifact CAS,
+without execution receipts or a changed node partition. The original program
+body remains immutable; accepted-reader overlays change only exact refs and
+coverage selections. At most eight applications and 131,072 UTF-8 bytes of
+complete application history are retained. A timeout is reconciled by the
+original operation identity, not retried with a new key. Rollback keeps readers
+but disables new emission/application. Fresh intake remains disabled.
+
+The runtime detail in accepted GMA ADR 014 preserves Scene-kit /5's empty
+typed-authority arrays. GMC's original typed observation projection is supplied
+as read-only context outside that world proposal. The immutable binding record
+ties its exact source Scene/workspace heads to the prepared Scene head. GMA
+selects the exact bound method/access at execution, rechecks both owners, keeps
+the original typed head in observation receipts, and retains the prepared head
+at artifact settlement only with the accepted association for every active
+group. It never uses a maximum-revision fallback or copies mutable authority.
+
+When accepted predecessor play changes readiness, ADR 014 requires a fresh
+unfinished window and independently examined successor binding. Earlier ordered
+applications remain immutable audit history; readers choose only the latest
+accepted application for each still-pending node. Completed receipts cannot be
+rebound or replayed. Exact prepared-requirement feasibility validates the owner
+artifact, effective requirements, current Scene and workspace heads, presence
+and dossier record existence. It confirms preparation only, not cover,
+concealment, movement, a mechanic or discovery. Unknown, stale or changed rows
+fail closed rather than using the legacy textual lookup.

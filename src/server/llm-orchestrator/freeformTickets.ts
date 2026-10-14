@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { freeformJsonDigest } from '../../shared/llm/freeformPlanBinding.js';
+import { freeformJsonDigest, FREEFORM_PLAN_BINDING_REGISTRY_VERSIONS } from '../../shared/llm/freeformPlanBinding.js';
 import type { Collection } from 'mongodb';
 import { LLM_REQUEST_SCHEMA_VERSION, type LlmRequestEnvelope, type LlmResponseEnvelope } from '../../shared/llm/orchestratorContracts.js';
 import { FREEFORM_INTAKE_OPERATION, FREEFORM_INTAKE_POLICY_VERSION } from '../../shared/llm/freeformIntakePolicy.js';
@@ -166,7 +166,7 @@ export async function loadBoundFreeformTicket(input: {
   if (typeof ticket !== 'string' || ticket.length > 80) freeformTicketError('FREEFORM_TICKET_REQUIRED');
   const record = await records.findOne({ _id: ticket, userId: input.userId, campaignId: input.request.references.campaignId });
   if (!record || record.requestDigest !== freeformDigest(input.request)
-    || record.policyVersion !== FREEFORM_INTAKE_POLICY_VERSION || record.registryVersion !== OPERATION_REGISTRY_VERSION
+    || record.policyVersion !== FREEFORM_INTAKE_POLICY_VERSION || !FREEFORM_PLAN_BINDING_REGISTRY_VERSIONS.includes(record.registryVersion)
     || record.transport !== (input.manualOutput === undefined ? 'integrated' : 'manual')) freeformTicketError('FREEFORM_TICKET_BINDING_INVALID');
   if (record.expiresAt <= (input.now ?? new Date())) freeformTicketError('FREEFORM_TICKET_EXPIRED');
   if (record.status === 'retired') freeformTicketError(record.supportStop ? 'FREEFORM_INTAKE_SUPPORT_REQUIRED' : 'FREEFORM_TICKET_RETIRED');

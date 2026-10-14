@@ -6,6 +6,9 @@ import { collections } from './gmcIntegrationStore.js';
 import { validateFreeformBinding, verifyFreeformBindingAcceptance } from './freeformPlanBindingStore.js';
 import type { FreeformTicketCollection } from '../llm-orchestrator/freeformTickets.js';
 import { freeformPlanBindingIssues } from '../../shared/llm/freeformPlanBinding.js';
+import { assertPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings,
+  INTENT_BINDING_APPLICATION_LIMITS } from '../../shared/llm/scenePendingIntentApplication.js';
+import { readScenePendingIntentContext, preparedPendingRequirementProjection, PENDING_INTENT_WRITES_ENABLED } from './scenePendingIntentService.js';
 import {
   readActiveStoryWorkspace,
   readStoryWorkspaceRevision,
@@ -102,6 +105,7 @@ export interface CompoundActionArtifactRevisionDocument {
   cursor: JsonObject;
   receipts: JsonObject[];
   rebaseReceipts?: JsonObject[];
+  intentBindingApplications?: JsonObject[];
   clarifications: JsonObject[];
   rootFailure: JsonObject | null;
   saga?: JsonObject | null;
@@ -700,7 +704,7 @@ function reference(document: CompoundActionArtifactRevisionDocument) {
 }
 
 function payload(document: Pick<CompoundActionArtifactRevisionDocument,
-  'instruction' | 'program' | 'cursor' | 'receipts' | 'rebaseReceipts' | 'clarifications' | 'rootFailure' | 'timelineAnchor' | 'saga' | 'freeformBinding'>): JsonObject {
+  'instruction' | 'program' | 'cursor' | 'receipts' | 'rebaseReceipts' | 'intentBindingApplications' | 'clarifications' | 'rootFailure' | 'timelineAnchor' | 'saga' | 'freeformBinding'>): JsonObject {
   return {
     instruction: document.instruction,
     program: document.program,
@@ -712,6 +716,7 @@ function payload(document: Pick<CompoundActionArtifactRevisionDocument,
     saga: document.saga ?? null,
     timelineAnchor: document.timelineAnchor,
     ...(document.freeformBinding ? { freeformBinding: document.freeformBinding } : {}),
+    ...(document.intentBindingApplications?.length ? { intentBindingApplications: document.intentBindingApplications } : {}),
   };
 }
 
@@ -815,6 +820,14 @@ export async function readActiveCompoundActionArtifact(input: { userId: string; 
   return document ? { artifactRef: reference(document), artifact: payload(document) } : null;
 }
 
+export type PendingApplicationReader = (scope: { userId: string; campaignId: string; programId: string }) => Promise<{ bundle: JsonObject; context: JsonObject } | null>;
+const readPendingApplicationAuthority: PendingApplicationReader = async (scope) => {
+  const [active, context] = await Promise.all([
+    (await import('./sceneRealityReadinessService.js')).readActiveSceneReality(scope), readScenePendingIntentContext(scope),
+  ]);
+  return active ? { bundle: active.bundle as JsonObject, context } : null;
+};
+
 export async function advanceCompoundActionArtifact(input: {
   userId: string;
   campaignId: string;
@@ -825,14 +838,17 @@ export async function advanceCompoundActionArtifact(input: {
   cursor: JsonObject;
   appendReceipts?: JsonObject[];
   appendRebaseReceipts?: JsonObject[];
+  appendIntentBindingReceipts?: JsonObject[];
   clarifications?: JsonObject[];
   rootFailure?: JsonObject | null;
   saga?: JsonObject;
-}, records: CompoundActionArtifactCollection = artifactCollection()) {
+}, records: CompoundActionArtifactCollection = artifactCollection(), bindingReader: PendingApplicationReader = readPendingApplicationAuthority) {
   const priorReplay = await records.findOne({ userId: input.userId, campaignId: input.campaignId, idempotencyKey: input.idempotencyKey });
   if (priorReplay) {
     const receiptsMatch = (input.appendReceipts ?? []).every((candidate) => priorReplay.receipts.some((stored) => canonicalJson(stored) === canonicalJson(candidate)));
     const rebaseReceiptsMatch = (input.appendRebaseReceipts ?? []).every((candidate) => (priorReplay.rebaseReceipts ?? []).some((stored) => canonicalJson(stored) === canonicalJson(candidate)));
+    const bindingReceiptsMatch = canonicalJson((input.appendIntentBindingReceipts ?? []) as unknown as JsonValue)
+      === canonicalJson((priorReplay.intentBindingApplications ?? []).filter((a) => (a.receipt as JsonObject).resultingCursorRevision === priorReplay.revision).map((a) => a.receipt) as JsonValue);
     const matches = priorReplay.programId === input.programId
       && input.expectedRevision === priorReplay.revision - 1
       && canonicalJson(priorReplay.cursor) === canonicalJson(input.cursor)
@@ -840,7 +856,7 @@ export async function advanceCompoundActionArtifact(input: {
       && (input.clarifications === undefined || canonicalJson(priorReplay.clarifications) === canonicalJson(input.clarifications))
       && (input.rootFailure === undefined || canonicalJson(priorReplay.rootFailure) === canonicalJson(input.rootFailure))
       && (input.saga === undefined || canonicalJson(priorReplay.saga ?? null) === canonicalJson(input.saga))
-      && receiptsMatch && rebaseReceiptsMatch;
+      && receiptsMatch && rebaseReceiptsMatch && bindingReceiptsMatch;
     if (!matches) throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_IDEMPOTENCY_CONFLICT', 'The idempotency key was already used for a different interaction artifact write.', {});
     return { artifactRef: reference(priorReplay), duplicate: true };
   }
@@ -850,6 +866,8 @@ export async function advanceCompoundActionArtifact(input: {
     throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_REVISION_CONFLICT', 'The interaction artifact changed before this update.', { expectedRevision: input.expectedRevision, actualRevision: active.revision });
   }
   const program = input.program ?? active.program;
+  if ((active.intentBindingApplications?.length || input.appendIntentBindingReceipts?.length)
+    && canonicalJson(program) !== canonicalJson(active.program)) throw new StoryWorkspaceStoreError(409, 'SCENE_PENDING_INTENT_PROGRAM_IMMUTABLE', 'Applying prepared references cannot replace the original action program.', {});
   validateProgram(program, active.instruction);
   if (active.freeformBinding && freeformPlanBindingIssues(active.freeformBinding, active.instruction, program).length) {
     throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_BINDING_INVALID', 'An update cannot replace the original intake identities.', {});
@@ -893,6 +911,32 @@ export async function advanceCompoundActionArtifact(input: {
   if (appendedCurrentRebase && canonicalJson(appendedCurrentRebase.authorityHead) !== canonicalJson(input.cursor.authorityHead)) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_REBASE_RECEIPT_INVALID', 'The saved action cursor does not use the owner head certified by its Scene-authority rebase.', {});
   }
+  const intentBindingApplications = structuredClone(active.intentBindingApplications ?? []);
+  if (input.appendIntentBindingReceipts !== undefined) {
+    if (!PENDING_INTENT_WRITES_ENABLED) throw new StoryWorkspaceStoreError(503, 'SCENE_PENDING_INTENT_WRITES_DISABLED', 'New prepared action bindings are disabled.', {});
+    if (!Array.isArray(input.appendIntentBindingReceipts) || input.appendIntentBindingReceipts.length !== 1 || currentRebases.length !== 1
+      || input.appendReceipts?.length || canonicalJson({ ...active.cursor, revision: input.cursor.revision, authorityHead: input.cursor.authorityHead }) !== canonicalJson(input.cursor)) {
+      throw new StoryWorkspaceStoreError(422, 'SCENE_PENDING_INTENT_TRANSPORT_INVALID', 'Prepared references require one binding receipt and its matching authority rebase without execution progress.', {});
+    }
+    const authority = await bindingReader({ userId: input.userId, campaignId: input.campaignId, programId: input.programId });
+    const record = authority?.bundle?.pendingIntentBindingRecord as JsonObject;
+    try {
+      assertPendingBindingRecord(record, { instruction: active.instruction, program: active.program, cursor: active.cursor, receipts: active.receipts, artifactRevision: active.revision });
+      if (canonicalJson(record.ownerReadSet) !== canonicalJson(authority!.context.ownerReadSet)) throw new Error('Stale owner heads');
+      const head = input.cursor.authorityHead as JsonObject, readSet = record.ownerReadSet as JsonObject;
+      if (head.storyWorkspaceRevision !== readSet.storyWorkspaceRevision || head.vcsCharacterRevision !== readSet.vcsCharacterRevision
+        || head.sceneRevision !== (authority!.bundle.sceneKit as JsonObject).revision) throw new Error('Wrong resulting heads');
+      const expected = createIntentBindingReceipt(record, authority!.bundle.activeBundle as JsonObject, currentRebases[0]);
+      if (canonicalJson(expected as JsonObject) !== canonicalJson(input.appendIntentBindingReceipts[0])) throw new Error('Wrong binding receipt');
+      intentBindingApplications.push({ record, receipt: structuredClone(input.appendIntentBindingReceipts[0]) });
+      projectAppliedIntentBindings(active.instruction, program, intentBindingApplications);
+    } catch {
+      throw new StoryWorkspaceStoreError(409, 'SCENE_PENDING_INTENT_APPLICATION_CONFLICT', 'The examined references no longer match the current unfinished action and Scene.', {});
+    }
+    if (intentBindingApplications.length > INTENT_BINDING_APPLICATION_LIMITS.count || byteLength(intentBindingApplications as unknown as JsonValue) > INTENT_BINDING_APPLICATION_LIMITS.bytes) {
+      throw new StoryWorkspaceStoreError(422, 'SCENE_PENDING_INTENT_APPLICATION_TOO_LARGE', 'The complete prepared-reference history exceeds its bounded artifact envelope.', {});
+    }
+  }
   const clarifications = input.clarifications ?? active.clarifications;
   if (!Array.isArray(clarifications) || clarifications.length > COMPOUND_ACTION_LIMITS.clarificationMaximum || clarifications.some((value) => !isObject(value))) {
     throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_CLARIFICATION_INVALID', 'The interaction clarification state is invalid.', {});
@@ -901,6 +945,7 @@ export async function advanceCompoundActionArtifact(input: {
   const draft = {
     instruction: active.instruction, program: structuredClone(program), cursor: structuredClone(input.cursor), receipts, rebaseReceipts,
     ...(active.freeformBinding ? { freeformBinding: active.freeformBinding } : {}),
+    ...(intentBindingApplications.length ? { intentBindingApplications } : {}),
     clarifications: structuredClone(clarifications), rootFailure: input.rootFailure === undefined ? active.rootFailure : input.rootFailure,
     saga,
     timelineAnchor: active.timelineAnchor,
@@ -992,6 +1037,14 @@ export async function readCompoundActionOperationStatus(input: {
   operationId: string;
 }, records: CompoundActionArtifactCollection = artifactCollection()) {
   const operationId = requiredString(input.operationId, 'operationId');
+  const applied = await records.findOne({ userId: input.userId, campaignId: input.campaignId, programId: input.programId,
+    idempotencyKey: operationId }, { sort: { revision: -1 } });
+  const bindingReceipt = applied?.intentBindingApplications?.find((row) => (row.receipt as JsonObject).resultingCursorRevision === applied.revision)?.receipt as JsonObject | undefined;
+  if (applied && bindingReceipt) return {
+    schemaVersion: 'gmc.action-saga-operation-status/1', programId: input.programId, operationId,
+    disposition: 'committed', artifactRevision: applied.revision, artifactRef: reference(applied),
+    receiptRef: bindingReceipt.receiptId, resultingRevision: applied.revision, requestFingerprint: applied.requestHash,
+  };
   const document = await records.findOne({
     userId: input.userId,
     campaignId: input.campaignId,
@@ -1617,7 +1670,25 @@ export function compileCompoundActionRequirementProjection(input: {
 export async function resolveCompoundActionRequirements(input: {
   userId: string; campaignId: string; programId: string; nodeId: string; requirements: CompoundActionRequirement[];
   expectedAuthority?: { storyWorkspaceRevision?: number; sceneRevision?: number };
+}, preparedReaders?: {
+  readArtifact: (scope: { userId: string; campaignId: string; programId: string }) => Promise<any>;
+  readReality: (scope: { userId: string; campaignId: string }) => Promise<any>;
+  readScene: (scope: { userId: string; campaignId: string }) => Promise<any>;
 }) {
+  const preparedOwners = preparedReaders ?? { readArtifact: readActiveCompoundActionArtifact,
+    readReality: async (scope) => (await import('./sceneRealityReadinessService.js')).readActiveSceneReality(scope), readScene: readCurrentSceneContexts };
+  const loaded = await preparedOwners.readArtifact(input).catch((error: unknown) => {
+    if (error instanceof StoryWorkspaceStoreError && error.code === 'COMPOUND_ACTION_ARTIFACT_NOT_FOUND') return null;
+    throw error;
+  });
+  if (loaded?.artifact.intentBindingApplications?.some((entry: any) => entry.record.bindings.nodes.some((row: any) => row.nodeRef === input.nodeId))) {
+    const [active, sceneContext] = await Promise.all([preparedOwners.readReality(input), preparedOwners.readScene(input)]);
+    const projection = preparedPendingRequirementProjection(input, loaded, active, sceneContext);
+    if (!projection || input.expectedAuthority && Object.entries(input.expectedAuthority).some(([key, value]) => projection.authorityHead[key] !== value)) {
+      throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_AUTHORITY_CONFLICT', 'Prepared action references changed before feasibility could be checked.', {});
+    }
+    return projection;
+  }
   const [storyContext, campaignState] = await Promise.all([
     readCurrentSceneContexts({ userId: input.userId, campaignId: input.campaignId }),
     collections.state().findOne({ userId: input.userId, campaignId: input.campaignId }),

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 export const FREEFORM_PLAN_BINDING_VERSION = 'gma.freeform-plan-binding/1';
 export const FREEFORM_PLAN_BINDING_MAXIMUM_BYTES = 65_536;
+export const FREEFORM_PLAN_BINDING_REGISTRY_VERSIONS = Object.freeze(['2026-10-07.2', '2026-10-13.1']);
 export function canonicalFreeformJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalFreeformJson).join(',')}]`;
   if (value && typeof value === 'object') return `{${Object.entries(value).filter(([, nested]) => nested !== undefined)
@@ -28,7 +29,7 @@ export function freeformPlanBindingIssues(value: unknown, instruction: Record<st
   const binding = value as Record<string, any>;
   const issues: string[] = [];
   if (binding.schemaVersion !== FREEFORM_PLAN_BINDING_VERSION || binding.ticketDisposition !== 'owner_accepted'
-    || binding.policyVersion !== 'gma.freeform-intake-policy/1' || binding.registryVersion !== '2026-10-07.2'
+    || binding.policyVersion !== 'gma.freeform-intake-policy/1' || !FREEFORM_PLAN_BINDING_REGISTRY_VERSIONS.includes(binding.registryVersion)
     || typeof binding.ticket !== 'string' || !binding.ticket.length || binding.ticket.length > 80
     || !hash(binding.proposalDigest) || !hash(binding.requestDigest)) issues.push('/ticket');
   if (['instructionRef', 'interactionId', 'instructionFingerprint'].some((key) => binding[key] !== instruction[key])) issues.push('/instruction');

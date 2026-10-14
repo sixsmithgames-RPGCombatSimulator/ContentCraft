@@ -33,11 +33,13 @@ describe('D2 Story authority routes', () => {
   });
   it('forwards Scene-authority rebase receipts through the compound artifact route mapping', () => {
     const receipt = { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: 'rebase:one' };
+    const binding = { schemaVersion: 'gma.action-intent-binding-receipt/1', receiptId: 'intent-binding:one' };
     const mapped = compoundActionAdvanceInput({
       userId: 'user-1', campaignId: 'campaign-1', programId: 'program-1', idempotencyKey: 'header-key',
-      body: { expectedRevision: 4, cursor: { revision: 5 }, appendRebaseReceipts: [receipt] },
+      body: { expectedRevision: 4, cursor: { revision: 5 }, appendRebaseReceipts: [receipt], appendIntentBindingReceipts: [binding] },
     });
     expect(mapped.appendRebaseReceipts).toEqual([receipt]);
+    expect(mapped.appendIntentBindingReceipts).toEqual([binding]);
     expect(mapped.idempotencyKey).toBe('header-key');
   });
 
@@ -69,6 +71,8 @@ describe('D2 Story authority routes', () => {
       ['GET', '/scene-turns/operations/scene-turn%3Aturn-1%3Aresult'],
       ['GET', '/conversation-history'],
       ['GET', '/observation-authority'],
+      ['GET', '/scene-reality/pending-intent/program-1'],
+      ['POST', '/scene-reality/commit'],
       ['POST', '/observation-authority/commit'],
       ['GET', '/observation-authority/operations/operation-1'],
       ['POST', '/interaction-artifacts'],

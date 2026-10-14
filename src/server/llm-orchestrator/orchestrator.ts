@@ -22,6 +22,7 @@ import {
 import { priceUsage, routeProviders } from './modelPolicy.js';
 import {
   OPERATION_REGISTRY_VERSION,
+  MANUAL_PENDING_SCENE_OPERATIONS,
   applyOperationRuntime,
   assertOperationRegistryComplete,
   getOperationDefinition,
@@ -198,6 +199,10 @@ export interface ExecuteOptions {
 }
 
 export async function executeLlmOperation(request: LlmRequestEnvelope, options: ExecuteOptions): Promise<LlmResponseEnvelope> {
+  if (MANUAL_PENDING_SCENE_OPERATIONS.includes(request?.operation) && options.manualOutput === undefined) throw new OrchestratorError({
+    code: 'MANUAL_SCENE_OPERATION_REQUIRED', category: 'policy', message: 'Pending Scene preparation accepts Manual replies only.',
+    status: 403, source: 'gmc.manual-scene-policy',
+  });
   if (request?.operation === FREEFORM_INTAKE_OPERATION) {
     validateContract(request);
     return executeTicketedFreeform(request, options, () => executeOperation(request, { ...options, runtimeOverride: undefined }));

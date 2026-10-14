@@ -4,9 +4,9 @@ import { createHash } from 'node:crypto';
 
 /** Accepted ADR 014. Pure proposal checks, not a permission check, owner write,
  * examination certificate or execution receipt. Context is authenticated owner
- * input, never a model-authored catalog. This contract is not routed yet. */
+ * input, never a model-authored catalog. */
 export const SCENE_PENDING_INTENT_BINDINGS_VERSION = 'gma.scene-pending-intent-bindings/1';
-export const SCENE_PENDING_INTENT_BINDING_POLICY_VERSION = 'gma.scene-pending-intent-binding-policy/1';
+export const SCENE_PENDING_INTENT_BINDING_POLICY_VERSION = 'gma.scene-pending-intent-binding-policy/2';
 export const SCENE_PENDING_INTENT_BINDING_LIMITS = Object.freeze({ bytes: 24_576, nodes: 8, referencesPerNode: 64, coveragePerNode: 32 });
 export const SCENE_PENDING_INTENT_BINDING_POLICY = [
   'Propose bindings only for every node of the supplied exact pending intent window. In the final complete gma.scene-reality-builder-result/2, put gma.scene-pending-intent-bindings/1 in pendingIntentBindings. The outer result has exactly schemaVersion, operationId, campaignId, requestedDepth, status, proposal, checkpoint, intentWindowFingerprint and pendingIntentBindings. Copy the window fingerprint exactly. A complete result has one complete proposal, checkpoint null and pendingIntentBindings; a continuation has proposal null, one existing versioned checkpoint and pendingIntentBindings null. Do not return bindings early or request a third chunk. The binding object has exactly schemaVersion, bindingId, operationId, campaignId, windowId, windowFingerprint, sceneKitRef and nodes. Copy operationId, campaignId, windowId, windowFingerprint and sceneKitRef exactly from the packet.',
@@ -18,8 +18,9 @@ export const SCENE_PENDING_INTENT_BINDING_POLICY = [
   'This is proposal-only preparation. Preserve instruction, kind, purpose, graph, conditions, dependencies, parallel actions, completed receipts and pending mechanics. No roll, concealment, movement, observation, discovery or action is resolved by a binding. Never output execution results, narration, certificates or accepted receipts.',
   'Use at most eight node rows, sixty-four reference slots and thirty-two coverage slots per node and 24,576 UTF-8 bytes for the binding proposal. Complete data must fit the existing full preparation envelope; do not truncate evidence, drop a parallel action, increase budgets or request an extra model call. In a two-chunk build, preserve the same window and emit bindings only with the final complete dossier.',
   'Repair only the exact failed node rows named in a correction; preserve every other row and the original window, dossier, prose, targets and owner evidence exactly. Independent examination must review the complete successor, not only the repaired fragment.',
+  'The supplied pendingIntentContext.typedObservationAuthority is already accepted owner evidence outside the world proposal. Keep proposal.sceneKit.actorMechanicsBindings, observationAccess, observables and obstructions empty as required by Scene-kit /5; do not duplicate mutable authority there or replace typed observation truth with dossier facts. The bindings select the exact owner seed separately. Coverage slots for actor identity and origin prerequisites are not additional player actions: for an observation node select the same qualified original-observation affordance for these slots, using its confirmed zone/access/capability, not an invented actor-presence observation or the entrance view. The acting player and familiar observer remain distinct. New reusable ordinary scene-local world preparation is permitted within the current locus and creation policy, without inventing canon, mechanics or guaranteed outcomes.',
 ].join(' ');
-export const SCENE_PENDING_INTENT_EXAMINER_POLICY_VERSION = 'gma.scene-readiness-examiner-policy/2';
+export const SCENE_PENDING_INTENT_EXAMINER_POLICY_VERSION = 'gma.scene-readiness-examiner-policy/3';
 export const SCENE_PENDING_INTENT_EXAMINER_POLICY = [
   'Independently examine the complete private Scene dossier, exact pending intent window, proposed bindings and confirmed owner evidence together. Return exactly gma.scene-readiness-assessment/2 with the supplied identity fingerprints, selected depth, verdict, confidence, counterfactualProbes, debt, rationale, evidenceRefs and bindingReviews. Never upgrade a historical assessment to cover new bindings.',
   'Judge whether a competent human GM can run five to ten minutes of plausible play at the selected depth without inventing missing fundamentals. Review locus, topology, thresholds and their next layer, actors and purposes, information, ordinary operations, Story alignment, consequences, capabilities, unknowns and timeline. Do not lower the selected depth. Low confidence at investigative or encounter_set_piece depth requires repair_required.',
@@ -27,7 +28,7 @@ export const SCENE_PENDING_INTENT_EXAMINER_POLICY = [
   'Return exactly one bindingReviews row per pending node, with nodeRef, bindingRowFingerprint, verdict supported or unsupported, rationale, evidenceRefs and mechanicsState not_resolved. Copy the application-supplied binding-row fingerprint exactly. Positively verify original action meaning and purpose, every requirement and retained null, target/position correspondence, exact access and method, observer, capability, full-window and parallel coverage, conditions and completed receipt preservation. Cite exact supplied binding, slot, owner-evidence or dossier refs, not invented labels.',
   'A structurally valid reference is not semantic proof. A cover request bound to pebbles, an entrance observation substituted for familiar sight, a dropped parallel action or a missing capability must be unsupported with blocking pending_intent debt, never adequate. Keep other actions in their original meaning; do not silently turn them into waiting or guaranteed stealth.',
   'Pending mechanics remain unresolved. Completed prerequisite receipts are immutable evidence, not permission to replay their actions. Preparation and bindings alone do not complete a roll, concealment, movement, observation or discovery. Review pending and completed cases separately and never report an unexecuted action as completed.',
-  'adequate requires every pending row bound and supported, no unsupported probe, no blocking debt, exact dossier/window/binding/owner-read-set/policy fingerprints and complete reference closure. Otherwise return repair_required. An unsupported binding review requires blocking pending_intent debt. Use unique debt IDs and exact non-duplicated evidence refs, one to thirty-two per review and debt row, and one to 128 for the assessment. Keep the assessment within 32,768 UTF-8 bytes. Diagnose only; do not edit prose, bind a missing reference yourself, create facts, narration, certificates or owner receipts. Preserve the full dossier and existing token and four-operation limits; no extra qualification call.',
+  'adequate requires every pending row bound and supported, no unsupported probe, no blocking debt, exact dossier/window/binding/owner-read-set/policy fingerprints and complete reference closure. Otherwise return repair_required. An unsupported binding review requires blocking pending_intent debt. Use unique debt IDs and exact non-duplicated evidence refs, one to thirty-two per review and debt row, and one to 128 for the assessment. Keep the assessment within 32,768 UTF-8 bytes. Diagnose only; do not edit prose, bind a missing reference yourself, create facts, narration, certificates or owner receipts. Preserve the full dossier and token limits. The five-operation maximum allows one separate independent full-successor examination after a single-chunk repair; no sixth operation, second repair or extra qualification call. A two-chunk build stops on blocking examination debt.',
 ].join(' ');
 
 type Row = Record<string, any>;
@@ -39,6 +40,25 @@ export interface ScenePendingBindingContext {
   ownerReadSet: { campaignId: string; storyWorkspaceRevision: number; sceneRevision: number; vcsCharacterRevision: number };
   /** Authenticated owner projection, not an LLM assertion of authority. */
   observations: Row[];
+  /** Citation identities from the authenticated typed projection, not new authority. */
+  ownerEvidenceRefs?: string[];
+}
+/** owner must be the current authenticated GMC context, never model output.
+ * A new zone's semantic placement is reviewed with the complete dossier. */
+export function scenePendingBindingContextFromOwner(owner: Row, operationId: string, proposal: Row): ScenePendingBindingContext {
+  const observations = owner.observationSeeds.map((seed: Row) => {
+    const frames = proposal.actorFrames.filter((frame: Row) => frame.actorRef === seed.observerRef);
+    if (frames.length !== 1) throw new Error('The confirmed observer needs one exact prepared actor frame.');
+    return { ...Object.fromEntries(['evidenceRef', 'campaignId', 'groupId', 'observerKind', 'observerRef', 'methodRef', 'formRef',
+      'accessRef', 'capabilityRef', 'vcsCharacterRevision', 'ownerReceiptRefs'].map((key) => [key, structuredClone(seed[key])])), zoneRef: frames[0].zoneRef };
+  });
+  const typed = owner.typedObservationAuthority ?? {};
+  const ownerEvidenceRefs = [...new Set([
+    ...(typed.actorMechanicsBindings ?? []).map((row: Row) => row.bindingRef),
+    ...(typed.observables ?? []).map((row: Row) => row.observableId),
+    ...(typed.obstructions ?? []).map((row: Row) => row.obstructionId),
+  ].filter((ref): ref is string => typeof ref === 'string'))];
+  return { source: owner.source, operationId, proposal, ownerReadSet: owner.ownerReadSet, observations, ownerEvidenceRefs };
 }
 const object = (value: unknown): value is Row => !!value && typeof value === 'object' && !Array.isArray(value);
 const closed = (value: unknown, keys: string[]): value is Row => object(value)
@@ -285,6 +305,13 @@ export function scenePendingIntentExaminationIssues(value: unknown, bindings: Ro
       ...(context.proposal.actorFrames ?? []).map((r: Row) => r.actorFrameId), ...(context.proposal.elements ?? []).map((r: Row) => r.elementId),
       ...(context.proposal.facts ?? []).map((r: Row) => r.factId)]);
     const reviewRefs = new Set([...probeRefs, ...catalog.targets, ...catalog.affordances.keys(), ...catalog.evidence.keys(), bindings.bindingId,
+      catalog.window.windowId, context.proposal.sceneReality?.realityId, context.proposal.sceneStoryDesign?.designId,
+      ...(context.proposal.sceneStoryDesign?.affordances ?? []).map((row: Row) => row.affordanceId),
+      ...context.observations.flatMap((row) => [row.groupId, row.observerRef, row.methodRef, row.accessRef, row.capabilityRef, ...row.ownerReceiptRefs]),
+      ...catalog.window.prerequisiteReceipts.flatMap((row: Row) => [row.receiptRef,
+        ...row.ownerReceiptRefs.map((receipt: unknown) => typeof receipt === 'string' ? receipt : object(receipt) ? receipt.receiptRef : null)]),
+      ...catalog.window.nodes.flatMap((row: Row) => row.requirements.flatMap((r: Row) => [r.requirementId, r.value.observation?.outcomeId]).filter(Boolean)),
+      ...(context.ownerEvidenceRefs ?? []),
       ...pendingIntentBindingSlots(context.source).flatMap((r) => [r.nodeRef, ...r.references.map((s: Row) => s.slotId), ...r.coverage.map((s: Row) => s.slotId)])]);
     const refs = (entries: unknown, maximum: number, allowed: Set<string>, minimum = 1) => Array.isArray(entries)
       && entries.length >= minimum && entries.length <= maximum && new Set(entries).size === entries.length

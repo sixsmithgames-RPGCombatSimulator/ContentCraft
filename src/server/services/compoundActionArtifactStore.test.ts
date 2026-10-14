@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Collection, Filter } from 'mongodb';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   advanceCompoundActionArtifact,
   ACTION_PROGRAM_REBASE_RECEIPT_CONTRACT_VERSION,
@@ -22,6 +22,10 @@ import {
   type CompoundActionInstructionDocument,
 } from './compoundActionArtifactStore.js';
 import { type JsonObject, StoryWorkspaceStoreError } from './storyWorkspaceStore.js';
+import { createPendingIntentWindow } from '../../shared/llm/pendingIntentWindow.js';
+import { pendingIntentBindingSlots, scenePendingIntentExaminationIdentity } from '../../shared/llm/scenePendingIntentBindings.js';
+import { createPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings } from '../../shared/llm/scenePendingIntentApplication.js';
+import { freeformJsonDigest } from '../../shared/llm/freeformPlanBinding.js';
 
 function valueAt(record: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((value, key) => (
@@ -222,6 +226,89 @@ function createInput() {
     timelineAnchor: { messageId: 'message-42', sequence: 42 },
   };
 }
+
+async function bindingScenario() {
+  const store = memoryCollection(), input = createInput();
+  const compiled: any = parallelProgram(input.instruction);
+  compiled.nodes.forEach((node: any) => { node.kind = 'other'; node.authorityRequirements = ['gmc'];
+    node.dataRequirements = [{ dimension: 'where', kind: 'current_location', query: 'behind cover', targetRole: 'area', targetRef: null }]; });
+  await createCompoundActionArtifact({ ...input, program: compiled, cursor: parallelCursor() }, store.records);
+  const source = { instruction: input.instruction, program: compiled, cursor: parallelCursor(), receipts: [], artifactRevision: 1 };
+  const operationId = 'scene-reality:pending:one', campaignId = input.campaignId;
+  const proposal: any = { operationId, campaignId, requestedDepth: 'interactive', sceneKit: { sceneKitId: 'scene:cover', revision: 5 },
+    zones: [{ zoneId: 'zone:approach', campaignId }], actorFrames: [], elements: [{ elementId: 'element:cover', campaignId }],
+    facts: [], preparedBoundaries: [], sceneStoryDesign: { affordances: [{ coverageEntryId: 'coverage:cover', zoneRef: 'zone:approach', targetRef: 'element:cover',
+      actionFamily: 'interact', accessClass: null, thresholdRef: null, capabilityClass: null }] } };
+  const context = { source, operationId, proposal, ownerReadSet: { campaignId, storyWorkspaceRevision: 7, sceneRevision: 4, vcsCharacterRevision: 12 }, observations: [] };
+  const window = createPendingIntentWindow(source), slots = pendingIntentBindingSlots(source);
+  const bindings: any = { schemaVersion: 'gma.scene-pending-intent-bindings/1', bindingId: 'binding:cover', operationId, campaignId,
+    windowId: window.windowId, windowFingerprint: window.windowFingerprint, sceneKitRef: proposal.sceneKit,
+    nodes: slots.map((slot) => ({ nodeRef: slot.nodeRef, disposition: 'bound', references: slot.references.map((s: any) => ({ slotId: s.slotId, selectedRef: 'element:cover' })),
+      coverage: slot.coverage.map((s: any) => ({ slotId: s.slotId, coverageEntryRef: 'coverage:cover' })), observations: [], instructionEvidence: slot.instructionEvidence[0], rationale: 'Exact cover without resolving concealment.', question: null })) };
+  const policy = 'a'.repeat(64), assessment = { schemaVersion: 'gma.scene-readiness-assessment/2', assessmentId: 'assessment:cover',
+    ...scenePendingIntentExaminationIdentity(bindings, context, policy), verdict: 'adequate', confidence: 'high', rationale: 'Both pending positions match without resolving gameplay.',
+    counterfactualProbes: ['Position?', 'Access?', 'Operations?'].map((probe) => ({ probe, status: 'supported', evidenceRefs: ['element:cover'] })), debt: [], evidenceRefs: ['element:cover'],
+    bindingReviews: bindings.nodes.map((row: any) => ({ nodeRef: row.nodeRef, bindingRowFingerprint: freeformJsonDigest(row), verdict: 'supported', rationale: 'Matches the original position only.', evidenceRefs: ['element:cover'], mechanicsState: 'not_resolved' })) };
+  const record = createPendingBindingRecord(context, bindings, assessment, policy);
+  const nextCursor = { ...parallelCursor(2), authorityHead: { storyWorkspaceRevision: 7, sceneRevision: 5, vcsCharacterRevision: 12 } };
+  const rebase = { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: 'rebase:binding', campaignId, programRef: compiled.programId,
+    priorCursorRevision: 1, resultingCursorRevision: 2, sceneRealityReceiptRef: 'scene-receipt:one', sceneRealityReceiptSchemaVersion: 'gmc.scene-reality-commit-receipt/1',
+    reason: 'scene_preparation_commit', preservedCompletedNodeRefs: [], preservedReceiptRefs: [], revalidatedNodeRefs: compiled.nodes.map((n: any) => n.nodeId),
+    invalidatedNodeRefs: [], authorityHead: nextCursor.authorityHead, sceneRealityAuthorityHead: { activeSceneBundle: 1, sceneKit: 5, sceneReality: 1, readinessCertificate: 1, activeSceneState: 0 }, createdAt: '2026-10-13T00:00:00.000Z' };
+  const bundle: any = { activeBundle: { bundleId: 'bundle:one', revision: 1, sceneKitRef: bindings.sceneKitRef }, sceneKit: proposal.sceneKit, pendingIntentBindingRecord: record };
+  const receipt = createIntentBindingReceipt(record, bundle.activeBundle, rebase);
+  const write: any = { userId: input.userId, campaignId, programId: compiled.programId, expectedRevision: 1, idempotencyKey: 'apply:binding',
+    cursor: nextCursor, appendRebaseReceipts: [rebase], appendIntentBindingReceipts: [receipt] };
+  const reader = async () => ({ bundle, context: { ownerReadSet: context.ownerReadSet } });
+  return { store, input, source, record, bundle, write, reader };
+}
+
+describe('atomic examined pending-reference application', () => {
+  it('rollback disables new applications while preserving accepted readers and original-operation recovery', async () => {
+    const accepted = await bindingScenario(), fresh = await bindingScenario();
+    await advanceCompoundActionArtifact(accepted.write, accepted.store.records, accepted.reader);
+    vi.stubEnv('GMC_SCENE_PENDING_INTENT_BINDINGS', '0'); vi.resetModules();
+    try {
+      const rollback = await import('./compoundActionArtifactStore.js');
+      await expect(rollback.advanceCompoundActionArtifact(fresh.write, fresh.store.records, fresh.reader))
+        .rejects.toMatchObject({ code: 'SCENE_PENDING_INTENT_WRITES_DISABLED' });
+      expect(fresh.store.documents).toHaveLength(1);
+      const loaded: any = await rollback.readActiveCompoundActionArtifact(accepted.write, accepted.store.records);
+      expect(loaded.artifact.intentBindingApplications).toHaveLength(1);
+      expect((await rollback.advanceCompoundActionArtifact(accepted.write, accepted.store.records, accepted.reader)).duplicate).toBe(true);
+      expect((await rollback.readCompoundActionOperationStatus({ ...accepted.write, operationId: accepted.write.idempotencyKey }, accepted.store.records)).disposition).toBe('committed');
+    } finally { vi.unstubAllEnvs(); vi.resetModules(); }
+  });
+  it('saves both receipts in one CAS, preserves original program and reloads exact overlays', async () => {
+    const f = await bindingScenario();
+    expect((await advanceCompoundActionArtifact(f.write, f.store.records, f.reader)).duplicate).toBe(false);
+    expect((await advanceCompoundActionArtifact(f.write, f.store.records, async () => { throw new Error('Replay must not reread changed heads'); })).duplicate).toBe(true);
+    const saved: any = await readActiveCompoundActionArtifact(f.write, f.store.records);
+    expect(saved.artifact.program).toEqual(f.source.program); expect(saved.artifact.receipts).toEqual([]);
+    expect(saved.artifact.cursor.completedNodeRefs).toEqual([]);
+    expect(saved.artifact.intentBindingApplications).toHaveLength(1); expect(saved.artifact.rebaseReceipts).toHaveLength(1);
+    const projected = projectAppliedIntentBindings(saved.artifact.instruction, saved.artifact.program, saved.artifact.intentBindingApplications);
+    expect(projected.nodes[0].dataRequirements[0]).toMatchObject({ targetRef: 'element:cover', coverageEntryRef: 'coverage:cover' });
+    await expect(advanceCompoundActionArtifact({ ...f.write, appendIntentBindingReceipts: undefined }, f.store.records, f.reader))
+      .rejects.toMatchObject({ code: 'COMPOUND_ACTION_IDEMPOTENCY_CONFLICT' });
+    expect(f.store.documents).toHaveLength(2);
+  });
+  for (const invalid of ['missing_rebase', 'empty_transport', 'foreign_receipt', 'changed_program', 'changed_partition', 'stale_record', 'stale_head', 'missing_bundle']) {
+    it(`rejects ${invalid} without a partial application`, async () => {
+      const f = await bindingScenario(); let reader: any = f.reader;
+      if (invalid === 'missing_rebase') delete f.write.appendRebaseReceipts;
+      if (invalid === 'empty_transport') f.write.appendIntentBindingReceipts = [];
+      if (invalid === 'foreign_receipt') f.write.appendIntentBindingReceipts[0].programRef = 'program:other';
+      if (invalid === 'changed_program') f.write.program = { ...f.source.program, status: 'changed' };
+      if (invalid === 'changed_partition') { f.write.cursor.readyNodeRefs = [f.source.program.nodes[0].nodeId]; f.write.cursor.remainingNodeRefs = [f.source.program.nodes[1].nodeId]; }
+      if (invalid === 'stale_record') f.bundle.pendingIntentBindingRecord.sourceCursor.revision = 8;
+      if (invalid === 'stale_head') reader = async () => ({ bundle: f.bundle, context: { ownerReadSet: { campaignId: f.input.campaignId, storyWorkspaceRevision: 8, sceneRevision: 5, vcsCharacterRevision: 12 } } });
+      if (invalid === 'missing_bundle') reader = async () => null;
+      await expect(advanceCompoundActionArtifact(f.write, f.store.records, reader)).rejects.toBeInstanceOf(StoryWorkspaceStoreError);
+      expect(f.store.documents).toHaveLength(1); expect(f.store.documents[0].status).toBe('available');
+    });
+  }
+});
 
 function replayCreateInput({
   programId,

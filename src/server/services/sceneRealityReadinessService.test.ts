@@ -226,6 +226,24 @@ async function commitReady(mem = memory()) {
 }
 
 describe('Scene reality owner authority', () => {
+  it.each(['missing_reader', 'partial_transport', 'foreign_program', 'stale_owner', 'changed_instruction', 'unexamined_bindings'])(
+    'rejects %s pending transport before staging or swapping any Scene pointer', async (wrong) => {
+      const mem = memory(), request = buildRequest({ programRef: { programId: 'program:pending', cursorRevision: 4 } });
+      const candidate = proposal(request);
+      const owner: JsonObject = { window: { programId: 'program:pending', cursorRevision: 4, instructionRef: request.instructionRef },
+        source: { instruction: { exactText: request.playerDirection } }, ownerReadSet: { storyWorkspaceRevision: 1 } };
+      const pending: JsonObject = { schemaVersion: 'gma.scene-pending-intent-commit/1', ownerContext: owner, bindings: {} };
+      mem.stores.readPendingIntent = async () => structuredClone(owner);
+      if (wrong === 'missing_reader') delete mem.stores.readPendingIntent;
+      if (wrong === 'partial_transport') delete pending.bindings;
+      if (wrong === 'foreign_program') request.programRef = { programId: 'program:other', cursorRevision: 4 };
+      if (wrong === 'stale_owner') mem.stores.readPendingIntent = async () => ({ ...structuredClone(owner), ownerReadSet: { storyWorkspaceRevision: 2 } });
+      if (wrong === 'changed_instruction') (owner.source as JsonObject).instruction = { exactText: 'A different instruction.' };
+      await expect(commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0,
+        buildRequest: request, proposal: candidate, assessment: assessment(candidate, request), pendingIntent: pending }, mem.stores)).rejects.toBeInstanceOf(Error);
+      expect(mem.bundles.documents).toHaveLength(0); expect(mem.pointers.documents).toHaveLength(0); expect(mem.operations.documents).toHaveLength(0);
+    },
+  );
   it('allows only the exact same-interaction Story successor to finish its certified Scene settlement', () => {
     const campaignId = 'campaign:one';
     const interactionId = 'interaction:worker-account';

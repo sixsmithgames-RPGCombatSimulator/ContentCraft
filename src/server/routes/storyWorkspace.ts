@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readScenePendingIntentContext } from '../services/scenePendingIntentService.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { ProjectModel } from '../models/index.js';
 import { requireServiceIntegration, type IntegrationRequest } from '../middleware/integrationAuth.js';
@@ -674,6 +675,7 @@ export function compoundActionAdvanceInput(input: {
     cursor: JsonObject;
     appendReceipts?: JsonObject[];
     appendRebaseReceipts?: JsonObject[];
+    appendIntentBindingReceipts?: JsonObject[];
     clarifications?: JsonObject[];
     rootFailure?: JsonObject | null;
     saga?: JsonObject;
@@ -691,6 +693,7 @@ export function compoundActionAdvanceInput(input: {
     cursor: body.cursor,
     appendReceipts: body.appendReceipts,
     appendRebaseReceipts: body.appendRebaseReceipts,
+    appendIntentBindingReceipts: body.appendIntentBindingReceipts,
     clarifications: body.clarifications,
     rootFailure: body.rootFailure,
     saga: body.saga,
@@ -941,8 +944,15 @@ storyWorkspaceRouter.post('/scene-reality/commit', requireServiceIntegration, as
     buildRequest: body.buildRequest,
     proposal: body.proposal,
     assessment: body.assessment,
+    ...(body.pendingIntent !== undefined ? { pendingIntent: body.pendingIntent } : {}),
   });
   res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.get('/scene-reality/pending-intent/:programId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await readScenePendingIntentContext({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, programId: req.params.programId }));
 }));
 
 storyWorkspaceRouter.get('/scene-reality/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {

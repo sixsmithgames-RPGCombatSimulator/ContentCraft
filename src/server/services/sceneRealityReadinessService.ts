@@ -3,6 +3,8 @@ import type { Collection } from 'mongodb';
 import { getDb } from '../config/mongo.js';
 import { readActiveStoryWorkspace, StoryWorkspaceStoreError, validateSceneKitV4, type JsonObject, type JsonValue } from './storyWorkspaceStore.js';
 import { scenePresentedTargetRefs } from './scenePresentedTargetRefs.js';
+import { readScenePendingIntentContext, assertPendingIntentContextCurrent, pendingBindingContext, pendingScenePolicyFingerprint, PENDING_INTENT_WRITES_ENABLED } from './scenePendingIntentService.js';
+import { createPendingBindingRecord } from '../../shared/llm/scenePendingIntentApplication.js';
 
 export const SCENE_REALITY_CONTRACTS = Object.freeze({
   buildRequest: 'gma.scene-reality-build-request/1',
@@ -158,6 +160,7 @@ export interface SceneRealityCollections {
   activeSceneStates: Collection<ActiveSceneStateHead>;
   readStoryAuthority?: (input: { userId: string; campaignId: string }) => Promise<JsonObject | null>;
   readClockAuthority?: (input: { userId: string; campaignId: string }) => Promise<JsonObject | null>;
+  readPendingIntent?: typeof readScenePendingIntentContext;
 }
 
 function collections(): SceneRealityCollections {
@@ -169,6 +172,7 @@ function collections(): SceneRealityCollections {
     sceneTurnReceipts: getDb().collection<SceneTurnReceiptLink>('gmc_scene_turn_receipts'),
     activeSceneStates: getDb().collection<ActiveSceneStateHead>('gmc_active_scene_states'),
     readStoryAuthority: async (input) => clone(await readActiveStoryWorkspace(input) as unknown as JsonObject | null),
+    readPendingIntent: readScenePendingIntentContext,
     readClockAuthority: async (input) => clone(await getDb().collection<JsonObject>('gmc_campaign_state').findOne({
       userId: input.userId,
       campaignId: input.campaignId,
@@ -740,11 +744,12 @@ function validateSuccessorContinuity(
   }
 }
 
-function validateAssessment(value: unknown, proposal: JsonObject, request: JsonObject): JsonObject {
+function validateAssessment(value: unknown, proposal: JsonObject, request: JsonObject, pending = false): JsonObject {
   if (!object(value)) throw new StoryWorkspaceStoreError(422, 'SCENE_READINESS_ASSESSMENT_REQUIRED', 'The Scene was not independently examined for playability.', {});
-  version(value, SCENE_REALITY_CONTRACTS.assessment, 'assessment');
+  version(value, pending ? 'gma.scene-readiness-assessment/2' : SCENE_REALITY_CONTRACTS.assessment, 'assessment');
   assertByteBound(value, 32_768, 'SCENE_READINESS_ASSESSMENT_TOO_LARGE', 'assessment');
-  exactKeys(value, 'assessment', ['schemaVersion', 'assessmentId', 'operationId', 'campaignId', 'dossierFingerprint', 'policyFingerprint', 'selectedDepth', 'verdict', 'confidence', 'counterfactualProbes', 'debt', 'rationale', 'evidenceRefs']);
+  exactKeys(value, 'assessment', ['schemaVersion', 'assessmentId', 'operationId', 'campaignId', 'dossierFingerprint', 'policyFingerprint', 'selectedDepth', 'verdict', 'confidence', 'counterfactualProbes', 'debt', 'rationale', 'evidenceRefs',
+    ...(pending ? ['intentWindowFingerprint', 'bindingFingerprint', 'ownerReadSetFingerprint', 'pendingIntentPolicyFingerprint', 'bindingReviews'] : [])]);
   stableId(value.assessmentId, 'assessment.assessmentId');
   if (value.operationId !== request.operationId || value.campaignId !== request.campaignId) throw new StoryWorkspaceStoreError(409, 'SCENE_READINESS_ASSESSMENT_CONFLICT', 'The readiness assessment does not belong to this Scene build.', {});
   if (value.dossierFingerprint !== hash(proposal)) throw new StoryWorkspaceStoreError(422, 'SCENE_READINESS_DOSSIER_MISMATCH', 'The readiness assessment examined a different Scene dossier.', {});
@@ -1130,12 +1135,14 @@ export async function commitSceneReality(
     buildRequest: unknown;
     proposal: unknown;
     assessment: unknown;
+    pendingIntent?: JsonObject;
   },
   stores: SceneRealityCollections = collections(),
 ): Promise<JsonObject> {
   if (!SCENE_REALITY_WRITE_ENABLED) throw new StoryWorkspaceStoreError(503, 'SCENE_REALITY_WRITES_DISABLED', 'Scene preparation is not enabled for this campaign yet.', {});
   const request = validateBuildRequest(input.buildRequest, input.campaignId);
-  const requestHash = hash({ buildRequest: request, proposal: input.proposal, assessment: input.assessment });
+  const requestHash = hash({ buildRequest: request, proposal: input.proposal, assessment: input.assessment,
+    ...(input.pendingIntent !== undefined ? { pendingIntent: input.pendingIntent } : {}) });
   const existing = await stores.operations.findOne({ userId: input.userId, campaignId: input.campaignId, operationId: String(request.operationId) });
   if (existing) {
     if (existing.idempotencyKey !== request.idempotencyKey || existing.requestHash !== requestHash) throw new StoryWorkspaceStoreError(409, 'SCENE_REALITY_IDEMPOTENCY_CONFLICT', 'This Scene preparation operation was already used for different material.', {});
@@ -1187,13 +1194,35 @@ export async function commitSceneReality(
     });
   }
   validateSuccessorContinuity(proposal, priorDocument?.bundle ?? null, request.trigger, greatestReceiptSceneRevision);
-  const assessment = validateAssessment(input.assessment, proposal, request);
+  let pendingBindingRecord: JsonObject | null = null;
+  if (input.pendingIntent !== undefined) {
+    if (!PENDING_INTENT_WRITES_ENABLED) throw new StoryWorkspaceStoreError(503, 'SCENE_PENDING_INTENT_WRITES_DISABLED', 'New prepared action bindings are disabled.', {});
+    const supplement = input.pendingIntent;
+    exactKeys(supplement, 'pendingIntent', ['schemaVersion', 'ownerContext', 'bindings']);
+    version(supplement, 'gma.scene-pending-intent-commit/1', 'pendingIntent');
+    if (!stores.readPendingIntent || !object(supplement.ownerContext) || !object(supplement.bindings)) throw new StoryWorkspaceStoreError(422, 'SCENE_PENDING_INTENT_TRANSPORT_INVALID', 'Pending intent requires its complete current owner context.', {});
+    const sourceProgram = (supplement.ownerContext.window as JsonObject)?.programId;
+    if ((request.programRef as JsonObject)?.programId !== sourceProgram) throw new StoryWorkspaceStoreError(409, 'SCENE_PENDING_INTENT_PROGRAM_CONFLICT', 'The prepared binding belongs to a different action program.', {});
+    const current = await stores.readPendingIntent({ userId: input.userId, campaignId: input.campaignId, programId: String(sourceProgram) });
+    assertPendingIntentContextCurrent(supplement.ownerContext, current);
+    const window = current.window as JsonObject;
+    if ((request.programRef as JsonObject).cursorRevision !== window.cursorRevision || request.instructionRef !== window.instructionRef
+      || request.playerDirection !== ((current.source as JsonObject).instruction as JsonObject).exactText) throw new StoryWorkspaceStoreError(409, 'SCENE_PENDING_INTENT_PROGRAM_CONFLICT', 'The Scene request must retain the exact stored instruction and unfinished cursor.', {});
+    try {
+      pendingBindingRecord = createPendingBindingRecord(pendingBindingContext(current, String(request.operationId), proposal),
+        supplement.bindings, input.assessment as JsonObject, pendingScenePolicyFingerprint(String(proposal.requestedDepth))) as JsonObject;
+    } catch {
+      throw new StoryWorkspaceStoreError(422, 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', 'The complete Scene and unfinished-action binding examination could not be verified.', {});
+    }
+  }
+  const assessment = validateAssessment(input.assessment, proposal, request, pendingBindingRecord !== null);
   const pointerRevision = actualPointerRevision + 1;
   const certificate = certificateFrom(proposal, request, assessment, pointerRevision);
   const manifestCertificate = ref(((proposal.openingFrame as JsonObject).presentedTargetManifest as JsonObject).certificateRef, 'certificateId', 'proposal.openingFrame.presentedTargetManifest.certificateRef');
   if (manifestCertificate.id !== certificate.certificateId || manifestCertificate.revision !== certificate.revision) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_MANIFEST_CERTIFICATE_MISMATCH', 'The prepared opening is not bound to the exact readiness certificate being issued.', { field: 'proposal.openingFrame.presentedTargetManifest.certificateRef.revision', expectedRevision: certificate.revision, actualRevision: manifestCertificate.revision });
   const priorBundle = priorDocument ? priorDocument.bundle.activeBundle as JsonObject : null;
   const bundle = bundleFrom(proposal, request, assessment, certificate, pointerRevision, priorBundle);
+  if (pendingBindingRecord) bundle.pendingIntentBindingRecord = pendingBindingRecord;
   assertByteBound(bundle, SCENE_REALITY_LIMITS.aggregateRealityBytes, 'SCENE_REALITY_BUNDLE_TOO_LARGE', 'bundle');
   const activeBundle = bundle.activeBundle as JsonObject;
   const now = new Date();
@@ -1498,7 +1527,7 @@ export async function selectPreparedStoryFacts(
 
 export function sceneRealityHealthAdvertisement(): JsonObject {
   return {
-    capabilities: clone(SCENE_REALITY_CAPABILITIES as unknown as string[]),
+    capabilities: [...SCENE_REALITY_CAPABILITIES, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
     contracts: clone(SCENE_REALITY_CONTRACTS as unknown as JsonObject),
     limits: clone(SCENE_REALITY_LIMITS as unknown as JsonObject),
     authority: 'gmc',

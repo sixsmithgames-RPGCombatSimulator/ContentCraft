@@ -3,6 +3,7 @@ import Ajv from 'ajv';
 import { validateFreeformIntake } from './freeformIntakeValidation.js';
 import { scenePresentedTargetRefs } from '../services/scenePresentedTargetRefs.js';
 import { SCENE_MODEL_METADATA_BINDING, validSceneModelMetadataBinding } from './sceneModelMetadataBinding.js';
+import { scenePendingBindingContextFromOwner, scenePendingIntentBindingIssues, scenePendingIntentExaminationIssues } from '../../shared/llm/scenePendingIntentBindings.js';
 import {
   registerSemanticValidator,
   STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA,
@@ -14,6 +15,31 @@ function result(id: string, issues: Array<{ code: string; message: string; path?
 }
 
 registerSemanticValidator('freeform-intake', ({ request, output }) => validateFreeformIntake(request, output));
+
+registerSemanticValidator('scene-pending-intent-builder', ({ request, output }) => {
+  const trusted = request.context?.input?.value as any, owner = trusted?.pendingIntentContext;
+  let paths: string[] = [];
+  try {
+    if (output.intentWindowFingerprint !== owner.window.windowFingerprint) paths.push('/intentWindowFingerprint');
+    if (output.status === 'continuation_required') {
+      if (output.pendingIntentBindings !== null) paths.push('/pendingIntentBindings');
+    } else {
+      const checkpoint = trusted.buildContinuation?.checkpoint;
+      const proposal = checkpoint ? { ...output.proposal, ...Object.fromEntries(['zones', 'actorFrames', 'elements', 'facts']
+        .map((key) => [key, [...(checkpoint[key] ?? []), ...(output.proposal[key] ?? [])]])) } : output.proposal;
+      paths.push(...scenePendingIntentBindingIssues(output.pendingIntentBindings,
+        scenePendingBindingContextFromOwner(owner, trusted.buildRequest.operationId, proposal)));
+    }
+  } catch { paths = ['/pendingIntentContext']; }
+  return result('scene-pending-intent-builder', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_INVALID', message: 'The complete pending intent binding must match the supplied owner window, slots and evidence.', path })));
+});
+
+registerSemanticValidator('scene-pending-intent-examiner', ({ request, output }) => {
+  const trusted = request.context?.input?.value as any;
+  const paths = scenePendingIntentExaminationIssues(output, trusted.pendingIntentBindings,
+    scenePendingBindingContextFromOwner(trusted.pendingIntentContext, trusted.proposal.operationId, trusted.proposal), trusted.expectedPolicyFingerprint);
+  return result('scene-pending-intent-examiner', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', message: 'Joint examination must cover the exact prepared Scene, unfinished intent and owner evidence.', path })));
+});
 
 function outputText(output: any) {
   return [output?.narration, output?.correctedNarration, output?.response, output?.dialogue]

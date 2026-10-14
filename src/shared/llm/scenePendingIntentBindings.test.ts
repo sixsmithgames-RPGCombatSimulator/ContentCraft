@@ -1,6 +1,9 @@
 import Ajv from 'ajv';
+import { createPendingBindingRecord, assertPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings,
+  appliedObservationBinding, observationSettlementAuthorityHead } from './scenePendingIntentApplication.js';
 import { describe, expect, it } from 'vitest';
 import { freeformJsonDigest, freeformTextDigest } from './freeformPlanBinding.js';
+import { preparedPendingRequirementProjection } from '../../server/services/scenePendingIntentService.js';
 import { createPendingIntentWindow } from './pendingIntentWindow.js';
 import { getOperationDefinition } from '../../server/llm-orchestrator/operationRegistry.js';
 import { sceneReadinessPendingAssessmentOutput, sceneRealityPendingBuilderResultOutput } from '../../server/llm-orchestrator/sceneRealityOutputSchemas.js';
@@ -70,6 +73,122 @@ function fixture(modify?: (context: ScenePendingBindingContext) => void) {
 const shape = new Ajv({ strict: false, allErrors: true }).compile(SCENE_PENDING_INTENT_BINDINGS_SCHEMA);
 
 describe('ADR 014 staged pending binding contracts (no runtime route or owner write)', () => {
+  it('keeps ordered earlier bindings as audit history and uses only a fresh pending successor for a new Scene', () => {
+    const f = fixture(), source = structuredClone(f.context.source);
+    const make = (prior: number, revision: number) => {
+      f.context.source.cursor.revision = prior; f.context.source.artifactRevision = prior;
+      f.context.proposal.sceneKit.revision = revision; f.bindings.sceneKitRef.revision = revision;
+      const window = createPendingIntentWindow(f.context.source); f.bindings.windowId = window.windowId; f.bindings.windowFingerprint = window.windowFingerprint;
+      const record = createPendingBindingRecord(f.context, f.bindings, f.assessment(), f.policyFingerprint);
+      const head = { storyWorkspaceRevision: 3, sceneRevision: revision, vcsCharacterRevision: 12 };
+      return { record, receipt: createIntentBindingReceipt(record, { bundleId: `bundle:${revision}`, revision, sceneKitRef: f.bindings.sceneKitRef },
+        { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: `rebase:${revision}`, programRef: 'program:scout', priorCursorRevision: prior, resultingCursorRevision: prior + 1, authorityHead: head }) };
+    };
+    const first = make(5, 3), savedFirst = structuredClone(first), second = make(6, 4);
+    const projected = projectAppliedIntentBindings(source.instruction, source.program, [first, second]);
+    expect(projected.nodes[0]).toEqual(source.program.nodes[0]); expect(first).toEqual(savedFirst);
+    expect(projected.nodes[1].semanticLocationBindings.bindings[0].authorityRef).toBe('element:cover');
+    const gmc = { workspaceRef: { revision: 3 }, sceneKitRef: { sceneKitId: 'scene:scout', revision: 3 }, observationAccess: [{ accessId: 'access:familiar' }] };
+    const entry = { nodeId: 'watch', group: { groupId: 'group:familiar', methodRef: 'method:link' }, actorCandidate: { actorRef: 'actor:familiar' } };
+    expect(appliedObservationBinding(second.receipt.authorityHead, [first, second], gmc, entry)?.evidenceRef).toBe('evidence:familiar');
+    expect(() => appliedObservationBinding(first.receipt.authorityHead, [first, second], gmc, entry)).toThrow();
+    expect(() => projectAppliedIntentBindings(source.instruction, source.program, [second, first])).toThrow();
+    expect(() => projectAppliedIntentBindings(source.instruction, source.program, [first, first])).toThrow();
+  });
+  it('resolves prepared requirement existence only from accepted owner overlays, never labels or completed play', () => {
+    const f = fixture((c) => {
+      Object.assign(c.source.program.nodes[1].dataRequirements[0], { kind: 'scene_presence', dimension: 'who', query: 'I' });
+      Object.assign(c.source.program.nodes[1].dataRequirements[1], { kind: 'current_location', dimension: 'where', query: 'behind cover' });
+      c.source.program.nodes[1].dataRequirements.push({ kind: 'story_fact', dimension: 'what', query: 'remain behind cover' });
+      c.proposal.sceneStoryDesign.affordances[0].factRefs = ['fact:cover'];
+      c.proposal.facts[0].epistemicState = 'scene_local_stable';
+    });
+    const record = createPendingBindingRecord(f.context, f.bindings, f.assessment(), f.policyFingerprint);
+    const head = { storyWorkspaceRevision: 3, sceneRevision: 3, vcsCharacterRevision: 12 };
+    const receipt = createIntentBindingReceipt(record, { bundleId: 'bundle:one', revision: 1, sceneKitRef: f.bindings.sceneKitRef },
+      { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: 'rebase:one', programRef: 'program:scout', priorCursorRevision: 5, resultingCursorRevision: 6, authorityHead: head });
+    const applications = [{ record, receipt }], projected = projectAppliedIntentBindings(f.context.source.instruction, f.context.source.program, applications);
+    const loaded: any = { artifactRef: { campaignId: 'campaign:fictional', programId: 'program:scout' }, artifact: { ...f.context.source,
+      cursor: { ...f.context.source.cursor, revision: 6, authorityHead: head }, intentBindingApplications: applications } };
+    const active: any = { bundle: { ...f.context.proposal, pendingIntentBindingRecord: record } };
+    const scene: any = { storyWorkspaceRef: { revision: 3 }, playableSceneContext: { sceneKitRef: { revision: 3 }, presentActors: ['actor:player'] } };
+    const input = { campaignId: 'campaign:fictional', programId: 'program:scout', nodeId: 'cover',
+      requirements: projected.nodes[1].dataRequirements.map((row: any, i: number) => ({ ...row, requirementId: `cover:requirement:${i + 1}` })) };
+    const before = structuredClone({ loaded, active, scene });
+    const result = preparedPendingRequirementProjection(input, loaded, active, scene)!;
+    expect(result.requirementResults).toHaveLength(3);
+    expect(result.requirementResults.every((r: any) => r.status === 'resolved' && r.reasonCode.endsWith('NOT_EXECUTED'))).toBe(true);
+    expect({ loaded, active, scene }).toEqual(before);
+    for (const wrong of ['foreign', 'missing_binding', 'stale_scene', 'stale_workspace', 'absent_actor', 'completed', 'tampered_requirement', 'missing_fact']) {
+      const l = structuredClone(loaded), a = structuredClone(active), s = structuredClone(scene), body = structuredClone(input);
+      if (wrong === 'foreign') body.campaignId = 'campaign:other';
+      if (wrong === 'missing_binding') delete a.bundle.pendingIntentBindingRecord;
+      if (wrong === 'stale_scene') a.bundle.sceneKit.revision++;
+      if (wrong === 'stale_workspace') s.storyWorkspaceRef.revision++;
+      if (wrong === 'absent_actor') s.playableSceneContext.presentActors = [];
+      if (wrong === 'completed') l.artifact.cursor.completedNodeRefs.push('cover');
+      if (wrong === 'tampered_requirement') body.requirements[1].targetRef = 'element:pebbles';
+      if (wrong === 'missing_fact') a.bundle.facts = [];
+      expect(() => preparedPendingRequirementProjection(body, l, a, s), wrong).toThrow();
+    }
+  });
+  it('accepts exact supplied dossier and owner evidence citations while keeping probes strictly on scene records', () => {
+    const f = fixture(); f.context.ownerEvidenceRefs = ['observable:confirmed', 'mechanics-binding:confirmed'];
+    f.context.proposal.sceneReality = { realityId: 'reality:one' }; f.context.proposal.sceneStoryDesign.designId = 'design:one';
+    const assessment = f.assessment();
+    const window = createPendingIntentWindow(f.context.source);
+    const refs = [window.nodes[0].requirements[0].requirementId, 'outcome:tunnel', 'observable:confirmed', 'mechanics-binding:confirmed', 'receipt:entry', 'gmc:receipt:entry', 'vcs:receipt:link',
+      'group:familiar', 'method:link', 'access:familiar', 'capability:link', 'reality:one', 'design:one', createPendingIntentWindow(f.context.source).windowId];
+    assessment.evidenceRefs = refs; assessment.bindingReviews[1].evidenceRefs = refs;
+    expect(scenePendingIntentExaminationIssues(assessment, f.bindings, f.context, f.policyFingerprint)).toEqual([]);
+    assessment.counterfactualProbes[0].evidenceRefs = ['observable:confirmed'];
+    expect(scenePendingIntentExaminationIssues(assessment, f.bindings, f.context, f.policyFingerprint)).toContain('/counterfactualProbes');
+    assessment.evidenceRefs = ['observable:invented'];
+    expect(scenePendingIntentExaminationIssues(assessment, f.bindings, f.context, f.policyFingerprint)).toContain('/assessment');
+  });
+  it('recognizes exact structured completed owner receipt citations without rewriting their immutable window evidence', () => {
+    const f = fixture((c) => { c.source.receipts[0].authorityReceipts = [{ authority: 'gmc', receiptRef: 'gmc:receipt:structured', revision: 3 }]; });
+    const before = createPendingIntentWindow(f.context.source), assessment = f.assessment();
+    assessment.evidenceRefs = ['gmc:receipt:structured']; assessment.bindingReviews[0].evidenceRefs = ['gmc:receipt:structured'];
+    expect(scenePendingIntentExaminationIssues(assessment, f.bindings, f.context, f.policyFingerprint)).toEqual([]);
+    expect(createPendingIntentWindow(f.context.source)).toEqual(before);
+  });
+  it('keeps typed source heads exact and retains a newer prepared head only through its accepted association', () => {
+    const f = fixture(); f.context.proposal.sceneKit.revision = 4; f.bindings.sceneKitRef.revision = 4;
+    const record = createPendingBindingRecord(f.context, f.bindings, f.assessment(), f.policyFingerprint);
+    const head = { storyWorkspaceRevision: 3, sceneRevision: 4, vcsCharacterRevision: 12 };
+    const receipt = createIntentBindingReceipt(record, { bundleId: 'bundle:one', revision: 1, sceneKitRef: f.bindings.sceneKitRef },
+      { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: 'rebase:one', programRef: 'program:scout', priorCursorRevision: 5, resultingCursorRevision: 6, authorityHead: head });
+    const applications = [{ record, receipt }], gmc = { workspaceRef: { revision: 3 }, sceneKitRef: { sceneKitId: 'scene:scout', revision: 3 }, observationAccess: [{ accessId: 'access:familiar' }] };
+    const entry = { nodeId: 'watch', group: { groupId: 'group:familiar', methodRef: 'method:link' }, actorCandidate: { actorRef: 'actor:familiar' } };
+    expect(appliedObservationBinding(head, applications, gmc, entry)?.accessRef).toBe('access:familiar');
+    expect(observationSettlementAuthorityHead(head, applications, gmc, [entry])).toEqual(head);
+    expect(observationSettlementAuthorityHead(head, [], gmc, [entry]).sceneRevision).toBe(3);
+    expect(() => appliedObservationBinding({ ...head, sceneRevision: 5 }, applications, gmc, entry)).toThrow();
+    expect(() => appliedObservationBinding(head, applications, { ...gmc, workspaceRef: { revision: 4 } }, entry)).toThrow();
+    expect(() => appliedObservationBinding(head, applications, { ...gmc, sceneKitRef: { sceneKitId: 'scene:scout', revision: 4 } }, entry)).toThrow();
+    expect(() => appliedObservationBinding(head, applications, gmc, { ...entry, group: { ...entry.group, groupId: 'foreign' } })).toThrow();
+    expect(() => appliedObservationBinding(head, applications, gmc, { ...entry, group: { ...entry.group, methodRef: 'method:ordinary' } })).toThrow();
+    expect(() => observationSettlementAuthorityHead(head, applications, gmc, [entry, { ...entry, nodeId: 'unbound' }])).toThrow();
+  });
+  it('projects only examined reference and coverage fields while preserving original work', () => {
+    const { context, bindings, policyFingerprint, assessment } = fixture();
+    const before = structuredClone(context.source), record = createPendingBindingRecord(context, bindings, assessment(), policyFingerprint);
+    assertPendingBindingRecord(record, context.source);
+    const rebase = { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: 'rebase:scout', programRef: 'program:scout',
+      priorCursorRevision: 5, resultingCursorRevision: 6, authorityHead: { storyWorkspaceRevision: 3, sceneRevision: 3, vcsCharacterRevision: 12 } };
+    const receipt = createIntentBindingReceipt(record, { bundleId: 'bundle:scout', revision: 1, sceneKitRef: bindings.sceneKitRef }, rebase);
+    const projected = projectAppliedIntentBindings(context.source.instruction, context.source.program, [{ record, receipt }]);
+    expect(projected.nodes[0]).toEqual(context.source.program.nodes[0]);
+    expect(projected.nodes[1].kind).toBe('other');
+    expect(projected.nodes[1].semanticLocationBindings.bindings[0].authorityRef).toBe('element:cover');
+    expect(projected.nodes[2].observationGroups[0]).toMatchObject({ observerRef: 'actor:familiar', methodRef: 'method:link', bindingStatus: 'exact' });
+    expect(projected.nodes[2].dataRequirements[0].coverageEntryRef).toBe('coverage:familiar');
+    expect(context.source).toEqual(before);
+    expect(() => projectAppliedIntentBindings(context.source.instruction, { ...context.source.program, status: 'changed' }, [{ record, receipt }])).toThrow();
+    expect(() => projectAppliedIntentBindings(context.source.instruction, context.source.program, [{ record: { ...record, assessmentRef: 'forged' }, receipt }])).toThrow();
+    expect(() => createPendingBindingRecord(context, bindings, { ...assessment(), verdict: 'repair_required' }, policyFingerprint)).toThrow();
+  });
   it('accepts explicit full-window cover and qualified familiar bindings without changing source or receipts', () => {
     const { context, bindings, policyFingerprint, assessment } = fixture(), before = structuredClone(context);
     expect(shape(bindings)).toBe(true); expect(scenePendingIntentBindingIssues(bindings, context)).toEqual([]);
@@ -241,6 +360,6 @@ describe('ADR 014 staged pending binding contracts (no runtime route or owner wr
   it('states positive binding, evidence, pending mechanics and failed-row repair requirements before a correction', () => {
     for (const rule of [/every node/, /every reference slot exactly once/, /Preserve every non-null original ref/, /instructionEvidence/, /exact zone, access and capability tuple/,
       /clarification_required/, /completed receipts and pending mechanics/, /24,576 UTF-8 bytes/, /Repair only the exact failed node rows/]) expect(SCENE_PENDING_INTENT_BINDING_POLICY).toMatch(rule);
-    for (const rule of [/one bindingReviews row per pending node/, /Pending mechanics remain unresolved/, /Completed prerequisite receipts are immutable/, /pebbles/, /repair_required/, /four-operation/]) expect(SCENE_PENDING_INTENT_EXAMINER_POLICY).toMatch(rule);
+    for (const rule of [/one bindingReviews row per pending node/, /Pending mechanics remain unresolved/, /Completed prerequisite receipts are immutable/, /pebbles/, /repair_required/, /five-operation/, /no sixth operation/]) expect(SCENE_PENDING_INTENT_EXAMINER_POLICY).toMatch(rule);
   });
 });

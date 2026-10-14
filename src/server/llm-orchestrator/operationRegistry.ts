@@ -10,17 +10,24 @@ import {
 import { OrchestratorError } from './errors.js';
 import { FREEFORM_INTENT_PROPOSAL_SCHEMA } from '../../shared/llm/freeformIntentSchema.js';
 import { FREEFORM_INTAKE_OPERATION, FREEFORM_INTAKE_POLICY, FREEFORM_INTAKE_POLICY_VERSION } from '../../shared/llm/freeformIntakePolicy.js';
+import { SCENE_PENDING_INTENT_BINDING_POLICY, SCENE_PENDING_INTENT_EXAMINER_POLICY } from '../../shared/llm/scenePendingIntentBindings.js';
 import {
   sceneRealityBuilderCheckpointResultOutput,
   sceneRealityBuilderResultOutput,
   sceneRealityDepthOutput,
   sceneRealityExaminerOutput,
   sceneRealityRepairOutput,
+  sceneRealityPendingBuilderResultOutput,
+  sceneReadinessPendingAssessmentOutput,
+  scenePendingIntentRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-10-07.2';
+export const OPERATION_REGISTRY_VERSION = '2026-10-13.1';
+export const MANUAL_PENDING_SCENE_OPERATIONS = Object.freeze(['story.scene-reality.build.pending', 'story.scene-reality.build.checkpoint.pending',
+  'story.scene-readiness.examine.pending', 'story.scene-reality.repair.pending']);
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
+  '2026-10-07.2',
   '2026-10-07.1',
   '2026-09-09.9',
   '2026-09-09.8',
@@ -1538,6 +1545,31 @@ const seeds: Seed[] = [
   { id: 'workflow.stage.execute', operationClass: 'world_generation', tier: 'world', required: [], openOutput: true },
   { id: 'assistant.chat', operationClass: 'narrative', tier: 'narrative', required: ['response'] },
 ];
+
+// New identities preserve the exact historical policies and in-flight replies.
+for (const id of ['story.scene-reality.build', 'story.scene-reality.build.checkpoint']) {
+  const prior = seeds.find((seed) => seed.id === id)!;
+  const outputProperties = { ...sceneRealityPendingBuilderResultOutput,
+    ...(id.endsWith('.checkpoint') ? { proposal: { type: 'null' }, status: { const: 'continuation_required' } } : {}) };
+  seeds.push({ ...prior, id: `${id}.pending`, required: Object.keys(outputProperties), outputProperties,
+    validators: [...(prior.validators ?? []), 'scene-pending-intent-builder'], promptVersion: 'gma.scene-reality-builder-policy/4',
+    systemInstruction: prior.systemInstruction!
+      .replaceAll('gma.scene-reality-builder-result/1', 'gma.scene-reality-builder-result/2')
+      .replace('these seven keys:', 'these nine keys:')
+      .replace('status, proposal, checkpoint.', 'status, proposal, checkpoint, intentWindowFingerprint, pendingIntentBindings.')
+      + ' ' + SCENE_PENDING_INTENT_BINDING_POLICY
+      + ' The authenticated pendingIntentContext contains source, window, slots, ownerReadSet and observationSeeds. Select ownerEvidenceRef from those seeds; use their exact observer/method/access/capability and preserve their exact actor identity in one actor frame. Its zone must agree with the observation affordance. Copy sceneKitRef from the final proposal, including the application-declared next revision. Never manufacture owner evidence.' });
+}
+const priorExaminer = seeds.find((seed) => seed.id === 'story.scene-readiness.examine')!;
+seeds.push({ ...priorExaminer, id: 'story.scene-readiness.examine.pending',
+  required: [...sceneReadinessPendingAssessmentOutput.required],
+  outputProperties: sceneReadinessPendingAssessmentOutput.properties as Record<string, Record<string, unknown>>,
+  validators: [...(priorExaminer.validators ?? []), 'scene-pending-intent-examiner'],
+  promptVersion: 'gma.scene-readiness-examiner-policy/3', systemInstruction: SCENE_PENDING_INTENT_EXAMINER_POLICY });
+seeds.push({ ...seeds.find((seed) => seed.id === 'story.scene-reality.repair')!, id: 'story.scene-reality.repair.pending',
+  required: Object.keys(scenePendingIntentRepairOutput), outputProperties: scenePendingIntentRepairOutput,
+  validators: [], promptVersion: 'gma.scene-pending-intent-repair-policy/1',
+  systemInstruction: SCENE_PENDING_INTENT_BINDING_POLICY + ' Return exactly gma.scene-pending-intent-repair/1 with schemaVersion, correctionId, recordPatches and bindingReplacements only. Copy correctionId. Replace every named failedBindingNodeRef exactly once and no other binding row; if none are named return an empty bindingReplacements array. recordPatches may replace only exact allowedRecordRefs using {recordRef,replacement}; if none are allowed return an empty array. Preserve every unaffected world record, binding row, original null, non-null ref, condition, graph, pending mechanic, completed receipt and opening prose exactly. No new affordance, world domain, assessment, narration or authority artifact. The app merges the complete successor and computes its fingerprints, then a separate independent examiner reviews it. A repair is not permission to save or play. Keep the complete existing input/output budgets; there is no second repair or sixth model operation.' });
 
 const registry = new Map<string, LlmOperationDefinition>();
 const validators = new Map<string, SemanticValidator>();
