@@ -1,6 +1,6 @@
 import Ajv from 'ajv';
 import { createPendingBindingRecord, assertPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings,
-  appliedObservationBinding, observationSettlementAuthorityHead } from './scenePendingIntentApplication.js';
+  appliedObservationBinding, observationSettlementAuthorityHead, acceptedPendingNodeCoverage } from './scenePendingIntentApplication.js';
 import { describe, expect, it } from 'vitest';
 import { freeformJsonDigest, freeformTextDigest } from './freeformPlanBinding.js';
 import { preparedPendingRequirementProjection } from '../../server/services/scenePendingIntentService.js';
@@ -10,7 +10,7 @@ import { sceneReadinessPendingAssessmentOutput, sceneRealityPendingBuilderResult
 import { mergeScenePendingIntentBindingRepair, pendingIntentBindingSlots, scenePendingIntentBindingIssues,
   scenePendingIntentExaminationIdentity, scenePendingIntentExaminationIssues, SCENE_PENDING_INTENT_BINDINGS_SCHEMA,
   SCENE_PENDING_INTENT_BINDING_POLICY, SCENE_PENDING_INTENT_EXAMINER_POLICY,
-  type ScenePendingBindingContext } from './scenePendingIntentBindings.js';
+  pendingIntentBindingSlotsFromWindow, type ScenePendingBindingContext } from './scenePendingIntentBindings.js';
 
 function fixture(modify?: (context: ScenePendingBindingContext) => void) {
   const campaignId = 'campaign:fictional', operationId = 'scene-reality:pending:test';
@@ -73,6 +73,31 @@ function fixture(modify?: (context: ScenePendingBindingContext) => void) {
 const shape = new Ajv({ strict: false, allErrors: true }).compile(SCENE_PENDING_INTENT_BINDINGS_SCHEMA);
 
 describe('ADR 014 staged pending binding contracts (no runtime route or owner write)', () => {
+  it('uses the same immutable node projection for application and exact coverage witnesses', () => {
+    const f = fixture(), record = createPendingBindingRecord(f.context, f.bindings, f.assessment(), f.policyFingerprint);
+    expect(pendingIntentBindingSlotsFromWindow(record.window)).toEqual(pendingIntentBindingSlots(f.context.source));
+    const receipt = createIntentBindingReceipt(record, { bundleId: 'bundle:one', revision: 1, sceneKitRef: f.bindings.sceneKitRef },
+      { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: 'rebase:one', programRef: 'program:scout',
+        priorCursorRevision: 5, resultingCursorRevision: 6, authorityHead: { storyWorkspaceRevision: 3, sceneRevision: 3, vcsCharacterRevision: 12 } });
+    const original = structuredClone(f.context.source.program);
+    const projected = projectAppliedIntentBindings(f.context.source.instruction, original, [{ record, receipt }]);
+    expect(acceptedPendingNodeCoverage(record, projected.nodes[1], f.bindings.sceneKitRef)).toEqual(['coverage:cover']);
+    expect(acceptedPendingNodeCoverage(record, projected.nodes[2], f.bindings.sceneKitRef)).toEqual(['coverage:familiar']);
+    expect(acceptedPendingNodeCoverage(record, projected.nodes[0], f.bindings.sceneKitRef)).toBeNull(); // already completed
+    for (const change of [
+      (node: Record<string, unknown>) => { node.kind = 'wait'; },
+      (node: Record<string, unknown>) => { node.dependsOn = ['another']; },
+      (node: Record<string, unknown>) => { node.summary = 'A different action.'; },
+      (node: Record<string, unknown>) => { node.evidenceSpans = [{ start: 0, end: 1 }]; },
+    ]) {
+      const changed = structuredClone(projected.nodes[1]); change(changed);
+      expect(acceptedPendingNodeCoverage(record, changed, f.bindings.sceneKitRef)).toBeNull();
+    }
+    expect(acceptedPendingNodeCoverage(record, projected.nodes[1], { ...f.bindings.sceneKitRef, revision: 4 })).toBeNull();
+    const changed = structuredClone(record); changed.bindings.nodes[0].rationale = 'Changed after acceptance.';
+    expect(acceptedPendingNodeCoverage(changed, projected.nodes[1], f.bindings.sceneKitRef)).toBeNull();
+    expect(f.context.source.program).toEqual(original);
+  });
   it('keeps ordered earlier bindings as audit history and uses only a fresh pending successor for a new Scene', () => {
     const f = fixture(), source = structuredClone(f.context.source);
     const make = (prior: number, revision: number) => {
@@ -272,8 +297,8 @@ describe('ADR 014 staged pending binding contracts (no runtime route or owner wr
       instruction.exactText = prefix + instruction.exactText;
       instruction.instructionFingerprint = freeformTextDigest(instruction.exactText);
       c.source.program.instructionFingerprint = instruction.instructionFingerprint;
-      c.source.program.nodes[1].evidenceSpans = [{ start: 0, end: prefix.length }];
-      c.source.program.nodes[2].evidenceSpans = [{ start: prefix.length + 41, end: instruction.exactText.length }];
+      c.source.program.nodes[1].evidenceSpans = [{ start: 0, end: Buffer.byteLength(prefix, 'utf8') }];
+      c.source.program.nodes[2].evidenceSpans = [{ start: Buffer.byteLength(prefix, 'utf8') + 41, end: Buffer.byteLength(instruction.exactText, 'utf8') }];
     });
     for (const row of bindings.nodes) row.rationale = '🐀'.repeat(1_000);
     expect(scenePendingIntentBindingIssues(bindings, context)).toContain('/bytes');

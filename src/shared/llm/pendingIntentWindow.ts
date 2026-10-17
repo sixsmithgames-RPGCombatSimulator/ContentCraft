@@ -29,7 +29,7 @@ const digest = (value: unknown) => freeformJsonDigest(value);
 function sourceNodes(source: PendingIntentWindowSource): Row[] {
   const { instruction, program, cursor, artifactRevision } = source;
   check(instruction && program && cursor, 'source');
-  check(['gma.semantic-action-program/4', 'gma.semantic-action-program/5'].includes(program.schemaVersion), 'program.schemaVersion');
+  check(['gma.semantic-action-program/4', 'gma.semantic-action-program/5', 'gma.semantic-action-program/6'].includes(program.schemaVersion), 'program.schemaVersion');
   check(isId(program.programId) && cursor.programId === program.programId, 'programId');
   check(isId(instruction.instructionRef) && instruction.instructionRef === program.instructionRef, 'instructionRef');
   check(typeof instruction.exactText === 'string' && instruction.exactText.length > 0
@@ -123,9 +123,13 @@ export function createPendingIntentWindow(source: PendingIntentWindowSource): Ro
     const original = nodeMap.get(nodeRef)!;
     check(Array.isArray(original.evidenceSpans) && original.evidenceSpans.length > 0, 'node.evidenceSpans');
     const instructionEvidence = original.evidenceSpans.map((span: Row) => {
+      const encoded = Buffer.from(instruction.exactText, 'utf8');
       check(Number.isSafeInteger(span.start) && Number.isSafeInteger(span.end)
-        && span.start >= 0 && span.end > span.start && span.end <= instruction.exactText.length, 'node.evidenceSpans');
-      return { start: span.start, end: span.end, quote: instruction.exactText.slice(span.start, span.end) };
+        && span.start >= 0 && span.end > span.start && span.end <= encoded.length, 'node.evidenceSpans');
+      const prefix = encoded.subarray(0, span.start).toString('utf8');
+      const through = encoded.subarray(0, span.end).toString('utf8');
+      check(Buffer.byteLength(prefix, 'utf8') === span.start && Buffer.byteLength(through, 'utf8') === span.end, 'node.evidenceSpans');
+      return { start: span.start, end: span.end, quote: encoded.subarray(span.start, span.end).toString('utf8') };
     });
     const { dataRequirements, ...node } = structuredClone(original);
     const occurrences = new Map<string, number>();

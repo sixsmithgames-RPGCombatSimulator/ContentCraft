@@ -38,7 +38,7 @@ import { OpenAiProviderAdapter } from './providers/openAiProvider.js';
 import { resolveRolloutDecision } from './rolloutPolicy.js';
 import { MongoReferenceContextLoader } from './mongoContextLoader.js';
 import './semanticValidators.js';
-import { FREEFORM_INTAKE_OPERATION } from '../../shared/llm/freeformIntakePolicy.js';
+import { isFreeformIntakeOperation, freeformPromptForVersion } from '../../shared/llm/freeformIntakePolicy.js';
 import { executeTicketedFreeform } from './freeformExecution.js';
 import type { FreeformTicketCollection } from './freeformTickets.js';
 
@@ -145,7 +145,8 @@ function validateContract(request: LlmRequestEnvelope) {
       source: 'gmc.operation-registry',
     });
   }
-  return operation;
+  return isFreeformIntakeOperation(operation.id) ? { ...operation,
+    prompt: { ...operation.prompt, ...freeformPromptForVersion(request.constraints.policyVersion) } } : operation;
 }
 
 async function runValidation(
@@ -196,14 +197,19 @@ export interface ExecuteOptions {
   runtimeOverride?: LlmOperationRuntimeOverride;
   contextLoader?: ReferenceContextLoader;
   freeformTickets?: FreeformTicketCollection;
+  freeformWorkflowReader?: import('../services/freeformWorkflowAuthority.js').FreeformWorkflowReader;
 }
 
 export async function executeLlmOperation(request: LlmRequestEnvelope, options: ExecuteOptions): Promise<LlmResponseEnvelope> {
+  if (request?.operation === 'input.freeform.interpret.read-effects' && options.manualOutput === undefined) throw new OrchestratorError({
+    code: 'MANUAL_READ_EFFECT_OPERATION_REQUIRED', category: 'policy', message: 'Read/effect interpretation accepts Manual replies only.',
+    status: 403, source: 'gmc.manual-intake-policy',
+  });
   if (MANUAL_PENDING_SCENE_OPERATIONS.includes(request?.operation) && options.manualOutput === undefined) throw new OrchestratorError({
     code: 'MANUAL_SCENE_OPERATION_REQUIRED', category: 'policy', message: 'Pending Scene preparation accepts Manual replies only.',
     status: 403, source: 'gmc.manual-scene-policy',
   });
-  if (request?.operation === FREEFORM_INTAKE_OPERATION) {
+  if (isFreeformIntakeOperation(request?.operation)) {
     validateContract(request);
     return executeTicketedFreeform(request, options, () => executeOperation(request, { ...options, runtimeOverride: undefined }));
   }
@@ -468,7 +474,7 @@ async function executeClaimed(
     response.error = {
       code: normalized.code,
       category: normalized.category,
-      message: request.operation === FREEFORM_INTAKE_OPERATION
+      message: isFreeformIntakeOperation(request.operation)
         ? 'The compact interpretation attempt did not complete successfully.'
         : normalized.message,
       retryable: normalized.retryable,

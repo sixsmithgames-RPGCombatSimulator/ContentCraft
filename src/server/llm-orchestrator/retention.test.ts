@@ -20,8 +20,13 @@ describe('orchestrator retention and deletion', () => {
       confirmation: 'delete-my-orchestrator-data',
       database: { collection } as any,
     });
-    expect(collection).toHaveBeenCalledTimes(6);
-    expect(deleteMany).toHaveBeenCalledTimes(6);
+    expect(collection).toHaveBeenCalledTimes(14);
+    expect(deleteMany).toHaveBeenCalledTimes(14);
+    expect(collection).toHaveBeenCalledWith('gmc_scene_movement_outcomes');
+    expect(collection).toHaveBeenCalledWith('gma_pending_observers_v2');
+    expect(collection).toHaveBeenCalledWith('gma_freeform_turns');
+    expect(collection).toHaveBeenCalledWith('gma_actor_mechanics_links');
+    expect(collection).toHaveBeenCalledWith('gma_actor_mechanics_link_decisions');
     expect(deleteMany.mock.calls.every(([filter]) => filter.userId === 'user-1')).toBe(true);
     expect(result.deleted.llm_executions).toBe(2);
     expect(result.deleted.llm_freeform_tickets).toBe(2);

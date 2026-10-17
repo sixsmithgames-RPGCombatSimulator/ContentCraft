@@ -1,8 +1,15 @@
-import { randomUUID } from 'node:crypto';
 import { readScenePendingIntentContext } from '../services/scenePendingIntentService.js';
+import { sceneMovementOutcomeService, type SceneMovementOutcomeCommit } from '../services/sceneMovementOutcomeStore.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
+import { randomUUID } from 'node:crypto';
+import { readQualifiedSceneTurnIdentitySources } from '../services/qualifiedSceneTurnSources.js';
 import { ProjectModel } from '../models/index.js';
 import { requireServiceIntegration, type IntegrationRequest } from '../middleware/integrationAuth.js';
+import { rewindFreeformTurns } from '../services/freeformTurnStore.js';
+import { actorMechanicsLinkService } from '../services/actorMechanicsLinkStore.js';
+import { readActorIdentityChoices } from '../services/actorIdentityChoices.js';
+import { pendingObserverEvidenceService } from '../services/pendingObserverEvidenceStore.js';
+import { qualifiedObservationAuthorityService, type QualifiedObservationCommit } from '../services/qualifiedObservationAuthorityService.js';
 import {
   applyStoryDelta,
   compileLegacyScenePlanImport,
@@ -439,8 +446,70 @@ function queryRefs(value: unknown): string[] {
   return value === undefined ? [] : String(value).split(',').map((entry) => entry.trim()).filter(Boolean);
 }
 
+function closedActorLinkBody(body: unknown, fields: string[]): asserts body is Record<string, unknown> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+    || Object.keys(body).length !== fields.length || fields.some((key) => !Object.hasOwn(body, key))
+    || Buffer.byteLength(JSON.stringify(body)) > 8_192) {
+    throw new StoryWorkspaceStoreError(422, 'ACTOR_LINK_INPUT_INVALID', 'The identity selection contains unsupported fields.', {});
+  }
+}
+
+storyWorkspaceRouter.get('/actor-mechanics-links', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await actorMechanicsLinkService().read({ userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId }));
+}));
+storyWorkspaceRouter.get('/actor-mechanics-links/choices', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const subjectKind = req.query.subjectKind;
+  if (Object.keys(req.query).sort().join(',') !== 'mechanicsSubjectRef,subjectKind'
+    || subjectKind !== 'character' && subjectKind !== 'familiar' || typeof req.query.mechanicsSubjectRef !== 'string') {
+    throw new StoryWorkspaceStoreError(422, 'ACTOR_LINK_INPUT_INVALID', 'Identity choices require one exact subject selection.', {});
+  }
+  res.json(await readActorIdentityChoices({ userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId,
+    subjectKind, mechanicsSubjectRef: req.query.mechanicsSubjectRef }));
+}));
+storyWorkspaceRouter.get('/actor-mechanics-links/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await actorMechanicsLinkService().operation({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, operationId: req.params.operationId }));
+}));
+storyWorkspaceRouter.get('/actor-mechanics-links/decisions/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await actorMechanicsLinkService().decisionOperation({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, operationId: req.params.operationId }));
+}));
+storyWorkspaceRouter.post('/actor-mechanics-links/prepare', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  closedActorLinkBody(req.body, ['operationId', 'actorRef', 'subjectKind', 'parentActorRef', 'expectedRegistryRevision',
+    'expectedWorkspaceRevision', 'expectedSceneRevision', 'vcsBinding']);
+  res.json(await actorMechanicsLinkService().prepare({ ...req.body,
+    userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId } as Parameters<ReturnType<typeof actorMechanicsLinkService>['prepare']>[0]));
+}));
+storyWorkspaceRouter.post('/actor-mechanics-links/confirm', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  closedActorLinkBody(req.body, ['decisionRef']);
+  if (typeof req.body.decisionRef !== 'string') throw new StoryWorkspaceStoreError(422, 'ACTOR_LINK_INPUT_INVALID', 'The identity decision must be one exact reference.', {});
+  res.json(await actorMechanicsLinkService().confirm({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, decisionRef: req.body.decisionRef }));
+}));
+storyWorkspaceRouter.post('/actor-mechanics-links/retire', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  closedActorLinkBody(req.body, ['operationId', 'linkRef', 'expectedRegistryRevision']);
+  if (typeof req.body.operationId !== 'string' || typeof req.body.linkRef !== 'string' || typeof req.body.expectedRegistryRevision !== 'number') throw new StoryWorkspaceStoreError(422, 'ACTOR_LINK_INPUT_INVALID', 'The identity correction requires exact references and revision.', {});
+  res.json(await actorMechanicsLinkService().retire({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, operationId: req.body.operationId, linkRef: req.body.linkRef,
+    expectedRegistryRevision: req.body.expectedRegistryRevision }));
+}));
+
 storyWorkspaceRouter.get('/observation-authority', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
+  if (req.query.version !== undefined && !['1', '2', '3'].includes(String(req.query.version))) throw new StoryWorkspaceStoreError(422, 'QUALIFIED_OBSERVATION_INPUT_INVALID', 'Unsupported observation reader version.', {});
+  if (req.query.version === '2' || req.query.version === '3') {
+    if (Object.keys(req.query).some((key) => !['version', 'programId'].includes(key)) || typeof req.query.programId !== 'string') throw new StoryWorkspaceStoreError(422, 'QUALIFIED_OBSERVATION_INPUT_INVALID', 'Qualified observation requires one exact saved program.', {});
+    res.json(await qualifiedObservationAuthorityService().read({ userId: (req as IntegrationRequest).userId,
+      campaignId: req.params.campaignId, programId: req.query.programId, version: req.query.version }));
+    return;
+  }
   const derivedSubject = req.query.derivedParentActorRef || req.query.derivedMechanicsSubjectRef || req.query.derivedSubjectKind
     ? {
         parentActorRef: String(req.query.derivedParentActorRef ?? ''),
@@ -460,6 +529,16 @@ storyWorkspaceRouter.get('/observation-authority', requireServiceIntegration, as
 storyWorkspaceRouter.post('/observation-authority/commit', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   const body = req.body ?? {};
+  if (['gmc.observation-authority-commit/2', 'gmc.observation-authority-commit/3'].includes(body.schemaVersion)) {
+    closedActorLinkBody(body, ['schemaVersion', 'programId', 'operationId', 'idempotencyKey', 'expectedArtifactRevision',
+      'expectedWorkspaceRevision', 'expectedPreparedSceneRevision', 'bindingRecordRef', 'evidenceRef', 'nodeRef', 'groupId', 'movementReceiptRef', 'vcsProjection',
+      ...(body.schemaVersion === 'gmc.observation-authority-commit/3' ? ['relocationLineageRef'] : [])]);
+    const result = await qualifiedObservationAuthorityService().commit({ ...body, userId: (req as IntegrationRequest).userId,
+      campaignId: req.params.campaignId } as QualifiedObservationCommit);
+    res.status(result.duplicate ? 200 : 201).json(result);
+    return;
+  }
+  if (body.schemaVersion !== undefined && body.schemaVersion !== 'gmc.observation-authority-commit/1') throw new StoryWorkspaceStoreError(422, 'QUALIFIED_OBSERVATION_INPUT_INVALID', 'Unsupported observation commit version.', {});
   const result = await commitObservationAuthority({
     userId: (req as IntegrationRequest).userId,
     campaignId: req.params.campaignId,
@@ -533,6 +612,7 @@ storyWorkspaceRouter.post('/scene-turns', requireServiceIntegration, asyncRoute(
     proposal: req.body,
     sceneKit,
     sceneStoryDesign,
+    certifiedIdentitySourceRefs: certifiedSettlement ? await readQualifiedSceneTurnIdentitySources({ userId, campaignId, bundle: realityBundle, proposal: req.body }) : [],
   });
   res.status(result.duplicate ? 200 : 201).json(result);
 }));
@@ -569,6 +649,14 @@ storyWorkspaceRouter.get('/conversation-history', requireServiceIntegration, asy
 
 storyWorkspaceRouter.get('/observation-authority/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
+  if (req.query.version !== undefined && !['1', '2', '3'].includes(String(req.query.version))) throw new StoryWorkspaceStoreError(422, 'QUALIFIED_OBSERVATION_INPUT_INVALID', 'Unsupported observation operation reader version.', {});
+  if (req.query.version === '2' || req.query.version === '3') {
+    if (Object.keys(req.query).some((key) => !['version', 'programId'].includes(key)) || typeof req.query.programId !== 'string') throw new StoryWorkspaceStoreError(422, 'QUALIFIED_OBSERVATION_INPUT_INVALID', 'Qualified observation lookup requires one exact saved program.', {});
+    const result = await qualifiedObservationAuthorityService().operation({ userId: (req as IntegrationRequest).userId,
+      campaignId: req.params.campaignId, programId: req.query.programId, operationId: req.params.operationId, version: req.query.version });
+    res.json(result ?? { disposition: 'confirmed_absent' });
+    return;
+  }
   res.json(await readObservationAuthorityOperation({
     userId: (req as IntegrationRequest).userId,
     campaignId: req.params.campaignId,
@@ -635,12 +723,14 @@ storyWorkspaceRouter.post('/interaction-artifacts/requirements', requireServiceI
 
 storyWorkspaceRouter.post('/interaction-artifacts/rewind', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
+  const freeform = await rewindFreeformTurns({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, boundarySequence: req.body?.boundarySequence });
   res.json(await rewindCompoundActionArtifacts({
     userId: (req as IntegrationRequest).userId,
     campaignId: req.params.campaignId,
     boundarySequence: req.body?.boundarySequence,
     rewindId: req.body?.rewindId,
-  }));
+  }).then((result) => ({ ...result, ...freeform })));
 }));
 
 storyWorkspaceRouter.get('/interaction-artifacts/:programId', requireServiceIntegration, asyncRoute(async (req, res) => {
@@ -951,8 +1041,62 @@ storyWorkspaceRouter.post('/scene-reality/commit', requireServiceIntegration, as
 
 storyWorkspaceRouter.get('/scene-reality/pending-intent/:programId', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
+  if (Object.keys(req.query).some((key) => !['qualification', 'continuation', 'readEffects'].includes(key))
+    || req.query.qualification !== undefined && req.query.qualification !== '1'
+    || req.query.continuation !== undefined && req.query.continuation !== '1'
+    || req.query.readEffects !== undefined && req.query.readEffects !== '1') {
+    throw new StoryWorkspaceStoreError(422, 'OBSERVER_QUALIFICATION_INPUT_INVALID', 'The unfinished-action reader option is unsupported.', {});
+  }
   res.json(await readScenePendingIntentContext({ userId: (req as IntegrationRequest).userId,
-    campaignId: req.params.campaignId, programId: req.params.programId }));
+    campaignId: req.params.campaignId, programId: req.params.programId,
+    qualified: req.query.qualification === '1', continuation: req.query.continuation === '1', readEffects: req.query.readEffects === '1' }));
+}));
+
+storyWorkspaceRouter.get('/scene-movement-outcomes/expectation/:programId/:nodeRef', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  if (Object.keys(req.query).length) throw new StoryWorkspaceStoreError(422, 'SCENE_MOVEMENT_OUTCOME_INVALID', 'Unsupported movement reader fields.', {});
+  res.json(await sceneMovementOutcomeService().expectation({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, programId: req.params.programId, nodeRef: req.params.nodeRef }));
+}));
+storyWorkspaceRouter.get('/scene-movement-outcomes/operations/:programId/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  if (Object.keys(req.query).length) throw new StoryWorkspaceStoreError(422, 'SCENE_MOVEMENT_OUTCOME_INVALID', 'Unsupported movement reader fields.', {});
+  const receipt = await sceneMovementOutcomeService().operation({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, programId: req.params.programId, operationId: req.params.operationId });
+  res.json(receipt ?? { disposition: 'confirmed_absent' });
+}));
+storyWorkspaceRouter.post('/scene-movement-outcomes/commit', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  closedActorLinkBody(req.body, ['schemaVersion', 'operationId', 'idempotencyKey', 'programId', 'nodeRef',
+    'expectedArtifactRevision', 'expectedWorkspaceRevision', 'expectedPreparedSceneRevision', 'expectedActiveSceneRevision',
+    'sourceSceneTurnReceiptRef', 'expectation', 'proposal', 'sourceKind', 'humanDecision',
+    ...(req.body?.schemaVersion === 'gmc.scene-movement-outcome-commit/2' ? ['selectedCheckSource'] : [])]);
+  const result = await sceneMovementOutcomeService().commit({ ...req.body,
+    userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId } as SceneMovementOutcomeCommit);
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+
+storyWorkspaceRouter.get('/scene-reality/observer-origins/operations/:programId/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await pendingObserverEvidenceService().originOperation({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, programId: req.params.programId, operationId: req.params.operationId }));
+}));
+storyWorkspaceRouter.post('/scene-reality/observer-origins', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  closedActorLinkBody(req.body, ['operationId', 'programId', 'actorLinkRef', 'expectedWindowFingerprint', 'description']);
+  res.json(await pendingObserverEvidenceService().confirmOrigin({ ...req.body,
+    userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId } as Parameters<ReturnType<typeof pendingObserverEvidenceService>['confirmOrigin']>[0]));
+}));
+storyWorkspaceRouter.post('/scene-reality/observer-qualifications', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const fields = ['programId', 'nodeRef', 'groupId', 'actorLinkRef', 'expectedWindowFingerprint', 'vcsProjection'];
+  if (Object.hasOwn(req.body ?? {}, 'schemaVersion')) {
+    if (req.body.schemaVersion !== 'gmc.pending-observer-qualification/2') throw new StoryWorkspaceStoreError(422, 'OBSERVER_QUALIFICATION_INPUT_INVALID', 'Unsupported observer qualification version.', {});
+    fields.push('schemaVersion');
+  }
+  closedActorLinkBody(req.body, Object.hasOwn(req.body ?? {}, 'originRef') ? [...fields, 'originRef'] : fields);
+  res.json(await pendingObserverEvidenceService().qualify({ ...req.body,
+    userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId } as Parameters<ReturnType<typeof pendingObserverEvidenceService>['qualify']>[0]));
 }));
 
 storyWorkspaceRouter.get('/scene-reality/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {

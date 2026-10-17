@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { PREPARED_CHECK_COMPLETION_AUTHORITY } from '../../shared/llm/preparedCheckCompletion.js';
+import { STORY_SETTLEMENT_CANDIDATE_VERSIONS, STORY_SETTLEMENT_CANDIDATE_V2, STORY_TERMINAL_TRANSPORT_V1,
+  STORY_SETTLEMENT_V2_CAPABILITY, storySettlementTransportIssues } from '../../shared/llm/storySettlementCandidate.js';
 import type { Collection, Filter } from 'mongodb';
 import { getDb } from '../config/mongo.js';
 import { readCurrentSceneContexts } from './actionDirectedStoryStore.js';
@@ -6,9 +9,12 @@ import { collections } from './gmcIntegrationStore.js';
 import { validateFreeformBinding, verifyFreeformBindingAcceptance } from './freeformPlanBindingStore.js';
 import type { FreeformTicketCollection } from '../llm-orchestrator/freeformTickets.js';
 import { freeformPlanBindingIssues } from '../../shared/llm/freeformPlanBinding.js';
+import { READ_EFFECT_CONTRACTS, readEffectProgramIssues, isObservationSagaProgram } from '../../shared/llm/readEffectContracts.js';
+import { readEffectWritesEnabled } from './readEffectRollout.js';
 import { assertPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings,
   INTENT_BINDING_APPLICATION_LIMITS } from '../../shared/llm/scenePendingIntentApplication.js';
 import { readScenePendingIntentContext, preparedPendingRequirementProjection, PENDING_INTENT_WRITES_ENABLED } from './scenePendingIntentService.js';
+import { assertFreeformProgramWorkflowOpen } from './freeformWorkflowAuthority.js';
 import {
   readActiveStoryWorkspace,
   readStoryWorkspaceRevision,
@@ -38,9 +44,16 @@ export const COMPOUND_ACTION_CAPABILITIES = Object.freeze([
 export const GMC_COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   ...COMPOUND_ACTION_CAPABILITIES,
   'durable-story-settlement-candidate/1',
+  STORY_SETTLEMENT_V2_CAPABILITY,
+  PREPARED_CHECK_COMPLETION_AUTHORITY.capability,
   'freeform-intent-compiler-reader/1',
   'freeform-plan-binding/1',
   'freeform-scene-catalog/1',
+  'freeform-protected-packet-reader/1',
+  'freeform-turn-workflow/1',
+  'freeform-program-workflow-reader/1',
+  'actor-mechanics-identity-links/1',
+  'actor-mechanics-link-selection-reader/1',
 ] as const);
 export const COMPOUND_ACTION_CONTRACTS = Object.freeze({
   playerInstructionArtifact: 'gma.player-instruction-artifact/1',
@@ -58,14 +71,24 @@ export const GMC_COMPOUND_ACTION_CONTRACTS = Object.freeze({
   ...COMPOUND_ACTION_CONTRACTS,
   acceptedModelCandidateV2: 'gma.accepted-model-candidate/2',
   compoundStorySettlementCandidate: 'gma.compound-story-settlement-candidate/1',
+  compoundStorySettlementCandidateV2: STORY_SETTLEMENT_CANDIDATE_V2,
+  compoundStoryTerminalTransport: STORY_TERMINAL_TRANSPORT_V1,
+  compoundStoryTerminalTransportV2: PREPARED_CHECK_COMPLETION_AUTHORITY.terminalTransport,
   freeformIntentCompilerPolicy: FREEFORM_INTENT_COMPILER_POLICY_VERSION,
   freeformPlanBinding: 'gma.freeform-plan-binding/1',
   freeformSceneCatalog: 'gmc.freeform-scene-catalog/1',
+  freeformTurn: 'gma.freeform-turn/1',
+  freeformAnswerPolicy: 'gma.freeform-intake-policy/2',
+  freeformRemotePolicy: 'gma.freeform-intake-policy/3',
+  freeformRemoteAnswerPolicy: 'gma.freeform-intake-policy/4',
+  actorMechanicsLink: 'gmc.actor-mechanics-link/1',
+  actorIdentityChoices: 'gmc.actor-mechanics-link-choices/1',
 });
 export const COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS: readonly string[] = Object.freeze([
   COMPOUND_ACTION_CONTRACTS.semanticActionProgram,
   COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4,
   PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION,
+  READ_EFFECT_CONTRACTS.program,
 ]);
 export const COMPOUND_ACTION_LIMITS = Object.freeze({
   instructionMaximumBytes: 32_768,
@@ -366,12 +389,15 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
   }
   requiredString(program.programId, 'program.programId');
   const planner = isObject(program.planner) ? program.planner : null;
+  const readEffects = program.schemaVersion === READ_EFFECT_CONTRACTS.program;
+  const roleIssues = readEffectProgramIssues(program, instruction);
+  if (roleIssues.length) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The read/effect binding is invalid.', { issues: roleIssues });
   const freeformCompiler = planner?.source === 'freeform_intent_compiler';
   if (freeformCompiler || planner?.policyVersion === FREEFORM_INTENT_COMPILER_POLICY_VERSION) {
-    if (!freeformCompiler || planner?.policyVersion !== FREEFORM_INTENT_COMPILER_POLICY_VERSION
+    if (!freeformCompiler || planner?.policyVersion !== (readEffects ? READ_EFFECT_CONTRACTS.compiler : FREEFORM_INTENT_COMPILER_POLICY_VERSION)
       || Object.prototype.hasOwnProperty.call(planner, 'confidence')
       || Object.prototype.hasOwnProperty.call(planner, 'review')
-      || ![COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4, PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION].includes(String(program.schemaVersion))) {
+      || ![COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4, PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION, READ_EFFECT_CONTRACTS.program].includes(String(program.schemaVersion))) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The compact action compiler binding is invalid.', {});
     }
   }
@@ -404,7 +430,7 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
     nodesById.set(nodeId, nodeValue);
     seen.add(nodeId);
   }
-  if (program.schemaVersion === PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION) {
+  if (readEffects || program.schemaVersion === PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION) {
     const planner = isObject(program.planner) ? program.planner : null;
     if (!freeformCompiler && !['gma.semantic-action-compiler-policy/8', 'gma.semantic-action-compiler-policy/9', 'gma.semantic-action-compiler-policy/10', 'gma.semantic-action-compiler-policy/11'].includes(String(planner?.policyVersion ?? ''))) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The parallel action program compiler policy is invalid.', {});
@@ -442,7 +468,7 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The parallel action relationship count is invalid.', {});
     }
   }
-  if (program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4) {
+  if (readEffects || program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4) {
     const dependsTransitively = (node: JsonObject, ancestorRef: string, visiting = new Set<string>()): boolean => {
       const nodeId = String(node.nodeId);
       if (visiting.has(nodeId)) return false;
@@ -495,7 +521,7 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
       }
     }
   }
-  const programMaximumBytes = program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4
+  const programMaximumBytes = readEffects || isObservationSagaProgram(program)
     ? COMPOUND_ACTION_LIMITS.observationProgramMaximumBytes
     : COMPOUND_ACTION_LIMITS.programMaximumBytes;
   if (dependencies > COMPOUND_ACTION_LIMITS.dependencyMaximum || requirements > COMPOUND_ACTION_LIMITS.dataRequirementMaximum
@@ -505,7 +531,7 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
 }
 
 function validateSaga(saga: unknown, instruction: JsonObject, program: JsonObject, cursor: JsonObject): JsonObject | null {
-  const v4 = program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4;
+  const v4 = isObservationSagaProgram(program);
   if (!v4 && (saga === undefined || saga === null)) return null;
   if (!isObject(saga) || saga.schemaVersion !== COMPOUND_ACTION_CONTRACTS.actionSaga
     || saga.programId !== program.programId || saga.interactionId !== instruction.interactionId
@@ -558,9 +584,15 @@ function validateSaga(saga: unknown, instruction: JsonObject, program: JsonObjec
     const storyCandidate = pending.schemaVersion === GMC_COMPOUND_ACTION_CONTRACTS.acceptedModelCandidateV2
       && pending.kind === 'story_narration'
       && isObject(pending.candidate)
-      && pending.candidate.schemaVersion === GMC_COMPOUND_ACTION_CONTRACTS.compoundStorySettlementCandidate;
+      && STORY_SETTLEMENT_CANDIDATE_VERSIONS.includes(pending.candidate.schemaVersion as typeof STORY_SETTLEMENT_CANDIDATE_VERSIONS[number]);
     if ((!observationCandidate && !storyCandidate) || !isObject(pending.candidate)) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The pending accepted model candidate is invalid.', {});
+    }
+    if (pending.candidate.schemaVersion === STORY_SETTLEMENT_CANDIDATE_V2
+      && (storySettlementTransportIssues(pending.candidate).length
+        || pending.candidate.programId !== program.programId
+        || pending.candidate.instructionFingerprint !== program.instructionFingerprint)) {
+      throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_SAGA_INVALID', 'The pending Story transport is not bound to this original program.', {});
     }
     requiredString(pending.operationKey, 'saga.pendingModelCandidate.operationKey');
     const inputFingerprint = requiredString(pending.inputFingerprint, 'saga.pendingModelCandidate.inputFingerprint', 64);
@@ -613,7 +645,7 @@ function validateReceipts(receipts: unknown[], program: JsonObject): JsonObject[
   const nodeIds = new Set((program.nodes as JsonObject[]).map((node) => String(node.nodeId)));
   const receiptIds = new Set<string>();
   return receipts.map((receiptValue) => {
-    const expectedReceiptVersion = program.schemaVersion === COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4
+    const expectedReceiptVersion = isObservationSagaProgram(program)
       ? COMPOUND_ACTION_CONTRACTS.actionExecutionReceiptV2 : COMPOUND_ACTION_CONTRACTS.actionExecutionReceipt;
     if (!isObject(receiptValue) || receiptValue.schemaVersion !== expectedReceiptVersion
       || receiptValue.programId !== program.programId || !nodeIds.has(String(receiptValue.nodeId))) {
@@ -752,7 +784,7 @@ export async function createCompoundActionArtifact(input: {
   freeformBinding?: JsonObject;
   originCheckpoint?: CompoundActionInstructionDocument['originCheckpoint'] | null;
   timelineAnchor?: { messageId: string; sequence: number; replayLineageId?: string } | null;
-}, records: CompoundActionArtifactCollection = artifactCollection(), stagedInstructions?: CompoundActionInstructionCollection, freeformTickets?: FreeformTicketCollection, readSceneContext = readCurrentSceneContexts) {
+}, records: CompoundActionArtifactCollection = artifactCollection(), stagedInstructions?: CompoundActionInstructionCollection, freeformTickets?: FreeformTicketCollection, readSceneContext = readCurrentSceneContexts, workflowReader?: import('./freeformWorkflowAuthority.js').FreeformWorkflowReader) {
   requiredString(input.userId, 'userId');
   requiredString(input.campaignId, 'campaignId');
   requiredString(input.idempotencyKey, 'idempotencyKey');
@@ -794,7 +826,7 @@ export async function createCompoundActionArtifact(input: {
   if (input.freeformBinding) {
     if (!input.originCheckpoint) throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'Intake persistence requires the verified instruction origin.', {});
     const staged = await (stagedInstructions ?? instructionCollection()).findOne({ userId: input.userId, campaignId: input.campaignId, interactionId: String(input.instruction.interactionId) });
-    await verifyFreeformBindingAcceptance({ ...input, binding: input.freeformBinding, staged }, freeformTickets, new Date(), readSceneContext);
+    await verifyFreeformBindingAcceptance({ ...input, binding: input.freeformBinding, staged }, freeformTickets, new Date(), readSceneContext, workflowReader);
   }
   const document: CompoundActionArtifactRevisionDocument = {
     userId: input.userId, campaignId: input.campaignId,
@@ -822,9 +854,12 @@ export async function readActiveCompoundActionArtifact(input: { userId: string; 
 
 export type PendingApplicationReader = (scope: { userId: string; campaignId: string; programId: string }) => Promise<{ bundle: JsonObject; context: JsonObject } | null>;
 const readPendingApplicationAuthority: PendingApplicationReader = async (scope) => {
-  const [active, context] = await Promise.all([
-    (await import('./sceneRealityReadinessService.js')).readActiveSceneReality(scope), readScenePendingIntentContext(scope),
-  ]);
+  const active = await (await import('./sceneRealityReadinessService.js')).readActiveSceneReality(scope);
+  const record = isObject(active?.bundle) ? active.bundle.pendingIntentBindingRecord : null;
+  const context = await readScenePendingIntentContext({ ...scope, ...(isObject(record)
+    && ['gmc.scene-pending-intent-binding-record/2', 'gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4'].includes(String(record.schemaVersion)) ? { qualified: true } : {}),
+    ...(isObject(record) && ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4'].includes(String(record.schemaVersion)) ? { continuation: true } : {}),
+    ...(isObject(record) && record.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' ? { readEffects: true } : {}) });
   return active ? { bundle: active.bundle as JsonObject, context } : null;
 };
 
@@ -842,7 +877,8 @@ export async function advanceCompoundActionArtifact(input: {
   clarifications?: JsonObject[];
   rootFailure?: JsonObject | null;
   saga?: JsonObject;
-}, records: CompoundActionArtifactCollection = artifactCollection(), bindingReader: PendingApplicationReader = readPendingApplicationAuthority) {
+}, records: CompoundActionArtifactCollection = artifactCollection(), bindingReader: PendingApplicationReader = readPendingApplicationAuthority,
+  workflowAuthority: Parameters<typeof assertFreeformProgramWorkflowOpen>[2] = {}) {
   const priorReplay = await records.findOne({ userId: input.userId, campaignId: input.campaignId, idempotencyKey: input.idempotencyKey });
   if (priorReplay) {
     const receiptsMatch = (input.appendReceipts ?? []).every((candidate) => priorReplay.receipts.some((stored) => canonicalJson(stored) === canonicalJson(candidate)));
@@ -865,6 +901,7 @@ export async function advanceCompoundActionArtifact(input: {
   if (active.revision !== input.expectedRevision) {
     throw new StoryWorkspaceStoreError(409, 'COMPOUND_ACTION_REVISION_CONFLICT', 'The interaction artifact changed before this update.', { expectedRevision: input.expectedRevision, actualRevision: active.revision });
   }
+  await assertFreeformProgramWorkflowOpen(input, active.freeformBinding, workflowAuthority);
   const program = input.program ?? active.program;
   if ((active.intentBindingApplications?.length || input.appendIntentBindingReceipts?.length)
     && canonicalJson(program) !== canonicalJson(active.program)) throw new StoryWorkspaceStoreError(409, 'SCENE_PENDING_INTENT_PROGRAM_IMMUTABLE', 'Applying prepared references cannot replace the original action program.', {});
@@ -920,6 +957,7 @@ export async function advanceCompoundActionArtifact(input: {
     }
     const authority = await bindingReader({ userId: input.userId, campaignId: input.campaignId, programId: input.programId });
     const record = authority?.bundle?.pendingIntentBindingRecord as JsonObject;
+    if (record?.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' && !readEffectWritesEnabled(input.campaignId)) throw new StoryWorkspaceStoreError(503, 'SCENE_READ_EFFECT_WRITES_PAUSED', 'New read/effect applications are paused for this campaign.', {});
     try {
       assertPendingBindingRecord(record, { instruction: active.instruction, program: active.program, cursor: active.cursor, receipts: active.receipts, artifactRevision: active.revision });
       if (canonicalJson(record.ownerReadSet) !== canonicalJson(authority!.context.ownerReadSet)) throw new Error('Stale owner heads');
@@ -985,7 +1023,8 @@ export async function settleCompoundActionArtifact(input: {
   executionReceipt: JsonObject;
   executionReceipts?: JsonObject[];
   saga: JsonObject;
-}, records: CompoundActionArtifactCollection = artifactCollection()) {
+}, records: CompoundActionArtifactCollection = artifactCollection(),
+  workflowAuthority: Parameters<typeof assertFreeformProgramWorkflowOpen>[2] = {}): Promise<Awaited<ReturnType<typeof advanceCompoundActionArtifact>>> {
   const executionReceipts = Array.isArray(input.executionReceipts) ? input.executionReceipts : [input.executionReceipt];
   const receiptIds = executionReceipts.map((receipt) => receipt?.receiptId);
   const completedNodeRefs = new Set(Array.isArray(input.cursor.completedNodeRefs) ? input.cursor.completedNodeRefs : []);
@@ -1027,7 +1066,7 @@ export async function settleCompoundActionArtifact(input: {
     cursor: input.cursor,
     appendReceipts: executionReceipts,
     saga: input.saga,
-  }, records);
+  }, records, undefined, workflowAuthority);
 }
 
 export async function readCompoundActionOperationStatus(input: {
@@ -1674,6 +1713,8 @@ export async function resolveCompoundActionRequirements(input: {
   readArtifact: (scope: { userId: string; campaignId: string; programId: string }) => Promise<any>;
   readReality: (scope: { userId: string; campaignId: string }) => Promise<any>;
   readScene: (scope: { userId: string; campaignId: string }) => Promise<any>;
+  /** Test/transport dependency only: reads existing legacy owner state, never results. */
+  readLegacy?: (scope: { userId: string; campaignId: string }) => Promise<Omit<Parameters<typeof compileCompoundActionRequirementProjection>[0], 'programId' | 'nodeId' | 'requirements'>>;
 }) {
   const preparedOwners = preparedReaders ?? { readArtifact: readActiveCompoundActionArtifact,
     readReality: async (scope) => (await import('./sceneRealityReadinessService.js')).readActiveSceneReality(scope), readScene: readCurrentSceneContexts };
@@ -1689,24 +1730,31 @@ export async function resolveCompoundActionRequirements(input: {
     }
     return projection;
   }
-  const [storyContext, campaignState] = await Promise.all([
-    readCurrentSceneContexts({ userId: input.userId, campaignId: input.campaignId }),
-    collections.state().findOne({ userId: input.userId, campaignId: input.campaignId }),
-  ]);
-  const currentScene = campaignState?.currentSceneId
-    ? await collections.scenes().findOne({ userId: input.userId, campaignId: input.campaignId, _id: campaignState.currentSceneId })
-    : null;
-  const [entities, facts, merchantOffers] = await Promise.all([
-    collections.entities().find({ userId: input.userId, project_id: input.campaignId }).limit(500).toArray(),
-    collections.facts().find({ userId: input.userId, campaignId: input.campaignId, locked: true }).limit(500).toArray(),
-    collections.merchantOffers().findOne({ userId: input.userId, campaignId: input.campaignId }),
-  ]);
+  const legacy = preparedReaders?.readLegacy ? await preparedReaders.readLegacy(input) : await (async () => {
+    // Resolve collection handles before starting promises: a missing connection
+    // must not leave an unobserved read rejection running beside the real failure.
+    const stateRecords = collections.state(), sceneRecords = collections.scenes(), entityRecords = collections.entities(),
+      factRecords = collections.facts(), offerRecords = collections.merchantOffers();
+    const [storyContext, campaignState] = await Promise.all([
+      preparedOwners.readScene({ userId: input.userId, campaignId: input.campaignId }),
+      stateRecords.findOne({ userId: input.userId, campaignId: input.campaignId }),
+    ]);
+    const currentScene = campaignState?.currentSceneId
+      ? await sceneRecords.findOne({ userId: input.userId, campaignId: input.campaignId, _id: campaignState.currentSceneId })
+      : null;
+    const [entities, facts, merchantOffers] = await Promise.all([
+      entityRecords.find({ userId: input.userId, project_id: input.campaignId }).limit(500).toArray(),
+      factRecords.find({ userId: input.userId, campaignId: input.campaignId, locked: true }).limit(500).toArray(),
+      offerRecords.findOne({ userId: input.userId, campaignId: input.campaignId }),
+    ]);
+    return { storyContext: storyContext as unknown as Record<string, unknown> | null,
+      campaignState, currentScene, entities: entities as unknown as Array<Record<string, unknown>>, facts,
+      activeOffers: (Array.isArray(merchantOffers?.offers) ? merchantOffers.offers : [])
+        .filter((offer: Record<string, unknown>) => offer.status === 'active') };
+  })();
   const projection = compileCompoundActionRequirementProjection({
     programId: input.programId, nodeId: input.nodeId, requirements: input.requirements,
-    storyContext: storyContext as unknown as Record<string, unknown> | null,
-    campaignState, currentScene, entities: entities as unknown as Array<Record<string, unknown>>, facts,
-    activeOffers: (Array.isArray(merchantOffers?.offers) ? merchantOffers.offers : [])
-      .filter((offer: Record<string, unknown>) => offer.status === 'active'),
+    ...legacy,
   });
   if (input.expectedAuthority && (input.expectedAuthority.storyWorkspaceRevision !== undefined
     && input.expectedAuthority.storyWorkspaceRevision !== projection.authorityHead.storyWorkspaceRevision

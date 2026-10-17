@@ -16,6 +16,27 @@ afterEach(async () => {
 });
 
 describe('D2 Story authority routes', () => {
+  it('rejects coercible identity references and unknown operation versions before opening an owner writer', async () => {
+    vi.spyOn(ProjectModel, 'findById').mockResolvedValue({ _id: 'fictional-campaign' } as any);
+    const app = express(); app.use(express.json());
+    app.use((req, _res, next) => { (req as IntegrationRequest).userId = 'fictional-user'; (req as IntegrationRequest).integrationAuth = 'service'; next(); });
+    app.use('/campaigns/:campaignId/story', storyWorkspaceRouter);
+    const server = app.listen(0); servers.push(server);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/campaigns/fictional-campaign/story`;
+    for (const [path, body] of [
+      ['/actor-mechanics-links/confirm', { decisionRef: ['decision:forged'] }],
+      ['/actor-mechanics-links/confirm', { decisionRef: { id: 'decision:forged' } }],
+      ['/actor-mechanics-links/retire', { operationId: 'retire:one', linkRef: 'link:one', expectedRegistryRevision: '1' }],
+      ['/actor-mechanics-links/retire', { operationId: ['retire:one'], linkRef: 'link:one', expectedRegistryRevision: 1 }],
+      ['/actor-mechanics-links/confirm', { decisionRef: 'decision:one', userId: 'forged-owner' }],
+    ] as const) {
+      const response = await fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      expect(response.status).toBe(422); expect((await response.json()).error.code).toBe('ACTOR_LINK_INPUT_INVALID');
+    }
+    const unknown = await fetch(`${base}/observation-authority/operations/activate:one?version=99&programId=program:one`);
+    expect(unknown.status).toBe(422); expect((await unknown.json()).error.code).toBe('QUALIFIED_OBSERVATION_INPUT_INVALID');
+  });
   it('forwards protected freeform provenance to the owner rather than dropping the binding', async () => {
     vi.spyOn(ProjectModel, 'findById').mockResolvedValue({ _id: 'fictional-campaign' } as any);
     const create = vi.spyOn(artifacts, 'createCompoundActionArtifact').mockResolvedValue({ artifactRef: {} as any, duplicate: false });
@@ -71,10 +92,22 @@ describe('D2 Story authority routes', () => {
       ['GET', '/scene-turns/operations/scene-turn%3Aturn-1%3Aresult'],
       ['GET', '/conversation-history'],
       ['GET', '/observation-authority'],
+      ['GET', '/observation-authority?version=2&programId=program-1'],
+      ['GET', '/actor-mechanics-links'],
+      ['GET', '/actor-mechanics-links/choices'],
+      ['GET', '/actor-mechanics-links/operations/link-1'],
+      ['GET', '/actor-mechanics-links/decisions/link-1'],
+      ['POST', '/actor-mechanics-links/prepare'],
+      ['POST', '/actor-mechanics-links/confirm'],
+      ['POST', '/actor-mechanics-links/retire'],
       ['GET', '/scene-reality/pending-intent/program-1'],
+      ['GET', '/scene-reality/pending-intent/program-1?qualification=1'],
+      ['POST', '/scene-reality/observer-origins'],
+      ['POST', '/scene-reality/observer-qualifications'],
       ['POST', '/scene-reality/commit'],
       ['POST', '/observation-authority/commit'],
       ['GET', '/observation-authority/operations/operation-1'],
+      ['GET', '/observation-authority/operations/operation-1?version=2&programId=program-1'],
       ['POST', '/interaction-artifacts'],
       ['POST', '/interaction-artifacts/requirements'],
       ['POST', '/interaction-artifacts/rewind'],

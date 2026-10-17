@@ -8,9 +8,12 @@ import {
   type LlmValidationResult,
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
-import { FREEFORM_INTENT_PROPOSAL_SCHEMA } from '../../shared/llm/freeformIntentSchema.js';
-import { FREEFORM_INTAKE_OPERATION, FREEFORM_INTAKE_POLICY, FREEFORM_INTAKE_POLICY_VERSION } from '../../shared/llm/freeformIntakePolicy.js';
+import { FREEFORM_INTENT_PROPOSAL_SCHEMA, FREEFORM_READ_EFFECT_PROPOSAL_SCHEMA } from '../../shared/llm/freeformIntentSchema.js';
+import { FREEFORM_INTAKE_OPERATION, FREEFORM_INTAKE_POLICY, FREEFORM_INTAKE_POLICY_VERSION, FREEFORM_READ_EFFECT_OPERATION,
+  FREEFORM_MOVER_POLICY, FREEFORM_MOVER_POLICY_VERSION, isFreeformIntakeOperation } from '../../shared/llm/freeformIntakePolicy.js';
 import { SCENE_PENDING_INTENT_BINDING_POLICY, SCENE_PENDING_INTENT_EXAMINER_POLICY } from '../../shared/llm/scenePendingIntentBindings.js';
+import { QUALIFIED_BINDING_POLICY, QUALIFIED_EXAMINER_POLICY, CONTINUATION_BINDING_POLICY, CONTINUATION_EXAMINER_POLICY } from '../../shared/llm/scenePendingIntentQualified.js';
+import { READ_EFFECT_BINDING_POLICY, READ_EFFECT_EXAMINER_POLICY, SCENE_MECHANICS_PREPARATION_POLICY, SCENE_DOSSIER_REFERENCE_POLICY } from '../../shared/llm/sceneReadEffectPolicy.js';
 import {
   sceneRealityBuilderCheckpointResultOutput,
   sceneRealityBuilderResultOutput,
@@ -20,11 +23,22 @@ import {
   sceneRealityPendingBuilderResultOutput,
   sceneReadinessPendingAssessmentOutput,
   scenePendingIntentRepairOutput,
+  sceneRealityQualifiedBuilderResultOutput,
+  sceneReadinessQualifiedAssessmentOutput,
+  sceneQualifiedIntentRepairOutput,
+  sceneRealityContinuationBuilderResultOutput, sceneReadinessContinuationAssessmentOutput, sceneContinuationIntentRepairOutput,
+  sceneRealityReadEffectBuilderOutput, sceneReadinessReadEffectAssessmentOutput, sceneReadEffectRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
-export const OPERATION_REGISTRY_VERSION = '2026-10-13.1';
+export const OPERATION_REGISTRY_VERSION = '2026-10-15.1';
 export const MANUAL_PENDING_SCENE_OPERATIONS = Object.freeze(['story.scene-reality.build.pending', 'story.scene-reality.build.checkpoint.pending',
-  'story.scene-readiness.examine.pending', 'story.scene-reality.repair.pending']);
+  'story.scene-readiness.examine.pending', 'story.scene-reality.repair.pending',
+  'story.scene-reality.build.qualified', 'story.scene-reality.build.checkpoint.qualified',
+  'story.scene-readiness.examine.qualified', 'story.scene-reality.repair.qualified',
+  'story.scene-reality.build.continuation', 'story.scene-reality.build.checkpoint.continuation',
+  'story.scene-readiness.examine.continuation', 'story.scene-reality.repair.continuation',
+  'story.scene-reality.build.read-effects', 'story.scene-reality.build.checkpoint.read-effects',
+  'story.scene-readiness.examine.read-effects', 'story.scene-reality.repair.read-effects']);
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-10-07.2',
@@ -960,6 +974,13 @@ type Seed = {
 
 const seeds: Seed[] = [
   {
+    id: FREEFORM_READ_EFFECT_OPERATION, operationClass: 'reasoning_high', tier: 'reasoning',
+    required: [...FREEFORM_READ_EFFECT_PROPOSAL_SCHEMA.required], logicalSchema: FREEFORM_READ_EFFECT_PROPOSAL_SCHEMA,
+    validators: ['freeform-intake'], systemInstruction: FREEFORM_MOVER_POLICY,
+    promptVersion: FREEFORM_MOVER_POLICY_VERSION, targetBytes: 8192, hardLimitBytes: 24576,
+    maxOutputTokens: 6000, temperature: 0.1, thinkingLevel: 'medium', maxAttempts: 1, fallbackAllowed: false,
+  },
+  {
     id: FREEFORM_INTAKE_OPERATION, operationClass: 'reasoning_high', tier: 'reasoning',
     required: [...FREEFORM_INTENT_PROPOSAL_SCHEMA.required], logicalSchema: FREEFORM_INTENT_PROPOSAL_SCHEMA,
     validators: ['freeform-intake'], systemInstruction: FREEFORM_INTAKE_POLICY,
@@ -1571,6 +1592,85 @@ seeds.push({ ...seeds.find((seed) => seed.id === 'story.scene-reality.repair')!,
   validators: [], promptVersion: 'gma.scene-pending-intent-repair-policy/1',
   systemInstruction: SCENE_PENDING_INTENT_BINDING_POLICY + ' Return exactly gma.scene-pending-intent-repair/1 with schemaVersion, correctionId, recordPatches and bindingReplacements only. Copy correctionId. Replace every named failedBindingNodeRef exactly once and no other binding row; if none are named return an empty bindingReplacements array. recordPatches may replace only exact allowedRecordRefs using {recordRef,replacement}; if none are allowed return an empty array. Preserve every unaffected world record, binding row, original null, non-null ref, condition, graph, pending mechanic, completed receipt and opening prose exactly. No new affordance, world domain, assessment, narration or authority artifact. The app merges the complete successor and computes its fingerprints, then a separate independent examiner reviews it. A repair is not permission to save or play. Keep the complete existing input/output budgets; there is no second repair or sixth model operation.' });
 
+// Qualification is a distinct policy/operation, not a reinterpretation of an old reply.
+for (const id of ['story.scene-reality.build', 'story.scene-reality.build.checkpoint']) {
+  const prior = seeds.find((seed) => seed.id === id)!;
+  const outputProperties = { ...sceneRealityQualifiedBuilderResultOutput,
+    ...(id.endsWith('.checkpoint') ? { proposal: { type: 'null' }, status: { const: 'continuation_required' } } : {}) };
+  seeds.push({ ...prior, id: `${id}.qualified`, required: Object.keys(outputProperties), outputProperties,
+    validators: [...(prior.validators ?? []), 'scene-pending-intent-builder'], promptVersion: 'gma.scene-reality-builder-policy/6',
+    systemInstruction: prior.systemInstruction!
+      .replaceAll('gma.scene-reality-builder-result/1', 'gma.scene-reality-builder-result/3')
+      .replace('these seven keys:', 'these nine keys:')
+      .replace('status, proposal, checkpoint.', 'status, proposal, checkpoint, intentWindowFingerprint, pendingIntentBindings.')
+      + ' ' + QUALIFIED_BINDING_POLICY });
+}
+seeds.push({ ...priorExaminer, id: 'story.scene-readiness.examine.qualified',
+  required: [...sceneReadinessQualifiedAssessmentOutput.required],
+  outputProperties: sceneReadinessQualifiedAssessmentOutput.properties as Record<string, Record<string, unknown>>,
+  validators: [...(priorExaminer.validators ?? []), 'scene-pending-intent-examiner'],
+  promptVersion: 'gma.scene-readiness-examiner-policy/6',
+  systemInstruction: SCENE_PENDING_INTENT_EXAMINER_POLICY.replaceAll('gma.scene-readiness-assessment/2', 'gma.scene-readiness-assessment/3')
+    + ' ' + QUALIFIED_EXAMINER_POLICY });
+seeds.push({ ...seeds.find((seed) => seed.id === 'story.scene-reality.repair')!, id: 'story.scene-reality.repair.qualified',
+  required: Object.keys(sceneQualifiedIntentRepairOutput), outputProperties: sceneQualifiedIntentRepairOutput,
+  validators: [], promptVersion: 'gma.scene-pending-intent-repair-policy/3',
+  systemInstruction: 'Return only gma.scene-pending-intent-repair/2 with schemaVersion, correctionId, recordPatches and bindingReplacements. Copy correctionId. '
+    + 'The following binding rules apply to the complete merged successor, not to an outer builder result: '
+    + QUALIFIED_BINDING_POLICY.slice(QUALIFIED_BINDING_POLICY.indexOf('Return exactly one binding node row'))
+    + ' Output only one replacement for each named failedBindingNodeRef and no other row. recordPatches contains only allowedRecordRefs as {recordRef,replacement}. Empty permitted sets require empty arrays. '
+    + 'Preserve every unaffected world record, binding, opening prose, original reference, condition, pending mechanic and completed receipt exactly. No new affordance, domain, narration, assessment or owner receipt. '
+    + 'The app merges the full successor and computes fingerprints for separate independent examination. One repair only, no sixth model operation and no larger budget.' });
+
+for (const id of ['story.scene-reality.build', 'story.scene-reality.build.checkpoint']) {
+  const prior = seeds.find((seed) => seed.id === id)!;
+  const outputProperties = { ...sceneRealityContinuationBuilderResultOutput,
+    ...(id.endsWith('.checkpoint') ? { proposal: { type: 'null' }, status: { const: 'continuation_required' } } : {}) };
+  seeds.push({ ...prior, id: `${id}.continuation`, required: Object.keys(outputProperties), outputProperties,
+    validators: [...(prior.validators ?? []), 'scene-pending-intent-builder'], promptVersion: 'gma.scene-reality-builder-policy/7',
+    systemInstruction: prior.systemInstruction!.replaceAll('gma.scene-reality-builder-result/1', 'gma.scene-reality-builder-result/4')
+      .replace('these seven keys:', 'these nine keys:')
+      .replace('status, proposal, checkpoint.', 'status, proposal, checkpoint, intentWindowFingerprint, pendingIntentBindings.')
+      + ' ' + CONTINUATION_BINDING_POLICY });
+}
+seeds.push({ ...priorExaminer, id: 'story.scene-readiness.examine.continuation',
+  required: [...sceneReadinessContinuationAssessmentOutput.required],
+  outputProperties: sceneReadinessContinuationAssessmentOutput.properties as Record<string, Record<string, unknown>>,
+  validators: [...(priorExaminer.validators ?? []), 'scene-pending-intent-examiner'], promptVersion: 'gma.scene-readiness-examiner-policy/7',
+  systemInstruction: SCENE_PENDING_INTENT_EXAMINER_POLICY.replaceAll('gma.scene-readiness-assessment/2', 'gma.scene-readiness-assessment/4')
+    + ' ' + CONTINUATION_EXAMINER_POLICY });
+seeds.push({ ...seeds.find((seed) => seed.id === 'story.scene-reality.repair')!, id: 'story.scene-reality.repair.continuation',
+  required: Object.keys(sceneContinuationIntentRepairOutput), outputProperties: sceneContinuationIntentRepairOutput,
+  validators: [], promptVersion: 'gma.scene-pending-intent-repair-policy/4',
+  systemInstruction: 'Return only gma.scene-pending-intent-repair/3 with schemaVersion, correctionId, recordPatches and bindingReplacements. Copy correctionId. '
+    + CONTINUATION_BINDING_POLICY.slice(CONTINUATION_BINDING_POLICY.indexOf('Return exactly one binding node row'))
+    + ' Replace exactly the named failedBindingNodeRefs and allowedRecordRefs, using empty arrays when none are allowed. '
+    + 'Preserve every unaffected record, binding, original instruction, exact tail, completed receipt and opening prose. '
+    + 'No new affordance, domain, narration, assessment or owner receipt. The app merges and fingerprints for a separate independent review. One repair only; unchanged operation and byte budgets.' });
+
+for (const id of ['story.scene-reality.build', 'story.scene-reality.build.checkpoint']) {
+  const prior = seeds.find((seed) => seed.id === id)!;
+  const outputProperties = { ...sceneRealityReadEffectBuilderOutput,
+    ...(id.endsWith('.checkpoint') ? { proposal: { type: 'null' }, status: { const: 'continuation_required' } } : {}) };
+  seeds.push({ ...prior, id: `${id}.read-effects`, required: Object.keys(outputProperties), outputProperties,
+    validators: [...(prior.validators ?? []), 'scene-pending-intent-builder'], promptVersion: 'gma.scene-reality-builder-policy/11',
+    systemInstruction: prior.systemInstruction!.replaceAll('gma.scene-reality-builder-result/1', 'gma.scene-reality-builder-result/5')
+      .replace('these seven keys:', 'these nine keys:').replace('status, proposal, checkpoint.', 'status, proposal, checkpoint, intentWindowFingerprint, pendingIntentBindings.')
+      .replaceAll('gmc.scene-story-design/3', 'gmc.scene-story-design/4') + ' ' + READ_EFFECT_BINDING_POLICY + ' ' + SCENE_MECHANICS_PREPARATION_POLICY + ' ' + SCENE_DOSSIER_REFERENCE_POLICY });
+}
+seeds.push({ ...priorExaminer, id: 'story.scene-readiness.examine.read-effects',
+  required: [...sceneReadinessReadEffectAssessmentOutput.required],
+  outputProperties: sceneReadinessReadEffectAssessmentOutput.properties as Record<string, Record<string, unknown>>,
+  validators: [...(priorExaminer.validators ?? []), 'scene-pending-intent-examiner'], promptVersion: 'gma.scene-readiness-examiner-policy/11',
+  systemInstruction: SCENE_PENDING_INTENT_EXAMINER_POLICY.replaceAll('gma.scene-readiness-assessment/2', 'gma.scene-readiness-assessment/5')
+    + ' ' + READ_EFFECT_EXAMINER_POLICY + ' ' + SCENE_MECHANICS_PREPARATION_POLICY + ' ' + SCENE_DOSSIER_REFERENCE_POLICY });
+seeds.push({ ...seeds.find((seed) => seed.id === 'story.scene-reality.repair')!, id: 'story.scene-reality.repair.read-effects',
+  required: Object.keys(sceneReadEffectRepairOutput), outputProperties: sceneReadEffectRepairOutput,
+  validators: [], promptVersion: 'gma.scene-pending-intent-repair-policy/6',
+  systemInstruction: 'Return only gma.scene-pending-intent-repair/4 with schemaVersion, correctionId, recordPatches, bindingReplacements and roleReplacements. '
+    + 'Copy correctionId. Replace exactly the named failedBindingNodeRefs and allowedRecordRefs. roleReplacements replaces only the complete role rows for failedRoleNodeRefs; empty arrays when no matching failed scope. '
+    + READ_EFFECT_BINDING_POLICY + ' ' + SCENE_MECHANICS_PREPARATION_POLICY + ' Preserve every unaffected row, record, instruction, exact tail, receipt and prose. A validationDebt record with reviewStatus not_examined is only deterministic binding-shape debt; assessment is null because no independent review has happened. Correct only its named binding rows, leaving world records and role rows unchanged. The app merges the complete successor for an independent review. One repair only, existing budgets, never save or execute.' });
+
 const registry = new Map<string, LlmOperationDefinition>();
 const validators = new Map<string, SemanticValidator>();
 const compiledOutputSchemas = new Map<string, ValidateFunction>();
@@ -1601,7 +1701,7 @@ for (const seed of seeds) {
     },
     validators: ['authority-boundary', ...(seed.validators ?? [])],
     context: {
-      allowedKeys: seed.id === FREEFORM_INTAKE_OPERATION ? ['input'] : ['policy', 'campaign', 'canon', 'scene', 'turn', 'input', 'mechanics', 'workflow', 'priorResult'],
+      allowedKeys: isFreeformIntakeOperation(seed.id) ? ['input'] : ['policy', 'campaign', 'canon', 'scene', 'turn', 'input', 'mechanics', 'workflow', 'priorResult'],
       inputTargetBytes: seed.targetBytes ?? (seed.tier === 'structured' ? 24_000 : 64_000),
       inputHardLimitBytes: seed.hardLimitBytes ?? (seed.tier === 'structured' ? 64_000 : 256_000),
       requiredReferenceRevisions: [],
@@ -1616,7 +1716,7 @@ for (const seed of seeds) {
       premiumAllowed: seed.operationClass === 'reasoning_high',
     },
     cache: {
-      enabled: seed.operationClass !== 'narrative' && seed.id !== FREEFORM_INTAKE_OPERATION,
+      enabled: seed.operationClass !== 'narrative' && !isFreeformIntakeOperation(seed.id),
       ttlMs: seed.operationClass === 'world_generation' || seed.operationClass === 'reasoning_high' ? 900_000 : 300_000,
     },
   };

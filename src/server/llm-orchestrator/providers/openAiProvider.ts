@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { FREEFORM_INTAKE_OPERATION } from '../../../shared/llm/freeformIntakePolicy.js';
+import { isFreeformIntakeOperation } from '../../../shared/llm/freeformIntakePolicy.js';
 import { OrchestratorError } from '../errors.js';
 import type {
   LlmProviderAdapter,
@@ -27,7 +27,7 @@ export class OpenAiProviderAdapter implements LlmProviderAdapter {
       });
     }
     try {
-      const compactIntake = request.operation === FREEFORM_INTAKE_OPERATION;
+      const compactIntake = isFreeformIntakeOperation(request.operation);
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY,
         ...(compactIntake ? { maxRetries: 0 } : {}) });
       const body = {

@@ -17,7 +17,7 @@ function source(): PendingIntentWindowSource {
         { ...common, nodeId: 'cover', dependsOn: [], evidenceSpans: [{ start: 22, end: 39 }],
           dataRequirements: [{ targetRole: 'area', targetRef: null, query: 'behind cover' }],
           semanticLocationBindings: { bindings: [{ role: 'area', authorityRef: null, description: 'behind cover' }] } },
-        { ...common, nodeId: 'watch', kind: 'observe', dependsOn: ['enter', 'cover'], evidenceSpans: [{ start: 41, end: exactText.length }],
+        { ...common, nodeId: 'watch', kind: 'observe', dependsOn: ['enter', 'cover'], evidenceSpans: [{ start: 41, end: Buffer.byteLength(exactText, 'utf8') }],
           dataRequirements: [{ kind: 'observation', observation: { targetRef: 'element:tunnel', relationOriginRef: 'element:tunnel' } }],
           observationGroups: [{ groupId: 'group:familiar', observerKind: 'familiar', observerRef: null,
             methodRef: null, methodDescription: 'watch through its eyes', viewpointBinding: 'after:enter' }] }],
@@ -30,6 +30,22 @@ function source(): PendingIntentWindowSource {
 }
 
 describe('ADR 014 application-owned pending intent window foundation', () => {
+  it('reads exact UTF-8 byte evidence after curly punctuation, accented text and emoji; rejects split code points', () => {
+    const input = source();
+    input.instruction.exactText = 'Mira’s 🐀 waits. Café: look through its eyes.';
+    input.instruction.instructionFingerprint = freeformTextDigest(input.instruction.exactText);
+    input.program.instructionFingerprint = input.instruction.instructionFingerprint;
+    const start = Buffer.byteLength('Mira’s 🐀 waits. Café: ', 'utf8');
+    const end = Buffer.byteLength(input.instruction.exactText, 'utf8');
+    input.program.nodes.forEach((node: any) => { node.evidenceSpans = [{ start, end }]; });
+    const window = createPendingIntentWindow(input);
+    expect(window.nodes.every((node: any) => node.instructionEvidence[0].quote === 'look through its eyes.')).toBe(true);
+    expect(window.nodes[0].instructionEvidence[0]).toEqual({ start, end, quote: 'look through its eyes.' });
+    for (const span of [{ start: 5, end }, { start: 0, end: 5 }, { start: 0, end: end + 1 }]) {
+      const bad = structuredClone(input); bad.program.nodes[1].evidenceSpans = [span];
+      expect(() => createPendingIntentWindow(bad)).toThrow(PendingIntentWindowError);
+    }
+  });
   it('preserves unresolved cover, exact tunnel, remote method and completed entry without rewriting any source', () => {
     const input = source(), before = structuredClone(input);
     const window = createPendingIntentWindow(input);

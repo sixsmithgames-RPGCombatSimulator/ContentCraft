@@ -160,6 +160,15 @@ catalog for these identities. A label or arbitrary source ref never establishes
 an addressable target. This implements the existing actor-alias and threshold
 closure rules, not a new identity inference or mechanics authority.
 
+The same exact actor identity closure applies to a fact's material target and
+an instruction-independent affordance target: a prepared frame's `actorRef`
+identifies its actor, while `actorFrameId` identifies the local frame. Both
+must come from the staged dossier. The remaining-actions rehearsal exposed a
+save-time catalog that omitted `actorRef` although participants, opening targets
+and semantic binding already accepted it. Align those catalogs; do not change
+model replies, infer names, add foreign source refs, or alter probe-evidence
+rules (which continue to require indexed record IDs).
+
 The complete logical schemas, depth profiles, budgets, flows, migration,
 examples, and acceptance gates are normative in ADR-011. Shared JSON Schemas
 must express exact versions, keys, enums, sizes, identities, refs, visibility,
@@ -532,3 +541,29 @@ artifact, effective requirements, current Scene and workspace heads, presence
 and dossier record existence. It confirms preparation only, not cover,
 concealment, movement, a mechanic or discovery. Unknown, stale or changed rows
 fail closed rather than using the legacy textual lookup.
+
+An owner-saved empty qualified-observer witness set yields no special movement
+identity citations. Ordinary later turns need not keep that preparation program
+open merely to receive the empty set. Record hash, campaign and exact Scene-head
+checks remain mandatory; any nonempty witness set still requires its original
+protected workflow and artifact before supplying a citation. Successor programs
+obtain their own examined role/binding record rather than inheriting the earlier
+program's execution authority. This does not grant presence, movement or facts.
+
+The ADR 019 October 17 implementation clarification supplies existing VCS
+mechanics reads to the builder/examiner as request-only context. GMC does not
+accept that sidecar as mechanics authority or copy it into world facts. Exact
+structural binding slots are unchanged, as are the executor's owner checks.
+Read/effect preparation policies `/9` and `/10` have distinct known fingerprints;
+the original `/9` reader remains available for in-progress replies. Unknown
+policy fingerprints still fail closed. There is no new writer, call allowance,
+larger envelope, identity inference, or broader activation.
+
+Preparation `/11` additionally runs typed dossier-reference closure before
+independent examination and at final owner acceptance. Original `/9` and `/10`
+readers remain unchanged. The positive original policy names exact indexes,
+native compact element/information records, participant aliases and internal
+record/affordance references. Missing records are rejected, not synthesized,
+silently dropped, or added through an expanded repair. This implements the
+accepted deterministic-before-semantic validation order without changing writes,
+authority, record limits, repair scope, operation budgets or rollout.

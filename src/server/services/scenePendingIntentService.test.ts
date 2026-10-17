@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { freeformTextDigest } from '../../shared/llm/freeformPlanBinding.js';
-import { readScenePendingIntentContext, pendingBindingContext, assertPendingIntentContextCurrent } from './scenePendingIntentService.js';
+import { readScenePendingIntentContext, pendingBindingContext, assertPendingIntentContextCurrent, preparedReadEffectActorIsPresent, preparedReadEffectReadEvidence } from './scenePendingIntentService.js';
 
 function fixture() {
   const scope = { userId: 'user:one', campaignId: 'campaign:one', programId: 'program:one' };
@@ -25,6 +25,42 @@ function fixture() {
 }
 
 describe('current owner pending-intent context', () => {
+  it('resolves examined continuity and current-location reads without inventing targets, facts or an effect outcome', () => {
+    const bundle = { actorFrames: [], elements: [], zones: [{ zoneId: 'zone:entrance' }],
+      facts: [{ factId: 'fact:watch', epistemicState: 'scene_local_stable' }] };
+    const affordance = { targetRef: 'zone:entrance', factRefs: ['fact:watch'] };
+    const before = structuredClone({ bundle, affordance });
+    expect(preparedReadEffectReadEvidence({ kind: 'current_location' }, affordance, bundle, false)).toEqual({ available: true, sourceRef: 'zone:entrance' });
+    expect(preparedReadEffectReadEvidence({ kind: 'recent_continuity' }, affordance, bundle, false).available).toBe(true);
+    expect(preparedReadEffectReadEvidence({ kind: 'current_location', targetRef: 'zone:other' }, affordance, bundle, false).available).toBe(false);
+    for (const kind of ['effect', 'mechanic', 'movement', 'unknown']) expect(preparedReadEffectReadEvidence({ kind }, affordance, bundle, true).available).toBe(false);
+    expect(preparedReadEffectReadEvidence({ kind: 'scene_presence' }, affordance, bundle, false).available).toBe(false);
+    for (const factRefs of [[], ['fact:missing']]) expect(preparedReadEffectReadEvidence({ kind: 'recent_continuity' }, { ...affordance, factRefs }, bundle, true).available).toBe(false);
+    for (const epistemicState of ['missing_preparation', 'deliberate_unknown']) expect(preparedReadEffectReadEvidence({ kind: 'recent_continuity' }, affordance,
+      { ...bundle, facts: [{ factId: 'fact:watch', epistemicState }] }, true).available).toBe(false);
+    expect(preparedReadEffectReadEvidence({ kind: 'recent_continuity' }, undefined, bundle, true).available).toBe(false);
+    expect({ bundle, affordance }).toEqual(before);
+  });
+  it('recognizes exact Scene /5 participant/frame aliases and local roles without inventing location or information authority', () => {
+    const actor = { actorRef: 'actor:mira', actorFrameId: 'frame:mira', zoneRef: 'zone:future' };
+    for (const context of [
+      { presentActors: ['actor:mira'], sceneLocalRoles: [] },
+      { presentActors: ['frame:mira'], sceneLocalRoles: [] },
+      { presentActors: [], sceneLocalRoles: [{ roleId: 'actor:mira', count: 1 }] },
+      { presentActors: [], sceneLocalRoles: [{ roleId: 'frame:mira', count: 1 }] },
+    ]) {
+      const before = structuredClone({ actor, context });
+      expect(preparedReadEffectActorIsPresent(actor, context)).toBe(true);
+      expect({ actor, context }).toEqual(before);
+    }
+    for (const context of [null, {}, { presentActors: ['actor:other'] },
+      { sceneLocalRoles: [{ roleId: 'Mira', label: 'actor:mira', count: 1 }] },
+      { sceneLocalRoles: [{ roleId: 'actor:mira', count: 0 }] },
+      { sceneLocalRoles: [{ roleId: 'actor:mira', count: '1' }] },
+      { sceneLocalRoles: [{ roleId: 'actor:mira' }] }]) expect(preparedReadEffectActorIsPresent(actor, context)).toBe(false);
+    expect(preparedReadEffectActorIsPresent(undefined, { presentActors: ['actor:mira'] })).toBe(false);
+    expect(preparedReadEffectActorIsPresent(actor, { presentActors: [], sceneLocalRoles: [] })).toBe(false);
+  });
   it('reads actual singular viewpointRef and keeps opaque subject head separate from numeric character head', async () => {
     const f = fixture(), owner: any = await readScenePendingIntentContext(f.scope, f.readers);
     expect(owner.observationSeeds).toHaveLength(1);

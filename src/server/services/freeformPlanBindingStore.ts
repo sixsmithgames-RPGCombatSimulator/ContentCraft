@@ -5,6 +5,8 @@ import { StoryWorkspaceStoreError, type JsonObject } from './storyWorkspaceStore
 import type { CompoundActionInstructionDocument } from './compoundActionArtifactStore.js';
 import { readCurrentSceneContexts } from './actionDirectedStoryStore.js';
 import { assertFreeformCatalogCurrent } from '../llm-orchestrator/freeformSceneCatalog.js';
+import { assertFreeformWorkflowOpen, type FreeformWorkflowReader } from './freeformWorkflowAuthority.js';
+import { READ_EFFECT_CONTRACTS } from '../../shared/llm/readEffectContracts.js';
 
 export function validateFreeformBinding(binding: JsonObject, instruction: JsonObject, program: JsonObject) {
   const issues = freeformPlanBindingIssues(binding, instruction, program, true);
@@ -16,7 +18,7 @@ export function validateFreeformBinding(binding: JsonObject, instruction: JsonOb
 export async function verifyFreeformBindingAcceptance(input: {
   userId: string; campaignId: string; binding: JsonObject; instruction: JsonObject; program: JsonObject;
   staged: CompoundActionInstructionDocument | null;
-}, tickets: FreeformTicketCollection = getDb().collection<FreeformTicketRecord>('llm_freeform_tickets'), now = new Date(), readSceneContext = readCurrentSceneContexts) {
+}, tickets: FreeformTicketCollection = getDb().collection<FreeformTicketRecord>('llm_freeform_tickets'), now = new Date(), readSceneContext = readCurrentSceneContexts, workflowReader?: FreeformWorkflowReader) {
   const { binding, instruction, program, staged } = input;
   const ticket = await tickets.findOne({ _id: String(binding.ticket), userId: input.userId, campaignId: input.campaignId });
   const proposal = ticket?.response?.output as JsonObject | undefined;
@@ -43,6 +45,22 @@ export async function verifyFreeformBindingAcceptance(input: {
   if (freeformJsonDigest(binding.compiledStepIds) !== freeformJsonDigest(proposal.steps.map((_, index) => `freeform:step:${index}`))) {
     throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'The compiled step identities do not match the accepted window.', {});
   }
+  if (binding.schemaVersion === READ_EFFECT_CONTRACTS.binding) {
+    const steps = proposal.steps as JsonObject[];
+    const nodes = program.nodes as JsonObject[];
+    if (proposal.schemaVersion !== READ_EFFECT_CONTRACTS.proposal || steps.some((step, index) => {
+      if (!Array.isArray(step.effects)) return true;
+      const expected = (step.effects as JsonObject[]).map((effect, i) => ({
+        effectId: `freeform:step:${index}:effect:${i + 1}`, attempt: effect.attempt, resolution: effect.resolution,
+        evidenceSpans: (effect.evidence as string[]).map((quote) => {
+          const offset = String(instruction.exactText).indexOf(quote);
+          const start = Buffer.byteLength(String(instruction.exactText).slice(0, offset), 'utf8');
+          return { start, end: start + Buffer.byteLength(quote, 'utf8'), quote };
+        }),
+      }));
+      return freeformJsonDigest(expected) !== freeformJsonDigest(nodes[index].requestedEffects);
+    })) throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'The requested effects do not match the accepted interpretation.', {});
+  }
   if (ticket.catalogContextRef) {
     if (!expectedSources || freeformJsonDigest(staged.originCheckpoint?.storyWorkspaceRef) !== freeformJsonDigest(ticket.catalogContextRef.storyWorkspaceRef)
       || Number((binding.authorityBase as JsonObject).sceneRevision) !== Number(ticket.catalogContextRef.sceneKitRef.revision)) {
@@ -50,4 +68,5 @@ export async function verifyFreeformBindingAcceptance(input: {
     }
     assertFreeformCatalogCurrent(ticket.catalogContextRef, await readSceneContext(input));
   }
+  await assertFreeformWorkflowOpen(ticket, workflowReader);
 }

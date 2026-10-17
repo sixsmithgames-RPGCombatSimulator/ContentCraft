@@ -10,6 +10,7 @@ import {
   GMC_COMPOUND_ACTION_CAPABILITIES,
   GMC_COMPOUND_ACTION_CONTRACTS,
   compileCompoundActionRequirementProjection,
+  resolveCompoundActionRequirements,
   createCompoundActionArtifact,
   readActiveCompoundActionArtifact,
   readStagedCompoundActionInstruction,
@@ -23,7 +24,23 @@ import {
 } from './compoundActionArtifactStore.js';
 import { type JsonObject, StoryWorkspaceStoreError } from './storyWorkspaceStore.js';
 import { createPendingIntentWindow } from '../../shared/llm/pendingIntentWindow.js';
+import type { FreeformTicketCollection, FreeformTicketRecord } from '../llm-orchestrator/freeformTickets.js';
+
+it('legacy requirement transport injection keeps real projection and owner-head validation without database escape', async () => {
+  const scope: Parameters<typeof resolveCompoundActionRequirements>[0] = { userId: 'fixture:user', campaignId: 'fixture:campaign', programId: 'fixture:program', nodeId: 'fixture:gesture',
+    requirements: [{ dimension: 'what', kind: 'story_fact', query: 'Raise my hand' }],
+    expectedAuthority: { storyWorkspaceRevision: 3, sceneRevision: 4 } };
+  const owners = { storyContext: { storyWorkspaceRef: { revision: 3 } }, currentScene: { revision: 4 }, facts: [] };
+  const readers = { readArtifact: async () => ({ artifact: {} }), readScene: async () => { throw new Error('Unexpected extra read.'); },
+    readReality: async () => { throw new Error('Unexpected prepared read.'); }, readLegacy: async () => owners };
+  const projection = await resolveCompoundActionRequirements(scope, readers);
+  expect(projection.requirementResults[0]).toMatchObject({ status: 'unresolved', reasonCode: 'FACT_NOT_ESTABLISHED' });
+  expect(projection.authorityHead).toEqual(scope.expectedAuthority);
+  owners.currentScene.revision = 5;
+  await expect(resolveCompoundActionRequirements(scope, readers)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_AUTHORITY_CONFLICT' });
+});
 import { pendingIntentBindingSlots, scenePendingIntentExaminationIdentity } from '../../shared/llm/scenePendingIntentBindings.js';
+import { scenePendingIntentExaminationIdentity as readEffectExaminationIdentity } from '../../shared/llm/sceneReadEffectBindings.js';
 import { createPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings } from '../../shared/llm/scenePendingIntentApplication.js';
 import { freeformJsonDigest } from '../../shared/llm/freeformPlanBinding.js';
 
@@ -227,11 +244,15 @@ function createInput() {
   };
 }
 
-async function bindingScenario() {
+async function bindingScenario(readEffects = false) {
   const store = memoryCollection(), input = createInput();
   const compiled: any = parallelProgram(input.instruction);
   compiled.nodes.forEach((node: any) => { node.kind = 'other'; node.authorityRequirements = ['gmc'];
     node.dataRequirements = [{ dimension: 'where', kind: 'current_location', query: 'behind cover', targetRole: 'area', targetRef: null }]; });
+  if (readEffects) {
+    compiled.planner = { source: 'freeform_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/12' };
+    compiled.nodes[0].dataRequirements = [{ dimension: 'what', kind: 'story_fact', query: 'Attempt the declared action' }];
+  }
   await createCompoundActionArtifact({ ...input, program: compiled, cursor: parallelCursor() }, store.records);
   const source = { instruction: input.instruction, program: compiled, cursor: parallelCursor(), receipts: [], artifactRevision: 1 };
   const operationId = 'scene-reality:pending:one', campaignId = input.campaignId;
@@ -245,11 +266,38 @@ async function bindingScenario() {
     windowId: window.windowId, windowFingerprint: window.windowFingerprint, sceneKitRef: proposal.sceneKit,
     nodes: slots.map((slot) => ({ nodeRef: slot.nodeRef, disposition: 'bound', references: slot.references.map((s: any) => ({ slotId: s.slotId, selectedRef: 'element:cover' })),
       coverage: slot.coverage.map((s: any) => ({ slotId: s.slotId, coverageEntryRef: 'coverage:cover' })), observations: [], instructionEvidence: slot.instructionEvidence[0], rationale: 'Exact cover without resolving concealment.', question: null })) };
-  const policy = 'a'.repeat(64), assessment = { schemaVersion: 'gma.scene-readiness-assessment/2', assessmentId: 'assessment:cover',
-    ...scenePendingIntentExaminationIdentity(bindings, context, policy), verdict: 'adequate', confidence: 'high', rationale: 'Both pending positions match without resolving gameplay.',
+  let reviewContext: Parameters<typeof createPendingBindingRecord>[0] = context;
+  if (readEffects) {
+    proposal.sceneStoryDesign.schemaVersion = 'gmc.scene-story-design/4';
+    proposal.sceneStoryDesign.affordances[0].surfaceKind = 'action_surface';
+    proposal.sceneStoryDesign.affordances[0].interactionSurface = 'owner_action';
+    proposal.sceneStoryDesign.affordances[0].factRefs = [];
+    const coverageBody = { schemaVersion: 'gmc.instruction-window-coverage/1' as const, campaignId, programRef: compiled.programId,
+      rootInstructionFingerprint: input.instruction.instructionFingerprint, instructionFingerprint: input.instruction.instructionFingerprint,
+      bindingFingerprint: 'f'.repeat(64), currentInstructionRange: { start: 0, end: input.instruction.utf8Bytes },
+      prefixRange: { start: 0, end: input.instruction.utf8Bytes }, deferredTailRange: { start: input.instruction.utf8Bytes, end: input.instruction.utf8Bytes },
+      deferredTailBytes: 0, deferredTailFingerprint: createHash('sha256').update('').digest('hex'), rootCompletionPermitted: true };
+    reviewContext = { ...context, qualifiedObservers: [], confirmedRelocations: [],
+      instructionCoverage: { ...coverageBody, coverageRef: `instruction-coverage:${freeformJsonDigest(coverageBody).slice(0, 40)}` } };
+    bindings.schemaVersion = 'gma.scene-pending-intent-bindings/4';
+    bindings.requirementRoles = { schemaVersion: 'gma.pending-requirement-role-classification/1', classificationId: 'roles:atomic',
+      windowFingerprint: window.windowFingerprint, programFingerprint: window.programFingerprint,
+      nodes: window.nodes.map((node: { nodeRef: string; instructionEvidence: unknown[]; requirements: { requirementId: string; value: { kind: string } }[] }) => ({
+        nodeRef: node.nodeRef, roles: node.requirements.map((row) => ({ requirementRef: row.requirementId,
+          role: row.value.kind === 'story_fact' ? 'effect' : 'read', resolution: row.value.kind === 'story_fact' ? 'owner_resolution' : null,
+          instructionEvidence: node.instructionEvidence[0] })),
+      })) };
+  }
+  const policy = 'a'.repeat(64), assessment = { schemaVersion: readEffects ? 'gma.scene-readiness-assessment/5' : 'gma.scene-readiness-assessment/2', assessmentId: 'assessment:cover',
+    ...(readEffects ? readEffectExaminationIdentity(bindings, reviewContext, policy) : scenePendingIntentExaminationIdentity(bindings, context, policy)), verdict: 'adequate', confidence: 'high', rationale: 'Both pending positions match without resolving gameplay.',
     counterfactualProbes: ['Position?', 'Access?', 'Operations?'].map((probe) => ({ probe, status: 'supported', evidenceRefs: ['element:cover'] })), debt: [], evidenceRefs: ['element:cover'],
-    bindingReviews: bindings.nodes.map((row: any) => ({ nodeRef: row.nodeRef, bindingRowFingerprint: freeformJsonDigest(row), verdict: 'supported', rationale: 'Matches the original position only.', evidenceRefs: ['element:cover'], mechanicsState: 'not_resolved' })) };
-  const record = createPendingBindingRecord(context, bindings, assessment, policy);
+    bindingReviews: bindings.nodes.map((row: any) => ({ nodeRef: row.nodeRef, bindingRowFingerprint: freeformJsonDigest(row), verdict: 'supported', rationale: 'Matches the original position only.', evidenceRefs: ['element:cover'], mechanicsState: 'not_resolved' })),
+    ...(readEffects ? { qualificationReview: { verdict: 'supported', originState: 'preserved', viewpointState: 'pending_and_confirmed_lineage_preserved',
+      rationale: 'No observer or movement is asserted.', evidenceRefs: ['element:cover'] },
+    requirementRoleReviews: bindings.requirementRoles.nodes.flatMap((node: { roles: { requirementRef: string }[] }) => node.roles.map((row) => ({
+      requirementRef: row.requirementRef, verdict: 'supported', rationale: 'Exact original role, no completed result.', evidenceRefs: [row.requirementRef],
+    }))) } : {}) };
+  const record = createPendingBindingRecord(reviewContext, bindings, assessment, policy);
   const nextCursor = { ...parallelCursor(2), authorityHead: { storyWorkspaceRevision: 7, sceneRevision: 5, vcsCharacterRevision: 12 } };
   const rebase = { schemaVersion: 'gma.action-program-rebase-receipt/2', receiptId: 'rebase:binding', campaignId, programRef: compiled.programId,
     priorCursorRevision: 1, resultingCursorRevision: 2, sceneRealityReceiptRef: 'scene-receipt:one', sceneRealityReceiptSchemaVersion: 'gmc.scene-reality-commit-receipt/1',
@@ -264,6 +312,52 @@ async function bindingScenario() {
 }
 
 describe('atomic examined pending-reference application', () => {
+  it('atomically applies /4 roles once, discovers a lost response, and reads/replays after rollback without changing the original program', async () => {
+    vi.stubEnv('GMC_MANUAL_READ_EFFECTS_ENABLED', '1'); vi.stubEnv('GMC_MANUAL_READ_EFFECTS_CAMPAIGN_ALLOWLIST', 'campaign-a');
+    try {
+      const f = await bindingScenario(true), fresh = await bindingScenario(true), original = structuredClone(f.source);
+      expect(f.record.schemaVersion).toBe('gmc.scene-pending-intent-binding-record/4');
+      const owner = await import('./compoundActionArtifactStore.js');
+      // The write succeeds but the caller loses its response. Discovery, then
+      // the exact duplicate operation, must not read a changed owner or reapply.
+      await advanceCompoundActionArtifact(f.write, f.store.records, f.reader);
+      const found = await owner.readCompoundActionOperationStatus({ ...f.write, operationId: f.write.idempotencyKey }, f.store.records);
+      expect(found.disposition).toBe('committed');
+      vi.stubEnv('GMC_MANUAL_READ_EFFECTS_ENABLED', '0');
+      const unavailable = async () => { throw new Error('Discovery/replay must not start new owner preparation.'); };
+      expect((await advanceCompoundActionArtifact(f.write, f.store.records, unavailable)).duplicate).toBe(true);
+      await expect(advanceCompoundActionArtifact(fresh.write, fresh.store.records, fresh.reader)).rejects.toMatchObject({ code: 'SCENE_READ_EFFECT_WRITES_PAUSED' });
+      const saved = await readActiveCompoundActionArtifact(f.write, f.store.records);
+      if (!saved) throw new Error('The accepted original operation must remain readable.');
+      expect(saved.artifact.program).toEqual(original.program);
+      expect(saved.artifact.receipts).toEqual(original.receipts);
+      expect(saved.artifact.intentBindingApplications).toHaveLength(1);
+      const rawApplications = saved.artifact.intentBindingApplications;
+      if (!Array.isArray(rawApplications)) throw new Error('The atomic application association must be present.');
+      const applications = rawApplications.map((value): JsonObject => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('An application must remain a complete owner record.');
+        return value;
+      });
+      const projected = projectAppliedIntentBindings(f.source.instruction, f.source.program, applications);
+      expect(projected.schemaVersion).toBe('gma.semantic-action-program/6');
+      expect(projected.nodes[0].requestedEffects).toHaveLength(1);
+      expect(projected.nodes[0].dataRequirements).toEqual([]);
+      expect(f.store.documents).toHaveLength(2); expect(fresh.store.documents).toHaveLength(1);
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it.each(['foreign_role_receipt', 'stale_role_record', 'changed_partition', 'stale_head'])('rejects /4 %s without a partial role application', async (invalid) => {
+    vi.stubEnv('GMC_MANUAL_READ_EFFECTS_ENABLED', '1'); vi.stubEnv('GMC_MANUAL_READ_EFFECTS_CAMPAIGN_ALLOWLIST', 'campaign-a');
+    try {
+      const f = await bindingScenario(true);
+      if (invalid === 'foreign_role_receipt') f.write.appendIntentBindingReceipts[0].requirementRoleApplication.classificationFingerprint = 'b'.repeat(64);
+      if (invalid === 'stale_role_record') f.bundle.pendingIntentBindingRecord.bindings.requirementRoles.nodes[0].roles[0].role = 'read';
+      if (invalid === 'changed_partition') f.write.cursor.completedNodeRefs = [f.source.program.nodes[0].nodeId];
+      const reader = invalid === 'stale_head' ? async () => ({ bundle: f.bundle, context: { ownerReadSet: { ...f.record.ownerReadSet, sceneRevision: 99 } } }) : f.reader;
+      await expect(advanceCompoundActionArtifact(f.write, f.store.records, reader)).rejects.toBeInstanceOf(StoryWorkspaceStoreError);
+      expect(f.store.documents).toHaveLength(1);
+      expect(f.store.documents[0].intentBindingApplications ?? []).toEqual([]);
+    } finally { vi.unstubAllEnvs(); }
+  });
   it('rollback disables new applications while preserving accepted readers and original-operation recovery', async () => {
     const accepted = await bindingScenario(), fresh = await bindingScenario();
     await advanceCompoundActionArtifact(accepted.write, accepted.store.records, accepted.reader);
@@ -409,6 +503,7 @@ describe('GMC compound-action private artifact store', () => {
       'gma.semantic-action-program/2',
       'gma.semantic-action-program/4',
       'gma.semantic-action-program/5',
+      'gma.semantic-action-program/6',
     ]);
     expect(Object.values(COMPOUND_ACTION_CONTRACTS)).not.toContain('gma.semantic-action-program/5');
     const exact = instruction();
@@ -677,10 +772,23 @@ describe('GMC compound-action private artifact store', () => {
     }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_RECEIPT_CONFLICT' });
   });
 
-  it('stores program /4 saga checkpoints and atomically settles receipt /2 with the cursor', async () => {
+  it.each([4, 6])('stores program /%i observation saga checkpoints and atomically settles receipt /2 with the cursor', async (version) => {
     const store = memoryCollection();
     const exact = instruction();
-    const v4Program = { ...program(exact), schemaVersion: 'gma.semantic-action-program/4' };
+    const base = program(exact);
+    const v4Program = version === 4 ? { ...base, schemaVersion: 'gma.semantic-action-program/4' } : {
+      ...base, schemaVersion: 'gma.semantic-action-program/6',
+      planner: { source: 'freeform_intent_compiler', policyVersion: 'gma.semantic-action-compiler-policy/13' },
+      limits: { ...base.limits, parallelRelationshipCount: 0 },
+      nodes: base.nodes.map((node, index) => ({ ...node, parallelWith: [], requestedEffects: [],
+        ...(index === 1 ? { observationGroups: [{ groupId: 'group:search' }],
+          dataRequirements: [{ dimension: 'what', kind: 'observation', query: 'cart cargo' }] } : {}) })),
+    };
+    if (version === 6) await expect(createCompoundActionArtifact({
+      userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:missing-v6-saga',
+      instruction: exact, program: v4Program, cursor: cursor(1),
+    }, store.records)).rejects.toMatchObject({ code: 'COMPOUND_ACTION_SAGA_INVALID' });
+    expect(store.documents).toHaveLength(0);
     await createCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', idempotencyKey: 'create:v4:turn-42',
       instruction: exact, program: v4Program, cursor: cursor(1), saga: saga(1, 'unsettled'),
@@ -707,6 +815,24 @@ describe('GMC compound-action private artifact store', () => {
       ...cursor(3, ['node:hide']),
       completedNodeRefs: ['node:hide', 'node:search'], readyNodeRefs: [], remainingNodeRefs: [],
     };
+    // Supply only the workflow-reader boundary, not a bypass of the real guard.
+    const activeFixture = store.documents.find((row) => row.revision === 2)!;
+    activeFixture.freeformBinding = { policyVersion: 'gma.freeform-intake-policy/4', ticket: 'ticket:settlement',
+      instructionRef: 'gma:instruction:turn-42', interactionId: 'turn-42', ticketDisposition: 'owner_accepted' };
+    const workflowDeps = { tickets: { findOne: async () => ({ _id: 'ticket:settlement', userId: 'tenant-a', campaignId: 'campaign-a',
+      interactionId: 'turn-42', workflowRef: { turnId: 'workflow:settlement', windowId: 'window:one' } } as FreeformTicketRecord) } as unknown as FreeformTicketCollection,
+    reader: async () => ({ _id: 'workflow:settlement', userId: 'tenant-a', campaignId: 'campaign-a', rootInteractionId: 'turn-42',
+      selectedMechanicsSubjectRef: 'character:one', selectedMechanicsOwnerRef: 'tenant-a', selectedActorRef: 'actor:one',
+      answers: [], timelineSequence: 1, updatedAt: new Date(0),
+      turn: { schemaVersion: 'gma.freeform-turn/1' as const, turnId: 'workflow:settlement', campaignId: 'campaign-a',
+        rootInstructionRef: 'gma:instruction:turn-42', revision: 2, status: 'retired' as const, activeWindowRef: 'window:one', windows: [
+          { windowId: 'window:one', ordinal: 1, ticketRef: 'ticket:settlement', instructionRef: 'gma:instruction:turn-42',
+            parentProgramRef: null, programRef: 'program:turn-42', pendingDecision: null, status: 'retired' as const }] } }) };
+    await expect(settleCompoundActionArtifact({ userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 2,
+      idempotencyKey: 'settle:v4:turn-42', cursor: settledCursor, executionReceipt: receipt,
+      executionReceipts: [receipt, secondReceipt], saga: settledSaga }, store.records, workflowDeps)).rejects.toMatchObject({ code: 'FREEFORM_WORKFLOW_CLOSED' });
+    expect(store.documents).toHaveLength(2);
+    delete activeFixture.freeformBinding;
     const settled = await settleCompoundActionArtifact({
       userId: 'tenant-a', campaignId: 'campaign-a', programId: 'program:turn-42', expectedRevision: 2,
       idempotencyKey: 'settle:v4:turn-42', cursor: settledCursor, executionReceipt: receipt,

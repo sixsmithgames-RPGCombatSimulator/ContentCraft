@@ -225,6 +225,35 @@ async function commitReady(mem = memory()) {
   return { mem, request, candidate, receipt };
 }
 
+describe('read/effect surfaces at the real protected Scene save', () => {
+  const input = (patch: JsonObject = {}) => {
+    const mem = memory(), request = buildRequest(), candidate = proposal(request);
+    const design = candidate.sceneStoryDesign as JsonObject, actors = candidate.actorFrames as JsonObject[];
+    design.schemaVersion = 'gmc.scene-story-design/4';
+    for (const row of design.affordances as JsonObject[]) Object.assign(row, { surfaceKind: 'information', interactionSurface: null });
+    (design.affordances as JsonObject[]).push({ affordanceId: 'affordance:self', coverageEntryId: 'coverage:self',
+      targetRef: actors[0].actorRef as string, zoneRef: actors[0].zoneRef as string, actionFamily: 'interact', accessClass: 'ordinary_self_action',
+      thresholdRef: null, capabilityClass: null, condition: null, factRefs: [], surfaceKind: 'action_surface', interactionSurface: 'self_action', ...patch });
+    return { mem, write: { userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0,
+      buildRequest: request, proposal: candidate, assessment: assessment(candidate, request) } };
+  };
+  it('accepts a locally valid self surface but never saves it without the independent /4 role record', async () => {
+    const f = input();
+    await expect(commitSceneReality(f.write, f.mem.stores)).rejects.toMatchObject({ code: 'SCENE_READ_EFFECT_EXAMINATION_REQUIRED' });
+    expect(f.mem.bundles.documents).toHaveLength(0); expect(f.mem.pointers.documents).toHaveLength(0);
+  });
+  const unsupported: JsonObject[] = [
+    { condition: 'The character attempts a gesture, not its result.' }, { capabilityClass: 'capability:pending' },
+    { thresholdRef: 'boundary:deeper-drain' }, { actionFamily: 'social' }, { factRefs: ['scene-fact:bend:one'] },
+    { zoneRef: 'scene-zone:second-mouth:first-bend:one' },
+  ];
+  it.each(unsupported)('rejects an unsupported self surface before any protected write: %j', async (patch) => {
+    const f = input(patch);
+    await expect(commitSceneReality(f.write, f.mem.stores)).rejects.toMatchObject({ code: 'SCENE_READ_EFFECT_SURFACE_INVALID' });
+    expect(f.mem.bundles.documents).toHaveLength(0); expect(f.mem.pointers.documents).toHaveLength(0);
+  });
+});
+
 describe('Scene reality owner authority', () => {
   it.each(['missing_reader', 'partial_transport', 'foreign_program', 'stale_owner', 'changed_instruction', 'unexamined_bindings'])(
     'rejects %s pending transport before staging or swapping any Scene pointer', async (wrong) => {
@@ -370,6 +399,8 @@ describe('Scene reality owner authority', () => {
   it('commits an opening with the exact prepared actor alias and zone-local threshold without inventing authority', async () => {
     const mem = memory(); const request = buildRequest(); const candidate = proposal(request);
     (candidate.actorFrames as JsonObject[])[0].actorRef = 'actor:owner:worker';
+    (candidate.facts as JsonObject[])[0].targetRef = 'actor:owner:worker';
+    ((candidate.sceneStoryDesign as JsonObject).affordances as JsonObject[])[0].targetRef = 'actor:owner:worker';
     const entry = { ...boundary, boundaryId: 'boundary:local-entry', fromZoneRef: 'scene-zone:second-mouth:approach:one' };
     (candidate.zones as JsonObject[])[0].thresholds = [entry];
     const prose = 'The drain worker waits beside the tunnel entry.';
@@ -387,6 +418,18 @@ describe('Scene reality owner authority', () => {
     expect(mem.operations.documents).toHaveLength(1);
     expect(mem.pointers.documents).toHaveLength(1);
   });
+
+  it.each(['actor:unprepared', 'gmc:location:second-mouth', 'Mara'])(
+    'rejects a fact target outside exact staged actor/frame identity: %s', async (targetRef) => {
+      const mem = memory(), request = buildRequest(), candidate = proposal(request);
+      (candidate.facts as JsonObject[])[0].targetRef = targetRef;
+      await expect(commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0,
+        buildRequest: request, proposal: candidate, assessment: assessment(candidate, request) }, mem.stores)).rejects.toMatchObject({
+        code: 'SCENE_REALITY_REF_CLOSURE_FAILED',
+      });
+      expect(mem.bundles.documents).toHaveLength(0); expect(mem.pointers.documents).toHaveLength(0);
+    },
+  );
 
   it.each(['drain worker', 'gmc:location:second-mouth', 'actor:forged', 'boundary:unprepared'])(
     'rejects unprepared opening identity %s before staging or exposing a bundle', async (targetRef) => {
@@ -708,8 +751,10 @@ describe('Scene reality owner authority', () => {
     await expect(selectPreparedStoryFacts({ userId: 'user:one', campaignId: 'campaign:one', proposal: selection }, mem.stores)).rejects.toMatchObject({ code: 'SCENE_FACT_SELECTION_REQUIREMENT_UNBOUND' });
 
     const storedFacts = ((mem.bundles.documents[0].bundle as JsonObject).facts as JsonObject[]);
-    storedFacts[0].epistemicState = 'future_contingent';
-    await expect(selectPreparedStoryFacts({ userId: 'user:one', campaignId: 'campaign:one', proposal: { ...selection, operationId: 'operation:selection:unsafe', selections: [{ requirementRef: affordance.coverageEntryId, affordanceRef: affordance.affordanceId, factRefs: affordance.factRefs }] } }, mem.stores)).rejects.toMatchObject({ code: 'SCENE_FACT_SELECTION_EPISTEMIC_UNSAFE' });
+    for (const state of ['future_contingent', 'prepared_possibility']) {
+      storedFacts[0].epistemicState = state;
+      await expect(selectPreparedStoryFacts({ userId: 'user:one', campaignId: 'campaign:one', proposal: { ...selection, operationId: `operation:selection:unsafe:${state}`, selections: [{ requirementRef: affordance.coverageEntryId, affordanceRef: affordance.affordanceId, factRefs: affordance.factRefs }] } }, mem.stores)).rejects.toMatchObject({ code: 'SCENE_FACT_SELECTION_EPISTEMIC_UNSAFE' });
+    }
   });
 
   it('closes the coverage-to-selection race when active Scene state invalidates the certificate', async () => {

@@ -1,3 +1,5 @@
+import { READ_EFFECT_CONTRACTS, READ_EFFECT_ROW_SCHEMAS } from './readEffectContracts.js';
+
 export const FREEFORM_INTENT_PROPOSAL_SCHEMA = {
   "$id": "gma.freeform-intent-proposal/1",
   "description": "Compact interpretation proposal; never authority to apply game changes.",
@@ -381,3 +383,16 @@ export const FREEFORM_INTENT_PROPOSAL_SCHEMA = {
     }
   }
 } as const;
+
+/** The old proposal is immutable. Fresh /2 exchanges name reads and attempts. */
+export const FREEFORM_READ_EFFECT_PROPOSAL_SCHEMA = (() => {
+  const schema = structuredClone(FREEFORM_INTENT_PROPOSAL_SCHEMA);
+  const step = schema.$defs.step;
+  const { results: _historicalResults, ...properties } = step.properties;
+  return { ...schema, $id: READ_EFFECT_CONTRACTS.proposal,
+    properties: { ...schema.properties, schemaVersion: { const: READ_EFFECT_CONTRACTS.proposal } },
+    $defs: { ...schema.$defs, step: { ...step, required: [...step.required.filter((key) => key !== 'results'), 'reads', 'effects'],
+      properties: { ...properties,
+        reads: { type: 'array', maxItems: 8, items: READ_EFFECT_ROW_SCHEMAS.read },
+        effects: { type: 'array', maxItems: 8, items: READ_EFFECT_ROW_SCHEMAS.effect } } } } };
+})();

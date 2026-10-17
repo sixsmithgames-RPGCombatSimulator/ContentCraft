@@ -2,8 +2,9 @@ import type { LlmValidationResult } from '../../shared/llm/orchestratorContracts
 import Ajv from 'ajv';
 import { validateFreeformIntake } from './freeformIntakeValidation.js';
 import { scenePresentedTargetRefs } from '../services/scenePresentedTargetRefs.js';
+import { sceneDossierReferenceIssues } from '../../shared/llm/sceneDossierReferences.js';
 import { SCENE_MODEL_METADATA_BINDING, validSceneModelMetadataBinding } from './sceneModelMetadataBinding.js';
-import { scenePendingBindingContextFromOwner, scenePendingIntentBindingIssues, scenePendingIntentExaminationIssues } from '../../shared/llm/scenePendingIntentBindings.js';
+import { scenePendingBindingContextFromOwner, scenePendingIntentBindingIssues, scenePendingIntentExaminationIssues } from '../../shared/llm/sceneReadEffectBindings.js';
 import {
   registerSemanticValidator,
   STORY_DIRECTOR_REPAIR_SCENE_KIT_SCHEMA,
@@ -29,6 +30,7 @@ registerSemanticValidator('scene-pending-intent-builder', ({ request, output }) 
         .map((key) => [key, [...(checkpoint[key] ?? []), ...(output.proposal[key] ?? [])]])) } : output.proposal;
       paths.push(...scenePendingIntentBindingIssues(output.pendingIntentBindings,
         scenePendingBindingContextFromOwner(owner, trusted.buildRequest.operationId, proposal)));
+      if (trusted.preparationPolicyVersion === 11) paths.push(...sceneDossierReferenceIssues(proposal).map((path) => `/proposal${path}`));
     }
   } catch { paths = ['/pendingIntentContext']; }
   return result('scene-pending-intent-builder', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_INVALID', message: 'The complete pending intent binding must match the supplied owner window, slots and evidence.', path })));
@@ -38,6 +40,7 @@ registerSemanticValidator('scene-pending-intent-examiner', ({ request, output })
   const trusted = request.context?.input?.value as any;
   const paths = scenePendingIntentExaminationIssues(output, trusted.pendingIntentBindings,
     scenePendingBindingContextFromOwner(trusted.pendingIntentContext, trusted.proposal.operationId, trusted.proposal), trusted.expectedPolicyFingerprint);
+  if (trusted.preparationPolicyVersion === 11) paths.push(...sceneDossierReferenceIssues(trusted.proposal).map((path) => `/proposal${path}`));
   return result('scene-pending-intent-examiner', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', message: 'Joint examination must cover the exact prepared Scene, unfinished intent and owner evidence.', path })));
 });
 

@@ -369,6 +369,32 @@ async function createIndexes(database: Db): Promise<void> {
     { unique: true, name: 'unique_llm_freeform_ticket_issuance' },
   );
   await database.collection('llm_freeform_tickets').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await database.collection('gma_freeform_turns').createIndex({ userId: 1, campaignId: 1, rootInteractionId: 1 },
+    { unique: true, name: 'unique_gma_freeform_turn' });
+  await database.collection('gma_freeform_turns').createIndex({ userId: 1, campaignId: 1, timelineSequence: 1 });
+  await database.collection('gma_freeform_turns').createIndex({ userId: 1, campaignId: 1, 'turn.windows.programRef': 1 });
+  await database.collection('gma_actor_mechanics_links').createIndex({ userId: 1, campaignId: 1, revision: 1 },
+    { unique: true, name: 'unique_actor_link_revision' });
+  await database.collection('gma_actor_mechanics_links').createIndex({ userId: 1, campaignId: 1, operationId: 1 },
+    { unique: true, name: 'unique_actor_link_operation' });
+  await database.collection('gma_actor_mechanics_links').createIndex({ userId: 1, campaignId: 1, decisionRef: 1 });
+  await database.collection('gma_actor_mechanics_link_decisions').createIndex({ userId: 1, campaignId: 1, operationId: 1 },
+    { unique: true, name: 'unique_actor_link_decision_operation' });
+  await database.collection('gma_actor_mechanics_link_decisions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await database.collection('gma_pending_observers').createIndex({ userId: 1, campaignId: 1, programId: 1, windowFingerprint: 1, groupId: 1 },
+    { unique: true, name: 'unique_pending_observer_window_group' });
+  await database.collection('gma_observer_origins').createIndex({ userId: 1, campaignId: 1, programId: 1, operationId: 1 },
+    { unique: true, name: 'unique_observer_origin_decision' });
+  await database.collection('gma_pending_observers_v2').createIndex({ userId: 1, campaignId: 1, programId: 1, windowFingerprint: 1, groupId: 1 },
+    { unique: true, name: 'unique_pending_observer_v2_window_group' });
+  await database.collection('gmc_qualified_observation_activations').createIndex({ userId: 1, campaignId: 1, programId: 1, operationId: 1 },
+    { unique: true, name: 'unique_qualified_observation_activation' });
+  await database.collection('gmc_scene_movement_outcomes').createIndex({ userId: 1, campaignId: 1, programId: 1, operationId: 1 },
+    { unique: true, name: 'unique_scene_movement_outcome_operation' });
+  await database.collection('gmc_scene_movement_outcomes').createIndex({ userId: 1, campaignId: 1, programId: 1, nodeRef: 1 },
+    { unique: true, name: 'unique_scene_movement_outcome_node' });
+  await database.collection('gmc_qualified_observation_activations').createIndex({ userId: 1, campaignId: 1, programId: 1, bindingRecordRef: 1, nodeRef: 1, groupId: 1 },
+    { unique: true, name: 'unique_qualified_observation_group' });
   await database.collection('llm_generation_workflows').createIndex(
     { userId: 1, workflowId: 1 },
     { unique: true, name: 'unique_llm_generation_workflow' },

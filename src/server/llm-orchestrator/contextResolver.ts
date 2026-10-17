@@ -3,7 +3,7 @@ import type { LlmContextLayer, LlmRequestEnvelope } from '../../shared/llm/orche
 import { OrchestratorError } from './errors.js';
 import { OPERATION_REGISTRY_VERSION, type LlmOperationDefinition } from './operationRegistry.js';
 import { loadModelPolicy } from './modelPolicy.js';
-import { FREEFORM_INTAKE_OPERATION } from '../../shared/llm/freeformIntakePolicy.js';
+import { isFreeformIntakeOperation, freeformPromptForVersion } from '../../shared/llm/freeformIntakePolicy.js';
 import { geminiResponseJsonSchemaForRequest } from './providers/geminiProvider.js';
 
 export interface ResolvedContext {
@@ -46,6 +46,8 @@ function layerForProvider(layer: LlmContextLayer) {
 }
 
 export function resolveOperationContext(request: LlmRequestEnvelope, operation: LlmOperationDefinition): ResolvedContext {
+  if (isFreeformIntakeOperation(operation.id)) operation = { ...operation,
+    prompt: { ...operation.prompt, ...freeformPromptForVersion(request.constraints.policyVersion) } };
   const unknownKeys = Object.keys(request.context).filter((key) => !operation.context.allowedKeys.includes(key));
   if (unknownKeys.length) {
     throw new OrchestratorError({
@@ -85,7 +87,7 @@ export function resolveOperationContext(request: LlmRequestEnvelope, operation: 
   providerInput.references = request.references;
   providerInput.constraints = request.constraints;
   providerInput.outputContract = request.outputSchema;
-  const totalBytes = operation.id === FREEFORM_INTAKE_OPERATION
+  const totalBytes = isFreeformIntakeOperation(operation.id)
     ? Math.max(Buffer.byteLength(JSON.stringify({ systemInstruction: { parts: [{ text: operation.prompt.systemInstruction }] },
       contents: [{ role: 'user', parts: [{ text: JSON.stringify(providerInput) }] }],
       generationConfig: { responseMimeType: 'application/json', maxOutputTokens: operation.provider.maxOutputTokens,

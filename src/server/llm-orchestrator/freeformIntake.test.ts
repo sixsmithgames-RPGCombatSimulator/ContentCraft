@@ -99,13 +99,29 @@ describe('compact freeform proposal boundary (not gameplay certification)', () =
   });
   it('is disabled by default and never generates a model reply', async () => {
     const f = await fixture('integrated');
+    expect(f.issued.request.constraints.policyVersion).toBe(FREEFORM_INTAKE_POLICY_VERSION);
     const response = await executeLlmOperation(f.issued.request, f.options);
     expect(response.error?.code).toBe('OPERATION_ROLLOUT_DISABLED');
+    expect(f.provider.calls).toHaveLength(0);
+  });
+  it.each([5, 7])('fresh read/effect tickets teach mover meaning; policy /%s replacements retain their family', async (version) => {
+    vi.stubEnv('GMC_MANUAL_READ_EFFECTS_ENABLED', '1');
+    vi.stubEnv('GMC_MANUAL_READ_EFFECTS_CAMPAIGN_ALLOWLIST', 'fictional-campaign');
+    const f = await fixture();
+    expect(f.issued.request.constraints.policyVersion).toBe('gma.freeform-intake-policy/7');
+    f.documents[0].policyVersion = `gma.freeform-intake-policy/${version}`;
+    f.documents[0].request.constraints.policyVersion = f.documents[0].policyVersion;
+    f.documents[0].status = 'retired'; f.documents[0].failureSignature = 'fixture-rejection';
+    const replaced = await issueFreeformTicket({ ...f.input, issuanceKey: 'fixture-replacement', previousTicket: f.issued.ticket,
+      clarifications: [{ question: 'Which scout?', answer: 'My familiar.' }] }, { records: f.records, readInstruction: f.readInstruction });
+    expect(replaced.request.constraints.policyVersion).toBe(`gma.freeform-intake-policy/${version + 1}`);
+    expect(f.documents[0].request.constraints.policyVersion).toBe(`gma.freeform-intake-policy/${version}`);
     expect(f.provider.calls).toHaveLength(0);
   });
   it.each(['manual', 'integrated'] as const)('validates the explicit remote-observer proposal in %s transport and replays once', async (transport) => {
     enableFixtureOperation();
     const f = await fixture(transport);
+    expect(f.issued.request.constraints.policyVersion).toBe(FREEFORM_INTAKE_POLICY_VERSION);
     expect(validateOperationOutput(FREEFORM_INTAKE_OPERATION, f.output).valid).toBe(true);
     expect(validateFreeformIntake(f.issued.request, f.output).issues).toEqual([]);
     const first = await executeLlmOperation(f.issued.request, f.options);

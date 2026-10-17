@@ -184,13 +184,15 @@ function parseGameClockText(value: unknown) {
   return { calendar: 'campaign', day, hour, minute, second, elapsedSeconds, label: null, timeOfDay, notes: '' };
 }
 
-function normalizeGameClock(input: any = {}, previous: Record<string, any> = {}) {
-  const rawSource = input?.gameClock !== undefined ? input.gameClock : input;
+/** Keep the API and isolated owner rehearsals on the same clock normalization. */
+export function normalizeGameClock(input: unknown = {}, previous: Record<string, unknown> = {}): Record<string, unknown> {
+  const body = input && typeof input === 'object' ? input as Record<string, unknown> : null;
+  const rawSource = body?.gameClock !== undefined ? body.gameClock : input;
   const parsedRaw = parseGameClockText(rawSource);
   if ((typeof rawSource !== 'object' || rawSource === null || Array.isArray(rawSource)) && parsedRaw) {
     return { ...previous, ...parsedRaw, updatedAt: new Date() };
   }
-  const source = rawSource && typeof rawSource === 'object' && !Array.isArray(rawSource) ? rawSource : {};
+  const source: Record<string, unknown> = rawSource && typeof rawSource === 'object' && !Array.isArray(rawSource) ? rawSource as Record<string, unknown> : {};
   const parsedText = parseGameClockText(source.label ?? source.display ?? source.timeOfDay ?? '');
   const numberOrPrevious = (key: string, min: number, max: number) => {
     const value = Number(source[key] ?? parsedText?.[key as keyof typeof parsedText] ?? previous[key]);

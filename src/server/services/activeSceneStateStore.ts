@@ -222,6 +222,7 @@ function sceneAuthorityRefs(
   kit: JsonObject,
   state?: ActiveSceneStateDocument | null,
   certifiedDesign?: JsonObject | null,
+  certifiedIdentitySourceRefs: string[] = [],
 ): {
   all: Set<string>;
   actorRefs: Set<string>;
@@ -229,6 +230,8 @@ function sceneAuthorityRefs(
   threadRefs: Set<string>;
 } {
   const all = new Set<string>();
+  // Identity citations do not grant Scene presence or actor-update authority.
+  addRefs(all, identifierList(certifiedIdentitySourceRefs, 'certifiedIdentitySourceRefs', 32));
   const actorRefs = new Set<string>();
   const informationRefs = new Set<string>();
   const threadRefs = new Set<string>();
@@ -623,6 +626,7 @@ function validateProposal(
   kit: JsonObject,
   state?: ActiveSceneStateDocument | null,
   certifiedDesign?: JsonObject | null,
+  certifiedIdentitySourceRefs: string[] = [],
 ): JsonObject {
   if (!isObject(value)) throw new StoryWorkspaceStoreError(400, 'STORY_SCENE_TURN_INVALID', 'The scene-turn proposal must be an object.', {});
   const isV2 = value.schemaVersion === SCENE_TURN_PROPOSAL_V2_CONTRACT_VERSION;
@@ -652,7 +656,7 @@ function validateProposal(
     || value.sceneKitRef.payloadHash !== currentRef.payloadHash) {
     throw new StoryWorkspaceStoreError(409, 'STORY_CURRENT_SCENE_CONFLICT', 'The current Scene changed before this scene turn.', { expectedSceneKitRef: value.sceneKitRef, actualSceneKitRef: currentRef });
   }
-  const delta = validateDelta(value.stateDelta, sceneAuthorityRefs(workspace, kit, state, certifiedDesign));
+  const delta = validateDelta(value.stateDelta, sceneAuthorityRefs(workspace, kit, state, certifiedDesign, certifiedIdentitySourceRefs));
   if ((delta.phase === 'owner_confirmed_mechanic')
     && !(value.sourceReceiptRefs as string[]).some((ref) => /^vcs[:.-]/i.test(ref))) {
     throw new StoryWorkspaceStoreError(422, 'STORY_SCENE_TURN_MECHANICS_RECEIPT_REQUIRED', 'An owner-confirmed mechanical result requires its VCS receipt.', {});
@@ -1068,7 +1072,7 @@ export async function recordConversationHistoryRewind(
 }
 
 export async function commitSceneTurn(
-  input: { userId: string; campaignId: string; proposal: unknown; sceneKit?: JsonObject; sceneStoryDesign?: JsonObject },
+  input: { userId: string; campaignId: string; proposal: unknown; sceneKit?: JsonObject; sceneStoryDesign?: JsonObject; certifiedIdentitySourceRefs?: string[] },
   stores: ActiveSceneStateCollections = collections(),
   storyRecords?: StoryWorkspaceRevisionCollection,
 ): Promise<JsonObject> {
@@ -1076,7 +1080,7 @@ export async function commitSceneTurn(
   if (!active) throw new StoryWorkspaceStoreError(404, 'STORY_WORKSPACE_NOT_FOUND', 'No Story workspace has been prepared for this campaign.', {});
   const kit = input.sceneKit ?? activeSceneKit(active.workspace);
   const current = await stores.states.findOne({ userId: input.userId, campaignId: input.campaignId, sceneKitId: String(kit.sceneKitId) });
-  const proposal = validateProposal(input.proposal, input.campaignId, active.workspace, kit, current, input.sceneStoryDesign);
+  const proposal = validateProposal(input.proposal, input.campaignId, active.workspace, kit, current, input.sceneStoryDesign, input.certifiedIdentitySourceRefs);
   const requestHash = hash(proposal);
   const existingReceipt = await stores.receipts.findOne({ userId: input.userId, campaignId: input.campaignId, operationId: String(proposal.operationId) });
   if (existingReceipt) {

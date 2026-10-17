@@ -12,6 +12,8 @@ export function validateFreeformIntake(request: LlmRequestEnvelope, output: any)
   const refs = Array.isArray(output?.referents) ? output.referents : [];
   const steps = Array.isArray(output?.steps) ? output.steps : [];
   const observations = Array.isArray(output?.observations) ? output.observations : [];
+  const readEffects = request.operation === 'input.freeform.interpret.read-effects';
+  if (output?.schemaVersion !== `gma.freeform-intent-proposal/${readEffects ? 2 : 1}`) add('/schemaVersion', 'FREEFORM_VERSION_MISMATCH');
   const window = output?.windowText;
   if (Buffer.byteLength(JSON.stringify(output) ?? '', 'utf8') > 16_384) add('/', 'FREEFORM_PROPOSAL_OVER_BUDGET');
   if (refs.length > 32 || steps.length > 8 || observations.length > 32) {
@@ -70,8 +72,25 @@ export function validateFreeformIntake(request: LlmRequestEnvelope, output: any)
     }
     const count = observations.filter((row: any) => row?.step === i).length;
     const information = ['discover_information', 'observe_situation'].includes(step.purpose);
-    if (information && ((!count && output?.clarification === null) || count > 12 || step.results?.length !== 0)
+    if (information && ((!count && output?.clarification === null) || count > 12 || (readEffects ? step.reads?.length !== 0 || step.effects?.length !== 0 : step.results?.length !== 0))
       || !information && count !== 0) add(p, 'FREEFORM_INFORMATION_PARTITION_INVALID');
+    if (readEffects) {
+      for (const [field, textField] of [['reads', 'query'], ['effects', 'attempt']]) {
+        const rows = step[field];
+        if (!Array.isArray(rows) || rows.length > 8) { add(`${p}/${field}`, 'FREEFORM_READ_EFFECT_INVALID'); continue; }
+        const seen = new Set<string>();
+        rows.forEach((row: { evidence?: unknown; resolution?: unknown; [key: string]: unknown }, j: number) => {
+          evidence(row?.evidence, `${p}/${field}/${j}/evidence`);
+          const text = row?.[textField];
+          if (typeof text !== 'string' || !text.trim() || seen.has(text)) add(`${p}/${field}/${j}`, 'FREEFORM_READ_EFFECT_INVALID');
+          if (typeof text === 'string') seen.add(text);
+          if (field === 'effects' && row?.resolution === 'narrative_self_action'
+            && (!['other', 'manipulate_object'].includes(step.purpose) || step.method !== null
+              || step.targets?.some((target: { ref?: unknown }) => target.ref !== step.actor))) add(`${p}/${field}/${j}/resolution`, 'FREEFORM_SELF_ACTION_OWNER_REQUIRED');
+        });
+      }
+      if (!information && !step.reads?.length && !step.effects?.length && output?.clarification === null) add(p, 'FREEFORM_READ_EFFECT_REQUIRED');
+    }
   });
   const ancestors = (index: number, seen = new Set<number>()): Set<number> => {
     for (const dependency of deps[index] ?? []) {

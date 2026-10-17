@@ -20,8 +20,44 @@ import { classifyCanonProposal } from './canonClaimClassifier.js';
 import { queryLlmObservability } from './observability.js';
 import { deleteUserOrchestratorData } from './retention.js';
 import { findMechanicsLedger, upsertMechanicsLedger } from './mechanicsLedger.js';
+import { freeformTurnService } from '../services/freeformTurnStore.js';
 
 export const llmOrchestratorRouter = Router();
+
+llmOrchestratorRouter.get('/freeform-turns', requireServiceIntegration, async (req, res, next) => {
+  try {
+    if (Object.keys(req.query).some((key) => !['campaignId', 'turnId', 'interactionId', 'programId'].includes(key))
+      || typeof req.query.campaignId !== 'string'
+      || (typeof req.query.turnId !== 'string' && typeof req.query.interactionId !== 'string' && typeof req.query.programId !== 'string')
+      || req.query.programId !== undefined && (typeof req.query.programId !== 'string' || req.query.turnId !== undefined || req.query.interactionId !== undefined)) freeformTicketError('FREEFORM_TURN_INPUT_INVALID', 422);
+    res.json(await freeformTurnService().read({ userId: userId(req), campaignId: req.query.campaignId,
+      ...(typeof req.query.programId === 'string' ? { programId: req.query.programId }
+        : typeof req.query.turnId === 'string' ? { turnId: req.query.turnId } : { interactionId: req.query.interactionId as string }) }));
+  } catch (error) { next(error); }
+});
+
+llmOrchestratorRouter.post('/freeform-turns/prepare', requireServiceIntegration, async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const allowed = ['campaignId', 'interactionId', 'turnId', 'selectedMechanicsSubjectRef', 'selectedMechanicsOwnerRef', 'previousTicket', 'renewTicket', 'answer', 'advance', 'expectedParentProgramRef'];
+    if (Object.keys(body).some((key) => !allowed.includes(key)) || typeof body.campaignId !== 'string'
+      || body.advance !== undefined && typeof body.advance !== 'boolean'
+      || body.answer !== undefined && (!body.answer || typeof body.answer !== 'object' || Array.isArray(body.answer)
+        || Object.keys(body.answer).sort().join(',') !== 'expectedRevision,text,ticket')) freeformTicketError('FREEFORM_TURN_INPUT_INVALID', 422);
+    if (!await ProjectModel.findById(userId(req), body.campaignId)) freeformTicketError('FREEFORM_CAMPAIGN_NOT_OWNED', 404);
+    res.json(await freeformTurnService().prepare({ ...body, userId: userId(req) }));
+  } catch (error) { next(error); }
+});
+
+llmOrchestratorRouter.post('/freeform-turns/:turnId/retire', requireServiceIntegration, async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    if (Object.keys(body).sort().join(',') !== 'campaignId,expectedRevision' || typeof body.campaignId !== 'string'
+      || !Number.isSafeInteger(body.expectedRevision)) freeformTicketError('FREEFORM_TURN_INPUT_INVALID', 422);
+    res.json(await freeformTurnService().retire({ userId: userId(req), campaignId: body.campaignId,
+      turnId: req.params.turnId, expectedRevision: body.expectedRevision }));
+  } catch (error) { next(error); }
+});
 
 // Service-only during the initial action milestone. No private world context
 // is exported and the protected packet is built from the owner's staged text.

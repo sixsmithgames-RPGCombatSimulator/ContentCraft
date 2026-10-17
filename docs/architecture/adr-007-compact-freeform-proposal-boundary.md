@@ -10,6 +10,60 @@ This owner record adopts ADR 012, including its authority, schema, budget,
 privacy, repair, compatibility, rollback, evaluation, and release requirements.
 It does not authorize any departure from that decision.
 
+On 2026-10-15 the repository owner accepted governing ADR 019, separating
+information reads from attempted action effects. This owner ADR adopts its
+complete versioned schemas, original policies, structural surfaces, independent
+pending-only classification, atomic application, budgets, failure/rollback and
+acceptance gates. A desired effect is not an existing fact or a successful owner
+operation. The complete read/effect bundle must be negotiated; new emission and
+applications remain default-off and Manual/test-campaign only. No VCS changes,
+provider activation, extra AI calls or completed-receipt edits are authorized.
+
+Fresh read/effect tickets use original first-pass intake policy /7 (answer-aware
+/8) to state explicitly the existing mover/viewpoint rule: the actor whose
+location changes supplies the later viewpoint, rather than its controller.
+Original /5 and /6 packets and replacements retain their original policy family.
+The schema, owner authority and operation budgets remain unchanged.
+
+Accepted execution and instruction coverage use the durable exact owner/campaign/
+ticket/instruction/program window association. They do not depend on the original
+24-hour ticket document surviving TTL cleanup. Initial or running interpretation
+still requires that ticket; no expiry is extended or accepted ticket renewed.
+Closed, retiring, support-stopped, foreign or changed-window associations cannot
+authorize new work. This implements ADR 015's accepted-plan lifetime and ADR
+017's exact continuation, not a new authority source.
+
+On 2026-10-15 the repository owner accepted governing ADR 018, including the
+protected GMC Scene movement-outcome writer and original-operation lookup.
+This owner ADR adopts its complete schema, authority, compatibility, human
+confirmation, failure, budget, rollback and acceptance gates. A completed
+action is not automatically a successful move; original execution receipts
+remain immutable. Manual/test-campaign restrictions and zero extra AI calls
+remain in force.
+
+On 2026-10-15 the repository owner accepted governing ADR 017, owner-proven
+instruction and viewpoint continuation. This owner ADR adopts its complete
+versioned coverage, confirmed-relocation lineage, pending-only preparation,
+activation, retention, rollback, failure and acceptance gates. Completed
+receipts remain immutable; deferred instructions remain exact; no extra model
+operation, larger budget, VCS change or broader activation is authorized.
+
+On 2026-10-15 the repository owner accepted governing ADR 016, including the
+independent protected actor/mechanics identity-link writer, read-only observer
+qualification and receipt-conditioned future viewpoints. This owner ADR adopts
+that complete decision before runtime implementation. Identity links must not
+rewrite legacy Scene observations. Manual-only, test-campaign-only activation
+retains all automated, browser, deployment and scoped-canary gates, with no VCS
+changes or integrated-provider calls. Wider human-GM gates remain mandatory.
+
+On 2026-10-14 the repository owner accepted governing ADR 015, Durable Manual
+interpreter workflow integration, including its protected turn/clarification
+storage, answer-aware policy, owner-verified character selection, exact suffix
+lineage, retirement and recovery gates. This owner ADR adopts that complete
+decision. Manual-only activation is permitted solely for The Old One's Legacy
+after automated, browser and deployed-canary proof. Broader held-out and human-GM
+gates remain mandatory; no VCS changes or integrated-provider calls are allowed.
+
 On 2026-10-08 the owner accepted the governing ADR's Manual-first amendment:
 development uses an external-LLM subagent and zero-provider Manual validation.
 Native-provider acceptance is deferred, not passed, and remains a future

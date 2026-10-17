@@ -274,6 +274,23 @@ function proposalV2(playable: JsonObject, workspaceRevision: number, stateRevisi
 }
 
 describe('durable active Scene state', () => {
+  it('accepts an owner-verified identity citation without granting absent-actor update authority or accepting a browser actor list', async () => {
+    const { story, active, playable } = await prepared(), memory = activeSceneMemory();
+    const input = proposal(playable, active.storyWorkspaceRef.revision, 0);
+    const delta = input.stateDelta as JsonObject;
+    (delta.settledFacts as JsonObject[])[0].sourceFactRefs = ['actor:qualified-familiar'];
+    await expect(commitSceneTurn({ userId: 'user-a', campaignId: 'campaign-a', proposal: input }, memory.stores, story.records))
+      .rejects.toMatchObject({ code: 'STORY_SCENE_STATE_SOURCE_UNBOUND' });
+    const trusted = { userId: 'user-a', campaignId: 'campaign-a', proposal: input, certifiedIdentitySourceRefs: ['actor:qualified-familiar'] };
+    const accepted = await commitSceneTurn(trusted, memory.stores, story.records);
+    expect(accepted.duplicate).toBe(false);
+    expect(memory.states[0].actorStates.some((row) => row.actorRef === 'actor:qualified-familiar')).toBe(false);
+    const invalid = structuredClone(input);
+    ((invalid.stateDelta as JsonObject).actorUpdates as JsonObject[])[0].actorRef = 'actor:qualified-familiar';
+    await expect(commitSceneTurn({ ...trusted, proposal: invalid }, activeSceneMemory().stores, story.records)).rejects.toMatchObject({ code: 'STORY_SCENE_STATE_REF_UNBOUND' });
+    await expect(commitSceneTurn({ ...trusted, proposal: { ...input, certifiedIdentitySourceRefs: ['actor:forged'] } }, activeSceneMemory().stores, story.records))
+      .rejects.toMatchObject({ code: 'STORY_CONTRACT_FIELD_UNSUPPORTED' });
+  });
   it('projects an empty revision-zero state without promoting transcript prose', async () => {
     const { story, active } = await prepared();
     const memory = activeSceneMemory();

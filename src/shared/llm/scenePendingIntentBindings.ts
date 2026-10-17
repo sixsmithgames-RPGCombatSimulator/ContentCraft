@@ -1,6 +1,7 @@
 import { canonicalFreeformJson, freeformJsonDigest } from './freeformPlanBinding.js';
 import { createPendingIntentWindow, type PendingIntentWindowSource } from './pendingIntentWindow.js';
 import { createHash } from 'node:crypto';
+import type { ActorMechanicsLink } from './actorMechanicsLink.js';
 
 /** Accepted ADR 014. Pure proposal checks, not a permission check, owner write,
  * examination certificate or execution receipt. Context is authenticated owner
@@ -42,6 +43,11 @@ export interface ScenePendingBindingContext {
   observations: Row[];
   /** Citation identities from the authenticated typed projection, not new authority. */
   ownerEvidenceRefs?: string[];
+  /** Immutable identity evidence supplied by the authenticated /4 owner read. */
+  observerIdentityLinks?: ActorMechanicsLink[];
+  /** Pure /4 role closure derived only from authenticated observer identity.
+   * Historical contexts omit this; it grants neither sensing nor execution. */
+  remoteViewerCoverage?: ReadonlyArray<{ nodeRef: string; slotId: string; recipientRef: string }>;
 }
 /** owner must be the current authenticated GMC context, never model output.
  * A new zone's semantic placement is reviewed with the complete dossier. */
@@ -76,7 +82,13 @@ const slotId = (value: unknown) => `binding-slot:${freeformJsonDigest(value).sli
 /** Stable slots preserve original values; they do not infer missing meaning.
  * Repeated location rows get an occurrence qualifier in addition to their hash. */
 export function pendingIntentBindingSlots(source: PendingIntentWindowSource): Row[] {
-  return createPendingIntentWindow(source).nodes.map((projection: Row) => {
+  return pendingIntentBindingSlotsFromWindow(createPendingIntentWindow(source));
+}
+
+/** Reuse stable slots from an authenticated, already accepted immutable window.
+ * This pure projection is not permission to accept a caller-authored window. */
+export function pendingIntentBindingSlotsFromWindow(window: Row): Row[] {
+  return window.nodes.map((projection: Row) => {
     const references: Row[] = [], coverage: Row[] = [];
     const groups = projection.node.observationGroups ?? [];
     const outcomes = projection.requirements.filter((r: Row) => r.value.kind === 'observation').map((r: Row) => r.value.observation?.outcomeId);
@@ -117,6 +129,14 @@ export function pendingIntentBindingSlots(source: PendingIntentWindowSource): Ro
     }
     for (const [field, role] of Object.entries({ targetRef: 'subject', subjectRef: 'subject', zoneRef: 'area', locusRef: 'area', actorRef: 'actor' })) {
       if (Object.hasOwn(projection.node, field)) add({ field }, role, projection.node[field]);
+    }
+    // /6 explicit effects need feasibility coverage of their own, not a fact
+    // requirement saying the desired result has already happened. Historical
+    // nodes have no requestedEffects and retain their original slot identities.
+    for (const effect of projection.node.requestedEffects ?? []) {
+      if (!id(effect.effectId)) throw new Error('Invalid owner effect slot.');
+      coverage.push({ slotId: slotId({ nodeRef: projection.nodeRef, effectId: effect.effectId, kind: 'effect_surface' }),
+        requirementId: null, effectId: effect.effectId, groupId: null, outcomeId: null, originalCoverageEntryRef: null });
     }
     if (!coverage.length) coverage.push({ slotId: slotId({ nodeRef: projection.nodeRef, kind: 'coverage' }),
       requirementId: null, groupId: null, outcomeId: null, originalCoverageEntryRef: null });
@@ -229,10 +249,33 @@ export function scenePendingIntentBindingIssues(value: unknown, context: ScenePe
           || !family || a.actionFamily !== family) { issues.push(`${path}/coverage`); continue; }
         covered.add(binding.slotId);
         for (const reference of slot.references) {
+          // An explicit /6 effect has its own surface. References owned by
+          // separate information reads (for example the worker's identity)
+          // are checked by those reads, not equated with the effect's target.
+          // Node-level location bindings still constrain this effect below.
+          if (context.source.program.schemaVersion === 'gma.semantic-action-program/6'
+            && original.effectId !== undefined && reference.requirementId !== undefined) continue;
+          // A /6 prerequisite read closes against its own requirement slots.
+          // Node-level future location is still checked by the explicit effect
+          // surface; it must not relocate an identity or method read.
+          if (context.source.program.schemaVersion === 'gma.semantic-action-program/6'
+            && original.requirementId !== null && original.requirementId !== undefined
+            && reference.locationFingerprint !== undefined) continue;
           if (original.requirementId !== null && reference.requirementId !== undefined && reference.requirementId !== original.requirementId) continue;
+          // /6 separates present-state reads from requested effects. A node's
+          // destination is checked by its location/effect surfaces, not by the
+          // independent "who is here now?" prerequisite. Historical bindings
+          // keep their existing closure rules; no selected destination changes.
+          const requirement = originalNode.requirements.find((entry: Row) => entry.requirementId === original.requirementId)?.value;
+          if (context.source.program.schemaVersion === 'gma.semantic-action-program/6'
+            && requirement?.kind === 'scene_presence' && requirement.dimension === 'who'
+            && reference.locationFingerprint !== undefined && ['destination', 'area'].includes(reference.role)) continue;
           const ref = selected.get(reference.slotId);
+          const remoteViewer = reference.role === 'recipient' && family === 'observe'
+            && context.remoteViewerCoverage?.some((witness) => witness.nodeRef === slot.nodeRef
+              && witness.slotId === reference.slotId && witness.recipientRef === ref);
           if (['subject', 'recipient', 'object'].includes(reference.role) && ref !== a.targetRef
-            && !(catalog.aliases.has(ref) && catalog.aliases.get(ref) === catalog.aliases.get(a.targetRef))) issues.push(`${path}/coverage`);
+            && !remoteViewer && !(catalog.aliases.has(ref) && catalog.aliases.get(ref) === catalog.aliases.get(a.targetRef))) issues.push(`${path}/coverage`);
           if (['destination', 'area'].includes(reference.role) && ref !== a.zoneRef && ref !== a.targetRef) issues.push(`${path}/coverage`);
         }
         if (slot.observationGroups.length) {

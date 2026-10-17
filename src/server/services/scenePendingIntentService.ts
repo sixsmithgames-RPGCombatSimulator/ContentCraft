@@ -2,11 +2,11 @@ import { freeformJsonDigest, canonicalFreeformJson } from '../../shared/llm/free
 import { createPendingIntentWindow } from '../../shared/llm/pendingIntentWindow.js';
 import { pendingIntentBindingSlots } from '../../shared/llm/scenePendingIntentBindings.js';
 import { projectAppliedIntentBindings } from '../../shared/llm/scenePendingIntentApplication.js';
-export { scenePendingBindingContextFromOwner as pendingBindingContext } from '../../shared/llm/scenePendingIntentBindings.js';
+export { scenePendingBindingContextFromOwner as pendingBindingContext } from '../../shared/llm/sceneReadEffectBindings.js';
 import { StoryWorkspaceStoreError, type JsonObject } from './storyWorkspaceStore.js';
 
 type Row = Record<string, any>;
-type Scope = { userId: string; campaignId: string; programId: string };
+type Scope = { userId: string; campaignId: string; programId: string; qualified?: boolean; continuation?: boolean; readEffects?: boolean };
 export const PENDING_INTENT_CONTEXT_VERSION = 'gmc.scene-pending-intent-context/1';
 export const PENDING_INTENT_WRITES_ENABLED = process.env.GMC_SCENE_PENDING_INTENT_BINDINGS !== '0';
 export { pendingScenePolicyFingerprint } from '../../shared/llm/scenePendingIntentApplication.js';
@@ -18,6 +18,11 @@ const fail = (field = 'pendingIntent') => { throw new StoryWorkspaceStoreError(4
 const same = (a: unknown, b: unknown) => canonicalFreeformJson(a) === canonicalFreeformJson(b);
 
 export async function readScenePendingIntentContext(input: Scope, readers?: PendingIntentReaders): Promise<JsonObject> {
+  if (input.readEffects) {
+    const current = await (await import('./pendingObserverEvidenceStore.js')).pendingObserverEvidenceService().context({ ...input, continuation: true });
+    return { ...current, schemaVersion: 'gmc.scene-pending-intent-context/4' };
+  }
+  if (input.qualified || input.continuation) return (await import('./pendingObserverEvidenceStore.js')).pendingObserverEvidenceService().context(input);
   const owners = readers ?? {
     readArtifact: async (scope: Scope) => (await import('./compoundActionArtifactStore.js')).readActiveCompoundActionArtifact(scope),
     readObservation: async (scope: Scope) => (await import('./observationAuthorityService.js')).readObservationAuthority(scope),
@@ -79,6 +84,31 @@ export function assertPendingIntentContextCurrent(expected: Row, current: Row): 
   if (!same(expected, current)) fail();
 }
 
+/** Scene /5 admits both exact actor/frame participant refs and explicit local
+ * roles. This checks scene membership only, never arrival in a prepared zone,
+ * a capability, concealment, or access to information. No name matching. */
+export function preparedReadEffectActorIsPresent(actor: Row | undefined, context: Row | null): boolean {
+  if (!actor) return false;
+  const aliases = new Set([actor.actorRef, actor.actorFrameId].filter((ref) => typeof ref === 'string' && ref.length));
+  return (context?.presentActors ?? []).some((ref: unknown) => aliases.has(ref))
+    || (context?.sceneLocalRoles ?? []).some((role: Row) => Number.isSafeInteger(role.count) && role.count > 0 && aliases.has(role.roleId));
+}
+
+/** Exact examined read coverage, never an attempted effect or resolved check. */
+export function preparedReadEffectReadEvidence(row: Row, affordance: Row | undefined, bundle: Row, present: boolean) {
+  const ref = row.targetRef ?? (row.kind === 'current_location' ? affordance?.targetRef : undefined);
+  const target = [...bundle.actorFrames, ...bundle.elements, ...bundle.zones]
+    .find((record: Row) => [record.actorRef, record.actorFrameId, record.elementId, record.zoneId].includes(ref) && ref != null);
+  const facts = (affordance?.factRefs ?? []).map((factRef: string) => bundle.facts.find((fact: Row) => fact.factId === factRef));
+  const factRead = ['story_fact', 'recent_continuity'].includes(row.kind);
+  const available = row.kind === 'scene_presence' ? present : factRead
+    ? facts.length > 0 && facts.every((fact: Row) => fact && !['missing_preparation', 'deliberate_unknown'].includes(fact.epistemicState))
+    : Boolean(target);
+  return { available: Boolean(affordance) && available
+    && ['scene_presence', 'actor_identity', 'current_location', 'destination_location', 'canonical_reference', 'story_fact', 'recent_continuity'].includes(row.kind),
+  sourceRef: ref ?? null };
+}
+
 /** Existence/preparation checks only. Never resolves cover, a roll or discovery.
  * Supplied rows must equal the owner-saved effective node, not client guesses. */
 export function preparedPendingRequirementProjection(input: Row, loaded: Row, active: Row, sceneContext: Row): Row | null {
@@ -105,12 +135,16 @@ export function preparedPendingRequirementProjection(input: Row, loaded: Row, ac
     const actor = bundle.actorFrames.find((a: Row) => a.actorRef === row.targetRef || a.actorFrameId === row.targetRef);
     const target = actor ?? [...bundle.elements, ...bundle.zones].find((r: Row) => (r.elementId ?? r.zoneId) === row.targetRef);
     const facts = (affordance?.factRefs ?? []).map((ref: string) => bundle.facts.find((fact: Row) => fact.factId === ref));
-    const present = actor && (sceneContext.playableSceneContext?.presentActors ?? []).some((ref: unknown) => ref === actor.actorRef);
-    const available = row.kind === 'scene_presence' ? present : row.kind === 'story_fact'
+    const present = application.record.schemaVersion === 'gmc.scene-pending-intent-binding-record/4'
+      ? preparedReadEffectActorIsPresent(actor, sceneContext.playableSceneContext)
+      : actor && (sceneContext.playableSceneContext?.presentActors ?? []).some((ref: unknown) => ref === actor.actorRef);
+    const readEffectEvidence = application.record.schemaVersion === 'gmc.scene-pending-intent-binding-record/4'
+      ? preparedReadEffectReadEvidence(row, affordance, bundle, Boolean(present)) : null;
+    const available = readEffectEvidence ? readEffectEvidence.available : row.kind === 'scene_presence' ? present : row.kind === 'story_fact'
       ? facts.length > 0 && facts.every((fact: Row) => fact && !['missing_preparation', 'deliberate_unknown'].includes(fact.epistemicState)) : target;
-    if (!affordance || !available || !['scene_presence', 'actor_identity', 'current_location', 'destination_location', 'canonical_reference', 'story_fact'].includes(row.kind)) return fail('preparedRequirements.reference');
+    if (!affordance || !available || !readEffectEvidence && !['scene_presence', 'actor_identity', 'current_location', 'destination_location', 'canonical_reference', 'story_fact'].includes(row.kind)) return fail('preparedRequirements.reference');
     return { requirementId: row.requirementId, dimension: row.dimension, kind: row.kind, status: 'resolved', authority: 'gmc',
-      sourceRefs: [...new Set([row.targetRef, affordance.coverageEntryId, ...(affordance.factRefs ?? [])].filter(Boolean))],
+      sourceRefs: [...new Set([readEffectEvidence?.sourceRef ?? row.targetRef, affordance.coverageEntryId, ...(affordance.factRefs ?? [])].filter(Boolean))],
       revision: head.sceneRevision, reasonCode: 'PREPARED_PENDING_REFERENCE_CONFIRMED_NOT_EXECUTED' };
   });
   return { contractVersion: 'gmc.compound-action-requirement-projection/1', programId: input.programId, nodeId: input.nodeId,

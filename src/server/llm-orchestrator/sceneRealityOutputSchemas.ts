@@ -1,4 +1,6 @@
 import { SCENE_PENDING_INTENT_BINDINGS_SCHEMA } from '../../shared/llm/scenePendingIntentBindings.js';
+import { QUALIFIED_BINDINGS_SCHEMA, QUALIFICATION_REVIEW_SCHEMA, CONTINUATION_BINDINGS_SCHEMA, CONTINUATION_QUALIFICATION_REVIEW_SCHEMA } from '../../shared/llm/scenePendingIntentQualified.js';
+import { SCENE_READ_EFFECT_BINDINGS_SCHEMA } from '../../shared/llm/sceneReadEffectPolicy.js';
 
 const identifier = { type: 'string', minLength: 1, maxLength: 240, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' } as const;
 const revision = { type: 'integer', minimum: 1 } as const;
@@ -363,3 +365,55 @@ export const scenePendingIntentRepairOutput = {
   recordPatches: { ...sceneRealityRepairOutput.recordPatches, minItems: 0 },
   bindingReplacements: { type: 'array', maxItems: 8, items: SCENE_PENDING_INTENT_BINDINGS_SCHEMA.properties.nodes.items },
 } as const;
+
+/** Negotiated ADR 016 outputs; historical operation schemas remain unchanged. */
+export const sceneRealityQualifiedBuilderResultOutput = {
+  ...sceneRealityPendingBuilderResultOutput,
+  schemaVersion: { const: 'gma.scene-reality-builder-result/3' },
+  pendingIntentBindings: { anyOf: [QUALIFIED_BINDINGS_SCHEMA, { type: 'null' }] },
+} as const;
+export const sceneReadinessQualifiedAssessmentOutput = strictObject(
+  [...sceneReadinessPendingAssessmentOutput.required, 'qualifiedObserverFingerprint', 'qualificationReview'],
+  { ...sceneReadinessPendingAssessmentOutput.properties, schemaVersion: { const: 'gma.scene-readiness-assessment/3' },
+    qualifiedObserverFingerprint: sha256, qualificationReview: QUALIFICATION_REVIEW_SCHEMA },
+);
+export const sceneQualifiedIntentRepairOutput = {
+  ...scenePendingIntentRepairOutput, schemaVersion: { const: 'gma.scene-pending-intent-repair/2' },
+  bindingReplacements: { type: 'array', maxItems: 8, items: QUALIFIED_BINDINGS_SCHEMA.properties.nodes.items },
+} as const;
+
+/** ADR 017 outputs negotiate separate operation identities and policies. */
+export const sceneRealityContinuationBuilderResultOutput = { ...sceneRealityQualifiedBuilderResultOutput,
+  schemaVersion: { const: 'gma.scene-reality-builder-result/4' },
+  pendingIntentBindings: { anyOf: [CONTINUATION_BINDINGS_SCHEMA, { type: 'null' }] } } as const;
+export const sceneReadinessContinuationAssessmentOutput = strictObject(
+  [...sceneReadinessQualifiedAssessmentOutput.required, 'instructionCoverageFingerprint', 'confirmedRelocationFingerprint'],
+  { ...sceneReadinessQualifiedAssessmentOutput.properties, schemaVersion: { const: 'gma.scene-readiness-assessment/4' },
+    instructionCoverageFingerprint: sha256, confirmedRelocationFingerprint: sha256,
+    qualificationReview: CONTINUATION_QUALIFICATION_REVIEW_SCHEMA });
+export const sceneContinuationIntentRepairOutput = { ...sceneQualifiedIntentRepairOutput,
+  schemaVersion: { const: 'gma.scene-pending-intent-repair/3' },
+  bindingReplacements: { type: 'array', maxItems: 8, items: CONTINUATION_BINDINGS_SCHEMA.properties.nodes.items } } as const;
+
+/** ADR 019 schemas preserve all historical shapes and share unchanged budgets. */
+const readEffectStoryDesign = strictObject(sceneStoryDesign.required, { ...sceneStoryDesign.properties,
+  schemaVersion: { const: 'gmc.scene-story-design/4' },
+  affordances: { type: 'array', minItems: 1, maxItems: 64,
+    items: strictObject([...storyAffordance.required, 'surfaceKind', 'interactionSurface'], { ...storyAffordance.properties,
+      factRefs: idList(32), surfaceKind: { enum: ['information', 'action_surface'] },
+      interactionSurface: { enum: [null, 'self_action', 'owner_action'] } }) } });
+export const sceneRealityReadEffectBuilderOutput = { ...sceneRealityContinuationBuilderResultOutput,
+  schemaVersion: { const: 'gma.scene-reality-builder-result/5' },
+  proposal: { anyOf: [strictObject(sceneRealityBuilderCandidate.required, { ...sceneRealityBuilderCandidate.properties,
+    sceneStoryDesign: readEffectStoryDesign }), { type: 'null' }] },
+  pendingIntentBindings: { anyOf: [SCENE_READ_EFFECT_BINDINGS_SCHEMA, { type: 'null' }] } };
+export const sceneReadinessReadEffectAssessmentOutput = strictObject(
+  [...sceneReadinessContinuationAssessmentOutput.required, 'requirementRoleFingerprint', 'requirementRoleReviews'],
+  { ...sceneReadinessContinuationAssessmentOutput.properties, schemaVersion: { const: 'gma.scene-readiness-assessment/5' },
+    requirementRoleFingerprint: sha256,
+    requirementRoleReviews: { type: 'array', maxItems: 32, items: strictObject(['requirementRef', 'verdict', 'rationale', 'evidenceRefs'], {
+      requirementRef: identifier, verdict: { enum: ['supported', 'unsupported'] }, rationale: text(), evidenceRefs: idList(32, 1),
+    }) } });
+export const sceneReadEffectRepairOutput = { ...sceneContinuationIntentRepairOutput,
+  schemaVersion: { const: 'gma.scene-pending-intent-repair/4' },
+  roleReplacements: { type: 'array', maxItems: 8, items: SCENE_READ_EFFECT_BINDINGS_SCHEMA.properties.requirementRoles.properties.nodes.items } };
