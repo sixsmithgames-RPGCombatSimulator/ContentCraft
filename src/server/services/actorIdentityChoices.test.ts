@@ -19,9 +19,9 @@ function fixture() {
       sceneLocalRoles: [{ roleId: 'role:worker', label: 'Drain worker', privateName: 'DO NOT EXPOSE Tomas' }] } },
   };
   const frames: JsonObject[] = [
-    { actorRef: 'actor:player', actorFrameId: 'frame:player', revision: 1, kind: 'individual', count: 1, publicLabel: 'Mira', privateName: 'PRIVATE_PLAYER' },
-    { actorRef: 'actor:familiar', actorFrameId: 'frame:familiar', revision: 1, kind: 'individual', count: 1, publicLabel: 'Rat familiar' },
-    { actorRef: 'actor:hidden', actorFrameId: 'frame:hidden', revision: 1, kind: 'individual', count: 1, publicLabel: 'HIDDEN_ACTOR' },
+    { actorRef: 'actor:player', actorFrameId: 'frame:player', revision: 1, kind: 'individual', count: null, publicLabel: 'Mira', privateName: 'PRIVATE_PLAYER' },
+    { actorRef: 'actor:familiar', actorFrameId: 'frame:familiar', revision: 1, kind: 'individual', count: null, publicLabel: 'Rat familiar' },
+    { actorRef: 'actor:hidden', actorFrameId: 'frame:hidden', revision: 1, kind: 'individual', count: null, publicLabel: 'HIDDEN_ACTOR' },
   ];
   const bundle: JsonObject = { sceneKit: { campaignId: scope.campaignId, sceneKitId: 'scene:one', revision: 6 },
     readinessCertificate: { campaignId: scope.campaignId, status: 'certified' }, actorFrames: frames };
@@ -34,6 +34,23 @@ function fixture() {
 }
 
 describe('read-only human identity choices', () => {
+  it('reads certified individual frames with null cohort counts without changing the owner data', async () => {
+    const f = fixture(), before = structuredClone(f.frames);
+    const choices = await readActorIdentityChoices(f.scope, f.deps);
+    expect(choices.candidates.map((row) => row.actorRef)).toEqual(['actor:player', 'actor:familiar', 'role:worker']);
+    expect(f.frames).toEqual(before);
+    expect(f.frames.every((frame) => frame.count === null)).toBe(true);
+  });
+  it.each([undefined, 0, 1, 2, '1'])('rejects an individual carrying the noncanonical count %s', async (count) => {
+    const f = fixture();
+    if (count === undefined) delete f.frames[0].count;
+    else f.frames[0].count = count;
+    await expect(readActorIdentityChoices(f.scope, f.deps)).rejects.toMatchObject({ code: 'ACTOR_LINK_CHOICES_INVALID' });
+  });
+  it('does not turn a one-member cohort into an individual identity choice', async () => {
+    const f = fixture(); f.frames[1].kind = 'cohort'; f.frames[1].count = 1;
+    expect((await readActorIdentityChoices(f.scope, f.deps)).candidates.map((row) => row.actorRef)).toEqual(['actor:player', 'role:worker']);
+  });
   it('returns only the selected sheet family and separates character from familiar choices', async () => {
     const f = fixture();
     const character: ActorMechanicsLink = { schemaVersion: 'gmc.actor-mechanics-link/1', linkRef: 'link:character',
@@ -129,7 +146,7 @@ describe('read-only human identity choices', () => {
     const f = fixture();
     f.authority.actorCandidates = Array.from({ length: 128 }, (_, i) => ({ actorRef: `actor:${i}`, actorKind: 'present_actor', actorRecordRef: `actor:${i}`, actorRecordRevision: 1 }));
     f.bundle.actorFrames = f.authority.actorCandidates.map((actor, i) => ({ actorRef: actor.actorRef,
-      actorFrameId: `frame:${i}`, revision: 1, kind: 'individual', count: 1, publicLabel: '界'.repeat(180) }));
+      actorFrameId: `frame:${i}`, revision: 1, kind: 'individual', count: null, publicLabel: '界'.repeat(180) }));
     await expect(readActorIdentityChoices(f.scope, f.deps)).rejects.toMatchObject({ code: 'ACTOR_LINK_CHOICES_OVER_BUDGET' });
   });
 });

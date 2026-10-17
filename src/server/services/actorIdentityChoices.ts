@@ -79,7 +79,8 @@ export async function readActorIdentityChoices(input: { userId: string; campaign
     const frame = matchingFrames[0];
     // An individual character/familiar sheet must not quietly stand for a cohort.
     if (frame?.kind === 'cohort') continue;
-    if (frame && (frame.kind !== 'individual' || frame.count !== 1)) fail('ACTOR_LINK_CHOICES_INVALID');
+    // Scene reality reserves count for cohorts; certified individuals use null.
+    if (frame && (frame.kind !== 'individual' || frame.count !== null)) fail('ACTOR_LINK_CHOICES_INVALID');
     const matchingRoles = roles.filter((row) => row.roleId === actorRef);
     if (matchingRoles.length > 1) fail('ACTOR_LINK_CHOICES_AMBIGUOUS');
     const role = matchingRoles[0];

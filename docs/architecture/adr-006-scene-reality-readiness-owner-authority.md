@@ -137,6 +137,13 @@ result, or semantic stop; checking only the first ready node is invalid.
 
 ## Owner contracts and validation
 
+The accepted ADR 016 identity reader must retain the canonical actor-frame
+distinction: an individual has `count: null`, while counts belong to cohorts.
+The October 17 live read exposed a selector incorrectly requiring one for an
+individual. Correct that reader and its noncanonical test fixtures; do not
+rewrite the certified campaign. Even a one-member cohort is not eligible for
+an individual sheet link. Missing or numeric individual counts still fail.
+
 The owner approved GMA ADR 013 (application-owned Scene prose fingerprints) on
 2026-10-08. GMC publishes the exact metadata marker and fresh builder `/3` and
 repair `/2` policies. Marked builds must return the declared zero placeholder;
