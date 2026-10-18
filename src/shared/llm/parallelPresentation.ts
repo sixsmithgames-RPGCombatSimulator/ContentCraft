@@ -12,7 +12,7 @@ export function parallelPresentationNodeRefs(program: unknown, cursor: unknown, 
   if (!object(program) || !object(cursor)) invalid();
   const nodes = rows(program.nodes), byId = new Map(nodes.map((node) => [node.nodeId, node]));
   if (!byId.has(nodeRef)) invalid();
-  if (!['gma.semantic-action-program/5', 'gma.semantic-action-program/6'].includes(String(program.schemaVersion))) return [nodeRef];
+  if (!['gma.semantic-action-program/5', 'gma.semantic-action-program/6', 'gma.semantic-action-program/7'].includes(String(program.schemaVersion))) return [nodeRef];
   if (!Array.isArray(cursor.readyNodeRefs)) invalid();
   const eligible = new Set(cursor.readyNodeRefs);
   if (includeWaiting && object(cursor.waiting) && cursor.waiting.nodeRef) eligible.add(cursor.waiting.nodeRef);

@@ -1,3 +1,4 @@
+import { isTypedReferenceProgram, typedReferenceProgramIssues, historicalTypedEffectProgram } from './typedReferenceBindings.js';
 /** ADR 019 versions are negotiated as one bundle; partial upgrades cannot execute. */
 export const READ_EFFECT_CONTRACTS = Object.freeze({
   proposal: 'gma.freeform-intent-proposal/2',
@@ -9,13 +10,14 @@ export const READ_EFFECT_CONTRACTS = Object.freeze({
   design: 'gmc.scene-story-design/4',
   narration: 'gma.current-scene-narration-packet/15',
 });
+export const isReadEffectProgram = (value: any): boolean => value?.schemaVersion === READ_EFFECT_CONTRACTS.program || isTypedReferenceProgram(value);
 /** Additive /6 plans retain /4's observation receipts and atomic settlement.
  * Pure self-action plans do not acquire an observation workflow by version alone. */
 export function isObservationSagaProgram(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const program = value as Record<string, unknown>;
   if (program.schemaVersion === 'gma.semantic-action-program/4') return true;
-  return program.schemaVersion === READ_EFFECT_CONTRACTS.program && Array.isArray(program.nodes)
+  return isReadEffectProgram(program) && Array.isArray(program.nodes)
     && program.nodes.some((value: unknown) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
       const node = value as Record<string, unknown>;
@@ -68,6 +70,8 @@ export function readEffectProgramIssues(value: unknown, instruction?: { exactTex
   const record = (entry: unknown): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && !Array.isArray(entry);
   if (!record(value)) return ['/program'];
   const program = value;
+  if (isTypedReferenceProgram(program)) return [...typedReferenceProgramIssues(program),
+    ...readEffectProgramIssues(historicalTypedEffectProgram(program), instruction)];
   const issues: string[] = [];
   const modern = program.schemaVersion === READ_EFFECT_CONTRACTS.program;
   const nodes: unknown[] = Array.isArray(program.nodes) ? program.nodes : [];

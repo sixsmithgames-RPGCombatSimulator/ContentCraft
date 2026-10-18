@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { READ_EFFECT_CONTRACTS, readEffectProgramIssues } from './readEffectContracts.js';
+import { TYPED_REFERENCE_AUTHORITY_BUNDLE as TYPED } from './typedReferenceBindings.js';
 
 export const FREEFORM_PLAN_BINDING_VERSION = 'gma.freeform-plan-binding/1';
 export const FREEFORM_PLAN_BINDING_MAXIMUM_BYTES = 65_536;
@@ -26,13 +27,15 @@ export function freeformPlanBindingIssues(value: unknown, instruction: Record<st
   const keys = ['schemaVersion', 'instructionRef', 'interactionId', 'instructionFingerprint', 'windowId', 'windowBytes',
     'suffixText', 'continuationFingerprint', 'policyVersion', 'registryVersion', 'proposalDigest', 'requestDigest',
     'ticket', 'ticketDisposition', 'authorityBase', 'sourceReferences', 'compiledStepIds', 'operationRequirements'];
-  const readEffects = object(value) && value.schemaVersion === READ_EFFECT_CONTRACTS.binding;
+  const typed = object(value) && value.schemaVersion === TYPED.binding;
+  const readEffects = typed || object(value) && value.schemaVersion === READ_EFFECT_CONTRACTS.binding;
   if (readEffects) keys.push('operationEffects');
+  if (typed) keys.push('referenceLedgerFingerprint');
   if (!closed(value, keys)) return ['/'];
   const binding = value as Record<string, any>;
   const issues: string[] = [];
-  if (binding.schemaVersion !== (readEffects ? READ_EFFECT_CONTRACTS.binding : FREEFORM_PLAN_BINDING_VERSION) || binding.ticketDisposition !== 'owner_accepted'
-    || !(readEffects ? ['gma.freeform-intake-policy/5', 'gma.freeform-intake-policy/6', 'gma.freeform-intake-policy/7', 'gma.freeform-intake-policy/8'] : ['gma.freeform-intake-policy/1', 'gma.freeform-intake-policy/2', 'gma.freeform-intake-policy/3', 'gma.freeform-intake-policy/4']).includes(binding.policyVersion) || !FREEFORM_PLAN_BINDING_REGISTRY_VERSIONS.includes(binding.registryVersion)
+  if (binding.schemaVersion !== (typed ? TYPED.binding : readEffects ? READ_EFFECT_CONTRACTS.binding : FREEFORM_PLAN_BINDING_VERSION) || binding.ticketDisposition !== 'owner_accepted'
+    || !(typed ? ['gma.freeform-intake-policy/9', 'gma.freeform-intake-policy/10'] : readEffects ? ['gma.freeform-intake-policy/5', 'gma.freeform-intake-policy/6', 'gma.freeform-intake-policy/7', 'gma.freeform-intake-policy/8'] : ['gma.freeform-intake-policy/1', 'gma.freeform-intake-policy/2', 'gma.freeform-intake-policy/3', 'gma.freeform-intake-policy/4']).includes(binding.policyVersion) || !FREEFORM_PLAN_BINDING_REGISTRY_VERSIONS.includes(binding.registryVersion)
     || typeof binding.ticket !== 'string' || !binding.ticket.length || binding.ticket.length > 80
     || !hash(binding.proposalDigest) || !hash(binding.requestDigest)) issues.push('/ticket');
   if (['instructionRef', 'interactionId', 'instructionFingerprint'].some((key) => binding[key] !== instruction[key])) issues.push('/instruction');
@@ -63,7 +66,8 @@ export function freeformPlanBindingIssues(value: unknown, instruction: Record<st
     || binding.operationEffects.some((row: { nodeRef?: unknown; effects?: unknown }, index: number) => !closed(row, ['nodeRef', 'effects'])
       || row.nodeRef !== binding.compiledStepIds[index] || !Array.isArray(row.effects) || row.effects.length > 8)
     || initial && !same(binding.operationEffects, program.nodes?.map((node: { nodeId?: unknown; requestedEffects?: unknown }) => ({ nodeRef: node.nodeId, effects: node.requestedEffects }))))) issues.push('/operationEffects');
-  if (program.planner?.source !== 'freeform_intent_compiler' || program.planner?.policyVersion !== (readEffects ? READ_EFFECT_CONTRACTS.compiler : 'gma.semantic-action-compiler-policy/12')) issues.push('/compiler');
+  if (typed && (program.schemaVersion !== TYPED.program || binding.referenceLedgerFingerprint !== freeformJsonDigest(program.referenceLedger))) issues.push('/referenceLedger');
+  if (program.planner?.source !== 'freeform_intent_compiler' || program.planner?.policyVersion !== (typed ? TYPED.compiler : readEffects ? READ_EFFECT_CONTRACTS.compiler : 'gma.semantic-action-compiler-policy/12')) issues.push('/compiler');
   issues.push(...readEffectProgramIssues(program, instruction));
   if (Buffer.byteLength(JSON.stringify(binding), 'utf8') > FREEFORM_PLAN_BINDING_MAXIMUM_BYTES) issues.push('/bytes');
   return issues;

@@ -2,6 +2,8 @@ import { freeformJsonDigest } from './freeformPlanBinding.js';
 import { createPendingIntentWindow } from './pendingIntentWindow.js';
 import { pendingRequirementRoleIssues } from './pendingRequirementRoles.js';
 import { readEffectSurfaceIssues } from './readEffectSurfaces.js';
+import { qualifiedPendingReferenceSlots, historicalTypedPendingBinding } from './typedPendingReferenceProjection.js';
+import { TYPED_REFERENCE_AUTHORITY_BUNDLE as TYPED } from './typedReferenceBindings.js';
 import { actorMechanicsLinkIssues, type ActorMechanicsLink } from './actorMechanicsLink.js';
 import { scenePendingIntentBindingIssues as historicalBindingIssues, scenePendingIntentExaminationIdentity as historicalIdentity,
   scenePendingIntentExaminationIssues as historicalExaminationIssues, pendingIntentBindingSlots,
@@ -38,10 +40,27 @@ export function historicalReadEffectBinding(value: Row): Row {
 
 /** Authenticated owner context uses the same exact source, heads and coverage. */
 export function scenePendingBindingContextFromOwner(owner: Row, operationId: string, proposal: Row): Context {
-  const context = historicalContext(owner.schemaVersion === 'gmc.scene-pending-intent-context/4'
+  const typed = owner.schemaVersion === TYPED.context;
+  const context = historicalContext(typed || owner.schemaVersion === 'gmc.scene-pending-intent-context/4'
     ? { ...owner, schemaVersion: 'gmc.scene-pending-intent-context/3' } : owner, operationId, proposal);
-  return owner.schemaVersion === 'gmc.scene-pending-intent-context/4'
-    ? { ...context, observerIdentityLinks: structuredClone(rows(owner.observerIdentityLinks ?? []).map(identityLink)) } : context;
+  return typed || owner.schemaVersion === 'gmc.scene-pending-intent-context/4'
+    ? { ...context, observerIdentityLinks: structuredClone(rows(owner.observerIdentityLinks ?? []).map(identityLink)),
+      ...(typed ? { pendingReferenceQualification: structuredClone(record(owner.referenceQualification)),
+        qualifiedBindingSlots: qualifiedPendingReferenceSlots(context.source, record(owner.referenceQualification)) } : {}) } : context;
+}
+
+function typedProjection(binding: Row, context: Context): { binding: Row; context: Context } {
+  requireMatch(binding.schemaVersion === TYPED.pendingBindings && context.pendingReferenceQualification
+    && binding.referenceQualificationFingerprint === context.pendingReferenceQualification.fingerprint);
+  const slots = qualifiedPendingReferenceSlots(context.source, context.pendingReferenceQualification!);
+  const projected = historicalTypedPendingBinding(binding, slots);
+  // One original local symbol must not acquire competing selected world IDs.
+  const selected = new Map<string, unknown>();
+  for (const node of rows(projected.nodes)) for (const ref of rows(node.references)) {
+    const symbol = slots.find((slot: any) => slot.nodeRef === node.nodeRef)?.references.find((slot: any) => slot.slotId === ref.slotId)?.symbolRef;
+    if (symbol) { requireMatch(!selected.has(symbol) || selected.get(symbol) === ref.selectedRef); selected.set(symbol, ref.selectedRef); }
+  }
+  return { binding: projected, context: { ...context, qualifiedBindingSlots: slots } };
 }
 
 /** A receiving controller is not the sensed subject. Derive the narrow closure
@@ -87,6 +106,13 @@ function remoteViewerContext(bindings: Row, context: Context): Context {
 
 /** Versioned semantic projection does not treat prepared possibilities as truth. */
 export function scenePendingIntentBindingIssues(value: unknown, context: Context): string[] {
+  if ((value as Row)?.schemaVersion === TYPED.pendingBindings) {
+    try {
+      requireMatch(closed(value, ['schemaVersion', 'bindingId', 'operationId', 'campaignId', 'windowId', 'windowFingerprint', 'sceneKitRef', 'nodes', 'requirementRoles', 'referenceQualificationFingerprint']));
+      const projected = typedProjection(value as Row, context);
+      return scenePendingIntentBindingIssues(projected.binding, projected.context);
+    } catch { return ['/typedReferences']; }
+  }
   if ((value as Row)?.schemaVersion !== READ_EFFECT_BINDINGS_VERSION) return historicalBindingIssues(value, context);
   try {
     if (!closed(value, ['schemaVersion', 'bindingId', 'operationId', 'campaignId', 'windowId', 'windowFingerprint', 'sceneKitRef', 'nodes', 'requirementRoles'])) return ['/identity'];
@@ -97,14 +123,14 @@ export function scenePendingIntentBindingIssues(value: unknown, context: Context
     for (const [index, surface] of context.proposal.sceneStoryDesign.affordances.entries()) {
       issues.push(...readEffectSurfaceIssues(surface, context.proposal.actorFrames).map((path) => `/sceneStoryDesign/affordances/${index}${path}`));
     }
-    const slots = pendingIntentBindingSlots(context.source), window = createPendingIntentWindow(context.source);
+    const slots = context.qualifiedBindingSlots ?? pendingIntentBindingSlots(context.source), window = createPendingIntentWindow(context.source);
     for (const node of rows(classification.nodes)) {
       const binding = rows(value.nodes).find((row) => row.nodeRef === node.nodeRef);
       if (binding?.disposition !== 'bound') continue;
       const slot = slots.find((row: Row) => row.nodeRef === node.nodeRef)!;
       const original = window.nodes.find((row: Row) => row.nodeRef === node.nodeRef)!;
       for (const effect of original.node.requestedEffects ?? []) {
-        const effectSlot = slot.coverage.find((row: Row) => row.effectId === effect.effectId);
+        for (const effectSlot of slot.coverage.filter((row: Row) => row.effectId === effect.effectId)) {
         const selected = rows(binding.coverage).find((row) => row.slotId === effectSlot?.slotId);
         const surface = context.proposal.sceneStoryDesign.affordances.find((row: Row) => row.coverageEntryId === selected?.coverageEntryRef);
         if (!effectSlot || surface?.surfaceKind !== 'action_surface' || surface.factRefs?.length
@@ -113,6 +139,7 @@ export function scenePendingIntentBindingIssues(value: unknown, context: Context
           const actors = slot.references.filter((row: Row) => row.role === 'actor').map((row: Row) => rows(binding.references).find((r) => r.slotId === row.slotId)?.selectedRef);
           const frame = context.proposal.actorFrames.find((row: Row) => actors.includes(row.actorRef) || actors.includes(row.actorFrameId));
           if (!frame || ![frame.actorRef, frame.actorFrameId].includes(surface?.targetRef) || surface?.zoneRef !== frame.zoneRef) issues.push(`/nodes/${node.nodeRef}/selfSurface`);
+        }
         }
       }
       for (const role of rows(node.roles)) {
@@ -139,6 +166,14 @@ export function scenePendingIntentBindingIssues(value: unknown, context: Context
 
 /** Independent review fingerprints both meaning partition and prepared dossier. */
 export function scenePendingIntentExaminationIdentity(bindings: Row, context: Context, policyFingerprint: string): Row {
+  if (bindings.schemaVersion === TYPED.pendingBindings) {
+    requireMatch(!scenePendingIntentBindingIssues(bindings, context).length);
+    const p = typedProjection(bindings, context);
+    return { ...scenePendingIntentExaminationIdentity(p.binding, p.context, policyFingerprint), bindingFingerprint: freeformJsonDigest(bindings),
+      referenceQualificationFingerprint: bindings.referenceQualificationFingerprint,
+      effectTargetFingerprint: freeformJsonDigest(context.pendingReferenceQualification!.effects),
+      pendingIntentPolicyFingerprint: freeformJsonDigest({ binding: 'gma.scene-pending-intent-binding-policy/8', examiner: 'gma.scene-pending-intent-examiner-policy/8' }) };
+  }
   if (bindings.schemaVersion !== READ_EFFECT_BINDINGS_VERSION) return historicalIdentity(bindings, context, policyFingerprint);
   requireMatch(!scenePendingIntentBindingIssues(bindings, context).length);
   return { ...historicalIdentity(historicalReadEffectBinding(bindings), remoteViewerContext(bindings, context), policyFingerprint),
@@ -156,6 +191,11 @@ export function historicalReadEffectAssessment(value: Row, bindings: Row, contex
 /** One closed citation vocabulary for the original /5 prompt and every review
  * layer. Exact instruction/role records are evidence, not execution authority. */
 export function readEffectAssessmentEvidenceRefs(bindings: Row, context: Context): string[] {
+  if (bindings.schemaVersion === TYPED.pendingBindings) {
+    const p = typedProjection(bindings, context);
+    return [...new Set([...readEffectAssessmentEvidenceRefs(p.binding, p.context), context.pendingReferenceQualification!.qualificationRef,
+      ...p.context.qualifiedBindingSlots!.flatMap((node: any) => node.coverage.map((slot: any) => slot.slotId))])].sort();
+  }
   const window = createPendingIntentWindow(context.source);
   return [...new Set<string>([
     ...historicalReviewEvidenceRefs(historicalReadEffectBinding(bindings), remoteViewerContext(bindings, context)),
@@ -173,6 +213,35 @@ export function readEffectAssessmentEvidenceRefs(bindings: Row, context: Context
 
 /** Metadata integrity supplements actual semantic review; it is not its substitute. */
 export function scenePendingIntentExaminationIssues(value: unknown, bindings: Row, context: Context, policyFingerprint: string): string[] {
+  if (bindings.schemaVersion === TYPED.pendingBindings) {
+    try {
+      const expected = scenePendingIntentExaminationIdentity(bindings, context, policyFingerprint), a = record(value);
+      requireMatch(a.schemaVersion === TYPED.assessment && Object.entries(expected).every(([key, v]) => a[key] === v));
+      const review = record(a.referenceReview), allowed = new Set(readEffectAssessmentEvidenceRefs(bindings, context));
+      requireMatch(closed(review, ['verdict', 'rationale', 'evidenceRefs']) && ['supported', 'unsupported'].includes(String(review.verdict))
+        && typeof review.rationale === 'string' && review.rationale.trim() && review.rationale.length <= 2000
+        && Array.isArray(review.evidenceRefs) && review.evidenceRefs.length > 0 && review.evidenceRefs.length <= 32
+        && new Set(review.evidenceRefs).size === review.evidenceRefs.length
+        && review.evidenceRefs.includes(context.pendingReferenceQualification!.qualificationRef)
+        && review.evidenceRefs.every((ref: any) => allowed.has(ref)));
+      requireMatch(review.verdict === 'supported' || a.verdict === 'repair_required' && rows(a.debt).some((row) => row.domain === 'pending_intent' && row.blocking));
+      const qualificationRefs = new Set(qualificationReviewEvidenceRefs(bindings, context));
+      const observerReview = record(a.qualificationReview);
+      requireMatch(Array.isArray(observerReview.evidenceRefs)
+        && observerReview.evidenceRefs.every((ref: unknown) => typeof ref === 'string' && qualificationRefs.has(ref)));
+      for (const node of rows(bindings.nodes)) requireMatch(rows(a.bindingReviews).find((row) => row.nodeRef === node.nodeRef)?.bindingRowFingerprint === freeformJsonDigest(node));
+      const p = typedProjection(bindings, context);
+      // The original /6 prompt supplies this exact additive citation catalog.
+      // Keep it through structural reuse; do not strip a valid qualification
+      // citation from general/binding/role reviews. The narrower observer-review
+      // vocabulary was independently checked above before this projection.
+      const reviewContext = { ...p.context, ownerEvidenceRefs: [...new Set([...(p.context.ownerEvidenceRefs ?? []), ...allowed])] };
+      const { referenceReview: _review, referenceQualificationFingerprint: _qualification, effectTargetFingerprint: _targets, ...body } = a;
+      return scenePendingIntentExaminationIssues({ ...body, ...scenePendingIntentExaminationIdentity(p.binding, reviewContext, policyFingerprint),
+        schemaVersion: 'gma.scene-readiness-assessment/5', bindingReviews: rows(a.bindingReviews).map((row) => ({ ...row,
+          bindingRowFingerprint: freeformJsonDigest(rows(p.binding.nodes).find((node) => node.nodeRef === row.nodeRef)) })) }, p.binding, reviewContext, policyFingerprint);
+    } catch { return ['/typedReferenceReview']; }
+  }
   if (bindings.schemaVersion !== READ_EFFECT_BINDINGS_VERSION) return historicalExaminationIssues(value, bindings, context, policyFingerprint);
   try {
     const expected = scenePendingIntentExaminationIdentity(bindings, context, policyFingerprint);
@@ -207,6 +276,7 @@ export function scenePendingIntentExaminationIssues(value: unknown, bindings: Ro
 
 /** Use the new partition's original refs along with the unchanged owner evidence. */
 export function qualificationReviewEvidenceRefs(bindings: Row, context: Context): string[] {
+  if (bindings.schemaVersion === TYPED.pendingBindings) { const p = typedProjection(bindings, context); return qualificationReviewEvidenceRefs(p.binding, p.context); }
   return bindings.schemaVersion === READ_EFFECT_BINDINGS_VERSION
     ? [...new Set<string>([...historicalReviewEvidenceRefs(historicalReadEffectBinding(bindings), remoteViewerContext(bindings, context)),
       ...rows(record(bindings.requirementRoles).nodes).flatMap((node) => rows(node.roles).map((role) => referenceText(role.requirementRef)))])].sort()
@@ -215,6 +285,11 @@ export function qualificationReviewEvidenceRefs(bindings: Row, context: Context)
 
 /** New binding versions retain the original execution/discovery safety gate. */
 export function futureSensoryFactRefs(bindings: Row, proposal: Row): string[] {
+  if (bindings?.schemaVersion === TYPED.pendingBindings) {
+    const { referenceQualificationFingerprint: _q, ...body } = bindings;
+    return futureSensoryFactRefs({ ...body, schemaVersion: READ_EFFECT_BINDINGS_VERSION,
+      nodes: rows(body.nodes).map(({ effectCoverage: _coverage, ...node }) => node) }, proposal);
+  }
   return historicalFutureSensoryFacts(bindings?.schemaVersion === READ_EFFECT_BINDINGS_VERSION ? historicalReadEffectBinding(bindings) : bindings, proposal);
 }
 
@@ -222,6 +297,15 @@ export function futureSensoryFactRefs(bindings: Row, proposal: Row): string[] {
  * every valid row and requiring review of the complete merged successor. */
 export function mergeScenePendingIntentBindingRepair(value: Row, replacements: Row[], failedNodeRefs: string[], context: Context,
   roleReplacements: Row[] = [], failedRoleNodeRefs: string[] = []): Row {
+  if (value.schemaVersion === TYPED.pendingBindings) {
+    const exact = (replacements: Row[], refs: string[], originals: Row[]) => new Set(refs).size === refs.length && replacements.length === refs.length
+      && new Set(replacements.map((row) => row.nodeRef)).size === refs.length && replacements.every((row) => typeof row.nodeRef === 'string'
+        && refs.includes(row.nodeRef) && originals.some((original) => original.nodeRef === row.nodeRef));
+    requireMatch(exact(replacements, failedNodeRefs, rows(value.nodes)) && exact(roleReplacements, failedRoleNodeRefs, rows(record(value.requirementRoles).nodes)));
+    const result = structuredClone(value); result.nodes = rows(result.nodes).map((node) => replacements.find((r) => r.nodeRef === node.nodeRef) ?? node);
+    record(result.requirementRoles).nodes = rows(record(result.requirementRoles).nodes).map((node) => roleReplacements.find((r) => r.nodeRef === node.nodeRef) ?? node);
+    requireMatch(!scenePendingIntentBindingIssues(result, context).length); return result;
+  }
   if (value.schemaVersion !== READ_EFFECT_BINDINGS_VERSION) {
     requireMatch(!roleReplacements.length && !failedRoleNodeRefs.length);
     return historicalRepair(value, replacements, failedNodeRefs, context);

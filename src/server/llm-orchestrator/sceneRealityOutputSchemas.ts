@@ -1,6 +1,7 @@
 import { SCENE_PENDING_INTENT_BINDINGS_SCHEMA } from '../../shared/llm/scenePendingIntentBindings.js';
 import { QUALIFIED_BINDINGS_SCHEMA, QUALIFICATION_REVIEW_SCHEMA, CONTINUATION_BINDINGS_SCHEMA, CONTINUATION_QUALIFICATION_REVIEW_SCHEMA } from '../../shared/llm/scenePendingIntentQualified.js';
 import { SCENE_READ_EFFECT_BINDINGS_SCHEMA } from '../../shared/llm/sceneReadEffectPolicy.js';
+import { SCENE_TYPED_REFERENCE_BINDINGS_SCHEMA } from '../../shared/llm/sceneTypedReferencePolicy.js';
 
 const identifier = { type: 'string', minLength: 1, maxLength: 240, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' } as const;
 const revision = { type: 'integer', minimum: 1 } as const;
@@ -417,3 +418,16 @@ export const sceneReadinessReadEffectAssessmentOutput = strictObject(
 export const sceneReadEffectRepairOutput = { ...sceneContinuationIntentRepairOutput,
   schemaVersion: { const: 'gma.scene-pending-intent-repair/4' },
   roleReplacements: { type: 'array', maxItems: 8, items: SCENE_READ_EFFECT_BINDINGS_SCHEMA.properties.requirementRoles.properties.nodes.items } };
+
+export const sceneRealityTypedReferenceBuilderOutput = { ...sceneRealityReadEffectBuilderOutput,
+  schemaVersion: { const: 'gma.scene-reality-builder-result/6' },
+  pendingIntentBindings: { anyOf: [SCENE_TYPED_REFERENCE_BINDINGS_SCHEMA, { type: 'null' }] } };
+export const sceneReadinessTypedReferenceAssessmentOutput = strictObject(
+  [...sceneReadinessReadEffectAssessmentOutput.required, 'referenceQualificationFingerprint', 'effectTargetFingerprint', 'referenceReview'],
+  { ...sceneReadinessReadEffectAssessmentOutput.properties, schemaVersion: { const: 'gma.scene-readiness-assessment/6' },
+    referenceQualificationFingerprint: sha256, effectTargetFingerprint: sha256,
+    referenceReview: strictObject(['verdict', 'rationale', 'evidenceRefs'], {
+      verdict: { enum: ['supported', 'unsupported'] }, rationale: text(2000), evidenceRefs: idList(32, 1),
+    }) });
+export const sceneTypedReferenceRepairOutput = { ...sceneReadEffectRepairOutput,
+  bindingReplacements: { type: 'array', maxItems: 8, items: SCENE_TYPED_REFERENCE_BINDINGS_SCHEMA.properties.nodes.items } };

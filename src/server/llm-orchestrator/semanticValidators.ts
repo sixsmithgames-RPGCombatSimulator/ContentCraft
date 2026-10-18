@@ -3,6 +3,7 @@ import Ajv from 'ajv';
 import { validateFreeformIntake } from './freeformIntakeValidation.js';
 import { scenePresentedTargetRefs } from '../services/scenePresentedTargetRefs.js';
 import { sceneDossierReferenceIssues } from '../../shared/llm/sceneDossierReferences.js';
+import { rehydrateScenePreparationProposal } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { SCENE_MODEL_METADATA_BINDING, validSceneModelMetadataBinding } from './sceneModelMetadataBinding.js';
 import { scenePendingBindingContextFromOwner, scenePendingIntentBindingIssues, scenePendingIntentExaminationIssues } from '../../shared/llm/sceneReadEffectBindings.js';
 import {
@@ -26,11 +27,12 @@ registerSemanticValidator('scene-pending-intent-builder', ({ request, output }) 
       if (output.pendingIntentBindings !== null) paths.push('/pendingIntentBindings');
     } else {
       const checkpoint = trusted.buildContinuation?.checkpoint;
-      const proposal = checkpoint ? { ...output.proposal, ...Object.fromEntries(['zones', 'actorFrames', 'elements', 'facts']
+      let proposal = checkpoint ? { ...output.proposal, ...Object.fromEntries(['zones', 'actorFrames', 'elements', 'facts']
         .map((key) => [key, [...(checkpoint[key] ?? []), ...(output.proposal[key] ?? [])]])) } : output.proposal;
+      if ([12, 13].includes(trusted.preparationPolicyVersion)) proposal = rehydrateScenePreparationProposal(proposal, trusted.priorBundle);
       paths.push(...scenePendingIntentBindingIssues(output.pendingIntentBindings,
         scenePendingBindingContextFromOwner(owner, trusted.buildRequest.operationId, proposal)));
-      if (trusted.preparationPolicyVersion === 11) paths.push(...sceneDossierReferenceIssues(proposal).map((path) => `/proposal${path}`));
+      if ([11, 12, 13].includes(trusted.preparationPolicyVersion)) paths.push(...sceneDossierReferenceIssues(proposal).map((path) => `/proposal${path}`));
     }
   } catch { paths = ['/pendingIntentContext']; }
   return result('scene-pending-intent-builder', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_INVALID', message: 'The complete pending intent binding must match the supplied owner window, slots and evidence.', path })));
@@ -40,7 +42,7 @@ registerSemanticValidator('scene-pending-intent-examiner', ({ request, output })
   const trusted = request.context?.input?.value as any;
   const paths = scenePendingIntentExaminationIssues(output, trusted.pendingIntentBindings,
     scenePendingBindingContextFromOwner(trusted.pendingIntentContext, trusted.proposal.operationId, trusted.proposal), trusted.expectedPolicyFingerprint);
-  if (trusted.preparationPolicyVersion === 11) paths.push(...sceneDossierReferenceIssues(trusted.proposal).map((path) => `/proposal${path}`));
+  if ([11, 12, 13].includes(trusted.preparationPolicyVersion)) paths.push(...sceneDossierReferenceIssues(trusted.proposal).map((path) => `/proposal${path}`));
   return result('scene-pending-intent-examiner', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', message: 'Joint examination must cover the exact prepared Scene, unfinished intent and owner evidence.', path })));
 });
 
@@ -338,7 +340,7 @@ registerSemanticValidator('scene-reality-builder-contract', ({ request, output }
     }
   }
   const priorCheckpoint = trusted?.buildContinuation?.checkpoint;
-  const effectiveCandidate = !continuation && priorCheckpoint && candidate
+  let effectiveCandidate = !continuation && priorCheckpoint && candidate
     ? {
         ...candidate,
         zones: [...(priorCheckpoint.zones ?? []), ...(candidate.zones ?? [])],
@@ -347,6 +349,14 @@ registerSemanticValidator('scene-reality-builder-contract', ({ request, output }
         facts: [...(priorCheckpoint.facts ?? []), ...(candidate.facts ?? [])],
       }
     : candidate;
+  if (!continuation && [12, 13].includes(trusted?.preparationPolicyVersion)) {
+    try { effectiveCandidate = rehydrateScenePreparationProposal(effectiveCandidate, trusted.priorBundle); }
+    catch { issues.push({ code: 'SCENE_REALITY_RETAINED_RECORD_INVALID', message: 'Retained records require exact unique typed identities.', path: '/proposal' }); }
+    for (const field of ['zones', 'actorFrames', 'elements', 'facts']) {
+      if (effectiveCandidate?.[field]?.length > Number(recordLimits[field])) issues.push({
+        code: 'SCENE_REALITY_BUILD_RECORD_LIMIT_EXCEEDED', message: 'The complete rehydrated dossier exceeds its record limit.', path: `/proposal/${field}` });
+    }
+  }
   if (continuation && trusted?.buildContinuation) {
     issues.push({ code: 'SCENE_REALITY_BUILD_CHUNK_LIMIT', message: 'Scene construction cannot request a third build chunk.', path: '/status' });
   }

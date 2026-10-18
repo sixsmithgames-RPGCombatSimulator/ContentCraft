@@ -82,7 +82,7 @@ export function qualifiedObservationAuthorityService(deps: QualifiedObservationD
     const artifact = loaded.artifact as unknown as JsonObject, bundle = active.bundle;
     const application = rows(artifact.intentBindingApplications).find((row) => object(row.record) && row.record.recordId === bindingRecordRef);
     const record = application?.record;
-    if (!object(record) || !['gmc.scene-pending-intent-binding-record/2', 'gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4'].includes(String(record.schemaVersion))
+    if (!object(record) || !['gmc.scene-pending-intent-binding-record/2', 'gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(record.schemaVersion))
       || !object(bundle.pendingIntentBindingRecord) || bundle.pendingIntentBindingRecord.recordId !== record.recordId
       || !object(record.bindings) || !object(bundle.activeBundle) || !object(bundle.sceneKit)
       || freeformJsonDigest(record) !== freeformJsonDigest(bundle.pendingIntentBindingRecord)) fail('binding_record');
@@ -99,7 +99,7 @@ export function qualifiedObservationAuthorityService(deps: QualifiedObservationD
       || freeformJsonDigest(selection.viewpointCondition) !== freeformJsonDigest(evidence.viewpointCondition)
       || !node || !group || group.observerRef !== evidence.observerRef || group.methodRef !== evidence.methodRef || group.formRef !== evidence.formRef
       || !['after_relocation', 'confirmed_relocation'].includes(evidence.viewpointCondition.kind)) fail('qualification');
-    const continuation = ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4'].includes(String(record.schemaVersion));
+    const continuation = ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(record.schemaVersion));
     if (evidence.schemaVersion !== (continuation ? 'gmc.pending-observer-evidence/2' : 'gmc.pending-observer-evidence/1')) fail('evidence_version');
     let lineage: ConfirmedRelocationLineage | null = null;
     if (evidence.viewpointCondition.kind === 'confirmed_relocation') {
@@ -219,7 +219,7 @@ export function qualifiedObservationAuthorityService(deps: QualifiedObservationD
     if (!object(active?.bundle) || !object(active.bundle.sceneKit)) fail('prepared_scene');
     const bundle = active.bundle;
     const bindingRecord = bundle.pendingIntentBindingRecord;
-    const continuation = object(bindingRecord) && ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4'].includes(String(bindingRecord.schemaVersion));
+    const continuation = object(bindingRecord) && ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(bindingRecord.schemaVersion));
     if (continuation !== (input.version === '3')) fail('reader_version');
     const saved = object(bindingRecord) ? await records.find({ ...scope, bindingRecordRef: String(bindingRecord.recordId) }).limit(33).toArray() : [];
     if (saved.length > 32) fail('budget');

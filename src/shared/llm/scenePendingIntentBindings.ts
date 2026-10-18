@@ -48,6 +48,9 @@ export interface ScenePendingBindingContext {
   /** Pure /4 role closure derived only from authenticated observer identity.
    * Historical contexts omit this; it grants neither sensing nor execution. */
   remoteViewerCoverage?: ReadonlyArray<{ nodeRef: string; slotId: string; recipientRef: string }>;
+  /** Internal, independently derived from protected /5 qualification only. */
+  qualifiedBindingSlots?: Row[];
+  pendingReferenceQualification?: Row;
 }
 /** owner must be the current authenticated GMC context, never model output.
  * A new zone's semantic placement is reviewed with the complete dossier. */
@@ -195,7 +198,7 @@ function contextCatalog(context: ScenePendingBindingContext): Row {
 
 export function scenePendingIntentBindingIssues(value: unknown, context: ScenePendingBindingContext): string[] {
   try {
-    const catalog = contextCatalog(context), slots = pendingIntentBindingSlots(context.source), window = catalog.window;
+    const catalog = contextCatalog(context), slots = context.qualifiedBindingSlots ?? pendingIntentBindingSlots(context.source), window = catalog.window;
     if (!closed(value, ['schemaVersion', 'bindingId', 'operationId', 'campaignId', 'windowId', 'windowFingerprint', 'sceneKitRef', 'nodes'])) return ['/'];
     if (value.schemaVersion !== SCENE_PENDING_INTENT_BINDINGS_VERSION || !id(value.bindingId)
       || value.operationId !== context.operationId || value.campaignId !== window.campaignId
@@ -249,16 +252,24 @@ export function scenePendingIntentBindingIssues(value: unknown, context: ScenePe
           || !family || a.actionFamily !== family) { issues.push(`${path}/coverage`); continue; }
         covered.add(binding.slotId);
         for (const reference of slot.references) {
+          // /5 supplies one exact role-qualified surface per material effect
+          // target. Other roles close through their own surface, never through
+          // a convenient endpoint shared with the entire node.
+          if (original.targetSlotId && reference.slotId !== original.targetSlotId) continue;
+          if (original.targetSlotId && ['actor', 'origin'].includes(reference.role)) {
+            const ref = selected.get(reference.slotId);
+            if (ref !== a.targetRef && !(catalog.aliases.has(ref) && catalog.aliases.get(ref) === catalog.aliases.get(a.targetRef))) issues.push(`${path}/coverage`);
+          }
           // An explicit /6 effect has its own surface. References owned by
           // separate information reads (for example the worker's identity)
           // are checked by those reads, not equated with the effect's target.
           // Node-level location bindings still constrain this effect below.
-          if (context.source.program.schemaVersion === 'gma.semantic-action-program/6'
-            && original.effectId !== undefined && reference.requirementId !== undefined) continue;
+          if (['gma.semantic-action-program/6', 'gma.semantic-action-program/7'].includes(context.source.program.schemaVersion)
+            && original.effectId !== undefined && !original.targetSlotId && reference.requirementId !== undefined) continue;
           // A /6 prerequisite read closes against its own requirement slots.
           // Node-level future location is still checked by the explicit effect
           // surface; it must not relocate an identity or method read.
-          if (context.source.program.schemaVersion === 'gma.semantic-action-program/6'
+          if (['gma.semantic-action-program/6', 'gma.semantic-action-program/7'].includes(context.source.program.schemaVersion)
             && original.requirementId !== null && original.requirementId !== undefined
             && reference.locationFingerprint !== undefined) continue;
           if (original.requirementId !== null && reference.requirementId !== undefined && reference.requirementId !== original.requirementId) continue;
@@ -267,7 +278,7 @@ export function scenePendingIntentBindingIssues(value: unknown, context: ScenePe
           // independent "who is here now?" prerequisite. Historical bindings
           // keep their existing closure rules; no selected destination changes.
           const requirement = originalNode.requirements.find((entry: Row) => entry.requirementId === original.requirementId)?.value;
-          if (context.source.program.schemaVersion === 'gma.semantic-action-program/6'
+          if (['gma.semantic-action-program/6', 'gma.semantic-action-program/7'].includes(context.source.program.schemaVersion)
             && requirement?.kind === 'scene_presence' && requirement.dimension === 'who'
             && reference.locationFingerprint !== undefined && ['destination', 'area'].includes(reference.role)) continue;
           const ref = selected.get(reference.slotId);

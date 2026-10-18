@@ -8,6 +8,7 @@ const RETAINED_COLLECTIONS = [
   'llm_freeform_tickets',
   'gma_freeform_turns',
   'gma_actor_mechanics_links',
+  'gma_pending_reference_qualifications',
   'gma_actor_mechanics_link_decisions',
   'gma_pending_observers',
   'gma_pending_observers_v2',

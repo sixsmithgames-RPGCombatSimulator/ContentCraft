@@ -7,6 +7,7 @@ import { readCurrentSceneContexts } from './actionDirectedStoryStore.js';
 import { assertFreeformCatalogCurrent } from '../llm-orchestrator/freeformSceneCatalog.js';
 import { assertFreeformWorkflowOpen, type FreeformWorkflowReader } from './freeformWorkflowAuthority.js';
 import { READ_EFFECT_CONTRACTS } from '../../shared/llm/readEffectContracts.js';
+import { createProgramReferenceLedger, TYPED_REFERENCE_AUTHORITY_BUNDLE as TYPED } from '../../shared/llm/typedReferenceBindings.js';
 
 export function validateFreeformBinding(binding: JsonObject, instruction: JsonObject, program: JsonObject) {
   const issues = freeformPlanBindingIssues(binding, instruction, program, true);
@@ -45,13 +46,19 @@ export async function verifyFreeformBindingAcceptance(input: {
   if (freeformJsonDigest(binding.compiledStepIds) !== freeformJsonDigest(proposal.steps.map((_, index) => `freeform:step:${index}`))) {
     throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'The compiled step identities do not match the accepted window.', {});
   }
-  if (binding.schemaVersion === READ_EFFECT_CONTRACTS.binding) {
+  const typed = binding.schemaVersion === TYPED.binding;
+  if (typed && freeformJsonDigest(program.referenceLedger) !== freeformJsonDigest(createProgramReferenceLedger(proposal!, expectedSources!,
+    Number((binding.authorityBase as JsonObject).sceneRevision)))) {
+    throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'The typed references do not match the protected original catalog.', {});
+  }
+  if (typed || binding.schemaVersion === READ_EFFECT_CONTRACTS.binding) {
     const steps = proposal.steps as JsonObject[];
     const nodes = program.nodes as JsonObject[];
-    if (proposal.schemaVersion !== READ_EFFECT_CONTRACTS.proposal || steps.some((step, index) => {
+    if (proposal.schemaVersion !== (typed ? TYPED.proposal : READ_EFFECT_CONTRACTS.proposal) || steps.some((step, index) => {
       if (!Array.isArray(step.effects)) return true;
       const expected = (step.effects as JsonObject[]).map((effect, i) => ({
         effectId: `freeform:step:${index}:effect:${i + 1}`, attempt: effect.attempt, resolution: effect.resolution,
+        ...(typed ? { targets: (effect.targets as JsonObject[]).map((target) => ({ symbolRef: `freeform:referent:${target.ref}`, role: target.role })) } : {}),
         evidenceSpans: (effect.evidence as string[]).map((quote) => {
           const offset = String(instruction.exactText).indexOf(quote);
           const start = Buffer.byteLength(String(instruction.exactText).slice(0, offset), 'utf8');

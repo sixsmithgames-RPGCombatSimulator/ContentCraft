@@ -2,11 +2,13 @@ import { freeformJsonDigest, canonicalFreeformJson } from '../../shared/llm/free
 import { createPendingIntentWindow } from '../../shared/llm/pendingIntentWindow.js';
 import { pendingIntentBindingSlots } from '../../shared/llm/scenePendingIntentBindings.js';
 import { projectAppliedIntentBindings } from '../../shared/llm/scenePendingIntentApplication.js';
+import { qualifiedPendingReferenceSlots } from '../../shared/llm/typedPendingReferenceProjection.js';
+import { pendingReferenceQualificationService, pendingReferenceQualificationOperationId } from './pendingReferenceQualificationStore.js';
 export { scenePendingBindingContextFromOwner as pendingBindingContext } from '../../shared/llm/sceneReadEffectBindings.js';
 import { StoryWorkspaceStoreError, type JsonObject } from './storyWorkspaceStore.js';
 
 type Row = Record<string, any>;
-type Scope = { userId: string; campaignId: string; programId: string; qualified?: boolean; continuation?: boolean; readEffects?: boolean };
+type Scope = { userId: string; campaignId: string; programId: string; qualified?: boolean; continuation?: boolean; readEffects?: boolean; typedReferences?: boolean };
 export const PENDING_INTENT_CONTEXT_VERSION = 'gmc.scene-pending-intent-context/1';
 export const PENDING_INTENT_WRITES_ENABLED = process.env.GMC_SCENE_PENDING_INTENT_BINDINGS !== '0';
 export { pendingScenePolicyFingerprint } from '../../shared/llm/scenePendingIntentApplication.js';
@@ -18,6 +20,14 @@ const fail = (field = 'pendingIntent') => { throw new StoryWorkspaceStoreError(4
 const same = (a: unknown, b: unknown) => canonicalFreeformJson(a) === canonicalFreeformJson(b);
 
 export async function readScenePendingIntentContext(input: Scope, readers?: PendingIntentReaders): Promise<JsonObject> {
+  if (input.typedReferences) {
+    const current = await readScenePendingIntentContext({ ...input, typedReferences: false, readEffects: true });
+    const qualified = await pendingReferenceQualificationService().operation({ ...input, operationId: pendingReferenceQualificationOperationId(input.programId) });
+    if (!qualified) return fail('referenceQualification');
+    return { ...current, schemaVersion: 'gmc.scene-pending-intent-context/5', referenceQualification: qualified.qualification,
+      referenceQualificationReceipt: qualified.receipt,
+      slots: qualifiedPendingReferenceSlots(current.source as any, qualified.qualification) } as JsonObject;
+  }
   if (input.readEffects) {
     const current = await (await import('./pendingObserverEvidenceStore.js')).pendingObserverEvidenceService().context({ ...input, continuation: true });
     return { ...current, schemaVersion: 'gmc.scene-pending-intent-context/4' };
@@ -135,10 +145,10 @@ export function preparedPendingRequirementProjection(input: Row, loaded: Row, ac
     const actor = bundle.actorFrames.find((a: Row) => a.actorRef === row.targetRef || a.actorFrameId === row.targetRef);
     const target = actor ?? [...bundle.elements, ...bundle.zones].find((r: Row) => (r.elementId ?? r.zoneId) === row.targetRef);
     const facts = (affordance?.factRefs ?? []).map((ref: string) => bundle.facts.find((fact: Row) => fact.factId === ref));
-    const present = application.record.schemaVersion === 'gmc.scene-pending-intent-binding-record/4'
+    const present = ['gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(application.record.schemaVersion)
       ? preparedReadEffectActorIsPresent(actor, sceneContext.playableSceneContext)
       : actor && (sceneContext.playableSceneContext?.presentActors ?? []).some((ref: unknown) => ref === actor.actorRef);
-    const readEffectEvidence = application.record.schemaVersion === 'gmc.scene-pending-intent-binding-record/4'
+    const readEffectEvidence = ['gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(application.record.schemaVersion)
       ? preparedReadEffectReadEvidence(row, affordance, bundle, Boolean(present)) : null;
     const available = readEffectEvidence ? readEffectEvidence.available : row.kind === 'scene_presence' ? present : row.kind === 'story_fact'
       ? facts.length > 0 && facts.every((fact: Row) => fact && !['missing_preparation', 'deliberate_unknown'].includes(fact.epistemicState)) : target;

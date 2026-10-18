@@ -8,12 +8,15 @@ import {
   type LlmValidationResult,
 } from '../../shared/llm/orchestratorContracts.js';
 import { OrchestratorError } from './errors.js';
-import { FREEFORM_INTENT_PROPOSAL_SCHEMA, FREEFORM_READ_EFFECT_PROPOSAL_SCHEMA } from '../../shared/llm/freeformIntentSchema.js';
+import { FREEFORM_INTENT_PROPOSAL_SCHEMA, FREEFORM_READ_EFFECT_PROPOSAL_SCHEMA, FREEFORM_TYPED_REFERENCE_PROPOSAL_SCHEMA } from '../../shared/llm/freeformIntentSchema.js';
 import { FREEFORM_INTAKE_OPERATION, FREEFORM_INTAKE_POLICY, FREEFORM_INTAKE_POLICY_VERSION, FREEFORM_READ_EFFECT_OPERATION,
-  FREEFORM_MOVER_POLICY, FREEFORM_MOVER_POLICY_VERSION, isFreeformIntakeOperation } from '../../shared/llm/freeformIntakePolicy.js';
+  FREEFORM_MOVER_POLICY, FREEFORM_MOVER_POLICY_VERSION, FREEFORM_TYPED_REFERENCE_OPERATION,
+  FREEFORM_TYPED_REFERENCE_POLICY, FREEFORM_TYPED_REFERENCE_POLICY_VERSION, isFreeformIntakeOperation } from '../../shared/llm/freeformIntakePolicy.js';
 import { SCENE_PENDING_INTENT_BINDING_POLICY, SCENE_PENDING_INTENT_EXAMINER_POLICY } from '../../shared/llm/scenePendingIntentBindings.js';
 import { QUALIFIED_BINDING_POLICY, QUALIFIED_EXAMINER_POLICY, CONTINUATION_BINDING_POLICY, CONTINUATION_EXAMINER_POLICY } from '../../shared/llm/scenePendingIntentQualified.js';
 import { READ_EFFECT_BINDING_POLICY, READ_EFFECT_EXAMINER_POLICY, SCENE_MECHANICS_PREPARATION_POLICY, SCENE_DOSSIER_REFERENCE_POLICY } from '../../shared/llm/sceneReadEffectPolicy.js';
+import { SCENE_WORKING_SET_POLICY, decodeScenePreparationWorkingSet } from '../../shared/llm/scenePreparationWorkingSet.js';
+import { TYPED_PENDING_BINDING_POLICY, TYPED_PENDING_EXAMINER_POLICY } from '../../shared/llm/sceneTypedReferencePolicy.js';
 import {
   sceneRealityBuilderCheckpointResultOutput,
   sceneRealityBuilderResultOutput,
@@ -28,17 +31,22 @@ import {
   sceneQualifiedIntentRepairOutput,
   sceneRealityContinuationBuilderResultOutput, sceneReadinessContinuationAssessmentOutput, sceneContinuationIntentRepairOutput,
   sceneRealityReadEffectBuilderOutput, sceneReadinessReadEffectAssessmentOutput, sceneReadEffectRepairOutput,
+  sceneRealityTypedReferenceBuilderOutput, sceneReadinessTypedReferenceAssessmentOutput, sceneTypedReferenceRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
 export const OPERATION_REGISTRY_VERSION = '2026-10-15.1';
-export const MANUAL_PENDING_SCENE_OPERATIONS = Object.freeze(['story.scene-reality.build.pending', 'story.scene-reality.build.checkpoint.pending',
+export const MANUAL_PENDING_SCENE_OPERATIONS = Object.freeze([FREEFORM_TYPED_REFERENCE_OPERATION, 'story.scene-reality.build.pending', 'story.scene-reality.build.checkpoint.pending',
   'story.scene-readiness.examine.pending', 'story.scene-reality.repair.pending',
   'story.scene-reality.build.qualified', 'story.scene-reality.build.checkpoint.qualified',
   'story.scene-readiness.examine.qualified', 'story.scene-reality.repair.qualified',
   'story.scene-reality.build.continuation', 'story.scene-reality.build.checkpoint.continuation',
   'story.scene-readiness.examine.continuation', 'story.scene-reality.repair.continuation',
   'story.scene-reality.build.read-effects', 'story.scene-reality.build.checkpoint.read-effects',
-  'story.scene-readiness.examine.read-effects', 'story.scene-reality.repair.read-effects']);
+  'story.scene-readiness.examine.read-effects', 'story.scene-reality.repair.read-effects',
+  'story.scene-reality.build.read-effects.working-set', 'story.scene-reality.build.checkpoint.read-effects.working-set',
+  'story.scene-readiness.examine.read-effects.working-set', 'story.scene-reality.repair.read-effects.working-set',
+  'story.scene-reality.build.read-effects.typed-references.working-set', 'story.scene-reality.build.checkpoint.read-effects.typed-references.working-set',
+  'story.scene-readiness.examine.read-effects.typed-references.working-set', 'story.scene-reality.repair.read-effects.typed-references.working-set']);
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-10-07.2',
@@ -1671,6 +1679,34 @@ seeds.push({ ...seeds.find((seed) => seed.id === 'story.scene-reality.repair')!,
     + 'Copy correctionId. Replace exactly the named failedBindingNodeRefs and allowedRecordRefs. roleReplacements replaces only the complete role rows for failedRoleNodeRefs; empty arrays when no matching failed scope. '
     + READ_EFFECT_BINDING_POLICY + ' ' + SCENE_MECHANICS_PREPARATION_POLICY + ' Preserve every unaffected row, record, instruction, exact tail, receipt and prose. A validationDebt record with reviewStatus not_examined is only deterministic binding-shape debt; assessment is null because no independent review has happened. Correct only its named binding rows, leaving world records and role rows unchanged. The app merges the complete successor for an independent review. One repair only, existing budgets, never save or execute.' });
 
+// New profile; historical operation policies/fingerprints are never rewritten.
+for (const id of ['story.scene-reality.build.read-effects', 'story.scene-reality.build.checkpoint.read-effects',
+  'story.scene-readiness.examine.read-effects', 'story.scene-reality.repair.read-effects']) {
+  const prior = seeds.find((seed) => seed.id === id)!;
+  seeds.push({ ...prior, id: `${id}.working-set`,
+    promptVersion: id.includes('.examine.') ? 'gma.scene-readiness-examiner-policy/12'
+      : id.includes('.repair.') ? 'gma.scene-pending-intent-repair-policy/7' : 'gma.scene-reality-builder-policy/12',
+    systemInstruction: `${prior.systemInstruction} ${SCENE_WORKING_SET_POLICY} In a complete result, unchanged prior zones, actorFrames, elements, facts, Scene-kit information and Story-design affordances/obligations may be omitted from their required arrays: the app rehydrates their exact owner values before all semantic checks, full independent review and commit. Return every changed or new row as a full literal record. Do not omit a row to delete it or hide contradictory evidence. Preserve all complete Scene indexes against that rehydrated dossier. This does not permit an empty first checkpoint or a changed domain partition. The full rehydrated counts, not just emitted rows, must obey recordLimits.` });
+}
+
+seeds.push({ ...seeds.find((seed) => seed.id === FREEFORM_READ_EFFECT_OPERATION)!,
+  id: FREEFORM_TYPED_REFERENCE_OPERATION, required: [...FREEFORM_TYPED_REFERENCE_PROPOSAL_SCHEMA.required],
+  logicalSchema: FREEFORM_TYPED_REFERENCE_PROPOSAL_SCHEMA, systemInstruction: FREEFORM_TYPED_REFERENCE_POLICY,
+  promptVersion: FREEFORM_TYPED_REFERENCE_POLICY_VERSION });
+
+for (const base of ['story.scene-reality.build', 'story.scene-reality.build.checkpoint', 'story.scene-readiness.examine', 'story.scene-reality.repair']) {
+  const prior = seeds.find((seed) => seed.id === `${base}.read-effects.working-set`)!;
+  const examine = base === 'story.scene-readiness.examine', repair = base === 'story.scene-reality.repair';
+  const output = examine ? sceneReadinessTypedReferenceAssessmentOutput.properties : repair ? sceneTypedReferenceRepairOutput
+    : { ...sceneRealityTypedReferenceBuilderOutput, ...(base.endsWith('.checkpoint') ? { proposal: { type: 'null' }, status: { const: 'continuation_required' } } : {}) };
+  const oldPolicy = examine ? READ_EFFECT_EXAMINER_POLICY : READ_EFFECT_BINDING_POLICY;
+  seeds.push({ ...prior, id: `${base}.read-effects.typed-references.working-set`, required: Object.keys(output), outputProperties: output as Record<string, Record<string, unknown>>,
+    promptVersion: examine ? 'gma.scene-readiness-examiner-policy/13' : repair ? 'gma.scene-pending-intent-repair-policy/8' : 'gma.scene-reality-builder-policy/13',
+    systemInstruction: prior.systemInstruction!.replaceAll(oldPolicy, examine ? TYPED_PENDING_EXAMINER_POLICY : TYPED_PENDING_BINDING_POLICY)
+      .replaceAll('gma.scene-reality-builder-result/5', 'gma.scene-reality-builder-result/6')
+      .replaceAll('gma.scene-readiness-assessment/5', 'gma.scene-readiness-assessment/6') });
+}
+
 const registry = new Map<string, LlmOperationDefinition>();
 const validators = new Map<string, SemanticValidator>();
 const compiledOutputSchemas = new Map<string, ValidateFunction>();
@@ -1772,7 +1808,19 @@ export function registerSemanticValidator(id: string, validator: SemanticValidat
 }
 
 export function getSemanticValidator(id: string) {
-  return validators.get(id);
+  const validator = validators.get(id);
+  if (!validator) return undefined;
+  return (input: Parameters<SemanticValidator>[0]) => {
+    if (!String(input.request.operation ?? '').endsWith('.working-set')) return validator(input);
+    const request = structuredClone(input.request);
+    try {
+      request.context.input.value = decodeScenePreparationWorkingSet(request.context.input.value as any, request.operation);
+    } catch {
+      return { validatorId: id, version: '1', valid: false, issues: [{ code: 'SCENE_WORKING_SET_INVALID',
+        message: 'The preparation input must resolve exactly to its original bounded source view.', path: '/context/input' }] };
+    }
+    return validator({ ...input, request });
+  };
 }
 
 export function getOperationDefinition(id: string) {

@@ -30,6 +30,8 @@ describe('D2 Story authority routes', () => {
       ['/actor-mechanics-links/retire', { operationId: 'retire:one', linkRef: 'link:one', expectedRegistryRevision: '1' }],
       ['/actor-mechanics-links/retire', { operationId: ['retire:one'], linkRef: 'link:one', expectedRegistryRevision: 1 }],
       ['/actor-mechanics-links/confirm', { decisionRef: 'decision:one', userId: 'forged-owner' }],
+      ['/pending-reference-qualifications/commit', { schemaVersion: 'gmc.pending-reference-qualification-commit/1', userId: 'forged-owner' }],
+      ['/pending-reference-qualifications/commit', { programId: ['program:forged'] }],
     ] as const) {
       const response = await fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       expect(response.status).toBe(422); expect((await response.json()).error.code).toBe('ACTOR_LINK_INPUT_INVALID');
@@ -100,6 +102,8 @@ describe('D2 Story authority routes', () => {
       ['POST', '/actor-mechanics-links/prepare'],
       ['POST', '/actor-mechanics-links/confirm'],
       ['POST', '/actor-mechanics-links/retire'],
+      ['GET', '/pending-reference-qualifications/operations/program-1/operation-1'],
+      ['POST', '/pending-reference-qualifications/commit'],
       ['GET', '/scene-reality/pending-intent/program-1'],
       ['GET', '/scene-reality/pending-intent/program-1?qualification=1'],
       ['POST', '/scene-reality/observer-origins'],

@@ -9,8 +9,9 @@ import { collections } from './gmcIntegrationStore.js';
 import { validateFreeformBinding, verifyFreeformBindingAcceptance } from './freeformPlanBindingStore.js';
 import type { FreeformTicketCollection } from '../llm-orchestrator/freeformTickets.js';
 import { freeformPlanBindingIssues } from '../../shared/llm/freeformPlanBinding.js';
-import { READ_EFFECT_CONTRACTS, readEffectProgramIssues, isObservationSagaProgram } from '../../shared/llm/readEffectContracts.js';
-import { readEffectWritesEnabled } from './readEffectRollout.js';
+import { READ_EFFECT_CONTRACTS, readEffectProgramIssues, isObservationSagaProgram, isReadEffectProgram } from '../../shared/llm/readEffectContracts.js';
+import { isTypedReferenceProgram, TYPED_REFERENCE_AUTHORITY_BUNDLE } from '../../shared/llm/typedReferenceBindings.js';
+import { readEffectWritesEnabled, typedReferenceWritesEnabled } from './readEffectRollout.js';
 import { assertPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings,
   INTENT_BINDING_APPLICATION_LIMITS } from '../../shared/llm/scenePendingIntentApplication.js';
 import { readScenePendingIntentContext, preparedPendingRequirementProjection, PENDING_INTENT_WRITES_ENABLED } from './scenePendingIntentService.js';
@@ -89,7 +90,12 @@ export const COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS: readonly string[]
   COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4,
   PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION,
   READ_EFFECT_CONTRACTS.program,
+  TYPED_REFERENCE_AUTHORITY_BUNDLE.program,
 ]);
+// Existing deployed readers compare this legacy advertisement exactly. New /7
+// support is negotiated through the additive typedReferences authority bundle.
+export const COMPOUND_ACTION_ARTIFACT_STORE_LEGACY_READERS = Object.freeze(
+  COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS.filter((version) => version !== TYPED_REFERENCE_AUTHORITY_BUNDLE.program));
 export const COMPOUND_ACTION_LIMITS = Object.freeze({
   instructionMaximumBytes: 32_768,
   nodeMaximum: 8,
@@ -389,15 +395,15 @@ function validateProgram(program: unknown, instruction: JsonObject): asserts pro
   }
   requiredString(program.programId, 'program.programId');
   const planner = isObject(program.planner) ? program.planner : null;
-  const readEffects = program.schemaVersion === READ_EFFECT_CONTRACTS.program;
+  const readEffects = isReadEffectProgram(program);
   const roleIssues = readEffectProgramIssues(program, instruction);
   if (roleIssues.length) throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The read/effect binding is invalid.', { issues: roleIssues });
   const freeformCompiler = planner?.source === 'freeform_intent_compiler';
   if (freeformCompiler || planner?.policyVersion === FREEFORM_INTENT_COMPILER_POLICY_VERSION) {
-    if (!freeformCompiler || planner?.policyVersion !== (readEffects ? READ_EFFECT_CONTRACTS.compiler : FREEFORM_INTENT_COMPILER_POLICY_VERSION)
+    if (!freeformCompiler || planner?.policyVersion !== (isTypedReferenceProgram(program) ? TYPED_REFERENCE_AUTHORITY_BUNDLE.compiler : readEffects ? READ_EFFECT_CONTRACTS.compiler : FREEFORM_INTENT_COMPILER_POLICY_VERSION)
       || Object.prototype.hasOwnProperty.call(planner, 'confidence')
       || Object.prototype.hasOwnProperty.call(planner, 'review')
-      || ![COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4, PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION, READ_EFFECT_CONTRACTS.program].includes(String(program.schemaVersion))) {
+      || ![COMPOUND_ACTION_CONTRACTS.semanticActionProgramV4, PARALLEL_COHORT_SEMANTIC_ACTION_PROGRAM_VERSION, READ_EFFECT_CONTRACTS.program, TYPED_REFERENCE_AUTHORITY_BUNDLE.program].includes(String(program.schemaVersion))) {
       throw new StoryWorkspaceStoreError(422, 'COMPOUND_ACTION_PROGRAM_INVALID', 'The compact action compiler binding is invalid.', {});
     }
   }
@@ -857,9 +863,10 @@ const readPendingApplicationAuthority: PendingApplicationReader = async (scope) 
   const active = await (await import('./sceneRealityReadinessService.js')).readActiveSceneReality(scope);
   const record = isObject(active?.bundle) ? active.bundle.pendingIntentBindingRecord : null;
   const context = await readScenePendingIntentContext({ ...scope, ...(isObject(record)
-    && ['gmc.scene-pending-intent-binding-record/2', 'gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4'].includes(String(record.schemaVersion)) ? { qualified: true } : {}),
-    ...(isObject(record) && ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4'].includes(String(record.schemaVersion)) ? { continuation: true } : {}),
-    ...(isObject(record) && record.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' ? { readEffects: true } : {}) });
+    && ['gmc.scene-pending-intent-binding-record/2', 'gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(record.schemaVersion)) ? { qualified: true } : {}),
+    ...(isObject(record) && ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(record.schemaVersion)) ? { continuation: true } : {}),
+    ...(isObject(record) && ['gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(record.schemaVersion)) ? { readEffects: true } : {}),
+    ...(isObject(record) && record.schemaVersion === 'gmc.scene-pending-intent-binding-record/5' ? { typedReferences: true } : {}) });
   return active ? { bundle: active.bundle as JsonObject, context } : null;
 };
 
@@ -958,6 +965,7 @@ export async function advanceCompoundActionArtifact(input: {
     const authority = await bindingReader({ userId: input.userId, campaignId: input.campaignId, programId: input.programId });
     const record = authority?.bundle?.pendingIntentBindingRecord as JsonObject;
     if (record?.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' && !readEffectWritesEnabled(input.campaignId)) throw new StoryWorkspaceStoreError(503, 'SCENE_READ_EFFECT_WRITES_PAUSED', 'New read/effect applications are paused for this campaign.', {});
+    if (record?.schemaVersion === 'gmc.scene-pending-intent-binding-record/5' && !typedReferenceWritesEnabled(input.campaignId)) throw new StoryWorkspaceStoreError(503, 'SCENE_TYPED_REFERENCE_WRITES_PAUSED', 'New typed-reference applications are paused for this campaign.', {});
     try {
       assertPendingBindingRecord(record, { instruction: active.instruction, program: active.program, cursor: active.cursor, receipts: active.receipts, artifactRevision: active.revision });
       if (canonicalJson(record.ownerReadSet) !== canonicalJson(authority!.context.ownerReadSet)) throw new Error('Stale owner heads');

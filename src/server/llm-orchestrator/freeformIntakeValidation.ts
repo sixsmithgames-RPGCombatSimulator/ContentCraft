@@ -12,8 +12,9 @@ export function validateFreeformIntake(request: LlmRequestEnvelope, output: any)
   const refs = Array.isArray(output?.referents) ? output.referents : [];
   const steps = Array.isArray(output?.steps) ? output.steps : [];
   const observations = Array.isArray(output?.observations) ? output.observations : [];
-  const readEffects = request.operation === 'input.freeform.interpret.read-effects';
-  if (output?.schemaVersion !== `gma.freeform-intent-proposal/${readEffects ? 2 : 1}`) add('/schemaVersion', 'FREEFORM_VERSION_MISMATCH');
+  const typedReferences = request.operation === 'input.freeform.interpret.read-effects.typed-references';
+  const readEffects = typedReferences || request.operation === 'input.freeform.interpret.read-effects';
+  if (output?.schemaVersion !== `gma.freeform-intent-proposal/${typedReferences ? 3 : readEffects ? 2 : 1}`) add('/schemaVersion', 'FREEFORM_VERSION_MISMATCH');
   const window = output?.windowText;
   if (Buffer.byteLength(JSON.stringify(output) ?? '', 'utf8') > 16_384) add('/', 'FREEFORM_PROPOSAL_OVER_BUDGET');
   if (refs.length > 32 || steps.length > 8 || observations.length > 32) {
@@ -84,6 +85,14 @@ export function validateFreeformIntake(request: LlmRequestEnvelope, output: any)
           const text = row?.[textField];
           if (typeof text !== 'string' || !text.trim() || seen.has(text)) add(`${p}/${field}/${j}`, 'FREEFORM_READ_EFFECT_INVALID');
           if (typeof text === 'string') seen.add(text);
+          if (typedReferences && field === 'effects') {
+            const targets = row.targets;
+            if (!Array.isArray(targets) || targets.length > 8 || targets.some((target: any) =>
+              !step.targets?.some((candidate: any) => candidate.ref === target?.ref && candidate.role === target?.role)
+              && !(target?.role === 'actor' && target?.ref === step.actor))) add(`${p}/${field}/${j}/targets`, 'FREEFORM_EFFECT_TARGET_INVALID');
+            for (const [targetIndex, target] of (Array.isArray(targets) ? targets : []).entries()) ref(target?.ref,
+              `${p}/${field}/${j}/targets/${targetIndex}`, ['actor', 'subject', 'place', 'object']);
+          }
           if (field === 'effects' && row?.resolution === 'narrative_self_action'
             && (!['other', 'manipulate_object'].includes(step.purpose) || step.method !== null
               || step.targets?.some((target: { ref?: unknown }) => target.ref !== step.actor))) add(`${p}/${field}/${j}/resolution`, 'FREEFORM_SELF_ACTION_OWNER_REQUIRED');

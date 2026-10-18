@@ -1,6 +1,7 @@
 import { canonicalFreeformJson, freeformJsonDigest } from './freeformPlanBinding.js';
 import { createPendingIntentWindow, type PendingIntentWindowSource } from './pendingIntentWindow.js';
-import { READ_EFFECT_CONTRACTS, readEffectProgramIssues } from './readEffectContracts.js';
+import { READ_EFFECT_CONTRACTS, readEffectProgramIssues, isReadEffectProgram } from './readEffectContracts.js';
+import { isTypedReferenceProgram, TYPED_REFERENCE_AUTHORITY_BUNDLE } from './typedReferenceBindings.js';
 
 type Row = Record<string, unknown>;
 /** Owner-validated program projection with safely iterable node records. */
@@ -49,8 +50,8 @@ export function pendingRequirementRoleIssues(value: unknown, source: PendingInte
   try {
     const program = source.program;
     if (program.planner?.source !== 'freeform_intent_compiler'
-      || !(program.schemaVersion === READ_EFFECT_CONTRACTS.program
-        ? program.planner.policyVersion === READ_EFFECT_CONTRACTS.compiler
+      || !(isReadEffectProgram(program)
+        ? program.planner.policyVersion === (isTypedReferenceProgram(program) ? TYPED_REFERENCE_AUTHORITY_BUNDLE.compiler : READ_EFFECT_CONTRACTS.compiler)
         : ['gma.semantic-action-program/4', 'gma.semantic-action-program/5'].includes(program.schemaVersion)
           && program.planner.policyVersion === 'gma.semantic-action-compiler-policy/12')) return ['/source/compiler'];
     const window = createPendingIntentWindow(source);
@@ -73,7 +74,7 @@ export function pendingRequirementRoleIssues(value: unknown, source: PendingInte
         if (role.role === 'read' && role.resolution !== null) issues.push(`${path}/resolution`);
         if (role.role === 'effect') {
           const row = requirement.value;
-          if (source.program.schemaVersion === READ_EFFECT_CONTRACTS.program || source.program.planner?.source !== 'freeform_intent_compiler'
+          if (isReadEffectProgram(source.program) || source.program.planner?.source !== 'freeform_intent_compiler'
             || row.kind !== 'story_fact' || row.dimension !== 'what' || row.targetRef != null || row.targetRole != null || row.observation
             || !['owner_resolution', 'narrative_self_action'].includes(String(role.resolution))) issues.push(`${path}/effect`);
           if (role.resolution === 'narrative_self_action' && (!['interact', 'other'].includes(original.node.kind)
@@ -104,8 +105,8 @@ export function projectPendingRequirementRoles(source: PendingIntentWindowSource
   // New empty fields on completed projections are representation only; every
   // original completed field and every durable execution receipt stays exact.
   for (const node of rows(result.nodes)) node.requestedEffects ??= [];
-  result.schemaVersion = READ_EFFECT_CONTRACTS.program;
-  result.planner = { source: 'freeform_intent_compiler', policyVersion: READ_EFFECT_CONTRACTS.compiler };
+  result.schemaVersion = isTypedReferenceProgram(source.program) ? TYPED_REFERENCE_AUTHORITY_BUNDLE.program : READ_EFFECT_CONTRACTS.program;
+  result.planner = { source: 'freeform_intent_compiler', policyVersion: isTypedReferenceProgram(source.program) ? TYPED_REFERENCE_AUTHORITY_BUNDLE.compiler : READ_EFFECT_CONTRACTS.compiler };
   if (readEffectProgramIssues(result, source.instruction).length) throw new Error('Role projection violated the compiled effect boundary.');
   return { ...result, nodes: rows(result.nodes) };
 }
@@ -133,8 +134,8 @@ export function projectClassifiedPendingNode(original: Row, boundNode: Row, clas
  * there is no competing standalone writer or independently mutable collection. */
 export function pendingRoleApplicationIssues(record: Row, receipt: Row): string[] {
   const value = receipt?.requirementRoleApplication;
-  return record?.schemaVersion === 'gmc.scene-pending-intent-binding-record/4'
-    && receipt?.schemaVersion === 'gma.action-intent-binding-receipt/4'
+  return ['gmc.scene-pending-intent-binding-record/4', TYPED_REFERENCE_AUTHORITY_BUNDLE.pendingRecord].includes(String(record?.schemaVersion))
+    && receipt?.schemaVersion === (record.schemaVersion === TYPED_REFERENCE_AUTHORITY_BUNDLE.pendingRecord ? TYPED_REFERENCE_AUTHORITY_BUNDLE.pendingReceipt : 'gma.action-intent-binding-receipt/4')
     && closed(value, ['schemaVersion', 'classificationFingerprint', 'assessmentFingerprint', 'recordFingerprint'])
     && value.schemaVersion === READ_EFFECT_CONTRACTS.application
     && object(record.bindings) && value.classificationFingerprint === freeformJsonDigest(record.bindings.requirementRoles)

@@ -1,5 +1,6 @@
 import { readScenePendingIntentContext } from '../services/scenePendingIntentService.js';
 import { sceneMovementOutcomeService, type SceneMovementOutcomeCommit } from '../services/sceneMovementOutcomeStore.js';
+import { pendingReferenceQualificationService, type PendingReferenceQualificationCommit } from '../services/pendingReferenceQualificationStore.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { readQualifiedSceneTurnIdentitySources } from '../services/qualifiedSceneTurnSources.js';
@@ -1041,15 +1042,30 @@ storyWorkspaceRouter.post('/scene-reality/commit', requireServiceIntegration, as
 
 storyWorkspaceRouter.get('/scene-reality/pending-intent/:programId', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
-  if (Object.keys(req.query).some((key) => !['qualification', 'continuation', 'readEffects'].includes(key))
+  if (Object.keys(req.query).some((key) => !['qualification', 'continuation', 'readEffects', 'typedReferences'].includes(key))
     || req.query.qualification !== undefined && req.query.qualification !== '1'
     || req.query.continuation !== undefined && req.query.continuation !== '1'
-    || req.query.readEffects !== undefined && req.query.readEffects !== '1') {
+    || req.query.readEffects !== undefined && req.query.readEffects !== '1'
+    || req.query.typedReferences !== undefined && req.query.typedReferences !== '1') {
     throw new StoryWorkspaceStoreError(422, 'OBSERVER_QUALIFICATION_INPUT_INVALID', 'The unfinished-action reader option is unsupported.', {});
   }
   res.json(await readScenePendingIntentContext({ userId: (req as IntegrationRequest).userId,
     campaignId: req.params.campaignId, programId: req.params.programId,
-    qualified: req.query.qualification === '1', continuation: req.query.continuation === '1', readEffects: req.query.readEffects === '1' }));
+    qualified: req.query.qualification === '1', continuation: req.query.continuation === '1', readEffects: req.query.readEffects === '1', typedReferences: req.query.typedReferences === '1' }));
+}));
+
+storyWorkspaceRouter.get('/pending-reference-qualifications/operations/:programId/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  if (Object.keys(req.query).length) throw new StoryWorkspaceStoreError(422, 'PENDING_REFERENCE_INPUT_INVALID', 'Unsupported saved-reference reader fields.', {});
+  res.json(await pendingReferenceQualificationService().operation({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, programId: req.params.programId, operationId: req.params.operationId }) ?? { disposition: 'confirmed_absent' });
+}));
+storyWorkspaceRouter.post('/pending-reference-qualifications/commit', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  closedActorLinkBody(req.body, ['schemaVersion', 'operationId', 'idempotencyKey', 'programId', 'expectedArtifactRevision']);
+  const result = await pendingReferenceQualificationService().commit({ ...req.body,
+    userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId } as PendingReferenceQualificationCommit);
+  res.status(result.duplicate ? 200 : 201).json(result);
 }));
 
 storyWorkspaceRouter.get('/scene-movement-outcomes/expectation/:programId/:nodeRef', requireServiceIntegration, asyncRoute(async (req, res) => {

@@ -1,4 +1,5 @@
 import { READ_EFFECT_CONTRACTS, READ_EFFECT_ROW_SCHEMAS } from './readEffectContracts.js';
+import { TYPED_REFERENCE_AUTHORITY_BUNDLE } from './typedReferenceBindings.js';
 
 export const FREEFORM_INTENT_PROPOSAL_SCHEMA = {
   "$id": "gma.freeform-intent-proposal/1",
@@ -395,4 +396,19 @@ export const FREEFORM_READ_EFFECT_PROPOSAL_SCHEMA = (() => {
       properties: { ...properties,
         reads: { type: 'array', maxItems: 8, items: READ_EFFECT_ROW_SCHEMAS.read },
         effects: { type: 'array', maxItems: 8, items: READ_EFFECT_ROW_SCHEMAS.effect } } } } };
+})();
+
+/** Separate operation/profile: historical /2 outputs keep their exact shape. */
+export const FREEFORM_TYPED_REFERENCE_PROPOSAL_SCHEMA = (() => {
+  const schema = structuredClone(FREEFORM_READ_EFFECT_PROPOSAL_SCHEMA);
+  const effect = schema.$defs.step.properties.effects.items;
+  const originalTarget = FREEFORM_INTENT_PROPOSAL_SCHEMA.$defs.step.properties.targets.items;
+  const target = { ...originalTarget, properties: { ...originalTarget.properties,
+    role: { enum: [...originalTarget.properties.role.enum, 'actor'] } } };
+  return { ...schema, $id: TYPED_REFERENCE_AUTHORITY_BUNDLE.proposal,
+    properties: { ...schema.properties, schemaVersion: { const: TYPED_REFERENCE_AUTHORITY_BUNDLE.proposal } },
+    $defs: { ...schema.$defs, step: { ...schema.$defs.step, properties: { ...schema.$defs.step.properties,
+      effects: { ...schema.$defs.step.properties.effects, items: { ...effect,
+        required: [...effect.required, 'targets'], properties: { ...effect.properties,
+          targets: { type: 'array', maxItems: 8, uniqueItems: true, items: target } } } } } } } };
 })();

@@ -11,6 +11,8 @@ import { readActiveCompoundActionArtifact, readStagedCompoundActionInstruction, 
   type CompoundActionInstructionDocument } from './compoundActionArtifactStore.js';
 import type { JsonObject } from './storyWorkspaceStore.js';
 import { actorMechanicsLinkService } from './actorMechanicsLinkStore.js';
+import { validateOperationOutput } from '../llm-orchestrator/operationRegistry.js';
+import { validateFreeformIntake } from '../llm-orchestrator/freeformIntakeValidation.js';
 
 type Scope = { userId: string; campaignId: string };
 type AnswerBinding = { windowId: string; question: string; questionDigest: string; ticketRef: string; answerInstructionRef: string };
@@ -219,6 +221,25 @@ export function freeformTurnService(deps: FreeformTurnDependencies = {}): Freefo
     const ticket = window.ticketRef ? await tickets.findOne({ ...scoped(input), _id: window.ticketRef }) : null;
     if (ticket?.status === 'accepted' && !window.pendingDecision) {
       const output = ticket.response?.output;
+      // Acceptance and plan persistence are separate owner boundaries. After an
+      // interrupted save, discover the same packet so the secured response can
+      // finish its original save; never invent a clarification or issue a ticket.
+      if (object(output) && output.clarification === null
+        && !input.advance && !input.answer && !input.renewTicket && !input.previousTicket
+        && ticket.transport === 'manual' && ticket.response?.status === 'succeeded'
+        && ticket.response.route?.provider === 'manual' && ticket.response.route.model === null
+        && ticket.requestDigest === freeformJsonDigest(ticket.request)
+        && ticket.outputDigest === freeformJsonDigest(output)
+        && ticket.workflowRef?.turnId === document._id && ticket.workflowRef.windowId === window.windowId
+        && ticket.interactionId === interactionOf(window.instructionRef)
+        && ticket.response.operation === ticket.request.operation
+        && ticket.response.taskId === ticket.request.taskId
+        && ticket.response.correlationId === ticket.request.correlationId
+        && ticket.response.idempotencyKey === ticket.request.idempotencyKey
+        && validateOperationOutput(ticket.request.operation, output).valid
+        && validateFreeformIntake(ticket.request, output).valid) {
+        return read({ ...scoped(input), turnId: document._id });
+      }
       if (!object(output) || typeof output.clarification !== 'string' || !output.clarification.trim()) freeformTicketError('FREEFORM_PLAN_BINDING_INVALID');
       const question = output.clarification;
       const digest = freeformTextDigest(question.trim().toLocaleLowerCase('en-US'));

@@ -29,7 +29,7 @@ const digest = (value: unknown) => freeformJsonDigest(value);
 function sourceNodes(source: PendingIntentWindowSource): Row[] {
   const { instruction, program, cursor, artifactRevision } = source;
   check(instruction && program && cursor, 'source');
-  check(['gma.semantic-action-program/4', 'gma.semantic-action-program/5', 'gma.semantic-action-program/6'].includes(program.schemaVersion), 'program.schemaVersion');
+  check(['gma.semantic-action-program/4', 'gma.semantic-action-program/5', 'gma.semantic-action-program/6', 'gma.semantic-action-program/7'].includes(program.schemaVersion), 'program.schemaVersion');
   check(isId(program.programId) && cursor.programId === program.programId, 'programId');
   check(isId(instruction.instructionRef) && instruction.instructionRef === program.instructionRef, 'instructionRef');
   check(typeof instruction.exactText === 'string' && instruction.exactText.length > 0
@@ -104,6 +104,19 @@ function executionWindow(nodes: Row[], cursor: Row): { nodeRefs: string[]; stopR
   return { nodeRefs: selected, stopReason };
 }
 
+/** Stable requirement identities are shared by current-window and immutable
+ * source-provenance checks. This pure projection grants no execution scope. */
+export function pendingIntentRequirementRows(nodeRef: string, dataRequirements: Row[]): Row[] {
+  const occurrences = new Map<string, number>();
+  return dataRequirements.map((value: Row) => {
+    const requirementFingerprint = digest(value);
+    const occurrence = occurrences.get(requirementFingerprint) ?? 0;
+    occurrences.set(requirementFingerprint, occurrence + 1);
+    const requirementId = `requirement:${digest({ nodeRef, requirementFingerprint, occurrence }).slice(0, 32)}`;
+    return { requirementId, requirementFingerprint, value };
+  });
+}
+
 export function createPendingIntentWindow(source: PendingIntentWindowSource): Row {
   const nodes = sourceNodes(source);
   const { instruction, program, cursor } = source;
@@ -132,14 +145,7 @@ export function createPendingIntentWindow(source: PendingIntentWindowSource): Ro
       return { start: span.start, end: span.end, quote: encoded.subarray(span.start, span.end).toString('utf8') };
     });
     const { dataRequirements, ...node } = structuredClone(original);
-    const occurrences = new Map<string, number>();
-    const requirements = dataRequirements.map((value: Row) => {
-      const requirementFingerprint = digest(value);
-      const occurrence = occurrences.get(requirementFingerprint) ?? 0;
-      occurrences.set(requirementFingerprint, occurrence + 1);
-      const requirementId = `requirement:${digest({ nodeRef, requirementFingerprint, occurrence }).slice(0, 32)}`;
-      return { requirementId, requirementFingerprint, value };
-    });
+    const requirements = pendingIntentRequirementRows(nodeRef, dataRequirements);
     return { nodeRef, nodeFingerprint: digest(original), node, instructionEvidence, requirements };
   });
   const body = {

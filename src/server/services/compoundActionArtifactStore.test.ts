@@ -504,6 +504,7 @@ describe('GMC compound-action private artifact store', () => {
       'gma.semantic-action-program/4',
       'gma.semantic-action-program/5',
       'gma.semantic-action-program/6',
+      'gma.semantic-action-program/7',
     ]);
     expect(Object.values(COMPOUND_ACTION_CONTRACTS)).not.toContain('gma.semantic-action-program/5');
     const exact = instruction();

@@ -9,7 +9,7 @@ import {
   STORY_OBLIGATION_CAPABILITIES,
 } from '../services/storyWorkspaceStore.js';
 import {
-  COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
+  COMPOUND_ACTION_ARTIFACT_STORE_LEGACY_READERS,
   GMC_COMPOUND_ACTION_CAPABILITIES,
   GMC_COMPOUND_ACTION_CONTRACTS,
 } from '../services/compoundActionArtifactStore.js';
@@ -42,6 +42,10 @@ afterEach(async () => {
 
 describe('API health', () => {
   it('advertises the complete D2 authority bundle without authentication', async () => {
+    expect(COMPOUND_ACTION_ARTIFACT_STORE_LEGACY_READERS).toEqual([
+      'gma.semantic-action-program/2', 'gma.semantic-action-program/4',
+      'gma.semantic-action-program/5', 'gma.semantic-action-program/6',
+    ]);
     const app = express();
     app.use('/api', apiRouter);
     const server = app.listen(0);
@@ -55,7 +59,7 @@ describe('API health', () => {
       success: true,
       status: 'healthy',
       service: 'gamemastercraft',
-      version: '1.14.11',
+      version: '1.14.12',
       contracts: {
         actionDirectedStory: {
           capabilities: ACTION_DIRECTED_STORY_CAPABILITIES,
@@ -109,7 +113,7 @@ describe('API health', () => {
           capabilities: GMC_COMPOUND_ACTION_CAPABILITIES,
           contracts: GMC_COMPOUND_ACTION_CONTRACTS,
           artifactStoreContractVersion: 'gmc.compound-action-artifact-store/2',
-          readableSemanticActionPrograms: COMPOUND_ACTION_ARTIFACT_STORE_READABLE_PROGRAMS,
+          readableSemanticActionPrograms: COMPOUND_ACTION_ARTIFACT_STORE_LEGACY_READERS,
           requirementProjectionContractVersion: 'gmc.compound-action-requirement-projection/1',
           limits: { dataRequirementMaximum: 32 },
           authority: 'gmc',

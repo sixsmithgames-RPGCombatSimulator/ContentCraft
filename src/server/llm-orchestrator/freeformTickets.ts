@@ -5,8 +5,9 @@ import { LLM_REQUEST_SCHEMA_VERSION, type LlmRequestEnvelope, type LlmResponseEn
 import { FREEFORM_INTAKE_OPERATION, FREEFORM_INTAKE_POLICY_VERSION, FREEFORM_ANSWER_POLICY_VERSION,
   FREEFORM_READABLE_POLICY_VERSIONS, FREEFORM_REMOTE_POLICY_VERSION, FREEFORM_REMOTE_ANSWER_POLICY_VERSION,
   FREEFORM_READ_EFFECT_OPERATION, FREEFORM_READ_EFFECT_POLICY_VERSION, FREEFORM_READ_EFFECT_ANSWER_POLICY_VERSION,
-  FREEFORM_MOVER_POLICY_VERSION, FREEFORM_MOVER_ANSWER_POLICY_VERSION } from '../../shared/llm/freeformIntakePolicy.js';
-import { readEffectWritesEnabled } from '../services/readEffectRollout.js';
+  FREEFORM_MOVER_POLICY_VERSION, FREEFORM_MOVER_ANSWER_POLICY_VERSION, FREEFORM_TYPED_REFERENCE_OPERATION,
+  FREEFORM_TYPED_REFERENCE_POLICY_VERSION, FREEFORM_TYPED_REFERENCE_ANSWER_POLICY_VERSION } from '../../shared/llm/freeformIntakePolicy.js';
+import { readEffectWritesEnabled, typedReferenceWritesEnabled } from '../services/readEffectRollout.js';
 import { getDb } from '../config/mongo.js';
 import { readStagedCompoundActionInstruction } from '../services/compoundActionArtifactStore.js';
 import { OrchestratorError } from './errors.js';
@@ -110,15 +111,18 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
   const instruction = staged.instruction;
   const originalTicket = input.previousTicket ?? input.renewedTicket;
   const originalContract = originalTicket ? await records.findOne({ userId: input.userId, campaignId: input.campaignId, _id: originalTicket }) : null;
-  const readEffects = originalContract ? originalContract.request.operation === FREEFORM_READ_EFFECT_OPERATION
-    : input.transport === 'manual' && readEffectWritesEnabled(input.campaignId);
+  const typedReferences = originalContract ? originalContract.request.operation === FREEFORM_TYPED_REFERENCE_OPERATION
+    : input.transport === 'manual' && typedReferenceWritesEnabled(input.campaignId);
+  const readEffects = typedReferences || (originalContract ? originalContract.request.operation === FREEFORM_READ_EFFECT_OPERATION
+    : input.transport === 'manual' && readEffectWritesEnabled(input.campaignId));
   // New durable workflows receive the remote-meaning policy. The original
   // action-only entry retains its historical policy; a replacement stays in
   // the original ticket's policy family rather than silently changing it.
   const remoteWorkflow = Boolean(input.workflowRef)
     || [FREEFORM_REMOTE_POLICY_VERSION, FREEFORM_REMOTE_ANSWER_POLICY_VERSION].includes(originalContract?.policyVersion ?? '');
   const historicalReadEffects = [FREEFORM_READ_EFFECT_POLICY_VERSION, FREEFORM_READ_EFFECT_ANSWER_POLICY_VERSION].includes(originalContract?.policyVersion ?? '');
-  const policyVersion = readEffects ? historicalReadEffects
+  const policyVersion = typedReferences ? input.clarifications?.length ? FREEFORM_TYPED_REFERENCE_ANSWER_POLICY_VERSION : FREEFORM_TYPED_REFERENCE_POLICY_VERSION
+    : readEffects ? historicalReadEffects
     ? input.clarifications?.length ? FREEFORM_READ_EFFECT_ANSWER_POLICY_VERSION : FREEFORM_READ_EFFECT_POLICY_VERSION
     : input.clarifications?.length ? FREEFORM_MOVER_ANSWER_POLICY_VERSION : FREEFORM_MOVER_POLICY_VERSION
     : remoteWorkflow ? input.clarifications?.length ? FREEFORM_REMOTE_ANSWER_POLICY_VERSION : FREEFORM_REMOTE_POLICY_VERSION
@@ -148,7 +152,7 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
       || previous.instructionFingerprint !== instruction.instructionFingerprint) freeformTicketError('FREEFORM_REPLACEMENT_NOT_ALLOWED');
   }
   const ticket = randomUUID();
-  const operation = getOperationDefinition(readEffects ? FREEFORM_READ_EFFECT_OPERATION : FREEFORM_INTAKE_OPERATION);
+  const operation = getOperationDefinition(typedReferences ? FREEFORM_TYPED_REFERENCE_OPERATION : readEffects ? FREEFORM_READ_EFFECT_OPERATION : FREEFORM_INTAKE_OPERATION);
   const sceneCatalog = input.includeSceneCatalog === true ? buildFreeformSceneCatalog(
     await (options.readSceneContext ?? readCurrentSceneContexts)(input), input.selectedActorRef, staged.originCheckpoint?.storyWorkspaceRef,
   ) : null;

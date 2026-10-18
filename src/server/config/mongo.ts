@@ -5,6 +5,7 @@
 
 import { MongoClient, Db } from 'mongodb';
 import type { Collection } from 'mongodb';
+import { ensureFreeformTicketRetention } from './freeformTicketRetention.js';
 import type { CanonEntity } from '../models/CanonEntity.js';
 import type { CanonChunk } from '../models/CanonChunk.js';
 import type { ProjectLibraryLink } from '../models/ProjectLibraryLink.js';
@@ -368,11 +369,13 @@ async function createIndexes(database: Db): Promise<void> {
     { userId: 1, campaignId: 1, issuanceKey: 1 },
     { unique: true, name: 'unique_llm_freeform_ticket_issuance' },
   );
-  await database.collection('llm_freeform_tickets').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ensureFreeformTicketRetention(database);
   await database.collection('gma_freeform_turns').createIndex({ userId: 1, campaignId: 1, rootInteractionId: 1 },
     { unique: true, name: 'unique_gma_freeform_turn' });
   await database.collection('gma_freeform_turns').createIndex({ userId: 1, campaignId: 1, timelineSequence: 1 });
   await database.collection('gma_freeform_turns').createIndex({ userId: 1, campaignId: 1, 'turn.windows.programRef': 1 });
+  await database.collection('gma_pending_reference_qualifications').createIndex({ userId: 1, campaignId: 1, programId: 1, operationId: 1 },
+    { unique: true });
   await database.collection('gma_actor_mechanics_links').createIndex({ userId: 1, campaignId: 1, revision: 1 },
     { unique: true, name: 'unique_actor_link_revision' });
   await database.collection('gma_actor_mechanics_links').createIndex({ userId: 1, campaignId: 1, operationId: 1 },

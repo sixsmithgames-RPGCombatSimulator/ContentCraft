@@ -10,6 +10,9 @@ import { sceneDossierReferenceIssues } from '../../shared/llm/sceneDossierRefere
 import { createPendingBindingRecord } from '../../shared/llm/scenePendingIntentApplication.js';
 import { readEffectWritesEnabled } from './readEffectRollout.js';
 import { READ_EFFECT_AUTHORITY_BUNDLE } from '../../shared/llm/readEffectContracts.js';
+import { TYPED_REFERENCE_AUTHORITY_BUNDLE as TYPED } from '../../shared/llm/typedReferenceBindings.js';
+import { typedReferenceWritesEnabled } from './readEffectRollout.js';
+import { SCENE_WORKING_SET } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { readEffectSurfaceIssues } from '../../shared/llm/readEffectSurfaces.js';
 
 export const SCENE_REALITY_CONTRACTS = Object.freeze({
@@ -756,15 +759,16 @@ function validateSuccessorContinuity(
   }
 }
 
-function validateAssessment(value: unknown, proposal: JsonObject, request: JsonObject, pending: false | 'legacy' | 'qualified' | 'continuation' | 'read_effects' = false): JsonObject {
+function validateAssessment(value: unknown, proposal: JsonObject, request: JsonObject, pending: false | 'legacy' | 'qualified' | 'continuation' | 'read_effects' | 'typed_references' = false): JsonObject {
   if (!object(value)) throw new StoryWorkspaceStoreError(422, 'SCENE_READINESS_ASSESSMENT_REQUIRED', 'The Scene was not independently examined for playability.', {});
-  version(value, pending === 'read_effects' ? 'gma.scene-readiness-assessment/5' : pending === 'continuation' ? 'gma.scene-readiness-assessment/4' : pending === 'qualified' ? 'gma.scene-readiness-assessment/3' : pending ? 'gma.scene-readiness-assessment/2' : SCENE_REALITY_CONTRACTS.assessment, 'assessment');
+  version(value, pending === 'typed_references' ? TYPED.assessment : pending === 'read_effects' ? 'gma.scene-readiness-assessment/5' : pending === 'continuation' ? 'gma.scene-readiness-assessment/4' : pending === 'qualified' ? 'gma.scene-readiness-assessment/3' : pending ? 'gma.scene-readiness-assessment/2' : SCENE_REALITY_CONTRACTS.assessment, 'assessment');
   assertByteBound(value, 32_768, 'SCENE_READINESS_ASSESSMENT_TOO_LARGE', 'assessment');
   exactKeys(value, 'assessment', ['schemaVersion', 'assessmentId', 'operationId', 'campaignId', 'dossierFingerprint', 'policyFingerprint', 'selectedDepth', 'verdict', 'confidence', 'counterfactualProbes', 'debt', 'rationale', 'evidenceRefs',
     ...(pending ? ['intentWindowFingerprint', 'bindingFingerprint', 'ownerReadSetFingerprint', 'pendingIntentPolicyFingerprint', 'bindingReviews'] : []),
-    ...(['qualified', 'continuation', 'read_effects'].includes(String(pending)) ? ['qualifiedObserverFingerprint', 'qualificationReview'] : []),
-    ...(['continuation', 'read_effects'].includes(String(pending)) ? ['instructionCoverageFingerprint', 'confirmedRelocationFingerprint'] : []),
-    ...(pending === 'read_effects' ? ['requirementRoleFingerprint', 'requirementRoleReviews'] : [])]);
+    ...(['qualified', 'continuation', 'read_effects', 'typed_references'].includes(String(pending)) ? ['qualifiedObserverFingerprint', 'qualificationReview'] : []),
+    ...(['continuation', 'read_effects', 'typed_references'].includes(String(pending)) ? ['instructionCoverageFingerprint', 'confirmedRelocationFingerprint'] : []),
+    ...(['read_effects', 'typed_references'].includes(String(pending)) ? ['requirementRoleFingerprint', 'requirementRoleReviews'] : []),
+    ...(pending === 'typed_references' ? ['referenceQualificationFingerprint', 'effectTargetFingerprint', 'referenceReview'] : [])]);
   stableId(value.assessmentId, 'assessment.assessmentId');
   if (value.operationId !== request.operationId || value.campaignId !== request.campaignId) throw new StoryWorkspaceStoreError(409, 'SCENE_READINESS_ASSESSMENT_CONFLICT', 'The readiness assessment does not belong to this Scene build.', {});
   if (value.dossierFingerprint !== hash(proposal)) throw new StoryWorkspaceStoreError(422, 'SCENE_READINESS_DOSSIER_MISMATCH', 'The readiness assessment examined a different Scene dossier.', {});
@@ -1214,37 +1218,39 @@ export async function commitSceneReality(
     if (!PENDING_INTENT_WRITES_ENABLED) throw new StoryWorkspaceStoreError(503, 'SCENE_PENDING_INTENT_WRITES_DISABLED', 'New prepared action bindings are disabled.', {});
     const supplement = input.pendingIntent;
     exactKeys(supplement, 'pendingIntent', ['schemaVersion', 'ownerContext', 'bindings']);
-    const readEffects = supplement.schemaVersion === 'gma.scene-pending-intent-commit/4';
+    const typed = supplement.schemaVersion === 'gma.scene-pending-intent-commit/5';
+    const readEffects = typed || supplement.schemaVersion === 'gma.scene-pending-intent-commit/4';
+    if (typed && !typedReferenceWritesEnabled(input.campaignId)) throw new StoryWorkspaceStoreError(503, 'SCENE_TYPED_REFERENCE_WRITES_PAUSED', 'New typed-reference applications are paused for this campaign.', {});
     if (readEffects && !readEffectWritesEnabled(input.campaignId)) throw new StoryWorkspaceStoreError(503, 'SCENE_READ_EFFECT_WRITES_PAUSED', 'New read/effect applications are paused for this campaign.', {});
     const continuation = readEffects || supplement.schemaVersion === 'gma.scene-pending-intent-commit/3';
     const qualified = continuation || supplement.schemaVersion === 'gma.scene-pending-intent-commit/2';
-    version(supplement, readEffects ? 'gma.scene-pending-intent-commit/4' : continuation ? 'gma.scene-pending-intent-commit/3' : qualified ? 'gma.scene-pending-intent-commit/2' : 'gma.scene-pending-intent-commit/1', 'pendingIntent');
+    version(supplement, typed ? 'gma.scene-pending-intent-commit/5' : readEffects ? 'gma.scene-pending-intent-commit/4' : continuation ? 'gma.scene-pending-intent-commit/3' : qualified ? 'gma.scene-pending-intent-commit/2' : 'gma.scene-pending-intent-commit/1', 'pendingIntent');
     if (!stores.readPendingIntent || !object(supplement.ownerContext) || !object(supplement.bindings)) throw new StoryWorkspaceStoreError(422, 'SCENE_PENDING_INTENT_TRANSPORT_INVALID', 'Pending intent requires its complete current owner context.', {});
     const sourceProgram = (supplement.ownerContext.window as JsonObject)?.programId;
     if ((request.programRef as JsonObject)?.programId !== sourceProgram) throw new StoryWorkspaceStoreError(409, 'SCENE_PENDING_INTENT_PROGRAM_CONFLICT', 'The prepared binding belongs to a different action program.', {});
-    const current = await stores.readPendingIntent({ userId: input.userId, campaignId: input.campaignId, programId: String(sourceProgram), ...(qualified ? { qualified: true } : {}), ...(continuation ? { continuation: true } : {}), ...(readEffects ? { readEffects: true } : {}) });
-    if (current.schemaVersion !== (readEffects ? 'gmc.scene-pending-intent-context/4' : continuation ? 'gmc.scene-pending-intent-context/3' : qualified ? 'gmc.scene-pending-intent-context/2' : 'gmc.scene-pending-intent-context/1')
-      || supplement.bindings.schemaVersion !== (readEffects ? 'gma.scene-pending-intent-bindings/4' : continuation ? 'gma.scene-pending-intent-bindings/3' : qualified ? 'gma.scene-pending-intent-bindings/2' : 'gma.scene-pending-intent-bindings/1')) throw new StoryWorkspaceStoreError(422, 'SCENE_PENDING_INTENT_TRANSPORT_INVALID', 'Pending intent versions must match the negotiated owner context.', {});
+    const current = await stores.readPendingIntent({ userId: input.userId, campaignId: input.campaignId, programId: String(sourceProgram), ...(qualified ? { qualified: true } : {}), ...(continuation ? { continuation: true } : {}), ...(readEffects ? { readEffects: true } : {}), ...(typed ? { typedReferences: true } : {}) });
+    if (current.schemaVersion !== (typed ? TYPED.context : readEffects ? 'gmc.scene-pending-intent-context/4' : continuation ? 'gmc.scene-pending-intent-context/3' : qualified ? 'gmc.scene-pending-intent-context/2' : 'gmc.scene-pending-intent-context/1')
+      || supplement.bindings.schemaVersion !== (typed ? TYPED.pendingBindings : readEffects ? 'gma.scene-pending-intent-bindings/4' : continuation ? 'gma.scene-pending-intent-bindings/3' : qualified ? 'gma.scene-pending-intent-bindings/2' : 'gma.scene-pending-intent-bindings/1')) throw new StoryWorkspaceStoreError(422, 'SCENE_PENDING_INTENT_TRANSPORT_INVALID', 'Pending intent versions must match the negotiated owner context.', {});
     assertPendingIntentContextCurrent(supplement.ownerContext, current);
     const window = current.window as JsonObject;
     if ((request.programRef as JsonObject).cursorRevision !== window.cursorRevision || request.instructionRef !== window.instructionRef
       || request.playerDirection !== ((current.source as JsonObject).instruction as JsonObject).exactText) throw new StoryWorkspaceStoreError(409, 'SCENE_PENDING_INTENT_PROGRAM_CONFLICT', 'The Scene request must retain the exact stored instruction and unfinished cursor.', {});
     try {
-      // Only the two registered policies are readable. The sidecar itself is
+      // Only registered historical/new policies are readable. The sidecar is
       // never accepted here as mechanics authority or copied into world facts.
       const policyKind = readEffects ? 'read_effects' : continuation ? 'continuation' : qualified;
-      const policyVersion = (readEffects ? ([10, 11] as const).find((version) => (input.assessment as JsonObject).policyFingerprint
+      const policyVersion = (readEffects ? (typed ? [13] as const : [10, 11, 12] as const).find((version) => (input.assessment as JsonObject).policyFingerprint
         === pendingScenePolicyFingerprint(String(proposal.requestedDepth), 'read_effects', version)) : undefined) ?? 9;
-      if (policyVersion === 11 && sceneDossierReferenceIssues(proposal).length) throw new Error('Incomplete typed dossier reference closure.');
+      if ([11, 12, 13].includes(policyVersion) && sceneDossierReferenceIssues(proposal).length) throw new Error('Incomplete typed dossier reference closure.');
       pendingBindingRecord = createPendingBindingRecord(pendingBindingContext(current, String(request.operationId), proposal),
         supplement.bindings, input.assessment as JsonObject, pendingScenePolicyFingerprint(String(proposal.requestedDepth), policyKind, policyVersion)) as JsonObject;
     } catch {
       throw new StoryWorkspaceStoreError(422, 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', 'The complete Scene and unfinished-action binding examination could not be verified.', {});
     }
   }
-  if ((proposal.sceneStoryDesign as JsonObject).schemaVersion === 'gmc.scene-story-design/4' && pendingBindingRecord?.schemaVersion !== 'gmc.scene-pending-intent-binding-record/4') throw new StoryWorkspaceStoreError(422, 'SCENE_READ_EFFECT_EXAMINATION_REQUIRED', 'New action surfaces require their exact independently reviewed pending roles.', {});
+  if ((proposal.sceneStoryDesign as JsonObject).schemaVersion === 'gmc.scene-story-design/4' && !['gmc.scene-pending-intent-binding-record/4', TYPED.pendingRecord].includes(String(pendingBindingRecord?.schemaVersion))) throw new StoryWorkspaceStoreError(422, 'SCENE_READ_EFFECT_EXAMINATION_REQUIRED', 'New action surfaces require their exact independently reviewed pending roles.', {});
   const assessment = validateAssessment(input.assessment, proposal, request, pendingBindingRecord
-    ? pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' ? 'read_effects' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/3' ? 'continuation'
+    ? pendingBindingRecord.schemaVersion === TYPED.pendingRecord ? 'typed_references' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' ? 'read_effects' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/3' ? 'continuation'
       : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/2' ? 'qualified' : 'legacy' : false);
   const pointerRevision = actualPointerRevision + 1;
   const certificate = certificateFrom(proposal, request, assessment, pointerRevision);
@@ -1557,8 +1563,10 @@ export async function selectPreparedStoryFacts(
 
 export function sceneRealityHealthAdvertisement(): JsonObject {
   return {
-    capabilities: [...SCENE_REALITY_CAPABILITIES, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
+    capabilities: [...SCENE_REALITY_CAPABILITIES, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, SCENE_WORKING_SET.capability, TYPED.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
     readEffects: READ_EFFECT_AUTHORITY_BUNDLE,
+    typedReferences: TYPED,
+    workingSet: SCENE_WORKING_SET,
     movementOutcome: { ...SCENE_MOVEMENT_OUTCOME_AUTHORITY, routeEnabled: true, writesEnabled: process.env.GMC_PENDING_OBSERVER_QUALIFICATION === '1' },
     preparedCheckCompletion: { ...PREPARED_CHECK_COMPLETION_AUTHORITY, routeEnabled: true },
     contracts: clone(SCENE_REALITY_CONTRACTS as unknown as JsonObject),

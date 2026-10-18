@@ -81,6 +81,26 @@ function enableFixtureOperation() {
 }
 
 describe('compact freeform proposal boundary (not gameplay certification)', () => {
+  it('issues the exact typed contract only for the approved Manual canary, accepting explicit per-effect targets with zero provider attempts', async () => {
+    vi.stubEnv('GMC_MANUAL_READ_EFFECTS_ENABLED', '1');
+    vi.stubEnv('GMC_MANUAL_READ_EFFECTS_CAMPAIGN_ALLOWLIST', 'fictional-campaign');
+    vi.stubEnv('GMC_TYPED_REFERENCE_BINDINGS', '1');
+    const f = await fixture(); enableFixtureOperation();
+    expect(f.issued.request.operation).toBe('input.freeform.interpret.read-effects.typed-references');
+    expect(f.issued.request.constraints.policyVersion).toBe('gma.freeform-intake-policy/9');
+    f.output.schemaVersion = 'gma.freeform-intent-proposal/3';
+    f.output.steps = f.output.steps.map(({ results: _results, ...step }: any) => ({ ...step, reads: [],
+      effects: step.purpose === 'observe_situation' ? [] : [{ attempt: step.goal, resolution: 'owner_resolution',
+        evidence: step.evidence, targets: step.targets }] }));
+    f.output.steps[1].effects[0].targets = [...f.output.steps[1].targets, { ref: f.output.steps[1].actor, role: 'actor' }];
+    const response = await executeLlmOperation(f.issued.request, f.options);
+    expect(response.status).toBe('succeeded'); expect(f.provider.calls).toHaveLength(0);
+    expect(f.documents[0].status).toBe('accepted');
+    const unrelated = await fixture('integrated');
+    expect(unrelated.issued.request.operation).toBe('input.freeform.interpret');
+    vi.stubEnv('GMC_MANUAL_READ_EFFECTS_CAMPAIGN_ALLOWLIST', 'foreign-campaign');
+    expect((await fixture()).issued.request.operation).toBe('input.freeform.interpret');
+  });
   it('registers one closed compact schema, complete first-pass policy, and one no-fallback attempt', () => {
     const op = getOperationDefinition(FREEFORM_INTAKE_OPERATION);
     expect(op.outputSchema.schema).toEqual(FREEFORM_INTENT_PROPOSAL_SCHEMA);

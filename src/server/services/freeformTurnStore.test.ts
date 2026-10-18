@@ -101,6 +101,26 @@ describe('protected Manual freeform workflow (not gameplay proof)', () => {
     expect(f.turns.rows).toEqual(before); expect(f.tickets.rows).toHaveLength(1);
     expect(f.artifacts.size).toBe(0);
   });
+  it('rediscovers an accepted action whose original plan save was interrupted, without another ticket or owner write', async () => {
+    const f = fixture(), first = await f.start(), ticket = f.tickets.rows[0];
+    const output = { schemaVersion: 'gma.freeform-intent-proposal/1', ticket: ticket._id,
+      windowText: first.instruction.exactText, clarification: null,
+      referents: [{ kind: 'actor', text: 'I', catalogKey: 'selected_actor', methodKind: null }],
+      steps: [{ kind: 'action', purpose: 'apply_capability', goal: 'Open it', evidence: ['I open it.'], actor: 0,
+        targets: [], method: null, results: ['Attempt to open it'], after: [], parallel: [], when: null }], observations: [] };
+    ticket.status = 'accepted'; ticket.outputDigest = freeformJsonDigest(output);
+    ticket.response = { schemaVersion: 'gma-gmc.llm-response/1', status: 'succeeded', output,
+      operation: ticket.request.operation, taskId: ticket.request.taskId, correlationId: ticket.request.correlationId,
+      idempotencyKey: ticket.request.idempotencyKey, route: { provider: 'manual', model: null } };
+    const before = structuredClone(f.turns.rows), ticketsBefore = structuredClone(f.tickets.rows);
+    expect((await f.service.prepare({ ...f.scope, turnId: first.turn.turnId }))!.turn).toEqual(first.turn);
+    expect((await f.service.prepare({ ...f.scope, turnId: first.turn.turnId }))!.turn).toEqual(first.turn);
+    expect(f.turns.rows).toEqual(before); expect(f.tickets.rows).toEqual(ticketsBefore);
+    expect(f.artifacts.size).toBe(0);
+    ticket.outputDigest = 'f'.repeat(64);
+    await expect(f.service.prepare({ ...f.scope, turnId: first.turn.turnId })).rejects.toMatchObject({ code: 'FREEFORM_PLAN_BINDING_INVALID' });
+    expect(f.turns.rows).toEqual(before);
+  });
   it('never turns a missing suffix into a new instruction or closes the root', async () => {
     const f = fixture(), first = await f.start(); f.finish(first, '');
     const artifact = f.artifacts.values().next().value!; delete artifact.artifact.freeformBinding.suffixText;
