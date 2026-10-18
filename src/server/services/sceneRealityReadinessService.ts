@@ -11,6 +11,7 @@ import { createPendingBindingRecord } from '../../shared/llm/scenePendingIntentA
 import { readEffectWritesEnabled } from './readEffectRollout.js';
 import { READ_EFFECT_AUTHORITY_BUNDLE } from '../../shared/llm/readEffectContracts.js';
 import { TYPED_REFERENCE_AUTHORITY_BUNDLE as TYPED } from '../../shared/llm/typedReferenceBindings.js';
+import { SCENE_INFORMATION_PROJECTION } from '../../shared/llm/sceneInformationProjection.js';
 import { typedReferenceWritesEnabled } from './readEffectRollout.js';
 import { SCENE_WORKING_SET } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { readEffectSurfaceIssues } from '../../shared/llm/readEffectSurfaces.js';
@@ -1239,9 +1240,9 @@ export async function commitSceneReality(
       // Only registered historical/new policies are readable. The sidecar is
       // never accepted here as mechanics authority or copied into world facts.
       const policyKind = readEffects ? 'read_effects' : continuation ? 'continuation' : qualified;
-      const policyVersion = (readEffects ? (typed ? [13] as const : [10, 11, 12] as const).find((version) => (input.assessment as JsonObject).policyFingerprint
+      const policyVersion = (readEffects ? (typed ? [13, 14] as const : [10, 11, 12] as const).find((version) => (input.assessment as JsonObject).policyFingerprint
         === pendingScenePolicyFingerprint(String(proposal.requestedDepth), 'read_effects', version)) : undefined) ?? 9;
-      if ([11, 12, 13].includes(policyVersion) && sceneDossierReferenceIssues(proposal).length) throw new Error('Incomplete typed dossier reference closure.');
+      if ([11, 12, 13, 14].includes(policyVersion) && sceneDossierReferenceIssues(proposal).length) throw new Error('Incomplete typed dossier reference closure.');
       pendingBindingRecord = createPendingBindingRecord(pendingBindingContext(current, String(request.operationId), proposal),
         supplement.bindings, input.assessment as JsonObject, pendingScenePolicyFingerprint(String(proposal.requestedDepth), policyKind, policyVersion)) as JsonObject;
     } catch {
@@ -1563,10 +1564,11 @@ export async function selectPreparedStoryFacts(
 
 export function sceneRealityHealthAdvertisement(): JsonObject {
   return {
-    capabilities: [...SCENE_REALITY_CAPABILITIES, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, SCENE_WORKING_SET.capability, TYPED.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
+    capabilities: [...SCENE_REALITY_CAPABILITIES, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, SCENE_WORKING_SET.capability, TYPED.capability, SCENE_INFORMATION_PROJECTION.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
     readEffects: READ_EFFECT_AUTHORITY_BUNDLE,
     typedReferences: TYPED,
     workingSet: SCENE_WORKING_SET,
+    informationProjection: SCENE_INFORMATION_PROJECTION,
     movementOutcome: { ...SCENE_MOVEMENT_OUTCOME_AUTHORITY, routeEnabled: true, writesEnabled: process.env.GMC_PENDING_OBSERVER_QUALIFICATION === '1' },
     preparedCheckCompletion: { ...PREPARED_CHECK_COMPLETION_AUTHORITY, routeEnabled: true },
     contracts: clone(SCENE_REALITY_CONTRACTS as unknown as JsonObject),

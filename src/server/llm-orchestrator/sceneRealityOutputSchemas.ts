@@ -431,3 +431,20 @@ export const sceneReadinessTypedReferenceAssessmentOutput = strictObject(
     }) });
 export const sceneTypedReferenceRepairOutput = { ...sceneReadEffectRepairOutput,
   bindingReplacements: { type: 'array', maxItems: 8, items: SCENE_TYPED_REFERENCE_BINDINGS_SCHEMA.properties.nodes.items } };
+
+const informationSelection = strictObject(['informationId', 'accessVectorIndexes'], {
+  informationId: identifier, accessVectorIndexes: { type: 'array', minItems: 1, maxItems: 8, uniqueItems: true,
+    items: { type: 'integer', minimum: 0, maximum: 23 } },
+});
+const { information: _copiedInformation, ...modelKitProperties } = sceneKit.properties;
+const modelKit = strictObject(sceneKit.required.filter((key) => key !== 'information').concat('informationSelections'), {
+  ...modelKitProperties, informationSelections: { type: 'array', maxItems: 24, items: informationSelection },
+});
+export const sceneRealityInformationBuilderOutput = { ...sceneRealityTypedReferenceBuilderOutput,
+  schemaVersion: { const: 'gma.scene-reality-builder-result/7' },
+  proposal: { anyOf: [strictObject(sceneRealityBuilderCandidate.required, { ...sceneRealityBuilderCandidate.properties,
+    schemaVersion: { const: 'gma.scene-reality-model-proposal/1' }, sceneKit: modelKit, sceneStoryDesign: readEffectStoryDesign }), { type: 'null' }] } };
+export const sceneInformationRepairOutput = { ...sceneTypedReferenceRepairOutput,
+  schemaVersion: { const: 'gma.scene-pending-intent-repair/5' },
+  informationReplacements: { type: 'array', maxItems: 24,
+    items: strictObject(['selectionIndex', 'replacement'], { selectionIndex: { type: 'integer', minimum: 0, maximum: 23 }, replacement: informationSelection }) } };

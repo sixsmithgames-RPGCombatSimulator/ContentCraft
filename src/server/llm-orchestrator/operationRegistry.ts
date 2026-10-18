@@ -17,6 +17,7 @@ import { QUALIFIED_BINDING_POLICY, QUALIFIED_EXAMINER_POLICY, CONTINUATION_BINDI
 import { READ_EFFECT_BINDING_POLICY, READ_EFFECT_EXAMINER_POLICY, SCENE_MECHANICS_PREPARATION_POLICY, SCENE_DOSSIER_REFERENCE_POLICY } from '../../shared/llm/sceneReadEffectPolicy.js';
 import { SCENE_WORKING_SET_POLICY, decodeScenePreparationWorkingSet } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { TYPED_PENDING_BINDING_POLICY, TYPED_PENDING_EXAMINER_POLICY } from '../../shared/llm/sceneTypedReferencePolicy.js';
+import { SCENE_INFORMATION_PROJECTION_POLICY } from '../../shared/llm/sceneInformationProjection.js';
 import {
   sceneRealityBuilderCheckpointResultOutput,
   sceneRealityBuilderResultOutput,
@@ -32,6 +33,7 @@ import {
   sceneRealityContinuationBuilderResultOutput, sceneReadinessContinuationAssessmentOutput, sceneContinuationIntentRepairOutput,
   sceneRealityReadEffectBuilderOutput, sceneReadinessReadEffectAssessmentOutput, sceneReadEffectRepairOutput,
   sceneRealityTypedReferenceBuilderOutput, sceneReadinessTypedReferenceAssessmentOutput, sceneTypedReferenceRepairOutput,
+  sceneRealityInformationBuilderOutput, sceneInformationRepairOutput,
 } from './sceneRealityOutputSchemas.js';
 
 export const OPERATION_REGISTRY_VERSION = '2026-10-15.1';
@@ -46,7 +48,11 @@ export const MANUAL_PENDING_SCENE_OPERATIONS = Object.freeze([FREEFORM_TYPED_REF
   'story.scene-reality.build.read-effects.working-set', 'story.scene-reality.build.checkpoint.read-effects.working-set',
   'story.scene-readiness.examine.read-effects.working-set', 'story.scene-reality.repair.read-effects.working-set',
   'story.scene-reality.build.read-effects.typed-references.working-set', 'story.scene-reality.build.checkpoint.read-effects.typed-references.working-set',
-  'story.scene-readiness.examine.read-effects.typed-references.working-set', 'story.scene-reality.repair.read-effects.typed-references.working-set']);
+  'story.scene-readiness.examine.read-effects.typed-references.working-set', 'story.scene-reality.repair.read-effects.typed-references.working-set',
+  'story.scene-reality.build.read-effects.typed-references.working-set.information-projection',
+  'story.scene-reality.build.checkpoint.read-effects.typed-references.working-set.information-projection',
+  'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection',
+  'story.scene-reality.repair.read-effects.typed-references.working-set.information-projection']);
 export const OPERATION_REGISTRY_COMPATIBLE_CLIENT_VERSIONS = Object.freeze([
   OPERATION_REGISTRY_VERSION,
   '2026-10-07.2',
@@ -1707,6 +1713,24 @@ for (const base of ['story.scene-reality.build', 'story.scene-reality.build.chec
       .replaceAll('gma.scene-readiness-assessment/5', 'gma.scene-readiness-assessment/6') });
 }
 
+// ADR 026 is additive: old tickets retain their original representation/policy.
+for (const base of ['story.scene-reality.build', 'story.scene-reality.build.checkpoint', 'story.scene-readiness.examine', 'story.scene-reality.repair']) {
+  const prior = seeds.find((seed) => seed.id === `${base}.read-effects.typed-references.working-set`)!;
+  const examine = base === 'story.scene-readiness.examine', repair = base === 'story.scene-reality.repair';
+  const output = examine ? sceneReadinessTypedReferenceAssessmentOutput.properties : repair ? sceneInformationRepairOutput
+    : { ...sceneRealityInformationBuilderOutput, ...(base.endsWith('.checkpoint') ? { proposal: { type: 'null' }, status: { const: 'continuation_required' } } : {}) };
+  seeds.push({ ...prior, id: `${prior.id}.information-projection`, required: Object.keys(output), outputProperties: output as Record<string, Record<string, unknown>>,
+    validators: [...(prior.validators ?? []), ...(examine || repair ? [] : ['scene-information-projection'])],
+    promptVersion: examine ? 'gma.scene-readiness-examiner-policy/14' : repair ? 'gma.scene-pending-intent-repair-policy/9' : 'gma.scene-reality-builder-policy/14',
+    systemInstruction: prior.systemInstruction!
+      .replaceAll('gma.scene-reality-builder-result/6', 'gma.scene-reality-builder-result/7')
+      .replace('gma.scene-reality-proposal/1 candidate', 'gma.scene-reality-model-proposal/1 candidate')
+      .replaceAll('gma.scene-pending-intent-repair/4', 'gma.scene-pending-intent-repair/5')
+      .replace('unchanged prior zones, actorFrames, elements, facts, Scene-kit information and Story-design', 'unchanged prior zones, actorFrames, elements, facts and Story-design')
+      + ' ' + SCENE_INFORMATION_PROJECTION_POLICY
+      + (repair ? ' The repair adds informationReplacements: rows are exactly {selectionIndex,replacement}, replacement is {informationId,accessVectorIndexes}. Return exactly one row for each failedInformationIndex and every selection of a fact whose permitted value/accessVectors patch changes; no other selection may change. selectionIndex is the zero-based row in the supplied informationSelections, never a world ID. Dependent fact reconfirmation retains its exact informationId. Empty scopes require an empty array.' : '') });
+}
+
 const registry = new Map<string, LlmOperationDefinition>();
 const validators = new Map<string, SemanticValidator>();
 const compiledOutputSchemas = new Map<string, ValidateFunction>();
@@ -1811,7 +1835,7 @@ export function getSemanticValidator(id: string) {
   const validator = validators.get(id);
   if (!validator) return undefined;
   return (input: Parameters<SemanticValidator>[0]) => {
-    if (!String(input.request.operation ?? '').endsWith('.working-set')) return validator(input);
+    if (!/\.working-set(?:\.information-projection)?$/.test(String(input.request.operation ?? ''))) return validator(input);
     const request = structuredClone(input.request);
     try {
       request.context.input.value = decodeScenePreparationWorkingSet(request.context.input.value as any, request.operation);
@@ -1819,6 +1843,11 @@ export function getSemanticValidator(id: string) {
       return { validatorId: id, version: '1', valid: false, issues: [{ code: 'SCENE_WORKING_SET_INVALID',
         message: 'The preparation input must resolve exactly to its original bounded source view.', path: '/context/input' }] };
     }
+    const projected = request.operation.endsWith('.information-projection');
+    if (projected !== ((request.context.input.value as any)?.preparationPolicyVersion === 14)) return {
+      validatorId: id, version: '1', valid: false, issues: [{ code: 'SCENE_INFORMATION_PROFILE_MISMATCH',
+        message: 'The registered operation and complete preparation profile must match exactly.', path: '/context/input/preparationPolicyVersion' }],
+    };
     return validator({ ...input, request });
   };
 }
