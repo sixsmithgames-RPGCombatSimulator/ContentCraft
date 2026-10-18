@@ -432,6 +432,14 @@ export const sceneReadinessTypedReferenceAssessmentOutput = strictObject(
 export const sceneTypedReferenceRepairOutput = { ...sceneReadEffectRepairOutput,
   bindingReplacements: { type: 'array', maxItems: 8, items: SCENE_TYPED_REFERENCE_BINDINGS_SCHEMA.properties.nodes.items } };
 
+export const sceneReadinessOwnerPremisesAssessmentOutput = strictObject(
+  [...sceneReadinessTypedReferenceAssessmentOutput.required, 'ownerPremisesFingerprint', 'ownerPremiseReview'],
+  { ...sceneReadinessTypedReferenceAssessmentOutput.properties, schemaVersion: { const: 'gma.scene-readiness-assessment/7' },
+    ownerPremisesFingerprint: sha256,
+    ownerPremiseReview: strictObject(['verdict', 'rationale', 'evidenceRefs'], {
+      verdict: { enum: ['supported', 'unsupported'] }, rationale: text(2000), evidenceRefs: idList(32, 1),
+    }) });
+
 const informationSelection = strictObject(['informationId', 'accessVectorIndexes'], {
   informationId: identifier, accessVectorIndexes: { type: 'array', minItems: 1, maxItems: 8, uniqueItems: true,
     items: { type: 'integer', minimum: 0, maximum: 23 } },

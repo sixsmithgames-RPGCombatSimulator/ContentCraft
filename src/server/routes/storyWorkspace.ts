@@ -1,4 +1,5 @@
 import { readScenePendingIntentContext } from '../services/scenePendingIntentService.js';
+import { readCurrentSceneOwnerContext } from '../services/currentSceneOwnerContext.js';
 import { sceneMovementOutcomeService, type SceneMovementOutcomeCommit } from '../services/sceneMovementOutcomeStore.js';
 import { pendingReferenceQualificationService, type PendingReferenceQualificationCommit } from '../services/pendingReferenceQualificationStore.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
@@ -96,10 +97,9 @@ import {
   type CompoundActionRequirement,
 } from '../services/compoundActionArtifactStore.js';
 import { GMA_SCENE_PLAN_SCHEMA_ALLOWLIST, readActiveScenePlan, readLatestActiveScenePlan } from '../services/gmaScenePlanStore.js';
-import { collections, listQuests } from '../services/gmcIntegrationStore.js';
+import { collections } from '../services/gmcIntegrationStore.js';
 import {
   applyStoryDeltaV2,
-  buildSceneTimeContext,
   commitSceneHandoff,
   compileAcceptedV1SceneSnapshotMigrationPreview,
   compileLegacyScenePlanV2MigrationPreview,
@@ -414,7 +414,7 @@ storyWorkspaceRouter.get('/scene-context', requireServiceIntegration, asyncRoute
   if (!await requireCampaign(req, res)) return;
   const userId = (req as IntegrationRequest).userId;
   const campaignId = req.params.campaignId;
-  const result = await readCurrentSceneContexts({
+  const result = await readCurrentSceneOwnerContext({
     userId,
     campaignId,
   });
@@ -429,17 +429,7 @@ storyWorkspaceRouter.get('/scene-context', requireServiceIntegration, asyncRoute
     });
     return;
   }
-  const state = await collections.state().findOne({ userId, campaignId });
-  const currentClock = state?.gameClock ?? null;
-  const pendingEvents = await listQuests(userId, campaignId, {}, currentClock);
-  res.json({
-    ...result,
-    gameTimeContext: buildSceneTimeContext({
-      gameClockRevision: state?.gameClockRevision ?? 0,
-      currentClock,
-      pendingEvents,
-    }),
-  });
+  res.json(result);
 }));
 
 function queryRefs(value: unknown): string[] {
@@ -1036,6 +1026,7 @@ storyWorkspaceRouter.post('/scene-reality/commit', requireServiceIntegration, as
     proposal: body.proposal,
     assessment: body.assessment,
     ...(body.pendingIntent !== undefined ? { pendingIntent: body.pendingIntent } : {}),
+    ...(body.ownerPremisesReview !== undefined ? { ownerPremisesReview: body.ownerPremisesReview } : {}),
   });
   res.status(result.duplicate ? 200 : 201).json(result);
 }));

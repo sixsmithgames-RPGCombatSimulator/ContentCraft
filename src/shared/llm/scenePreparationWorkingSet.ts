@@ -16,7 +16,8 @@ const exact = (value: Row, keys: string[]) => value && !Array.isArray(value)
   && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
 const stages = new Set(['depth', 'build', 'build_continuation', 'examine', 'repair']);
 const operationStageMatches = (operation: string, stage: string) => {
-  const name = operation.replace(/\.read-effects(?:\.typed-references)?\.working-set(?:\.information-projection)?$/, '');
+  if (operation.endsWith('.owner-premises') && operation !== 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises') return false;
+  const name = operation.replace(/\.read-effects(?:\.typed-references)?\.working-set(?:\.information-projection(?:\.owner-premises)?)?$/, '');
   return name === 'story.scene-reality.build' ? ['build', 'build_continuation'].includes(stage)
     : name === 'story.scene-reality.build.checkpoint' ? stage === 'build'
       : name === 'story.scene-readiness.examine' ? stage === 'examine'

@@ -18,6 +18,7 @@ import { READ_EFFECT_BINDING_POLICY, READ_EFFECT_EXAMINER_POLICY, SCENE_MECHANIC
 import { SCENE_WORKING_SET_POLICY, decodeScenePreparationWorkingSet } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { TYPED_PENDING_BINDING_POLICY, TYPED_PENDING_EXAMINER_POLICY } from '../../shared/llm/sceneTypedReferencePolicy.js';
 import { SCENE_INFORMATION_PROJECTION_POLICY } from '../../shared/llm/sceneInformationProjection.js';
+import { SCENE_OWNER_PREMISES, SCENE_OWNER_PREMISES_POLICY } from '../../shared/llm/sceneIndependentOwnerPremises.js';
 import {
   sceneRealityBuilderCheckpointResultOutput,
   sceneRealityBuilderResultOutput,
@@ -33,11 +34,11 @@ import {
   sceneRealityContinuationBuilderResultOutput, sceneReadinessContinuationAssessmentOutput, sceneContinuationIntentRepairOutput,
   sceneRealityReadEffectBuilderOutput, sceneReadinessReadEffectAssessmentOutput, sceneReadEffectRepairOutput,
   sceneRealityTypedReferenceBuilderOutput, sceneReadinessTypedReferenceAssessmentOutput, sceneTypedReferenceRepairOutput,
-  sceneRealityInformationBuilderOutput, sceneInformationRepairOutput,
+  sceneRealityInformationBuilderOutput, sceneInformationRepairOutput, sceneReadinessOwnerPremisesAssessmentOutput,
 } from './sceneRealityOutputSchemas.js';
 
 export const OPERATION_REGISTRY_VERSION = '2026-10-15.1';
-export const MANUAL_PENDING_SCENE_OPERATIONS = Object.freeze([FREEFORM_TYPED_REFERENCE_OPERATION, 'story.scene-reality.build.pending', 'story.scene-reality.build.checkpoint.pending',
+export const MANUAL_PENDING_SCENE_OPERATIONS = Object.freeze([SCENE_OWNER_PREMISES.operation, FREEFORM_TYPED_REFERENCE_OPERATION, 'story.scene-reality.build.pending', 'story.scene-reality.build.checkpoint.pending',
   'story.scene-readiness.examine.pending', 'story.scene-reality.repair.pending',
   'story.scene-reality.build.qualified', 'story.scene-reality.build.checkpoint.qualified',
   'story.scene-readiness.examine.qualified', 'story.scene-reality.repair.qualified',
@@ -1731,6 +1732,13 @@ for (const base of ['story.scene-reality.build', 'story.scene-reality.build.chec
       + (repair ? ' The repair adds informationReplacements: rows are exactly {selectionIndex,replacement}, replacement is {informationId,accessVectorIndexes}. Return exactly one row for each failedInformationIndex and every selection of a fact whose permitted value/accessVectors patch changes; no other selection may change. selectionIndex is the zero-based row in the supplied informationSelections, never a world ID. Dependent fact reconfirmation retains its exact informationId. Empty scopes require an empty array.' : '') });
 }
 
+const premisesExaminer = seeds.find((seed) => seed.id === SCENE_OWNER_PREMISES.operation.replace('.owner-premises', ''))!;
+seeds.push({ ...premisesExaminer, id: SCENE_OWNER_PREMISES.operation, promptVersion: SCENE_OWNER_PREMISES.policy,
+  required: [...sceneReadinessOwnerPremisesAssessmentOutput.required],
+  outputProperties: sceneReadinessOwnerPremisesAssessmentOutput.properties as Record<string, Record<string, unknown>>,
+  systemInstruction: premisesExaminer.systemInstruction!.replaceAll('gma.scene-readiness-assessment/6', SCENE_OWNER_PREMISES.assessment)
+    + ' ' + SCENE_OWNER_PREMISES_POLICY });
+
 const registry = new Map<string, LlmOperationDefinition>();
 const validators = new Map<string, SemanticValidator>();
 const compiledOutputSchemas = new Map<string, ValidateFunction>();
@@ -1835,7 +1843,7 @@ export function getSemanticValidator(id: string) {
   const validator = validators.get(id);
   if (!validator) return undefined;
   return (input: Parameters<SemanticValidator>[0]) => {
-    if (!/\.working-set(?:\.information-projection)?$/.test(String(input.request.operation ?? ''))) return validator(input);
+    if (!/\.working-set(?:\.information-projection(?:\.owner-premises)?)?$/.test(String(input.request.operation ?? ''))) return validator(input);
     const request = structuredClone(input.request);
     try {
       request.context.input.value = decodeScenePreparationWorkingSet(request.context.input.value as any, request.operation);
@@ -1843,7 +1851,7 @@ export function getSemanticValidator(id: string) {
       return { validatorId: id, version: '1', valid: false, issues: [{ code: 'SCENE_WORKING_SET_INVALID',
         message: 'The preparation input must resolve exactly to its original bounded source view.', path: '/context/input' }] };
     }
-    const projected = request.operation.endsWith('.information-projection');
+    const projected = /\.information-projection(?:\.owner-premises)?$/.test(request.operation);
     if (projected !== ((request.context.input.value as any)?.preparationPolicyVersion === 14)) return {
       validatorId: id, version: '1', valid: false, issues: [{ code: 'SCENE_INFORMATION_PROFILE_MISMATCH',
         message: 'The registered operation and complete preparation profile must match exactly.', path: '/context/input/preparationPolicyVersion' }],

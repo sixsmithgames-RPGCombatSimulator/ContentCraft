@@ -3,6 +3,7 @@ import { typedReferenceFixture } from './fixtures/typedReferences.js';
 import { derivePendingReferenceQualification } from './pendingReferenceQualification.js';
 import { qualifiedPendingReferenceSlots, historicalTypedPendingBinding } from './typedPendingReferenceProjection.js';
 import { getOperationDefinition } from '../../server/llm-orchestrator/operationRegistry.js';
+import { SCENE_OWNER_PREMISES, ownerPremisesEvidenceRef } from './sceneIndependentOwnerPremises.js';
 import { createPendingIntentWindow } from './pendingIntentWindow.js';
 import { createProgramReferenceLedger } from './typedReferenceBindings.js';
 import { freeformJsonDigest, freeformTextDigest } from './freeformPlanBinding.js';
@@ -68,6 +69,20 @@ function movementFixture(fresh = false) {
 }
 
 describe('typed pending projection, without rewriting an accepted source', () => {
+  it('retains every existing review for /7, requires the separate bound baseline, and saves the actual assessment fingerprint', () => {
+    const { context, binding, policy, assessment } = movementFixture(true);
+    const premises = { fingerprint: 'd'.repeat(64) }, scoped = { ...context, independentOwnerPremises: premises };
+    const reviewed = { ...assessment(), schemaVersion: SCENE_OWNER_PREMISES.assessment, ownerPremisesFingerprint: premises.fingerprint,
+      ownerPremiseReview: { verdict: 'supported', rationale: 'Current owner evidence is distinct from future requested movement.', evidenceRefs: [ownerPremisesEvidenceRef(premises)] } };
+    expect(scenePendingIntentExaminationIssues(reviewed, binding, scoped, policy)).toEqual([]);
+    expect(scenePendingIntentExaminationIssues(reviewed, binding, context, policy).length).toBeGreaterThan(0);
+    expect(scenePendingIntentExaminationIssues(assessment(), binding, scoped, policy).length).toBeGreaterThan(0);
+    const record = createPendingBindingRecord(scoped, binding, reviewed, policy);
+    expect(record.assessmentFingerprint).toBe(freeformJsonDigest(reviewed));
+    for (const key of ['referenceReview', 'requirementRoleReviews', 'bindingReviews', 'qualificationReview']) {
+      expect(scenePendingIntentExaminationIssues({ ...reviewed, [key]: null }, binding, scoped, policy).length).toBeGreaterThan(0);
+    }
+  });
   it('preserves the exact advertised typed review citation catalog without widening observer qualification evidence', () => {
     const { q, context, binding, policy, assessment } = movementFixture(true), reviewed = assessment();
     reviewed.evidenceRefs.push(q.qualificationRef);

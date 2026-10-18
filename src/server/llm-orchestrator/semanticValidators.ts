@@ -69,7 +69,8 @@ registerSemanticValidator('scene-pending-intent-builder', ({ request, output }) 
 registerSemanticValidator('scene-pending-intent-examiner', ({ request, output }) => {
   const trusted = request.context?.input?.value as any;
   const paths = scenePendingIntentExaminationIssues(output, trusted.pendingIntentBindings,
-    scenePendingBindingContextFromOwner(trusted.pendingIntentContext, trusted.proposal.operationId, trusted.proposal), trusted.expectedPolicyFingerprint);
+    { ...scenePendingBindingContextFromOwner(trusted.pendingIntentContext, trusted.proposal.operationId, trusted.proposal),
+      ...(request.operation.endsWith('.owner-premises') ? { independentOwnerPremises: trusted.independentOwnerPremises } : {}) }, trusted.expectedPolicyFingerprint);
   if ([11, 12, 13, 14].includes(trusted.preparationPolicyVersion)) paths.push(...sceneDossierReferenceIssues(trusted.proposal).map((path) => `/proposal${path}`));
   if (trusted.preparationPolicyVersion === 14) paths.push(...sceneInformationProjectionIssues(trusted.proposal, trusted.informationSelections, trusted.informationProjection));
   return result('scene-pending-intent-examiner', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', message: 'Joint examination must cover the exact prepared Scene, unfinished intent and owner evidence.', path })));

@@ -40,7 +40,7 @@ const requireMatch = (condition: unknown) => { if (!condition) throw new Error('
 
 /** Called only after the Scene owner validates the complete dossier and heads. */
 export function createPendingBindingRecord(context: ScenePendingBindingContext & { qualifiedObservers?: PendingObserverEvidence[];
-  instructionCoverage?: InstructionWindowCoverage; confirmedRelocations?: ConfirmedRelocationLineage[] }, bindings: Row, assessment: Row, policyFingerprint: string): Row {
+  instructionCoverage?: InstructionWindowCoverage; confirmedRelocations?: ConfirmedRelocationLineage[]; independentOwnerPremises?: Row }, bindings: Row, assessment: Row, policyFingerprint: string): Row {
   requireMatch(!scenePendingIntentBindingIssues(bindings, context).length
     && !scenePendingIntentExaminationIssues(assessment, bindings, context, policyFingerprint).length && assessment.verdict === 'adequate');
   const typed = bindings.schemaVersion === TYPED.pendingBindings;

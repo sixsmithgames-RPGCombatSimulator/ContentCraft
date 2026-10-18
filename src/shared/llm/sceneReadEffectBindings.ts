@@ -1,4 +1,5 @@
 import { freeformJsonDigest } from './freeformPlanBinding.js';
+import { SCENE_OWNER_PREMISES, ownerPremiseExaminationIssues, historicalOwnerPremiseAssessment } from './sceneIndependentOwnerPremises.js';
 import { createPendingIntentWindow } from './pendingIntentWindow.js';
 import { pendingRequirementRoleIssues } from './pendingRequirementRoles.js';
 import { readEffectSurfaceIssues } from './readEffectSurfaces.js';
@@ -24,7 +25,7 @@ const identityLink = (value: unknown): ActorMechanicsLink => {
   // The closed canonical validator above checks every ActorMechanicsLink field.
   return value as ActorMechanicsLink;
 };
-type Context = Parameters<typeof historicalBindingIssues>[1];
+type Context = Parameters<typeof historicalBindingIssues>[1] & { independentOwnerPremises?: Row };
 export const READ_EFFECT_BINDINGS_VERSION = 'gma.scene-pending-intent-bindings/4';
 export const READ_EFFECT_BINDING_POLICY_VERSION = 'gma.scene-pending-intent-binding-policy/7';
 export const READ_EFFECT_EXAMINER_POLICY_VERSION = 'gma.scene-pending-intent-examiner-policy/7';
@@ -213,6 +214,13 @@ export function readEffectAssessmentEvidenceRefs(bindings: Row, context: Context
 
 /** Metadata integrity supplements actual semantic review; it is not its substitute. */
 export function scenePendingIntentExaminationIssues(value: unknown, bindings: Row, context: Context, policyFingerprint: string): string[] {
+  const premises = (context as Context & { independentOwnerPremises?: Row }).independentOwnerPremises;
+  if (premises || object(value) && value.schemaVersion === SCENE_OWNER_PREMISES.assessment) {
+    if (!premises || !object(value) || bindings.schemaVersion !== TYPED.pendingBindings) return ['/ownerPremiseReview'];
+    const issues = ownerPremiseExaminationIssues(record(value), premises);
+    return [...issues, ...scenePendingIntentExaminationIssues(historicalOwnerPremiseAssessment(record(value)), bindings,
+      Object.fromEntries(Object.entries(context).filter(([key]) => key !== 'independentOwnerPremises')) as Context, policyFingerprint)];
+  }
   if (bindings.schemaVersion === TYPED.pendingBindings) {
     try {
       const expected = scenePendingIntentExaminationIdentity(bindings, context, policyFingerprint), a = record(value);
