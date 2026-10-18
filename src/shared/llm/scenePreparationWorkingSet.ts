@@ -75,9 +75,13 @@ export function compileScenePreparationWorkingSet(logicalInput: Row, operation: 
   }
   const counts = new Map<string, number>();
   const typedReferences = operation.includes('.typed-references.working-set');
+  // Only the not-yet-issued final construction chunk uses short exact sources.
+  // Preserve every previously issued first-chunk and historical wire identity.
+  const minimumSharedBytes = typedReferences && logical.preparationPolicyVersion === 14
+    && stage === 'build_continuation' ? 24 : typedReferences ? 32 : 40;
   visitJson(logical, (value) => {
     const text = canonicalFreeformJson(value);
-    if (Buffer.byteLength(text, 'utf8') >= (typedReferences ? 32 : 40)) counts.set(text, (counts.get(text) ?? 0) + 1);
+    if (Buffer.byteLength(text, 'utf8') >= minimumSharedBytes) counts.set(text, (counts.get(text) ?? 0) + 1);
   });
   const sources: Json[] = [], refs = new Map<string, number>();
   const children = (value: Json): Json => Array.isArray(value) ? value.map(encode)

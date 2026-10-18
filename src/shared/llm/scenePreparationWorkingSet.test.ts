@@ -63,6 +63,27 @@ describe('accepted ADR 024 lossless preparation source compiler', () => {
     const reordered = Object.fromEntries(Object.entries(input).reverse());
     expect(compileScenePreparationWorkingSet(reordered, typedOperation, 'build')).toEqual(typed);
   });
+  it('shares short exact values only in the unissued profile-14 continuation, preserving historical and first-chunk identities', () => {
+    const typed = 'story.scene-reality.build.read-effects.typed-references.working-set.information-projection';
+    const input: any = { ...fixture(), preparationPolicyVersion: 14,
+      shortRows: Array.from({ length: 100 }, (_, index) => ({ index, value: 'exact-short-shared-source' })) };
+    const original = structuredClone(input);
+    const first = compileScenePreparationWorkingSet(input, typed, 'build');
+    const continuation = compileScenePreparationWorkingSet(input, typed, 'build_continuation');
+    expect(decodeScenePreparationWorkingSet(first, typed)).toEqual(decodeScenePreparationWorkingSet(continuation, typed));
+    expect(input).toEqual(original);
+    expect(continuation.sources).toContain('exact-short-shared-source');
+    expect(first.sources).not.toContain('exact-short-shared-source');
+    expect(Buffer.byteLength(JSON.stringify(continuation))).toBeLessThan(Buffer.byteLength(JSON.stringify(first)) - 500);
+    for (const version of [12, 13]) {
+      const historical = compileScenePreparationWorkingSet({ ...input, preparationPolicyVersion: version }, typed, 'build_continuation');
+      expect(historical.sources).toEqual(first.sources);
+    }
+    expect(compileScenePreparationWorkingSet(input, typed, 'build')).toEqual(first);
+    const reordered = Object.fromEntries(Object.entries(input).reverse());
+    expect(compileScenePreparationWorkingSet(reordered, typed, 'build_continuation')).toEqual(continuation);
+    expect(continuation.manifest.deferred).toEqual([]);
+  });
   for (const kind of ['dangling', 'cycle', 'extra_ref_key', 'foreign_operation', 'stage', 'duplicate_retained', 'window', 'bytes', 'body', 'hash', 'unknown_key', 'unclassified_retained']) {
     it(`rejects ${kind} instead of guessing or dropping evidence`, () => {
       const packed = compileScenePreparationWorkingSet(fixture(), operation, 'build');
