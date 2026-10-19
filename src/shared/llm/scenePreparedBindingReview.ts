@@ -3,6 +3,7 @@ import { PREPARED_BINDING_COMPILATION as C, assertPreparedBindingCompilation } f
 import { createSceneOwnerReviewBinding } from './sceneIndependentOwnerPremises.js';
 import { SCENE_TEMPORAL_VALIDITY as T, historicalTemporalAssessment } from './sceneTemporalValidity.js';
 import { SCENE_TEMPORAL_GM as G } from './sceneTemporalGmDecisions.js';
+import { SCENE_TEMPORAL_ANALYSIS as A } from './sceneTemporalAnalysis.js';
 
 type Row = Record<string, any>;
 export const SCENE_PREPARED_OWNER_CITATION_POLICY = 'ownerPremiseReview.evidenceRefs must be exactly [ownerPremisesEvidenceRef], the one-element array containing the supplied owner-premises reference and no other refs. Discuss particular owner records in rationale; do not add their IDs to this array';
@@ -32,8 +33,8 @@ export function preparedBindingReviewIssues(assessment: Row, bindings: Row, comp
 }
 
 export function createPreparedBindingReview(compilation: Row, assessment: Row): Row {
-  const family = assessment.schemaVersion === G.assessment ? G : T;
-  const temporal = [T.assessment, G.assessment].includes(assessment.schemaVersion);
+  const family = assessment.schemaVersion === A.assessment ? A : assessment.schemaVersion === G.assessment ? G : T;
+  const temporal = [T.assessment, G.assessment, A.assessment].includes(assessment.schemaVersion);
   return { schemaVersion: temporal ? family.preparedReview : C.review, compilation: structuredClone(compilation), assessmentIdentity: {
     assessmentId: assessment.assessmentId, fingerprint: freeformJsonDigest(assessment),
     dossierFingerprint: assessment.dossierFingerprint, policyFingerprint: assessment.policyFingerprint,
@@ -50,8 +51,8 @@ export function assertPreparedBindingReview(value: Row, compilation: Row, assess
 /** Keep the older owner-premise contract immutable; this explicit new-family
  * wrapper binds the actual /8 assessment, not its structural /7 projection. */
 export function createPreparedOwnerReviewBinding(premises: Row, assessment: Row): Row {
-  const family = assessment.schemaVersion === G.assessment ? G : T;
-  const temporal = [T.assessment, G.assessment].includes(assessment.schemaVersion);
+  const family = assessment.schemaVersion === A.assessment ? A : assessment.schemaVersion === G.assessment ? G : T;
+  const temporal = [T.assessment, G.assessment, A.assessment].includes(assessment.schemaVersion);
   const result = createSceneOwnerReviewBinding(premises, historicalPreparedBindingAssessment(temporal ? historicalTemporalAssessment(assessment) : assessment));
   return { ...result, assessmentIdentity: { ...result.assessmentIdentity, fingerprint: freeformJsonDigest(assessment) }, reviewPolicy: temporal ? family.examinerPolicy : C.examinerPolicy };
 }

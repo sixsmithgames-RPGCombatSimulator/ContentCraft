@@ -15,7 +15,10 @@ const fail = () => { throw new Error('SCENE_WORKING_SET_INVALID'); };
 const exact = (value: Row, keys: string[]) => value && !Array.isArray(value)
   && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
 const stages = new Set(['depth', 'build', 'build_continuation', 'examine', 'repair']);
+const analysisOperation = 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity.analysis';
+export const SCENE_SHAPE_TABLE_POLICY = 'For this operation input uses gma.scene-preparation-working-set/2: {schemaVersion,shapes,value}. Recursively decode value before reading any instructions or evidence: an array whose first entry is null is an ordinary array containing the remaining recursively decoded entries; an array whose first entry is a nonnegative integer N is an object with ordered keys shapes[N] and recursively decoded values from the remaining entries, with exactly one value per key. Primitives stay literal; objects never appear within encoded value. Then decode the resulting working-set /1 source table normally. This representation is lossless; all event evidence, owner facts and unresolved nulls remain present. Shapes are local field-name tables, not world IDs. Return literal normal registered JSON, never shape arrays or source references.';
 const operationStageMatches = (operation: string, stage: string) => {
+  if (operation === analysisOperation && stage === 'examine') operation = operation.slice(0, -'.analysis'.length);
   if (operation.endsWith('.gm-decisions')) {
     if (operation !== 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity.gm-decisions' || stage !== 'examine') return false;
     operation = operation.slice(0, -'.gm-decisions'.length);
@@ -91,7 +94,7 @@ export function compileScenePreparationWorkingSet(logicalInput: Row, operation: 
   }
   const counts = new Map<string, number>();
   const typedReferences = operation.includes('.typed-references.working-set');
-  const compiledReview = /\.owner-premises\.binding-compilation(?:\.temporal-validity(?:\.gm-decisions)?)?$/.test(operation) && stage === 'examine';
+  const compiledReview = /\.owner-premises\.binding-compilation(?:\.temporal-validity(?:\.(?:gm-decisions|analysis))?)?$/.test(operation) && stage === 'examine';
   // Only the not-yet-issued final construction chunk uses short exact sources.
   // Preserve every previously issued first-chunk and historical wire identity.
   const minimumSharedBytes = compiledReview ? 16 : typedReferences && logical.preparationPolicyVersion === 14
@@ -127,7 +130,7 @@ export function compileScenePreparationWorkingSet(logicalInput: Row, operation: 
     // The GM review has not shipped: measure its actual maximum reference cost
     // instead of the older conservative 12-byte estimate. The representation,
     // expanded evidence and every historical operation remain unchanged.
-    const referenceBytes = operation.endsWith('.gm-decisions') ? bytes({ $s: Math.max(0, sources.length - 1) }) : 12;
+    const referenceBytes = operation.endsWith('.gm-decisions') || operation === analysisOperation ? bytes({ $s: Math.max(0, sources.length - 1) }) : 12;
     const retained = sources.map((_, index) => index).filter((index) => uses[index] > 1
       && (!compiledReview || bytes(sources[index]) * (uses[index] - 1) > referenceBytes * uses[index] + 2));
     const remap = new Map(retained.map((index, next) => [index, next]));
@@ -151,12 +154,51 @@ export function compileScenePreparationWorkingSet(logicalInput: Row, operation: 
   };
   const result = { schemaVersion: SCENE_WORKING_SET.schemaVersion, manifest, sources, input };
   if (canonicalFreeformJson(decodeScenePreparationWorkingSet(result, operation)) !== canonicalFreeformJson(logical)) fail();
-  return result;
+  return operation === analysisOperation ? encodeSceneShapeTable(result) : result;
+}
+
+/** New operation only. Field-name sharing removes no evidence or prose. */
+export function encodeSceneShapeTable(value: Row): Row {
+  const shapes: string[][] = [], indices = new Map<string, number>();
+  visitJson(value, () => {});
+  const encode = (v: any): any => {
+    if (Array.isArray(v)) return [null, ...v.map(encode)];
+    if (!v || typeof v !== 'object') return v;
+    const keys = Object.keys(v).sort(), text = JSON.stringify(keys);
+    if (!indices.has(text)) { indices.set(text, shapes.length); shapes.push(keys); }
+    return [indices.get(text), ...keys.map((k) => encode(v[k]))];
+  };
+  const encoded = encode(value);
+  return { schemaVersion: 'gma.scene-preparation-working-set/2', shapes, value: encoded };
+}
+
+export function decodeSceneShapeTable(value: Row): Row {
+  if (!exact(value, ['schemaVersion', 'shapes', 'value']) || value.schemaVersion !== 'gma.scene-preparation-working-set/2'
+    || !Array.isArray(value.shapes) || value.shapes.length > 10_000 || bytes(value) > 1_048_576
+    || value.shapes.some((keys: any) => !Array.isArray(keys) || keys.some((k: any) => typeof k !== 'string'
+      || ['__proto__', 'prototype', 'constructor'].includes(k)) || new Set(keys).size !== keys.length)) fail();
+  let nodes = 0;
+  const decode = (v: any, depth = 0): any => {
+    if (depth > 64 || ++nodes > 100_000 || v && typeof v === 'object' && !Array.isArray(v)) return fail();
+    if (!Array.isArray(v)) return v;
+    const [index, ...entries] = v;
+    if (index === null) return entries.map((e) => decode(e, depth + 1));
+    if (!Number.isSafeInteger(index) || index < 0 || index >= value.shapes.length || entries.length !== value.shapes[index].length) return fail();
+    return Object.fromEntries(value.shapes[index].map((k: string, n: number) => [k, decode(entries[n], depth + 1)]));
+  };
+  const decoded = decode(value.value);
+  if (!decoded || Array.isArray(decoded) || bytes(decoded) > 1_048_576
+    || canonicalFreeformJson(encodeSceneShapeTable(decoded)) !== canonicalFreeformJson(value)) fail();
+  return decoded;
 }
 
 /** Expansion is only a checked input view. Authentication/fresh owner checks
  * remain the caller's responsibility; a digest alone cannot confer authority. */
 export function decodeScenePreparationWorkingSet(value: Row, operation: string): Row {
+  if (value?.schemaVersion === 'gma.scene-preparation-working-set/2') {
+    if (operation !== analysisOperation) fail();
+    return decodeScenePreparationWorkingSet(decodeSceneShapeTable(value), operation);
+  }
   if (!exact(value, ['schemaVersion', 'manifest', 'sources', 'input']) || value.schemaVersion !== SCENE_WORKING_SET.schemaVersion
     || !Array.isArray(value.sources) || value.sources.length > 10_000) fail();
   const m = value.manifest;

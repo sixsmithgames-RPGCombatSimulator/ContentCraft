@@ -8,6 +8,7 @@ import { StoryWorkspaceStoreError } from './storyWorkspaceStore.js';
 import { freeformJsonDigest, canonicalFreeformJson } from '../../shared/llm/freeformPlanBinding.js';
 import { SCENE_TEMPORAL_GM as G, SCENE_TEMPORAL_GM_LIMITS as L, temporalSourceCatalog,
   temporalCatalogIdentities, temporalCatalogPage, assertTemporalGmChoice } from '../../shared/llm/sceneTemporalGmDecisions.js';
+import { SCENE_TEMPORAL_ANALYSIS as A, assertTemporalRulingChoice } from '../../shared/llm/sceneTemporalAnalysis.js';
 
 type Scope = { userId: string; campaignId: string };
 type Row = Record<string, any>;
@@ -30,6 +31,9 @@ export interface TemporalGmDependencies extends Partial<TemporalGmReaders> {
 const same = (a: unknown, b: unknown) => canonicalFreeformJson(a) === canonicalFreeformJson(b);
 const json = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 const id = (v: any) => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,239}$/.test(v);
+const ruleOnly = (choice: Row) => choice?.schemaVersion === A.choice;
+const assertChoice = (choice: Row, catalog: Row, clock: Row | null) => ruleOnly(choice)
+  ? assertTemporalRulingChoice(choice, catalog, clock) : assertTemporalGmChoice(choice, catalog, clock);
 function fail(code: string, field = '', status = 409): never {
   throw new StoryWorkspaceStoreError(status, code, 'The GM scene timing decision could not be saved safely.', { field });
 }
@@ -125,7 +129,7 @@ export function sceneTemporalGmDecisionService(deps: TemporalGmDependencies = {}
     const [{ catalog, currentClock }, saved] = await Promise.all([readCatalog(scope), current(scope)]);
     if (catalog.fingerprint !== input.catalogFingerprint || !same(catalog.sourceHead, input.expectedSourceHead)
       || (saved?.revision ?? 0) !== input.expectedRevision) fail('SCENE_TEMPORAL_GM_SOURCE_CHANGED');
-    try { assertTemporalGmChoice(input.choice, catalog, currentClock); }
+    try { assertChoice(input.choice, catalog, currentClock); }
     catch (error) { fail('SCENE_TEMPORAL_GM_CHOICE_INVALID', (error as any)?.details?.field ?? 'choice', 422); }
     const createdAt = now();
     const document: TemporalGmPreparedDocument = { ...scope, _id: `temporal-gm-prepare:${(deps.nonce ?? randomUUID)()}`,
@@ -142,7 +146,8 @@ export function sceneTemporalGmDecisionService(deps: TemporalGmDependencies = {}
       return { decisionRef: raced._id, expiresAt: raced.expiresAt, requestFingerprint };
     }
     audit('prepared', scope, { requestFingerprint, catalogFingerprint: catalog.fingerprint,
-      includedCount: input.choice.included.length, excludedCount: input.choice.excluded.length,
+      mode: ruleOnly(input.choice) ? 'world_rulings_only' : 'historical_human_scope',
+      includedCount: input.choice.included?.length ?? null, excludedCount: input.choice.excluded?.length ?? null,
       rulingCount: input.choice.rulings.length, revision: input.expectedRevision, duplicate: false });
     return { decisionRef: document._id, expiresAt: document.expiresAt, requestFingerprint };
   }
@@ -167,21 +172,23 @@ export function sceneTemporalGmDecisionService(deps: TemporalGmDependencies = {}
     const [{ catalog, currentClock }, saved] = await Promise.all([readCatalog(scope), current(scope)]);
     if (!same(catalog.sourceHead, prepared.sourceHead) || catalog.fingerprint !== prepared.catalogFingerprint
       || (saved?.revision ?? 0) !== prepared.expectedRevision) fail('SCENE_TEMPORAL_GM_SOURCE_CHANGED');
-    try { assertTemporalGmChoice(prepared.choice, catalog, currentClock); }
+    try { assertChoice(prepared.choice, catalog, currentClock); }
     catch { fail('SCENE_TEMPORAL_GM_CHOICE_INVALID'); }
     const revision = prepared.expectedRevision + 1, createdAt = now();
     const decisionRef = `temporal-gm-scope:${freeformJsonDigest({ ...scope, revision })}`;
     const receiptRef = `temporal-gm-receipt:${freeformJsonDigest({ ...scope, operationId: prepared.operationId })}`;
-    const scopeDecision = { schemaVersion: G.scope, decisionRef, operationId: prepared.operationId,
+    const onlyRulings = ruleOnly(prepared.choice);
+    const scopeDecision: Row = { schemaVersion: onlyRulings ? A.decision : G.scope, decisionRef, operationId: prepared.operationId,
       campaignId: scope.campaignId, sourceHead: catalog.sourceHead, catalogFingerprint: catalog.fingerprint,
-      sourceIdentities: temporalCatalogIdentities(catalog), included: prepared.choice.included,
-      excluded: prepared.choice.excluded, humanIdentity: scope.userId, createdAt: createdAt.toISOString(), receiptRef,
+      sourceIdentities: temporalCatalogIdentities(catalog), ...(onlyRulings ? { applicability: 'not_a_human_decision' }
+        : { included: prepared.choice.included, excluded: prepared.choice.excluded }),
+      humanIdentity: scope.userId, createdAt: createdAt.toISOString(), receiptRef,
       supersedes: saved?.scopeDecision.decisionRef ?? null };
-    const rulings = prepared.choice.rulings.map((r: Row) => ({ schemaVersion: G.ruling,
+    const rulings = prepared.choice.rulings.map((r: Row) => ({ schemaVersion: onlyRulings ? A.ruling : G.ruling,
       rulingRef: `temporal-gm-ruling:${freeformJsonDigest({ decisionRef, constraintRef: r.constraintRef })}`,
-      scopeDecisionRef: decisionRef, operationId: prepared.operationId, ...r,
+      ...(onlyRulings ? { decisionRef } : { scopeDecisionRef: decisionRef }), operationId: prepared.operationId, ...r,
       humanIdentity: scope.userId, createdAt: createdAt.toISOString(), receiptRef }));
-    const receipt = { schemaVersion: G.receipt, receiptRef, operationId: prepared.operationId,
+    const receipt = { schemaVersion: onlyRulings ? A.receipt : G.receipt, receiptRef, operationId: prepared.operationId,
       requestFingerprint: prepared.requestFingerprint, decisionRef, rulingRefs: rulings.map((r: Row) => r.rulingRef),
       sourceHead: catalog.sourceHead, catalogFingerprint: catalog.fingerprint, revision, duplicate: false };
     const document: TemporalGmDocument = { ...scope, _id: decisionRef, operationId: prepared.operationId,
@@ -196,18 +203,26 @@ export function sceneTemporalGmDecisionService(deps: TemporalGmDependencies = {}
       return { ...raced.receipt, duplicate: true };
     }
     audit('confirmed', scope, { requestFingerprint: prepared.requestFingerprint, catalogFingerprint: catalog.fingerprint,
-      revision, includedCount: scopeDecision.included.length, excludedCount: scopeDecision.excluded.length,
+      revision, mode: onlyRulings ? 'world_rulings_only' : 'historical_human_scope',
+      includedCount: scopeDecision.included?.length ?? null, excludedCount: scopeDecision.excluded?.length ?? null,
       rulingCount: rulings.length, duplicate: false });
     return receipt;
   }
   async function read(input: Scope) {
     const scope = scopeOf(input), [{ catalog, currentClock }, saved] = await Promise.all([readCatalog(scope), current(scope)]);
-    if (!saved || saved.scopeDecision.catalogFingerprint !== catalog.fingerprint
-      || !same(saved.scopeDecision.sourceIdentities, temporalCatalogIdentities(catalog))) return { catalog, currentClock, decision: null };
-    const choice = { included: saved.scopeDecision.included, excluded: saved.scopeDecision.excluded,
-      rulings: saved.rulings.map(({ constraintRef, bodyFingerprint, explanation, kind, deadline, start, end }: Row) =>
-        kind === 'clock_before' ? { constraintRef, bodyFingerprint, explanation, kind, deadline } : { constraintRef, bodyFingerprint, explanation, kind, start, end }) };
-    try { assertTemporalGmChoice(choice, catalog, currentClock); }
+    if (!saved) return { catalog, currentClock, decision: null };
+    const onlyRulings = saved.scopeDecision.schemaVersion === A.decision;
+    // Relevance analysis expires on any source edit. A GM's numeric meaning of
+    // this unchanged named constraint does not expire because a remote event
+    // changed. Keep the original receipt, never ask the same known fact again.
+    if (onlyRulings ? saved.scopeDecision.sourceHead.sceneKitId !== catalog.sourceHead.sceneKitId
+      : saved.scopeDecision.catalogFingerprint !== catalog.fingerprint
+        || !same(saved.scopeDecision.sourceIdentities, temporalCatalogIdentities(catalog))) return { catalog, currentClock, decision: null };
+    const choices = saved.rulings.map(({ constraintRef, bodyFingerprint, explanation, kind, deadline, start, end }: Row) =>
+      kind === 'clock_before' ? { constraintRef, bodyFingerprint, explanation, kind, deadline } : { constraintRef, bodyFingerprint, explanation, kind, start, end });
+    const choice = onlyRulings ? { schemaVersion: A.choice, rulings: choices }
+      : { included: saved.scopeDecision.included, excluded: saved.scopeDecision.excluded, rulings: choices };
+    try { assertChoice(choice, catalog, currentClock); }
     catch { return { catalog, currentClock, decision: null }; }
     return { catalog, currentClock, decision: saved };
   }

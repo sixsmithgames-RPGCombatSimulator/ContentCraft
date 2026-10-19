@@ -1019,7 +1019,7 @@ storyWorkspaceRouter.get('/scene-reality/inspection', requireServiceIntegration,
 storyWorkspaceRouter.get('/scene-reality/temporal-authority', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   res.json(await readSceneTemporalAuthority({ userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId,
-    gmDecisions: req.query.gmDecisions === '1' }));
+    gmDecisions: req.query.gmDecisions === '1', analysis: req.query.analysis === '1' }));
 }));
 
 storyWorkspaceRouter.get('/scene-reality/timing/choices', requireServiceIntegration, asyncRoute(async (req, res) => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Collection } from 'mongodb';
 import { sceneTemporalGmDecisionService, temporalGmOwnerFromRecords, type TemporalGmDocument, type TemporalGmPreparedDocument } from './sceneTemporalGmDecisionStore.js';
 import { freeformJsonDigest } from '../../shared/llm/freeformPlanBinding.js';
+import { SCENE_TEMPORAL_ANALYSIS as A } from '../../shared/llm/sceneTemporalAnalysis.js';
 
 function memory<T extends { _id: string; userId: string; campaignId: string; operationId: string; revision?: number }>() {
   const rows: T[] = [];
@@ -42,6 +43,29 @@ async function fixture(count = 43) {
     expire: () => { time = new Date('2026-10-20T12:00:00Z'); } };
 }
 describe('ADR 031 protected human Scene timing decisions', () => {
+  it('saves only the actual world ruling, with no implicit human relevance decision or campaign mutation', async () => {
+    const f = await fixture(), before = structuredClone({ owner: f.owner, sources: f.sources });
+    const input = { ...f.input, choice: { schemaVersion: A.choice, rulings: f.input.choice.rulings } };
+    const prepared = await f.service.prepare(input);
+    const confirm = { ...f.scope, decisionRef: prepared.decisionRef, confirmationToken: input.confirmationToken, humanConfirmed: true };
+    const receipt = await f.service.confirm(confirm);
+    expect(receipt).toMatchObject({ schemaVersion: A.receipt });
+    const saved = f.records.rows[0];
+    expect(saved.scopeDecision).toMatchObject({ schemaVersion: A.decision, applicability: 'not_a_human_decision', humanIdentity: f.scope.userId });
+    expect(saved.scopeDecision).not.toHaveProperty('included'); expect(saved.scopeDecision).not.toHaveProperty('excluded');
+    expect(saved.rulings[0]).toMatchObject({ schemaVersion: A.ruling, decisionRef: saved._id, humanIdentity: f.scope.userId });
+    expect(saved.rulings[0]).not.toHaveProperty('scopeDecisionRef');
+    expect((await f.service.read(f.scope)).decision).toEqual(saved);
+    expect(await f.service.confirm(confirm)).toMatchObject({ ...receipt, duplicate: true });
+    expect({ owner: f.owner, sources: f.sources }).toEqual(before);
+    expect(f.audit.find((r) => r.stage === 'prepared')).toMatchObject({ mode: 'world_rulings_only', includedCount: null, excludedCount: null });
+    f.sources[0].summary += ' An unrelated remote update.';
+    const changed = await f.service.read(f.scope);
+    expect(changed.catalog.fingerprint).not.toBe(input.catalogFingerprint);
+    expect(changed.decision).toEqual(saved); // Known 6 AM survives; the analysis does not.
+    f.owner.constraints[0].bodyFingerprint = 'f'.repeat(64);
+    expect((await f.service.read(f.scope)).decision).toBeNull();
+  });
   it('audits complete counts, byte bounds and replay disposition without private source or GM prose', async () => {
     const f = await fixture(); await f.service.choices({ ...f.scope, offset: 0 });
     const prepared = await f.service.prepare(f.input);

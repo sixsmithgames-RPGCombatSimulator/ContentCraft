@@ -6,8 +6,9 @@ import { createTemporalAuthorityContext, evaluateTemporalValidity, SCENE_TEMPORA
 import { canonicalFreeformJson } from '../../shared/llm/freeformPlanBinding.js';
 import { SCENE_TEMPORAL_GM as G, createScopedTemporalAuthorityContext } from '../../shared/llm/sceneTemporalGmDecisions.js';
 import { sceneTemporalGmDecisionService } from './sceneTemporalGmDecisionStore.js';
+import { SCENE_TEMPORAL_ANALYSIS as A, temporalAnalysisCatalog, createAnalyzedTemporalAuthority } from '../../shared/llm/sceneTemporalAnalysis.js';
 
-type Scope = { userId: string; campaignId: string; gmDecisions?: boolean };
+type Scope = { userId: string; campaignId: string; gmDecisions?: boolean; analysis?: boolean };
 type Row = Record<string, any>;
 const snapshotJson = (value: unknown) => canonicalFreeformJson(JSON.parse(JSON.stringify(value)));
 export const TEMPORAL_TERMINAL_SOURCE_STATUSES = ['completed', 'resolved', 'failed', 'abandoned', 'cancelled', 'closed', 'superseded'];
@@ -60,12 +61,29 @@ const readers: SceneTemporalReaders = {
   },
 };
 export async function readSceneTemporalAuthority(scope: Scope, deps: SceneTemporalReaders = readers): Promise<JsonObject> {
-  const gmDecisions = scope.gmDecisions === true;
+  const gmDecisions = scope.gmDecisions === true, analysis = scope.analysis === true;
   scope = { userId: scope.userId, campaignId: scope.campaignId };
+  if (analysis) {
+    const readDecision = deps.readGmDecision ?? sceneTemporalGmDecisionService().read;
+    const [state, prepared] = await Promise.all([deps.readState(scope), readDecision(scope)]);
+    const [after, latest] = await Promise.all([deps.readState(scope), readDecision(scope)]);
+    if (snapshotJson(state) !== snapshotJson(after) || snapshotJson(prepared) !== snapshotJson(latest)) throw new StoryWorkspaceStoreError(409,
+      'SCENE_TEMPORAL_GM_SOURCE_CHANGED', 'The timing sources changed during the Scene check.', {});
+    const catalog = temporalAnalysisCatalog(prepared.catalog);
+    // Historical scope choices are not converted into model analysis or new
+    // human rulings. Their receipts remain available to historical readers.
+    const rulings = prepared.decision?.scopeDecision.schemaVersion === A.decision ? prepared.decision.rulings.map((r: Row) => ({ ...r,
+      constraint: catalog.constraints.find((c: Row) => c.constraintRef === r.constraintRef) })) : [];
+    try {
+      return { schemaVersion: A.read, catalog, authority: createAnalyzedTemporalAuthority({ campaignId: scope.campaignId,
+        sceneKitId: catalog.sceneKitId }, state, catalog, rulings) } as JsonObject;
+    } catch (error) { throw new StoryWorkspaceStoreError(409, 'SCENE_TEMPORAL_ANALYSIS_INCOMPLETE',
+      'The complete current timing conditions do not fit the supported review.', { field: (error as any)?.details?.field ?? 'analysis' }); }
+  }
   if (gmDecisions) {
     const readDecision = deps.readGmDecision ?? sceneTemporalGmDecisionService().read;
     const [state, prepared] = await Promise.all([deps.readState(scope), readDecision(scope)]);
-    if (!prepared.decision) throw new StoryWorkspaceStoreError(409, 'SCENE_TEMPORAL_GM_REVIEW_REQUIRED',
+    if (!prepared.decision || prepared.decision.scopeDecision.schemaVersion !== G.scope) throw new StoryWorkspaceStoreError(409, 'SCENE_TEMPORAL_GM_REVIEW_REQUIRED',
       'A GM must review which pending events and timing rulings apply to this Scene.', {});
     const [after, latest] = await Promise.all([deps.readState(scope), readDecision(scope)]);
     if (snapshotJson(state) !== snapshotJson(after) || snapshotJson(prepared) !== snapshotJson(latest)) throw new StoryWorkspaceStoreError(409,
@@ -107,13 +125,15 @@ export async function evaluateCurrentSceneTemporalValidity(scope: Scope, bundle:
   // reads must not accidentally query that unrelated key and appear missing.
   scope = { userId: scope.userId, campaignId: scope.campaignId };
   const certificate = bundle.readinessCertificate as Row;
-  if (![T.certificate, G.certificate].includes(certificate?.schemaVersion)) return null;
+  if (![T.certificate, G.certificate, A.certificate].includes(certificate?.schemaVersion)) return null;
   const manifest = certificate.temporalValidity;
   if (!manifest || manifest.dossierFingerprint !== (bundle.readinessAssessment as Row)?.dossierFingerprint
     || manifest.assessmentFingerprint !== (bundle.pendingIntentBindingRecord as Row)?.assessmentFingerprint) {
     throw new StoryWorkspaceStoreError(409, 'SCENE_TEMPORAL_VALIDITY_INVALID', 'The prepared timing review could not be verified.', {});
   }
-  const authority = await readSceneTemporalAuthority({ ...scope, gmDecisions: certificate.schemaVersion === G.certificate }, deps);
+  const current = await readSceneTemporalAuthority({ ...scope, gmDecisions: certificate.schemaVersion === G.certificate,
+    analysis: certificate.schemaVersion === A.certificate }, deps);
+  const authority = certificate.schemaVersion === A.certificate ? current.authority as JsonObject : current;
   const state = await deps.readState(scope);
   const baseline = Number(manifest.authority?.clockRevision), revision = Number(authority.clockRevision);
   if (Number(state?.gameClockRevision ?? 0) !== revision) throw new StoryWorkspaceStoreError(409,

@@ -134,8 +134,8 @@ export function projectClassifiedPendingNode(original: Row, boundNode: Row, clas
  * there is no competing standalone writer or independently mutable collection. */
 export function pendingRoleApplicationIssues(record: Row, receipt: Row): string[] {
   const value = receipt?.requirementRoleApplication;
-  return ['gmc.scene-pending-intent-binding-record/4', TYPED_REFERENCE_AUTHORITY_BUNDLE.pendingRecord, 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8'].includes(String(record?.schemaVersion))
-    && receipt?.schemaVersion === (record.schemaVersion === 'gmc.scene-pending-intent-binding-record/8' ? 'gma.action-intent-binding-receipt/8' : record.schemaVersion === 'gmc.scene-pending-intent-binding-record/7' ? 'gma.action-intent-binding-receipt/7'
+  return ['gmc.scene-pending-intent-binding-record/4', TYPED_REFERENCE_AUTHORITY_BUNDLE.pendingRecord, 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8', 'gmc.scene-pending-intent-binding-record/9'].includes(String(record?.schemaVersion))
+    && receipt?.schemaVersion === (record.schemaVersion === 'gmc.scene-pending-intent-binding-record/9' ? 'gma.action-intent-binding-receipt/9' : record.schemaVersion === 'gmc.scene-pending-intent-binding-record/8' ? 'gma.action-intent-binding-receipt/8' : record.schemaVersion === 'gmc.scene-pending-intent-binding-record/7' ? 'gma.action-intent-binding-receipt/7'
       : record.schemaVersion === 'gmc.scene-pending-intent-binding-record/6' ? 'gma.action-intent-binding-receipt/6'
       : record.schemaVersion === TYPED_REFERENCE_AUTHORITY_BUNDLE.pendingRecord ? TYPED_REFERENCE_AUTHORITY_BUNDLE.pendingReceipt : 'gma.action-intent-binding-receipt/4')
     && closed(value, ['schemaVersion', 'classificationFingerprint', 'assessmentFingerprint', 'recordFingerprint'])

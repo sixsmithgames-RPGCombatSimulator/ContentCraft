@@ -3,6 +3,8 @@ import { readSceneTemporalAuthority, evaluateCurrentSceneTemporalValidity, asser
   readPendingSceneTemporalEvents, TEMPORAL_TERMINAL_SOURCE_STATUSES } from './sceneTemporalAuthorityService.js';
 import { createTemporalValidityManifest, temporalRecordRefs, SCENE_TEMPORAL_VALIDITY as T } from '../../shared/llm/sceneTemporalValidity.js';
 import { freeformJsonDigest } from '../../shared/llm/freeformPlanBinding.js';
+import { SCENE_TEMPORAL_ANALYSIS as A } from '../../shared/llm/sceneTemporalAnalysis.js';
+import { temporalSourceCatalog } from '../../shared/llm/sceneTemporalGmDecisions.js';
 const scope = { userId: 'user:test', campaignId: 'campaign:test' };
 const scene = { playableSceneContext: { sceneKitRef: { sceneKitId: 'scene:test', revision: 1 } } };
 function fixture() {
@@ -14,6 +16,37 @@ function fixture() {
   return { state, events, deps, seen };
 }
 describe('complete current-owner temporal evidence', () => {
+  it('analyzes all 43 full owner sources without human scope, and invalidates even a changed background source', async () => {
+    const f = fixture();
+    f.events.splice(0, f.events.length, ...Array.from({ length: 43 }, (_, n) => ({ _id: `event:${n}`, revision: 1,
+      title: `Full source ${n}`, summary: `Exact owner evidence ${n}. `.repeat(25), status: n === 42 ? 'redirected' : 'open',
+      ...(n === 0 ? { campaignDeadline: { day: 5, hour: 6, minute: 0, second: 0 } } : {}) })));
+    const deps = { ...f.deps, readGmDecision: async () => ({ catalog: temporalSourceCatalog(scope,
+      { sceneKitId: 'scene:test' }, f.events, []), currentClock: f.state.gameClock, decision: null }) };
+    const result = await readSceneTemporalAuthority({ ...scope, analysis: true }, deps) as any;
+    expect(result.schemaVersion).toBe(A.read); expect(result.catalog.sources).toHaveLength(43);
+    expect(Buffer.byteLength(JSON.stringify(result.catalog))).toBeGreaterThan(16384);
+    expect(Buffer.byteLength(JSON.stringify(result.authority))).toBeLessThanOrEqual(16384);
+    expect(result.catalog.sources.map((r: any) => r.summary)).toEqual(f.events.slice().sort((a, b) => a._id.localeCompare(b._id)).map((r) => r.summary));
+    expect(result.authority).not.toHaveProperty('scopeDecision');
+    const proposal = { campaignId: scope.campaignId, sceneKit: { sceneKitId: 'scene:test' }, sceneReality: { realityId: 'reality:test' },
+      sceneStoryDesign: { designId: 'design:test' }, zones: [], actorFrames: [], facts: [], elements: [], preparedBoundaries: [] };
+    const refs = temporalRecordRefs(proposal), dependency = refs[0];
+    const assessment = { schemaVersion: A.assessment, verdict: 'adequate', dossierFingerprint: freeformJsonDigest(proposal),
+      temporalCoverageReview: { schemaVersion: A.review, authorityFingerprint: result.authority.fingerprint, verdict: 'supported',
+        rationale: 'All complete sources were analyzed; the first source has the exact owner deadline.',
+        clockIndependentRecordRefs: refs.slice(1), conditions: [{ predicateRefs: result.authority.predicates.map((p: any) => p.predicateId), recordRefs: [dependency] }],
+        unresolvedRecordRefs: [], sourceAnalysis: result.catalog.sources.map((e: any) => ({ sourceRef: e.eventRef,
+          disposition: e.eventRef === 'gmc:event:event:0' ? 'material' : 'background', rationale: `Evidence for ${e.title} has been considered for the scout.`,
+          recordRefs: e.eventRef === 'gmc:event:event:0' ? [dependency] : [], question: null })) } };
+    const manifest = createTemporalValidityManifest(result.authority, proposal, assessment, result.catalog);
+    const bundle: any = { readinessCertificate: { schemaVersion: A.certificate, temporalValidity: manifest }, readinessAssessment: assessment,
+      pendingIntentBindingRecord: { assessmentFingerprint: freeformJsonDigest(assessment) } };
+    expect((await evaluateCurrentSceneTemporalValidity(scope, bundle, deps))?.decision).toBe('valid');
+    f.events[42].summary += ' The background owner changed.';
+    expect((await evaluateCurrentSceneTemporalValidity(scope, bundle, deps))?.decision).toBe('owner_changed');
+    await expect(assertCurrentSceneTemporalValidity(scope, bundle, deps)).rejects.toMatchObject({ code: 'SCENE_TEMPORAL_VALIDITY_STALE' });
+  });
   it('includes separate QUEST and EVENT owners, their exact descriptions and distinct IDs even when raw IDs collide', async () => {
     const seen: unknown[] = [];
     const rows = await readPendingSceneTemporalEvents({ ...scope, programId: 'ignored' } as typeof scope, {

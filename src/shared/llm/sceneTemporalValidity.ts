@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { canonicalFreeformJson, freeformJsonDigest } from './freeformPlanBinding.js';
 import { SCENE_TEMPORAL_GM as G, assertScopedTemporalAuthorityContext, assertGmRulingContinuity } from './sceneTemporalGmDecisions.js';
+import { SCENE_TEMPORAL_ANALYSIS as A, assertAnalyzedTemporalAuthority, assertTemporalSourceAnalysis } from './sceneTemporalAnalysis.js';
 
 type Row = Record<string, any>;
 export const SCENE_TEMPORAL_VALIDITY = Object.freeze({
@@ -98,6 +99,7 @@ export function createTemporalAuthorityContext(scope: { campaignId: string; scen
   return value;
 }
 export function assertTemporalAuthorityContext(value: Row): void {
+  if (value?.schemaVersion === A.context) return assertAnalyzedTemporalAuthority(value);
   if (value?.schemaVersion === G.context) return assertScopedTemporalAuthorityContext(value);
   requireValid(exact(value, ['schemaVersion', 'campaignId', 'sceneKitId', 'selectionScope', 'complete', 'clockRevision', 'currentClock',
     'calendar', 'events', 'eventDefinitionsFingerprint', 'predicates', 'fingerprint']) && value.schemaVersion === T.context
@@ -121,11 +123,12 @@ export function temporalPredicateTrue(predicate: Row, authority: Row): boolean {
     && now >= campaignInstant(predicate.start)! && now < campaignInstant(predicate.end)!;
   return false;
 }
-export function assertTemporalCoverageReview(review: Row, authority: Row, proposal: Row, adequate: boolean): void {
+export function assertTemporalCoverageReview(review: Row, authority: Row, proposal: Row, adequate: boolean, analysisCatalog?: Row): void {
   assertTemporalAuthorityContext(authority);
   const catalog = temporalRecordRefs(proposal), predicates = new Map(authority.predicates.map((p: Row) => [p.predicateId, p]));
-  requireValid(exact(review, ['schemaVersion', 'authorityFingerprint', 'verdict', 'rationale', 'clockIndependentRecordRefs', 'conditions', 'unresolvedRecordRefs'])
-    && review.schemaVersion === (authority.schemaVersion === G.context ? G.review : T.review) && review.authorityFingerprint === authority.fingerprint
+  const analyzed = authority.schemaVersion === A.context;
+  requireValid(exact(review, ['schemaVersion', 'authorityFingerprint', 'verdict', 'rationale', 'clockIndependentRecordRefs', 'conditions', 'unresolvedRecordRefs', ...(analyzed ? ['sourceAnalysis'] : [])])
+    && review.schemaVersion === (analyzed ? A.review : authority.schemaVersion === G.context ? G.review : T.review) && review.authorityFingerprint === authority.fingerprint
     && ['supported', 'unsupported'].includes(review.verdict) && typeof review.rationale === 'string' && review.rationale.trim().length > 0
     && review.rationale.length <= 2000 && uniqueStrings(review.clockIndependentRecordRefs, 512)
     && uniqueStrings(review.unresolvedRecordRefs, 512) && Array.isArray(review.conditions) && review.conditions.length <= 64, 'review.shape');
@@ -140,17 +143,18 @@ export function assertTemporalCoverageReview(review: Row, authority: Row, propos
   bounded(review, 16384, 'review.bytes');
   if (adequate || review.verdict === 'supported') requireValid(review.verdict === 'supported' && !review.unresolvedRecordRefs.length
     && [...selectedPredicates].every((ref) => temporalPredicateTrue(predicates.get(ref) as Row, authority)), 'review.unsupported');
-  if (authority.schemaVersion === G.context && (adequate || review.verdict === 'supported')) assertGmRulingContinuity(authority, proposal);
+  if ([A.context, G.context].includes(authority.schemaVersion) && (adequate || review.verdict === 'supported')) assertGmRulingContinuity(authority, proposal);
+  if (analyzed) assertTemporalSourceAnalysis(review, analysisCatalog!, authority, proposal, adequate);
 }
 export function historicalTemporalAssessment(value: Row): Row {
   const { temporalCoverageReview: _review, ...body } = value;
   return { ...body, schemaVersion: 'gma.scene-readiness-assessment/8' };
 }
-export function createTemporalValidityManifest(authority: Row, proposal: Row, assessment: Row): Row {
-  const family = authority.schemaVersion === G.context ? G : T;
+export function createTemporalValidityManifest(authority: Row, proposal: Row, assessment: Row, analysisCatalog?: Row): Row {
+  const family = authority.schemaVersion === A.context ? A : authority.schemaVersion === G.context ? G : T;
   requireValid(assessment.schemaVersion === family.assessment && assessment.dossierFingerprint === freeformJsonDigest(proposal)
     && authority.campaignId === proposal.campaignId && authority.sceneKitId === proposal.sceneKit?.sceneKitId, 'assessment.identity');
-  assertTemporalCoverageReview(assessment.temporalCoverageReview, authority, proposal, assessment.verdict === 'adequate');
+  assertTemporalCoverageReview(assessment.temporalCoverageReview, authority, proposal, assessment.verdict === 'adequate', analysisCatalog);
   requireValid(assessment.verdict === 'adequate', 'assessment.verdict');
   const selected = new Set(assessment.temporalCoverageReview.conditions.flatMap((r: Row) => r.predicateRefs));
   const body = { schemaVersion: family.manifest, campaignId: authority.campaignId, sceneKitId: authority.sceneKitId,
@@ -203,7 +207,7 @@ export function evaluateTemporalValidity(manifest: Row, current: Row, clockRecor
     assertTemporalAuthorityContext(current); assertTemporalAuthorityContext(manifest.authority);
     const { fingerprint, ...body } = manifest;
     requireValid(exact(manifest, ['schemaVersion', 'campaignId', 'sceneKitId', 'dossierFingerprint', 'assessmentFingerprint',
-      'authority', 'review', 'predicates', 'fingerprint']) && manifest.schemaVersion === (manifest.authority?.schemaVersion === G.context ? G.manifest : T.manifest)
+      'authority', 'review', 'predicates', 'fingerprint']) && manifest.schemaVersion === (manifest.authority?.schemaVersion === A.context ? A.manifest : manifest.authority?.schemaVersion === G.context ? G.manifest : T.manifest)
       && fingerprint === freeformJsonDigest(body) && manifest.review?.verdict === 'supported'
       && manifest.review.authorityFingerprint === manifest.authority.fingerprint && !manifest.review.unresolvedRecordRefs?.length, 'manifest.fingerprint');
     const selected = new Set(manifest.review.conditions.flatMap((r: Row) => r.predicateRefs));

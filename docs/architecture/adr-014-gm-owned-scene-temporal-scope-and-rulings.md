@@ -6,6 +6,21 @@
 - Scope: Studio Manual / approved test campaign only; VCS unchanged
 - Protected boundary: GMC temporal-scope decision and timing-ruling writer
 
+## Accepted correction — 2026-10-19
+
+The owner explicitly instructed correction of GMA ADR 031 and implementation of
+application/LLM analysis instead of a 43-source human applicability checklist.
+Adopt its **Accepted correction: application/LLM analysis, human world rulings**
+section in full, including hierarchy, additive schemas, complete catalog,
+rule-only protected writer, lossless working-set `/2`, unchanged budgets,
+original-cache recovery, first-pass policies, failures, compatibility, tests,
+reader-first rollout and live acceptance gates. That correction supersedes the
+human relevance requirement in the historical design below. Do not mark model
+analysis as human consent, weaken source closure, repeat a completed action,
+or count previous checklist rehearsals as proof of the corrected workflow.
+
+## Historical implementation and compatibility
+
 Adopt the governing proposal's complete problem/non-goals, authority hierarchy,
 lifetimes, versioned logical schemas, protected prepare/confirm/operation flow,
 human controls, prompt/data flow, unchanged budgets, validation/repair, player

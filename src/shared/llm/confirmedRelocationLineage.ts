@@ -42,7 +42,7 @@ export function deriveConfirmedRelocationLineage(scope: { campaignId: string; pr
   const application = [...applications].reverse().find((row) => object(row.record)
     && object(row.record.bindings) && rows(row.record.bindings.nodes).some((node) => node.nodeRef === scope.moveNodeRef));
   const record = application?.record;
-  if (!object(record) || !['gmc.scene-pending-intent-binding-record/2', 'gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5', 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8'].includes(String(record.schemaVersion))
+  if (!object(record) || !['gmc.scene-pending-intent-binding-record/2', 'gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5', 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8', 'gmc.scene-pending-intent-binding-record/9'].includes(String(record.schemaVersion))
     || !object(record.window) || !object(record.sourceCursor)) invalid('original_binding');
   assertPendingBindingRecord(record, { instruction, program: raw, cursor: record.sourceCursor,
     artifactRevision: Number(record.window.artifactRevision), receipts: rows(record.sourceReceipts) });

@@ -22,6 +22,7 @@ import { PREPARED_BINDING_COMPILATION as C, compilePreparedBindings, assertPrepa
 import { assertPreparedBindingReview, assertPreparedOwnerReviewBinding } from '../../shared/llm/scenePreparedBindingReview.js';
 import { SCENE_TEMPORAL_VALIDITY as T, createTemporalValidityManifest } from '../../shared/llm/sceneTemporalValidity.js';
 import { SCENE_TEMPORAL_GM as G } from '../../shared/llm/sceneTemporalGmDecisions.js';
+import { SCENE_TEMPORAL_ANALYSIS as A } from '../../shared/llm/sceneTemporalAnalysis.js';
 import { readSceneTemporalAuthority, evaluateCurrentSceneTemporalValidity } from './sceneTemporalAuthorityService.js';
 import { decodeScenePreparationWorkingSet } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { getOperationDefinition, getSemanticValidator, validateOperationOutput } from '../llm-orchestrator/operationRegistry.js';
@@ -252,7 +253,7 @@ async function currentClockAuthority(
 
 async function temporalReadinessChanges(input: { userId: string; campaignId: string }, bundle: JsonObject,
   stores: SceneRealityCollections): Promise<string[] | null> {
-  if (![T.certificate, G.certificate].some((v) => v === (bundle.readinessCertificate as JsonObject)?.schemaVersion)) return null;
+  if (![T.certificate, G.certificate, A.certificate].some((v) => v === (bundle.readinessCertificate as JsonObject)?.schemaVersion)) return null;
   if (!stores.evaluateTemporalValidity) throw new StoryWorkspaceStoreError(503, 'SCENE_TEMPORAL_VALIDITY_UNAVAILABLE',
     'The complete current timing check is not available.', {});
   const result = await stores.evaluateTemporalValidity(input, bundle);
@@ -809,7 +810,7 @@ function validateSuccessorContinuity(
 
 function validateAssessment(value: unknown, proposal: JsonObject, request: JsonObject, pending: false | 'legacy' | 'qualified' | 'continuation' | 'read_effects' | 'typed_references' = false, ownerPremises = false, compiled = false, temporal = false): JsonObject {
   if (!object(value)) throw new StoryWorkspaceStoreError(422, 'SCENE_READINESS_ASSESSMENT_REQUIRED', 'The Scene was not independently examined for playability.', {});
-  version(value, temporal ? (value.schemaVersion === G.assessment ? G.assessment : T.assessment) : compiled ? C.assessment : ownerPremises ? SCENE_OWNER_PREMISES.assessment : pending === 'typed_references' ? TYPED.assessment : pending === 'read_effects' ? 'gma.scene-readiness-assessment/5' : pending === 'continuation' ? 'gma.scene-readiness-assessment/4' : pending === 'qualified' ? 'gma.scene-readiness-assessment/3' : pending ? 'gma.scene-readiness-assessment/2' : SCENE_REALITY_CONTRACTS.assessment, 'assessment');
+  version(value, temporal ? (value.schemaVersion === A.assessment ? A.assessment : value.schemaVersion === G.assessment ? G.assessment : T.assessment) : compiled ? C.assessment : ownerPremises ? SCENE_OWNER_PREMISES.assessment : pending === 'typed_references' ? TYPED.assessment : pending === 'read_effects' ? 'gma.scene-readiness-assessment/5' : pending === 'continuation' ? 'gma.scene-readiness-assessment/4' : pending === 'qualified' ? 'gma.scene-readiness-assessment/3' : pending ? 'gma.scene-readiness-assessment/2' : SCENE_REALITY_CONTRACTS.assessment, 'assessment');
   assertByteBound(value, 32_768, 'SCENE_READINESS_ASSESSMENT_TOO_LARGE', 'assessment');
   exactKeys(value, 'assessment', ['schemaVersion', 'assessmentId', 'operationId', 'campaignId', 'dossierFingerprint', 'policyFingerprint', 'selectedDepth', 'verdict', 'confidence', 'counterfactualProbes', 'debt', 'rationale', 'evidenceRefs',
     ...(pending ? ['intentWindowFingerprint', 'bindingFingerprint', 'ownerReadSetFingerprint', 'pendingIntentPolicyFingerprint', 'bindingReviews'] : []),
@@ -1128,7 +1129,7 @@ export function sceneRealitySupportsStorySettlement(
   temporalEvaluation?: unknown,
 ): boolean {
   if (object(sceneReality) && object(sceneReality.bundle) && object(sceneReality.bundle.readinessCertificate)
-    && (sceneReality.bundle.readinessCertificate.schemaVersion === T.certificate || sceneReality.bundle.readinessCertificate.schemaVersion === G.certificate)) {
+    && new Set<string>([T.certificate, G.certificate, A.certificate]).has(String(sceneReality.bundle.readinessCertificate.schemaVersion))) {
     const manifest = sceneReality.bundle.readinessCertificate.temporalValidity;
     if (!object(manifest) || !object(temporalEvaluation) || temporalEvaluation.schemaVersion !== T.evaluation
       || temporalEvaluation.manifestFingerprint !== manifest.fingerprint || temporalEvaluation.decision !== 'valid') return false;
@@ -1348,10 +1349,13 @@ export async function issueScenePreparationReview(input: { userId: string; campa
   if (!typedReferenceWritesEnabled(input.campaignId) || !readEffectWritesEnabled(input.campaignId)) throw new StoryWorkspaceStoreError(503,
     'SCENE_TEMPORAL_GM_REVIEW_ISSUE_PAUSED', 'New independent review issuance is paused for this campaign.', {});
   const saved = await readScenePreparationResume({ userId: input.userId, campaignId: input.campaignId, resumeRef: String(body.resumeRef) }, stores);
-  const authority = await stores.readTemporalAuthority({ userId: input.userId, campaignId: input.campaignId, gmDecisions: true });
+  const analyzed = (packet.temporalAuthority as JsonObject)?.schemaVersion === A.context;
+  const current = await stores.readTemporalAuthority({ userId: input.userId, campaignId: input.campaignId, gmDecisions: !analyzed, analysis: analyzed });
+  const authority = analyzed ? current.authority as JsonObject : current;
   if (hash(packet.proposal) !== hash(saved.proposal) || hash(packet.pendingIntentBindings) !== hash(saved.bindings)
     || hash(packet.buildRequest) !== hash(saved.buildRequest) || hash(packet.preparedBindingCompilation) !== hash(saved.compilation)
-    || hash(packet.temporalAuthority) !== hash(authority) || authority.schemaVersion !== G.context
+    || hash(packet.temporalAuthority) !== hash(authority) || authority.schemaVersion !== (analyzed ? A.context : G.context)
+    || analyzed && (current.schemaVersion !== A.read || hash(packet.temporalAnalysisCatalog) !== hash(current.catalog))
     || (packet.pendingIntentContext as any)?.window?.windowFingerprint !== saved.sourceWindowFingerprint) throw new StoryWorkspaceStoreError(409,
     'SCENE_TEMPORAL_GM_REVIEW_ISSUE_INVALID', 'The review changed the saved preparation or current timing evidence.', {});
   const document: ScenePreparationReviewIssue = { _id, userId: input.userId, campaignId: input.campaignId, schemaVersion: G.reviewIssue,
@@ -1440,17 +1444,24 @@ export async function commitSceneReality(
   }
   validateSuccessorContinuity(proposal, priorDocument?.bundle ?? null, request.trigger, greatestReceiptSceneRevision);
   let pendingBindingRecord: JsonObject | null = null;
+  const analysisAware = (input.assessment as JsonObject)?.schemaVersion === A.assessment;
   const gmTimingAware = (input.assessment as JsonObject)?.schemaVersion === G.assessment;
-  const temporalAware = gmTimingAware || (input.assessment as JsonObject)?.schemaVersion === T.assessment;
+  const temporalAware = analysisAware || gmTimingAware || (input.assessment as JsonObject)?.schemaVersion === T.assessment;
   const compilationAware = temporalAware || (input.assessment as JsonObject)?.schemaVersion === C.assessment;
   let temporalAuthority: JsonObject | undefined;
+  let temporalAnalysisCatalog: JsonObject | undefined;
   if (temporalAware) {
     if (!typedReferenceWritesEnabled(input.campaignId) || !stores.readTemporalAuthority) throw new StoryWorkspaceStoreError(503,
       'SCENE_TEMPORAL_VALIDITY_UNAVAILABLE', 'The complete current timing review is not enabled for this campaign.', {});
-    temporalAuthority = await stores.readTemporalAuthority({ userId: input.userId, campaignId: input.campaignId, gmDecisions: gmTimingAware });
+    const currentTemporal = await stores.readTemporalAuthority({ userId: input.userId, campaignId: input.campaignId, gmDecisions: gmTimingAware, analysis: analysisAware });
+    temporalAuthority = analysisAware ? currentTemporal.authority as JsonObject : currentTemporal;
+    temporalAnalysisCatalog = analysisAware ? currentTemporal.catalog as JsonObject : undefined;
+    if (analysisAware && (currentTemporal.schemaVersion !== A.read || temporalAuthority?.schemaVersion !== A.context
+      || temporalAnalysisCatalog?.schemaVersion !== A.catalog)) throw new StoryWorkspaceStoreError(409,
+      'SCENE_TEMPORAL_ANALYSIS_INCOMPLETE', 'The complete current event analysis cannot be verified.', {});
     if ((input.assessment as any).temporalCoverageReview?.authorityFingerprint !== temporalAuthority.fingerprint) throw new StoryWorkspaceStoreError(409,
       'SCENE_TEMPORAL_AUTHORITY_CHANGED', 'The current timing conditions changed after their independent review.', {});
-    if (gmTimingAware) {
+    if (gmTimingAware || analysisAware) {
       const issue = await stores.reviewIssues?.findOne({ userId: input.userId, campaignId: input.campaignId, operationId: String(request.operationId) });
       if (!issue || issue.temporalAuthorityFingerprint !== temporalAuthority.fingerprint
         || ![1, 2].includes(issue.consumedCalls.builder) || issue.consumedCalls.independentReview !== 1) throw new StoryWorkspaceStoreError(409,
@@ -1516,21 +1527,22 @@ export async function commitSceneReality(
       }
       pendingBindingRecord = createPendingBindingRecord({ ...context,
         ...(temporalAuthority ? { temporalAuthority } : {}),
+        ...(temporalAnalysisCatalog ? { temporalAnalysisCatalog } : {}),
         ...(independentOwnerPremises ? { independentOwnerPremises } : {}), ...(preparedBindingCompilation ? { preparedBindingCompilation } : {}) },
         supplement.bindings, input.assessment as JsonObject, pendingScenePolicyFingerprint(String(proposal.requestedDepth), policyKind, policyVersion)) as JsonObject;
     } catch {
       throw new StoryWorkspaceStoreError(422, compilationAware ? 'SCENE_PREPARED_BINDING_REVIEW_INVALID' : 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', 'The complete Scene and unfinished-action binding examination could not be verified.', {});
     }
   }
-  if ((proposal.sceneStoryDesign as JsonObject).schemaVersion === 'gmc.scene-story-design/4' && !['gmc.scene-pending-intent-binding-record/4', TYPED.pendingRecord, C.record, T.record, G.record].includes(String(pendingBindingRecord?.schemaVersion))) throw new StoryWorkspaceStoreError(422, 'SCENE_READ_EFFECT_EXAMINATION_REQUIRED', 'New action surfaces require their exact independently reviewed pending roles.', {});
+  if ((proposal.sceneStoryDesign as JsonObject).schemaVersion === 'gmc.scene-story-design/4' && !['gmc.scene-pending-intent-binding-record/4', TYPED.pendingRecord, C.record, T.record, G.record, A.record].includes(String(pendingBindingRecord?.schemaVersion))) throw new StoryWorkspaceStoreError(422, 'SCENE_READ_EFFECT_EXAMINATION_REQUIRED', 'New action surfaces require their exact independently reviewed pending roles.', {});
   const assessment = validateAssessment(input.assessment, proposal, request, pendingBindingRecord
-    ? [TYPED.pendingRecord, C.record, T.record, G.record].some((v) => v === pendingBindingRecord!.schemaVersion) ? 'typed_references' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' ? 'read_effects' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/3' ? 'continuation'
+    ? [TYPED.pendingRecord, C.record, T.record, G.record, A.record].some((v) => v === pendingBindingRecord!.schemaVersion) ? 'typed_references' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' ? 'read_effects' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/3' ? 'continuation'
       : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/2' ? 'qualified' : 'legacy' : false, premisesAware, compilationAware, temporalAware);
   const pointerRevision = actualPointerRevision + 1;
   const certificate = certificateFrom(proposal, request, assessment, pointerRevision);
   if (temporalAuthority) {
-    certificate.schemaVersion = gmTimingAware ? G.certificate : T.certificate;
-    certificate.temporalValidity = createTemporalValidityManifest(temporalAuthority, proposal, assessment);
+    certificate.schemaVersion = analysisAware ? A.certificate : gmTimingAware ? G.certificate : T.certificate;
+    certificate.temporalValidity = createTemporalValidityManifest(temporalAuthority, proposal, assessment, temporalAnalysisCatalog);
     assertByteBound(certificate, SCENE_REALITY_LIMITS.certificateBytes, 'SCENE_READINESS_CERTIFICATE_TOO_LARGE', 'certificate');
   }
   const manifestCertificate = ref(((proposal.openingFrame as JsonObject).presentedTargetManifest as JsonObject).certificateRef, 'certificateId', 'proposal.openingFrame.presentedTargetManifest.certificateRef');
@@ -1585,8 +1597,9 @@ export async function commitSceneReality(
   // actual owners at the existing acceptance boundary, after all compilation.
   if (temporalAuthority) {
     await validateCurrentGmcReadSet(request, { userId: input.userId, campaignId: input.campaignId }, stores);
-    const currentTemporal = await stores.readTemporalAuthority!({ userId: input.userId, campaignId: input.campaignId, gmDecisions: gmTimingAware });
-    if (hash(currentTemporal) !== hash(temporalAuthority)) throw new StoryWorkspaceStoreError(409,
+    const currentTemporal = await stores.readTemporalAuthority!({ userId: input.userId, campaignId: input.campaignId, gmDecisions: gmTimingAware, analysis: analysisAware });
+    if (hash(analysisAware ? currentTemporal.authority : currentTemporal) !== hash(temporalAuthority)
+      || analysisAware && hash(currentTemporal.catalog) !== hash(temporalAnalysisCatalog)) throw new StoryWorkspaceStoreError(409,
       'SCENE_TEMPORAL_AUTHORITY_CHANGED', 'Campaign timing changed before the prepared Scene could be saved.', {});
   }
   try {
@@ -1859,7 +1872,7 @@ export async function selectPreparedStoryFacts(
 
 export function sceneRealityHealthAdvertisement(): JsonObject {
   return {
-    capabilities: [...SCENE_REALITY_CAPABILITIES, C.capability, T.capability, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, SCENE_WORKING_SET.capability, TYPED.capability, SCENE_INFORMATION_PROJECTION.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
+    capabilities: [...SCENE_REALITY_CAPABILITIES, C.capability, T.capability, A.capability, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, SCENE_WORKING_SET.capability, TYPED.capability, SCENE_INFORMATION_PROJECTION.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
     readEffects: READ_EFFECT_AUTHORITY_BUNDLE,
     typedReferences: TYPED,
     workingSet: SCENE_WORKING_SET,
@@ -1868,6 +1881,7 @@ export function sceneRealityHealthAdvertisement(): JsonObject {
     preparedBindingCompilation: C,
     temporalValidity: T,
     temporalGmDecisions: G,
+    temporalAnalysis: A,
     movementOutcome: { ...SCENE_MOVEMENT_OUTCOME_AUTHORITY, routeEnabled: true, writesEnabled: process.env.GMC_PENDING_OBSERVER_QUALIFICATION === '1' },
     preparedCheckCompletion: { ...PREPARED_CHECK_COMPLETION_AUTHORITY, routeEnabled: true },
     contracts: clone(SCENE_REALITY_CONTRACTS as unknown as JsonObject),

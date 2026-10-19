@@ -2,6 +2,7 @@ import { freeformJsonDigest } from './freeformPlanBinding.js';
 import { SCENE_OWNER_PREMISES, ownerPremiseExaminationIssues, historicalOwnerPremiseAssessment } from './sceneIndependentOwnerPremises.js';
 import { PREPARED_BINDING_COMPILATION as C, remoteReceiverWitnesses } from './scenePreparedBindingCompilation.js';
 import { SCENE_TEMPORAL_VALIDITY as T, assertTemporalCoverageReview, historicalTemporalAssessment } from './sceneTemporalValidity.js';
+import { SCENE_TEMPORAL_ANALYSIS as A } from './sceneTemporalAnalysis.js';
 import { SCENE_TEMPORAL_GM as G } from './sceneTemporalGmDecisions.js';
 import { preparedBindingReviewIssues, historicalPreparedBindingAssessment } from './scenePreparedBindingReview.js';
 import { createPendingIntentWindow } from './pendingIntentWindow.js';
@@ -29,7 +30,7 @@ const identityLink = (value: unknown): ActorMechanicsLink => {
   // The closed canonical validator above checks every ActorMechanicsLink field.
   return value as ActorMechanicsLink;
 };
-type Context = Parameters<typeof historicalBindingIssues>[1] & { independentOwnerPremises?: Row; preparedBindingCompilation?: Row; temporalAuthority?: Row };
+type Context = Parameters<typeof historicalBindingIssues>[1] & { independentOwnerPremises?: Row; preparedBindingCompilation?: Row; temporalAuthority?: Row; temporalAnalysisCatalog?: Row };
 export const READ_EFFECT_BINDINGS_VERSION = 'gma.scene-pending-intent-bindings/4';
 export const READ_EFFECT_BINDING_POLICY_VERSION = 'gma.scene-pending-intent-binding-policy/7';
 export const READ_EFFECT_EXAMINER_POLICY_VERSION = 'gma.scene-pending-intent-examiner-policy/7';
@@ -186,12 +187,12 @@ export function readEffectAssessmentEvidenceRefs(bindings: Row, context: Context
 
 /** Metadata integrity supplements actual semantic review; it is not its substitute. */
 export function scenePendingIntentExaminationIssues(value: unknown, bindings: Row, context: Context, policyFingerprint: string): string[] {
-  if (object(value) && [T.assessment, G.assessment].some((v) => v === value.schemaVersion) || context.temporalAuthority) {
+  if (object(value) && [T.assessment, G.assessment, A.assessment].some((v) => v === value.schemaVersion) || context.temporalAuthority) {
     try {
       if (!object(value) || !context.temporalAuthority
-        || value.schemaVersion !== (context.temporalAuthority.schemaVersion === G.context ? G.assessment : T.assessment)) return ['/temporalCoverageReview'];
+        || value.schemaVersion !== (context.temporalAuthority.schemaVersion === A.context ? A.assessment : context.temporalAuthority.schemaVersion === G.context ? G.assessment : T.assessment)) return ['/temporalCoverageReview'];
       const review = record(value.temporalCoverageReview);
-      assertTemporalCoverageReview(review, context.temporalAuthority, context.proposal, value.verdict === 'adequate');
+      assertTemporalCoverageReview(review, context.temporalAuthority, context.proposal, value.verdict === 'adequate', context.temporalAnalysisCatalog);
       if (review.verdict === 'unsupported' && !(value.verdict === 'repair_required'
         && rows(value.debt).some((row) => row.domain === 'timeline' && row.blocking))) return ['/temporalCoverageReview'];
       const { temporalAuthority: _authority, ...rest } = context;

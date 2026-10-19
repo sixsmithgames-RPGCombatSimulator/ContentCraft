@@ -15,13 +15,14 @@ import { FREEFORM_INTAKE_OPERATION, FREEFORM_INTAKE_POLICY, FREEFORM_INTAKE_POLI
 import { SCENE_PENDING_INTENT_BINDING_POLICY, SCENE_PENDING_INTENT_EXAMINER_POLICY } from '../../shared/llm/scenePendingIntentBindings.js';
 import { QUALIFIED_BINDING_POLICY, QUALIFIED_EXAMINER_POLICY, CONTINUATION_BINDING_POLICY, CONTINUATION_EXAMINER_POLICY } from '../../shared/llm/scenePendingIntentQualified.js';
 import { READ_EFFECT_BINDING_POLICY, READ_EFFECT_EXAMINER_POLICY, SCENE_MECHANICS_PREPARATION_POLICY, SCENE_DOSSIER_REFERENCE_POLICY } from '../../shared/llm/sceneReadEffectPolicy.js';
-import { SCENE_WORKING_SET_POLICY, decodeScenePreparationWorkingSet } from '../../shared/llm/scenePreparationWorkingSet.js';
+import { SCENE_WORKING_SET_POLICY, SCENE_SHAPE_TABLE_POLICY, decodeScenePreparationWorkingSet } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { TYPED_PENDING_BINDING_POLICY, TYPED_PENDING_EXAMINER_POLICY } from '../../shared/llm/sceneTypedReferencePolicy.js';
 import { SCENE_INFORMATION_PROJECTION_POLICY } from '../../shared/llm/sceneInformationProjection.js';
 import { SCENE_OWNER_PREMISES, SCENE_OWNER_PREMISES_POLICY } from '../../shared/llm/sceneIndependentOwnerPremises.js';
 import { PREPARED_BINDING_COMPILATION as C } from '../../shared/llm/scenePreparedBindingCompilation.js';
 import { SCENE_TEMPORAL_VALIDITY as T, SCENE_TEMPORAL_REVIEW_POLICY } from '../../shared/llm/sceneTemporalValidity.js';
 import { SCENE_TEMPORAL_GM as G, SCENE_TEMPORAL_GM_POLICY } from '../../shared/llm/sceneTemporalGmDecisions.js';
+import { SCENE_TEMPORAL_ANALYSIS as A, SCENE_TEMPORAL_ANALYSIS_POLICY } from '../../shared/llm/sceneTemporalAnalysis.js';
 import { SCENE_PREPARED_SELECTION_POLICY, SCENE_PREPARED_REVIEW_POLICY, SCENE_PREPARED_INFORMATION_REVIEW_POLICY,
   SCENE_PREPARED_MECHANICS_REVIEW_POLICY, SCENE_PREPARED_OWNER_CITATION_POLICY } from '../../shared/llm/scenePreparedBindingReview.js';
 import {
@@ -40,11 +41,11 @@ import {
   sceneRealityReadEffectBuilderOutput, sceneReadinessReadEffectAssessmentOutput, sceneReadEffectRepairOutput,
   sceneRealityTypedReferenceBuilderOutput, sceneReadinessTypedReferenceAssessmentOutput, sceneTypedReferenceRepairOutput,
   sceneRealityInformationBuilderOutput, sceneInformationRepairOutput, sceneReadinessOwnerPremisesAssessmentOutput,
-  scenePreparedBindingBuilderOutput, scenePreparedBindingRepairOutput, scenePreparedBindingAssessmentOutput, sceneTemporalAssessmentOutput, sceneTemporalGmAssessmentOutput,
+  scenePreparedBindingBuilderOutput, scenePreparedBindingRepairOutput, scenePreparedBindingAssessmentOutput, sceneTemporalAssessmentOutput, sceneTemporalGmAssessmentOutput, sceneTemporalAnalysisAssessmentOutput,
 } from './sceneRealityOutputSchemas.js';
 
 export const OPERATION_REGISTRY_VERSION = '2026-10-15.1';
-export const MANUAL_PENDING_SCENE_OPERATIONS = Object.freeze([G.operation, T.operation, C.operation,
+export const MANUAL_PENDING_SCENE_OPERATIONS = Object.freeze([A.operation, G.operation, T.operation, C.operation,
   ...['story.scene-reality.build', 'story.scene-reality.build.checkpoint', 'story.scene-reality.repair'].map((base) => `${base}.read-effects.typed-references.working-set.information-projection.binding-compilation`),
   SCENE_OWNER_PREMISES.operation, FREEFORM_TYPED_REFERENCE_OPERATION, 'story.scene-reality.build.pending', 'story.scene-reality.build.checkpoint.pending',
   'story.scene-readiness.examine.pending', 'story.scene-reality.repair.pending',
@@ -1790,6 +1791,15 @@ seeds.push({ ...gmTemporalExaminer, id: G.operation, promptVersion: G.examinerPo
   systemInstruction: gmTemporalExaminer.systemInstruction!.replaceAll(T.assessment, G.assessment)
     .replaceAll('assessment /9', 'assessment /10').replaceAll(T.review, G.review) + ' ' + SCENE_TEMPORAL_GM_POLICY });
 
+// Corrected ADR 031: the existing independent review does source analysis;
+// there is no human relevance partition and no added model stage.
+seeds.push({ ...gmTemporalExaminer, id: A.operation, promptVersion: A.examinerPolicy,
+  required: [...sceneTemporalAnalysisAssessmentOutput.required],
+  outputProperties: sceneTemporalAnalysisAssessmentOutput.properties as Record<string, Record<string, unknown>>,
+  systemInstruction: gmTemporalExaminer.systemInstruction!.replaceAll(T.assessment, A.assessment)
+    .replaceAll('assessment /9', 'assessment /11').replaceAll(T.review, A.review)
+    + ' ' + SCENE_SHAPE_TABLE_POLICY + ' ' + SCENE_TEMPORAL_ANALYSIS_POLICY });
+
 const registry = new Map<string, LlmOperationDefinition>();
 const validators = new Map<string, SemanticValidator>();
 const compiledOutputSchemas = new Map<string, ValidateFunction>();
@@ -1894,7 +1904,7 @@ export function getSemanticValidator(id: string) {
   const validator = validators.get(id);
   if (!validator) return undefined;
   return (input: Parameters<SemanticValidator>[0]) => {
-    if (!/\.working-set(?:\.information-projection(?:\.owner-premises)?(?:\.binding-compilation(?:\.temporal-validity(?:\.gm-decisions)?)?)?)?$/.test(String(input.request.operation ?? ''))) return validator(input);
+    if (!/\.working-set(?:\.information-projection(?:\.owner-premises)?(?:\.binding-compilation(?:\.temporal-validity(?:\.(?:gm-decisions|analysis))?)?)?)?$/.test(String(input.request.operation ?? ''))) return validator(input);
     const request = structuredClone(input.request);
     try {
       request.context.input.value = decodeScenePreparationWorkingSet(request.context.input.value as any, request.operation);
@@ -1902,11 +1912,11 @@ export function getSemanticValidator(id: string) {
       return { validatorId: id, version: '1', valid: false, issues: [{ code: 'SCENE_WORKING_SET_INVALID',
         message: 'The preparation input must resolve exactly to its original bounded source view.', path: '/context/input' }] };
     }
-    const projected = /\.information-projection(?:\.owner-premises)?(?:\.binding-compilation(?:\.temporal-validity(?:\.gm-decisions)?)?)?$/.test(request.operation);
+    const projected = /\.information-projection(?:\.owner-premises)?(?:\.binding-compilation(?:\.temporal-validity(?:\.(?:gm-decisions|analysis))?)?)?$/.test(request.operation);
     const profile = (request.context.input.value as any)?.preparationPolicyVersion;
-    const compiled = request.operation.endsWith(C.operationSuffix);
+    const compiled = request.operation.endsWith(C.operationSuffix) || [T.operation, G.operation, A.operation].some((op) => op === request.operation);
     if (projected !== [14, 15].includes(profile) || !compiled && profile === 15 || compiled && profile !== 15
-      && !(request.operation === C.operation && profile === 14)) return {
+      && !([C.operation, T.operation, G.operation, A.operation].some((op) => op === request.operation) && profile === 14)) return {
       validatorId: id, version: '1', valid: false, issues: [{ code: 'SCENE_INFORMATION_PROFILE_MISMATCH',
         message: 'The registered operation and complete preparation profile must match exactly.', path: '/context/input/preparationPolicyVersion' }],
     };

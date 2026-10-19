@@ -500,3 +500,15 @@ export const sceneTemporalGmAssessmentOutput = strictObject(sceneTemporalAssessm
     temporalCoverageReview: { ...(sceneTemporalAssessmentOutput.properties.temporalCoverageReview as Record<string, unknown>),
       properties: { ...(sceneTemporalAssessmentOutput.properties.temporalCoverageReview as { properties: Record<string, unknown> }).properties,
         schemaVersion: { const: 'gma.scene-temporal-coverage-review/2' } } } });
+
+/** Machine source analysis is not an exhaustive human applicability choice. */
+export const sceneTemporalAnalysisAssessmentOutput = strictObject(sceneTemporalAssessmentOutput.required,
+  { ...sceneTemporalAssessmentOutput.properties, schemaVersion: { const: 'gma.scene-readiness-assessment/11' },
+    temporalCoverageReview: strictObject([...((sceneTemporalAssessmentOutput.properties.temporalCoverageReview as any).required), 'sourceAnalysis'], {
+      ...((sceneTemporalAssessmentOutput.properties.temporalCoverageReview as any).properties),
+      schemaVersion: { const: 'gma.scene-temporal-coverage-review/3' },
+      sourceAnalysis: { type: 'array', maxItems: 64, items: strictObject(['sourceRef', 'disposition', 'rationale', 'recordRefs', 'question'], {
+        sourceRef: identifier, disposition: { enum: ['material', 'background', 'unresolved_fact'] }, rationale: text(240),
+        recordRefs: idList(512), question: { anyOf: [text(500), { type: 'null' }] },
+      }) },
+    }) });
