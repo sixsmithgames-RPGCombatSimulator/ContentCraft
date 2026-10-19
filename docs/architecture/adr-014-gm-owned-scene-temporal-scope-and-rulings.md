@@ -1,5 +1,10 @@
 # ADR 014: GM-owned Scene temporal scope and rulings
 
+Accepted GMC ADR 015 / GMA ADR 032 adds a separately negotiated 256 KiB complete-owner
+review profile after the original live pre-issuance overflow. It preserves all
+historical 128 KiB operations and every other limit; its exact profile-bound
+issuance is required. The original analysis and human-ruling semantics stay intact.
+
 - Status: Accepted — explicitly approved by the owner on 2026-10-19, including the protected timing-and-scope writer
 - Date: 2026-10-19
 - Governing decision: GMA ADR 031, `docs/adr/031-gm-owned-scene-temporal-scope-and-rulings.md`

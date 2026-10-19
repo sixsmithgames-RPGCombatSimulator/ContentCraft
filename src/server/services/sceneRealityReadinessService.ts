@@ -23,6 +23,7 @@ import { assertPreparedBindingReview, assertPreparedOwnerReviewBinding } from '.
 import { SCENE_TEMPORAL_VALIDITY as T, createTemporalValidityManifest } from '../../shared/llm/sceneTemporalValidity.js';
 import { SCENE_TEMPORAL_GM as G } from '../../shared/llm/sceneTemporalGmDecisions.js';
 import { SCENE_TEMPORAL_ANALYSIS as A } from '../../shared/llm/sceneTemporalAnalysis.js';
+import { SCENE_REVIEW_CAPACITY as R, assertSceneReviewCapacityProfile, sceneReviewContextBytes } from '../../shared/llm/sceneReviewCapacity.js';
 import { readSceneTemporalAuthority, evaluateCurrentSceneTemporalValidity } from './sceneTemporalAuthorityService.js';
 import { decodeScenePreparationWorkingSet } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { getOperationDefinition, getSemanticValidator, validateOperationOutput } from '../llm-orchestrator/operationRegistry.js';
@@ -203,6 +204,7 @@ export interface ScenePreparationReviewIssue {
   _id: string; userId: string; campaignId: string; schemaVersion: string; operationId: string;
   resumeRef: string; packetFingerprint: string; temporalAuthorityFingerprint: string; sourceWindowFingerprint: string;
   consumedCalls: { depth: number; builder: number; independentReview: number }; createdAt: Date;
+  reviewCapacityProfile?: typeof R; contextBytes?: number;
 }
 
 function collections(): SceneRealityCollections {
@@ -1329,20 +1331,34 @@ export async function issueScenePreparationReview(input: { userId: string; campa
   stores: SceneRealityCollections = collections()): Promise<JsonObject> {
   const body = input.body;
   if (!object(body)) throw new StoryWorkspaceStoreError(422, 'SCENE_TEMPORAL_GM_REVIEW_ISSUE_INVALID', 'The original review could not be matched to its preparation.', {});
-  exactKeys(body, 'reviewIssue', ['schemaVersion', 'resumeRef', 'packet']);
-  version(body, 'gma.scene-preparation-review-issuance-request/1', 'reviewIssue');
+  const capacity = body.schemaVersion === R.issueRequest;
+  exactKeys(body, 'reviewIssue', ['schemaVersion', 'resumeRef', 'packet', ...(capacity ? ['reviewCapacityProfile'] : [])]);
+  version(body, capacity ? R.issueRequest : 'gma.scene-preparation-review-issuance-request/1', 'reviewIssue');
+  if (capacity) {
+    try { assertSceneReviewCapacityProfile(body.reviewCapacityProfile); }
+    catch { throw new StoryWorkspaceStoreError(422, 'SCENE_REVIEW_CAPACITY_INVALID', 'The independent review capacity does not match its supported profile.', {}); }
+  }
   assertByteBound(body, 1_048_576, 'SCENE_TEMPORAL_GM_REVIEW_ISSUE_TOO_LARGE', 'reviewIssue');
   if (!stores.reviewIssues || !stores.readTemporalAuthority || !object(body.packet)) throw new StoryWorkspaceStoreError(503,
     'SCENE_TEMPORAL_GM_REVIEW_ISSUE_UNAVAILABLE', 'The original independent review cannot currently be retained.', {});
   const packet = body.packet, operationId = String((packet.buildRequest as JsonObject)?.operationId ?? '');
   const _id = `scene-review-issue:${hash({ userId: input.userId, campaignId: input.campaignId, operationId })}`;
   const packetFingerprint = hash(packet), prior = await stores.reviewIssues.findOne({ _id, userId: input.userId, campaignId: input.campaignId });
-  const publicIssue = (row: ScenePreparationReviewIssue, duplicate: boolean) => ({ schemaVersion: G.reviewIssue, issueRef: row._id,
+  const publicIssue = (row: ScenePreparationReviewIssue, duplicate: boolean) => {
+    if (row.reviewCapacityProfile) console.info('[gmc:scene-review-issuance]', JSON.stringify({
+      profileId: row.reviewCapacityProfile.profileId, operation: row.reviewCapacityProfile.operation,
+      contextBytes: row.contextBytes, maximumBytes: row.reviewCapacityProfile.hardLimitBytes,
+      scopeHash: hash({ userId: input.userId, campaignId: input.campaignId }).slice(0, 16),
+      packetFingerprint: row.packetFingerprint, consumedCalls: row.consumedCalls, duplicate,
+    }));
+    return { schemaVersion: row.schemaVersion, issueRef: row._id,
     operationId: row.operationId, resumeRef: row.resumeRef, packetFingerprint: row.packetFingerprint,
     temporalAuthorityFingerprint: row.temporalAuthorityFingerprint, sourceWindowFingerprint: row.sourceWindowFingerprint,
-    consumedCalls: row.consumedCalls, duplicate } as unknown as JsonObject);
+    consumedCalls: row.consumedCalls, ...(row.reviewCapacityProfile ? { reviewCapacityProfile: row.reviewCapacityProfile, contextBytes: row.contextBytes } : {}), duplicate } as unknown as JsonObject;
+  };
   if (prior) {
-    if (prior.packetFingerprint !== packetFingerprint || prior.resumeRef !== body.resumeRef) throw new StoryWorkspaceStoreError(409,
+    if (prior.packetFingerprint !== packetFingerprint || prior.resumeRef !== body.resumeRef
+      || hash(prior.reviewCapacityProfile ?? null) !== hash(body.reviewCapacityProfile ?? null)) throw new StoryWorkspaceStoreError(409,
       'SCENE_TEMPORAL_GM_REVIEW_ALREADY_ISSUED', 'The original independent review was already issued; changing timing cannot grant another review.', {});
     return publicIssue(prior, true);
   }
@@ -1352,20 +1368,39 @@ export async function issueScenePreparationReview(input: { userId: string; campa
   const analyzed = (packet.temporalAuthority as JsonObject)?.schemaVersion === A.context;
   const current = await stores.readTemporalAuthority({ userId: input.userId, campaignId: input.campaignId, gmDecisions: !analyzed, analysis: analyzed });
   const authority = analyzed ? current.authority as JsonObject : current;
+  let contextBytes: number | undefined;
+  if (capacity) {
+    if (!analyzed || !stores.readSceneOwnerContext || !stores.pointers) throw new StoryWorkspaceStoreError(422,
+      'SCENE_REVIEW_CAPACITY_INVALID', 'The complete owner baseline is required for this independent review.', {});
+    const owner = await stores.readSceneOwnerContext({ userId: input.userId, campaignId: input.campaignId });
+    if (!owner) throw new StoryWorkspaceStoreError(409, 'SCENE_OWNER_PREMISES_INVALID', 'The current starting conditions could not be read.', {});
+    const pointer = await stores.pointers.findOne({ userId: input.userId, campaignId: input.campaignId });
+    const priorBundle = pointer ? (await readBundleForPointer(pointer, stores)).bundle : null;
+    const pending = await stores.readPendingIntent!({ userId: input.userId, campaignId: input.campaignId,
+      programId: String(((saved.buildRequest as JsonObject).programRef as JsonObject).programId),
+      qualified: true, continuation: true, readEffects: true, typedReferences: true });
+    assertPendingIntentContextCurrent(packet.pendingIntentContext as JsonObject, pending);
+    assertSceneOwnerPremises(packet.independentOwnerPremises as any, saved.buildRequest as any, pending as any, owner, priorBundle);
+    contextBytes = sceneReviewContextBytes(packet, R.operation);
+    if (contextBytes > R.hardLimitBytes) throw new StoryWorkspaceStoreError(422,
+      'SCENE_REVIEW_CAPACITY_EXCEEDED', 'The complete prepared scene exceeds the supported independent review.', { contextBytes, maximumBytes: R.hardLimitBytes });
+  }
   if (hash(packet.proposal) !== hash(saved.proposal) || hash(packet.pendingIntentBindings) !== hash(saved.bindings)
     || hash(packet.buildRequest) !== hash(saved.buildRequest) || hash(packet.preparedBindingCompilation) !== hash(saved.compilation)
     || hash(packet.temporalAuthority) !== hash(authority) || authority.schemaVersion !== (analyzed ? A.context : G.context)
     || analyzed && (current.schemaVersion !== A.read || hash(packet.temporalAnalysisCatalog) !== hash(current.catalog))
     || (packet.pendingIntentContext as any)?.window?.windowFingerprint !== saved.sourceWindowFingerprint) throw new StoryWorkspaceStoreError(409,
     'SCENE_TEMPORAL_GM_REVIEW_ISSUE_INVALID', 'The review changed the saved preparation or current timing evidence.', {});
-  const document: ScenePreparationReviewIssue = { _id, userId: input.userId, campaignId: input.campaignId, schemaVersion: G.reviewIssue,
+  const document: ScenePreparationReviewIssue = { _id, userId: input.userId, campaignId: input.campaignId, schemaVersion: capacity ? R.issueReceipt : G.reviewIssue,
     operationId, resumeRef: String(body.resumeRef), packetFingerprint, temporalAuthorityFingerprint: String(authority.fingerprint),
-    sourceWindowFingerprint: String(saved.sourceWindowFingerprint), consumedCalls: { depth: 1, builder: Number(saved.builderCallCount), independentReview: 1 }, createdAt: new Date() };
+    sourceWindowFingerprint: String(saved.sourceWindowFingerprint), consumedCalls: { depth: 1, builder: Number(saved.builderCallCount), independentReview: 1 },
+    ...(capacity ? { reviewCapacityProfile: R, contextBytes } : {}), createdAt: new Date() };
   try { await stores.reviewIssues.insertOne(document); }
   catch (error) {
     if ((error as { code?: number })?.code !== 11000) throw error;
     const raced = await stores.reviewIssues.findOne({ _id, userId: input.userId, campaignId: input.campaignId });
-    if (!raced || raced.packetFingerprint !== packetFingerprint || raced.resumeRef !== body.resumeRef) throw new StoryWorkspaceStoreError(409,
+    if (!raced || raced.packetFingerprint !== packetFingerprint || raced.resumeRef !== body.resumeRef
+      || hash(raced.reviewCapacityProfile ?? null) !== hash(body.reviewCapacityProfile ?? null)) throw new StoryWorkspaceStoreError(409,
       'SCENE_TEMPORAL_GM_REVIEW_ALREADY_ISSUED', 'A different original review was already issued for this preparation.', {});
     return publicIssue(raced, true);
   }
@@ -1466,6 +1501,12 @@ export async function commitSceneReality(
       if (!issue || issue.temporalAuthorityFingerprint !== temporalAuthority.fingerprint
         || ![1, 2].includes(issue.consumedCalls.builder) || issue.consumedCalls.independentReview !== 1) throw new StoryWorkspaceStoreError(409,
         'SCENE_TEMPORAL_GM_REVIEW_ISSUE_INVALID', 'The original independent review and timing decision cannot be confirmed together.', {});
+      if (issue.schemaVersion === R.issueReceipt) {
+        assertSceneReviewCapacityProfile(issue.reviewCapacityProfile);
+        if (!Number.isSafeInteger(issue.contextBytes) || issue.contextBytes! > R.hardLimitBytes || issue.contextBytes! < 1) throw new StoryWorkspaceStoreError(409,
+          'SCENE_REVIEW_CAPACITY_INVALID', 'The independent review capacity cannot be verified against its saved issuance.', {});
+      } else if (issue.schemaVersion !== G.reviewIssue || issue.reviewCapacityProfile !== undefined) throw new StoryWorkspaceStoreError(409,
+        'SCENE_REVIEW_CAPACITY_INVALID', 'The original independent review issuance cannot be verified.', {});
     }
   }
   if (compilationAware !== (input.preparedBindingReview !== undefined)) throw new StoryWorkspaceStoreError(422,
@@ -1872,7 +1913,7 @@ export async function selectPreparedStoryFacts(
 
 export function sceneRealityHealthAdvertisement(): JsonObject {
   return {
-    capabilities: [...SCENE_REALITY_CAPABILITIES, C.capability, T.capability, A.capability, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, SCENE_WORKING_SET.capability, TYPED.capability, SCENE_INFORMATION_PROJECTION.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
+    capabilities: [...SCENE_REALITY_CAPABILITIES, C.capability, T.capability, A.capability, R.capability, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, SCENE_WORKING_SET.capability, TYPED.capability, SCENE_INFORMATION_PROJECTION.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
     readEffects: READ_EFFECT_AUTHORITY_BUNDLE,
     typedReferences: TYPED,
     workingSet: SCENE_WORKING_SET,
@@ -1882,6 +1923,7 @@ export function sceneRealityHealthAdvertisement(): JsonObject {
     temporalValidity: T,
     temporalGmDecisions: G,
     temporalAnalysis: A,
+    reviewCapacity: R,
     movementOutcome: { ...SCENE_MOVEMENT_OUTCOME_AUTHORITY, routeEnabled: true, writesEnabled: process.env.GMC_PENDING_OBSERVER_QUALIFICATION === '1' },
     preparedCheckCompletion: { ...PREPARED_CHECK_COMPLETION_AUTHORITY, routeEnabled: true },
     contracts: clone(SCENE_REALITY_CONTRACTS as unknown as JsonObject),

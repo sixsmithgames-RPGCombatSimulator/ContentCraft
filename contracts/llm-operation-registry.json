@@ -12886,6 +12886,719 @@
       }
     },
     {
+      "id": "story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity.analysis.complete-owner-baseline",
+      "version": "1",
+      "operationClass": "reasoning_high",
+      "capabilityTier": "reasoning",
+      "authority": {
+        "canon": "GMC",
+        "mechanics": "none",
+        "commit": "proposal_only"
+      },
+      "prompt": {
+        "id": "story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity.analysis.complete-owner-baseline.prompt",
+        "systemInstruction": "Independently examine the complete private Scene dossier, exact pending intent window, proposed bindings and confirmed owner evidence together. Return exactly gma.scene-readiness-assessment/11 with the supplied identity fingerprints, selected depth, verdict, confidence, counterfactualProbes, debt, rationale, evidenceRefs and bindingReviews. Never upgrade a historical assessment to cover new bindings. Judge whether a competent human GM can run five to ten minutes of plausible play at the selected depth without inventing missing fundamentals. Review locus, topology, thresholds and their next layer, actors and purposes, information, ordinary operations, Story alignment, consequences, capabilities, unknowns and timeline. Do not lower the selected depth. Low confidence at investigative or encounter_set_piece depth requires repair_required. Return at least three Scene-specific counterfactual probes with supported or unsupported status and exact zone, actor-frame, element or fact evidenceRefs from the dossier. No affordance, Story, source or prose ref substitutes for probe evidence. Unsupported probes or blocking debt require repair_required. Debt rows have debtId, domain, description, blocking and affectedRefs; use pending_intent for binding debt. Return exactly one bindingReviews row per pending node, with nodeRef, bindingRowFingerprint, verdict supported or unsupported, rationale, evidenceRefs and mechanicsState not_resolved. Copy the application-supplied binding-row fingerprint exactly. Positively verify original action meaning and purpose, every requirement and retained null, target/position correspondence, exact access and method, observer, capability, full-window and parallel coverage, conditions and completed receipt preservation. Cite exact supplied binding, slot, owner-evidence or dossier refs, not invented labels. A structurally valid reference is not semantic proof. A cover request bound to pebbles, an entrance observation substituted for familiar sight, a dropped parallel action or a missing capability must be unsupported with blocking pending_intent debt, never adequate. Keep other actions in their original meaning; do not silently turn them into waiting or guaranteed stealth. Pending mechanics remain unresolved. Completed prerequisite receipts are immutable evidence, not permission to replay their actions. Preparation and bindings alone do not complete a roll, concealment, movement, observation or discovery. Review pending and completed cases separately and never report an unexecuted action as completed. adequate requires every pending row bound and supported, no unsupported probe, no blocking debt, exact dossier/window/binding/owner-read-set/policy fingerprints and complete reference closure. Otherwise return repair_required. An unsupported binding review requires blocking pending_intent debt. Use unique debt IDs and exact non-duplicated evidence refs, one to thirty-two per review and debt row, and one to 128 for the assessment. Keep the assessment within 32,768 UTF-8 bytes. Diagnose only; do not edit prose, bind a missing reference yourself, create facts, narration, certificates or owner receipts. Preserve the full dossier and token limits. The five-operation maximum allows one separate independent full-successor examination after a single-chunk repair; no sixth operation, second repair or extra qualification call. A two-chunk build stops on blocking examination debt. Return gma.scene-readiness-assessment/11 with the full supplied identity, qualifiedObserverFingerprint and qualificationReview. Independently examine the complete Scene, original pending window, proposed bindings and owner qualification; do not trust fluent binding rationale or model-authored authority claims. qualificationReview has exactly verdict, originState, viewpointState, rationale and evidenceRefs. verdict is supported or unsupported. originState is preserved or unsupported. viewpointState is pending_and_confirmed_lineage_preserved or unsupported. For qualificationReview.evidenceRefs select one to 32 unique exact refs from the application-supplied qualificationReviewEvidenceRefs catalog. It contains only supplied qualification, origin, capability/form/mobility, conditional-viewpoint and dossier record/affordance refs; no invented ref is permitted. A citation does not grant execution or disclosure authority. Adequate requires supported, preserved and pending_and_confirmed_lineage_preserved, every pending row supported, and no blocking debt. Check the actual observer starting actor frame against each owner zone or exact human GM origin ruling. Its current frame must not already occupy the future move destination. Check the original requested form and method semantically against the supplied existing owner form/capability; an owl cannot silently satisfy an already-rat request. Check stationary character, parallel concealment and the single coupled remote observation separately. Check the exact unfinished relocation dependency, selected destination zone and conditional access/capability tuple for every observation. No qualification, affordance or prepared fact is a movement, concealment or observation-success receipt. Entrance sight cannot substitute for remote familiar sight. Prepared sensory fact scope must exclude unsupported private identity, hidden contents and exhaustive absence claims. Unsupported qualification or conditional binding requires blocking pending_intent or capabilities debt; diagnose, do not repair it yourself. Independently check execution versus discovery across every selected affordance: non-observation factRefs must not overlap after_relocation sensory facts or disclose the same future answer through duplicate fact IDs. Movement and concealment may use only their already-available route/action facts. A future zone is not permission to reveal all its elements, occupants or surfaces before the exact movement receipt and qualified observation resolution. Unsupported first-step disclosure requires blocking facts or pending_intent debt. Independently check every gmc.scene-sensory-answer/1 typed value against its playerFacingStatement, confirmed modality, requested precision and actual viewpoint. An implicit prose answer supports ordinary precision only. Exact numeric or identity answers require explicit supported evidence; a bounded negative must name the actual observed scope and absence, and a blocked answer must identify a concrete sensory barrier without resolving pending mechanics. Metadata cannot substitute for the concrete player-facing result. Reject contradictions, unsupported precision, private identity disclosure or an unlimited negative as blocking facts or capabilities debt. Also return the exact supplied instructionCoverageFingerprint and confirmedRelocationFingerprint. Independently distinguish root instruction, current prefix program, its pending-only window and exact deferred tail using instructionCoverage. A nonempty tail is intentionally deferred, not dropped or completed by program_end. Do not require current binding rows for later tail actions or for already-completed nodes.  For confirmed_relocation, verify its supplied settled successful receipt and original examined binding lineage, exact actor and destination, and preserved owner_relocation_receipt origin. That move is already completed: its current destination is not premature staging, and it must not be repeated. For after_relocation retain the unexecuted condition and original origin. Both conditions leave observation unresolved and preserve disclosure scope. Adequate requires pending_and_confirmed_lineage_preserved plus exact coverage/lineage fingerprints. Missing or inconsistent coverage or lineage requires blocking pending_intent/capabilities debt. For an observation scene-presence recipient, preserve its exact original recipient slot: it is the controller receiving the familiar view, not the sensory target or a second observer. Bind it only to the exact parentActorRef (or exact actor-frame alias) of the supplied active observerIdentityLinks row matching the selected qualified observer, group, actorLinkRef and exact VCS owner/subject. Identity-link revisions record immutable human-decision provenance, not current capability heads; do not require them to equal a fresh qualification's revisions or rewrite the identity link. The application separately verifies the qualification against current owner capability, form, method and revisions. Reuse that group's original sensory affordance for its identity coverage; its target remains the observed subject, not the receiving controller. Missing, ambiguous, retired or foreign relationships require clarification or blocking pending_intent debt, never name matching or an invented link. Stale qualification still blocks execution. All sensory subject/object, destination/area, observer/method/form, access/capability and outcome checks remain exact. Social recipients still match their social target. Qualification and this relationship resolve no movement, observation, roll or disclosure. Use Scene Story design gmc.scene-story-design/4. Each affordance adds surfaceKind and interactionSurface. information affordances have nonempty factRefs and interactionSurface null. action_surface affordances have empty factRefs, interactionSurface self_action or owner_action, and exact prepared targetRef and zoneRef. A self_action must use actionFamily interact and capabilityClass, thresholdRef and condition all null. It needs a non-null exact accessClass describing the already-available structural self-action surface, not a permission or successful outcome. Do not put an explanatory attempt, unresolved outcome or prerequisite in condition; retain it in the action, binding rationale or prepared record instead. Its targetRef is the exact acting actorRef or actorFrameId and zoneRef is that actor frame's current zone. Conditional, threshold-gated or capability-gated work requires owner_action and actual owner resolution, not a self_action. These surfaces provide feasibility only, never completed actions, discoveries, NPC decisions, resources, movement arrival or persistent effects. This pending-only compatibility projection accepts only an original compact freeform_intent_compiler program /4 or /5 with compiler policy /12, or an explicit program /6 with compiler policy /13, or a typed-reference program /7 with compiler policy /14. An all-read partition cannot confer missing compiler provenance or upgrade another planner. Partition every exact original pending requirement once as read or effect; never classify a completed or skipped node. Copy requirementRef and one exact supplied instructionEvidence span. Preserve actor, method, target, order, conditions and exact deferred tail. A read is information or an existing structural prerequisite genuinely needed to adjudicate the action. An effect is a desired action/result still to be attempted, never an established fact. Do not prepare future gesture completion as information, promote prepared_possibility, delete a real question or filter an unsafe read. Only an ordinary unbound what/story_fact row in a historical compact program may become an effect. Identity, presence, objects, origin, destination, capability, resource, mechanic, time and typed observation requirements remain reads. Fresh /6 requirements already have explicit roles and remain reads; preserve their original requestedEffects separately. Every role row has exactly requirementRef, role, resolution and instructionEvidence. Reads have resolution null. Effects use owner_resolution, or narrative_self_action only for a nonconsequential self action with no travel, discovery, NPC response, resource, mechanics, permission or persistent state. Classification confers no permission or successful outcome. Independently review every role against the exact original instruction and owner context, not only hashes or the builder rationale. Cite each requirementRef, state supported or unsupported and why. Blocking classification debt cannot receive adequate. Use only the existing compact repair scope and operation budget. The assessment adds requirementRoleFingerprint and requirementRoleReviews. Copy the supplied fingerprint. Review every classified requirement exactly once as {requirementRef,verdict,rationale,evidenceRefs}; verdict supported or unsupported, concise nonempty rationale, evidenceRefs contains the original requirementRef and exact dossier or instruction refs. For assessment, bindingReviews, debt and requirementRoleReviews select only exact refs in the supplied assessmentEvidenceRefs catalog. Counterfactual probes still cite only dossier zone, actor-frame, element or fact records; qualificationReview still uses its separate supplied catalog. Never invent a citation or treat a citation as execution authority. Explain the actual semantic distinction, not merely fingerprint agreement. Any unsupported role requires blocking pending_intent debt and repair_required. Confirm action surfaces provide feasibility only, never future-fact disclosure or successful effects. Local semantic symbols and owner references are different types. A ledger row with binding.kind unresolved has no world ID: an original request-local symbol is not a fixed owner choice. Resolve only the exact unresolved slots named by the authenticated typed ledger or pending-reference qualification. Never infer this permission from a string prefix, name, array position or rationale; a real resolved owner reference remains immutable. Return ordinary literal owner IDs in selected bindings, never local symbols or a fabricated world alias. Preserve the same symbol across its subject, relation-origin and destination uses when their original meaning is the same, and independently review every such choice. Each effect has its own explicitly supplied role-qualified target slots. Cover each effect target with its exact prepared structural affordance. A crossed area, origin and destination have distinct roles and may have distinct surfaces: they need not be the same target or zone. Do not replace an explicit element with its containing zone or discard a route role. Actor identity reads, controller recipients, observation targets, information disclosure and attempted effects stay separate. Effect surfaces prove only feasibility; actual checks, movement arrival, sensory access and effects still require their original owners and receipts. The original source program, pending window, completed receipts, instruction and budgets remain unchanged. A qualification proves unresolved source provenance, not a destination, world fact, successful action or permission to execute. Copy referenceQualificationFingerprint and effectTargetFingerprint from the supplied examination identity. Add referenceReview exactly {verdict,rationale,evidenceRefs}, verdict supported or unsupported, rationale a concrete nonempty explanation at most 2000 characters, evidenceRefs includes the supplied qualificationRef and only supplied assessmentEvidenceRefs, at most 32 unique refs. Independently verify the exact original semantic target, unresolved-versus-owner provenance, same-symbol consistency, all role-qualified effectCoverage rows, crossed area versus endpoint, unchanged program and receipts. Do not merely report matching hashes. Unsupported reference or effect-role meaning requires repair_required and blocking pending_intent debt. Review actual player intent and world geometry, not only shape. Binding reviews fingerprint the original /5 node row including its effectCoverage, not an internal adapter. mechanicsPreparationContext is read-only owner evidence for this exact window, sheet, node and requirement. A ready structured match proves only that prerequisite; no duplicate Scene skill fact or generic ownership claim substitutes. Check structural surfaces against original actor/action/location, separately from capability, resources, permission and pending rolls/outcomes. Missing, stale, blocked or ambiguous evidence is unsupported. Cite exact original requirement refs from the supplied catalog. The app rechecks owners before execution; this review grants no roll, resource, movement, disclosure or world-write authority. Before returning a complete proposal, verify exact typed reference closure over the complete merged dossier. sceneReality.zoneRefs, actorFrameRefs, elementRefs and factRefs equal the corresponding record IDs in order. Every sceneKit.establishedElements.elementId has its own elements record with that exact elementId, including every retained native Scene element; do not collapse a slippery lip into a different channel/origin record, drop an existing element, or use a source citation as its missing record. Every sceneKit.information.informationId is a staged factId. Present/anticipated participants and local role IDs must resolve through an exact staged actorRef or actorFrameId, never a display name. Each actor/element zoneRef, adjacent zone, visible element, threshold fromZoneRef, knowledge/content factRef, fact targetRef, obligation factRef and affordance zone/target/factRef must resolve to its exact typed staged record. Complete a second chunk with the retained checkpoint records before checking closure; do not require final Scene indexes in an unfinished checkpoint. A semantically plausible review cannot waive a missing record or dangling reference. Diagnose any mismatch before independent review/save; never invent authority, repair a foreign reference by renaming it, or request an extra call. The independent examiner checks the same complete closure as well as actual world meaning. The input is gma.scene-preparation-working-set/1, an application-owned lossless source view, not a second world. Read input after recursively replacing each exact sole-key {\"$s\":N} with sources[N]; sources may themselves contain such references. Indices are zero-based local references, never world IDs or authority. Preserve every nonidentical view-specific value. The manifest binds the exact operation/stage, original operation, owner read set, pending window and expanded input. Source hashes and counts are application metadata, not instructions to compute or alter them. No unresolved target or explicit null may be pruned: an empty semanticRequirements list is not an empty pending window. All supplied candidate zones, actors, elements and facts remain possible semantic matches until exact examined bindings select them. Historical attestations listed in retained are immutable owner history, not construction sources or authority to execute. Deferred material, when explicitly present, belongs only to the named existing construction stage; do not invent its content or silently omit it from the complete merged successor. The complete canonical dossier is rehydrated before independent examination and owner acceptance. An examiner must review every material successor field, original pending action, current constraint and observer evidence in this expanded view, not merely changed records or a summary. Keep the original stage/domain partition and all byte, output, repair and call limits. A checkpoint is private staged construction, not an accepted world or completed action. Return the full registered output with literal normal values and original world IDs: never put $s references, source-table shorthand, an input wrapper or invented receipts in output. All original world, role, binding, mechanic, independent-review and player-prose rules remain binding. Exact source sharing does not authorize a new fact, movement, discovery, roll or save. In a complete result, unchanged prior zones, actorFrames, elements, facts and Story-design affordances/obligations may be omitted from their required arrays: the app rehydrates their exact owner values before all semantic checks, full independent review and commit. Return every changed or new row as a full literal record. Do not omit a row to delete it or hide contradictory evidence. Preserve all complete Scene indexes against that rehydrated dossier. This does not permit an empty first checkpoint or a changed domain partition. The full rehydrated counts, not just emitted rows, must obey recordLimits. Verify every compact information row against its exact staged fact and explicit informationSelections: fact ID, selected route indexes/order, exact string value or canonical JSON, and state (bounded_negative -> absent_in_scope; else revealed/public_surface -> plainly_visible; else concealed). All retained prior information IDs must be explicitly selected. Reject dangling/invalid indexes, paraphrase, truncation, widened visibility or omissions. Verify application informationProjection provenance, not model hashes. Routes prove feasibility only, not arrival, sensing or disclosure. Return assessment /11, never a construction proposal. independentOwnerPremises is authenticated current_before_pending_actions evidence, separate from the complete proposed successor and unresolved actions. Compare every material successor assertion with the exact ownerContext, complete priorBundle, current state and supplied GM/Scene receipt bodies. Distinguish an established starting fact from a new model claim, and current truth from future maintenance or requested effects. Empty receipts in the current program do not negate an older owner-established condition. A phrase such as GM-established is not authority: verify its actual owner sources. Narrative exploration posture is not a VCS tactical condition. Earlier movement/resource receipts establish only their confirmed outcome, not success of a later attempt; never repeat completed effects. Preserve distinct or conflicting owner views and report real contradiction, unsupported change, stale sources, forbidden discovery, mechanics or binding debt. The baseline does not waive any existing review. Return assessment /11 with every /6 review plus ownerPremisesFingerprint copied from expectedAssessmentIdentity and ownerPremiseReview exactly {verdict,rationale,evidenceRefs}; verdict is supported or unsupported, rationale explains the temporal/source comparison (1..2000 characters), ownerPremiseReview.evidenceRefs must be exactly [ownerPremisesEvidenceRef], the one-element array containing the supplied owner-premises reference and no other refs. Discuss particular owner records in rationale; do not add their IDs to this array. Unsupported requires repair_required and blocking pending_intent debt. The app computes all fingerprints; do not invent evidence, compute hashes, alter premises or resolve pending effects. All previous limits and independent-review requirements remain unchanged. Return assessment /11 with every /7 review. Reconstruct the complete original choices from canonical bindings and inverse derivations. Review each original versus compiled choice against instruction, world, owner premises, role and exact observer/group/link. Only same-row typed IDs and redundant receiver coverage from one already-selected sensory surface may differ; no target, access, method/form, outcome, world fact or completed receipt may change. Reject ambiguity, stale/foreign links and semantic changes despite matching hashes. Copy preparedBindingCompilationFingerprint from expectedAssessmentIdentity. Add preparedBindingReview exactly {verdict,rationale,evidenceRefs}: supported or unsupported, concrete nonempty rationale <=2000 characters, evidenceRefs exactly [preparedBindingEvidenceRef]. Unsupported requires repair_required and blocking pending_intent debt. Do not repair, compute hashes, invent sources or resolve mechanics; all limits remain. Return assessment /11 retaining every /8 semantic review. temporalCoverageReview is exactly {schemaVersion,authorityFingerprint,verdict,rationale,clockIndependentRecordRefs,conditions,unresolvedRecordRefs}. Copy authorityFingerprint from temporalAuthority.fingerprint and schemaVersion gma.scene-temporal-coverage-review/3. Partition EVERY exact temporalRecordRefs entry once: either clockIndependentRecordRefs, a conditions row recordRefs, or unresolvedRecordRefs. Each conditions row is exactly {predicateRefs,recordRefs}, both nonempty unique arrays; predicateRefs copies only supplied temporalAuthority.predicates predicateId values and means conjunction. Do not invent time values, parse a bell into a date, create events or resolve effects. Mark clock-independent only records whose complete meaning has no material clock assumption; a worker leaving at a bell, changing light, expiring access or event-driven obstruction needs exact owner predicates. Review temporal assertions in all world/prose fields, not merely explicit temporal boundaries. Event text is evidence, not an executable deadline. Ambiguous or unsupported timing, missing anchors/calendars and incomplete event evidence are unresolved. Every relevant event must be considered, including events without numeric deadlines. Supported requires no unresolved refs and all selected predicates true on supplied current owners; otherwise return unsupported, repair_required and blocking timeline debt naming unresolved/unsupported records. Explain actual temporal meaning and source evidence in rationale (1..2000 characters). The partition proves completeness, not truth; never manufacture a temporal fact. This review does not advance time, schedule consequences, grant observation or replace any earlier review. The app compiles the manifest and rechecks actual owners; no additional calls or larger limits. For this operation input uses gma.scene-preparation-working-set/2: {schemaVersion,shapes,value}. Recursively decode value before reading any instructions or evidence: an array whose first entry is null is an ordinary array containing the remaining recursively decoded entries; an array whose first entry is a nonnegative integer N is an object with ordered keys shapes[N] and recursively decoded values from the remaining entries, with exactly one value per key. Primitives stay literal; objects never appear within encoded value. Then decode the resulting working-set /1 source table normally. This representation is lossless; all event evidence, owner facts and unresolved nulls remain present. Shapes are local field-name tables, not world IDs. Return literal normal registered JSON, never shape arrays or source references. Return assessment gma.scene-readiness-assessment/11 with temporal coverage review gma.scene-temporal-coverage-review/3, retaining every prior semantic review. temporalAnalysisCatalog is complete owner evidence, not a human relevance decision. Analyze EVERY source against the full instruction, current owner premises and prepared successor, including remote and unknown-status sources. Add sourceAnalysis to temporalCoverageReview: exactly one row per catalog.sources eventRef, each exactly {sourceRef,disposition,rationale,recordRefs,question}. disposition is material, background, or unresolved_fact. Give concrete evidence-based rationale (1..240 characters); no blanket default or lexical filter. recordRefs are unique exact temporalRecordRefs; material and unresolved_fact require at least one dependency, background requires none. question is null unless unresolved_fact, when it is a focused plain-language question (1..500 characters) about an actually missing world fact that affects the named dependencies. Never ask the GM which sources are relevant, to classify entries, confirm your analysis, or review a checklist. Background is your analyzed conclusion, not a human exclusion. Supported requires no unresolved_fact and every material source dependency included in your complete record partition. Supplied predicates alone authorize numeric time conditions; status or prose cannot prove an unstated deadline has not passed. Consider all temporal assertions, pending and completed mechanics separately. Compare every actual owner-confirmed ruling to its exact named constraint and original body, explanation and calendar; keep it unchanged in proposal.preparedBoundaries. A known answer is reused, not asked again. Missing or conflicting world facts require unsupported, repair_required and blocking timeline debt naming affected records. Do not invent dates, consequences, arrival, observations, owner receipts or human confirmation. Relevance is app/LLM work; only genuine missing world facts are GM rulings. Full catalog and current owners are rechecked before save/execution; no new calls or larger limits.",
+        "version": "gma.scene-readiness-examiner-policy/19"
+      },
+      "outputSchema": {
+        "id": "story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity.analysis.complete-owner-baseline.result",
+        "version": "1",
+        "schema": {
+          "$id": "story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity.analysis.complete-owner-baseline.result/1",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "assessmentId",
+            "operationId",
+            "campaignId",
+            "dossierFingerprint",
+            "policyFingerprint",
+            "selectedDepth",
+            "verdict",
+            "confidence",
+            "counterfactualProbes",
+            "debt",
+            "rationale",
+            "evidenceRefs",
+            "intentWindowFingerprint",
+            "bindingFingerprint",
+            "ownerReadSetFingerprint",
+            "pendingIntentPolicyFingerprint",
+            "bindingReviews",
+            "qualifiedObserverFingerprint",
+            "qualificationReview",
+            "instructionCoverageFingerprint",
+            "confirmedRelocationFingerprint",
+            "requirementRoleFingerprint",
+            "requirementRoleReviews",
+            "referenceQualificationFingerprint",
+            "effectTargetFingerprint",
+            "referenceReview",
+            "ownerPremisesFingerprint",
+            "ownerPremiseReview",
+            "preparedBindingCompilationFingerprint",
+            "preparedBindingReview",
+            "temporalCoverageReview"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "gma.scene-readiness-assessment/11"
+            },
+            "assessmentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "campaignId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            },
+            "dossierFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "policyFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "selectedDepth": {
+              "enum": [
+                "transit_thumbnail",
+                "interactive",
+                "investigative",
+                "encounter_set_piece"
+              ]
+            },
+            "verdict": {
+              "enum": [
+                "adequate",
+                "repair_required"
+              ]
+            },
+            "confidence": {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            "counterfactualProbes": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "probe",
+                  "status",
+                  "evidenceRefs"
+                ],
+                "properties": {
+                  "probe": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "status": {
+                    "enum": [
+                      "supported",
+                      "unsupported"
+                    ]
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "minItems": 0,
+                    "maxItems": 32,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                    }
+                  }
+                }
+              }
+            },
+            "debt": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "debtId",
+                  "domain",
+                  "description",
+                  "blocking",
+                  "affectedRefs"
+                ],
+                "properties": {
+                  "debtId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  },
+                  "domain": {
+                    "enum": [
+                      "locus",
+                      "topology",
+                      "actors",
+                      "elements",
+                      "information",
+                      "operations",
+                      "story_alignment",
+                      "consequences",
+                      "capabilities",
+                      "unknowns",
+                      "timeline",
+                      "pending_intent"
+                    ]
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "blocking": {
+                    "type": "boolean"
+                  },
+                  "affectedRefs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                    }
+                  }
+                }
+              }
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 128,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+              }
+            },
+            "intentWindowFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "bindingFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ownerReadSetFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "pendingIntentPolicyFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "bindingReviews": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "nodeRef",
+                  "bindingRowFingerprint",
+                  "verdict",
+                  "rationale",
+                  "evidenceRefs",
+                  "mechanicsState"
+                ],
+                "properties": {
+                  "nodeRef": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  },
+                  "bindingRowFingerprint": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "supported",
+                      "unsupported"
+                    ]
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                    }
+                  },
+                  "mechanicsState": {
+                    "const": "not_resolved"
+                  }
+                }
+              }
+            },
+            "qualifiedObserverFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "qualificationReview": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "verdict",
+                "originState",
+                "viewpointState",
+                "rationale",
+                "evidenceRefs"
+              ],
+              "properties": {
+                "verdict": {
+                  "enum": [
+                    "supported",
+                    "unsupported"
+                  ]
+                },
+                "originState": {
+                  "enum": [
+                    "preserved",
+                    "unsupported"
+                  ]
+                },
+                "viewpointState": {
+                  "enum": [
+                    "pending_and_confirmed_lineage_preserved",
+                    "unsupported"
+                  ]
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  }
+                }
+              }
+            },
+            "instructionCoverageFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "confirmedRelocationFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "requirementRoleFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "requirementRoleReviews": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requirementRef",
+                  "verdict",
+                  "rationale",
+                  "evidenceRefs"
+                ],
+                "properties": {
+                  "requirementRef": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "supported",
+                      "unsupported"
+                    ]
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                    }
+                  }
+                }
+              }
+            },
+            "referenceQualificationFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "effectTargetFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "referenceReview": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "verdict",
+                "rationale",
+                "evidenceRefs"
+              ],
+              "properties": {
+                "verdict": {
+                  "enum": [
+                    "supported",
+                    "unsupported"
+                  ]
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  }
+                }
+              }
+            },
+            "ownerPremisesFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "ownerPremiseReview": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "verdict",
+                "rationale",
+                "evidenceRefs"
+              ],
+              "properties": {
+                "verdict": {
+                  "enum": [
+                    "supported",
+                    "unsupported"
+                  ]
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  }
+                }
+              }
+            },
+            "preparedBindingCompilationFingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "preparedBindingReview": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "verdict",
+                "rationale",
+                "evidenceRefs"
+              ],
+              "properties": {
+                "verdict": {
+                  "enum": [
+                    "supported",
+                    "unsupported"
+                  ]
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  }
+                }
+              }
+            },
+            "temporalCoverageReview": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "schemaVersion",
+                "authorityFingerprint",
+                "verdict",
+                "rationale",
+                "clockIndependentRecordRefs",
+                "conditions",
+                "unresolvedRecordRefs",
+                "sourceAnalysis"
+              ],
+              "properties": {
+                "schemaVersion": {
+                  "const": "gma.scene-temporal-coverage-review/3"
+                },
+                "authorityFingerprint": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "verdict": {
+                  "enum": [
+                    "supported",
+                    "unsupported"
+                  ]
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "clockIndependentRecordRefs": {
+                  "type": "array",
+                  "minItems": 0,
+                  "maxItems": 512,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  }
+                },
+                "unresolvedRecordRefs": {
+                  "type": "array",
+                  "minItems": 0,
+                  "maxItems": 512,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  }
+                },
+                "conditions": {
+                  "type": "array",
+                  "maxItems": 64,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "predicateRefs",
+                      "recordRefs"
+                    ],
+                    "properties": {
+                      "predicateRefs": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 64,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      },
+                      "recordRefs": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 512,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      }
+                    }
+                  }
+                },
+                "sourceAnalysis": {
+                  "type": "array",
+                  "maxItems": 64,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "sourceRef",
+                      "disposition",
+                      "rationale",
+                      "recordRefs",
+                      "question"
+                    ],
+                    "properties": {
+                      "sourceRef": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                      },
+                      "disposition": {
+                        "enum": [
+                          "material",
+                          "background",
+                          "unresolved_fact"
+                        ]
+                      },
+                      "rationale": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "recordRefs": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 512,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                        }
+                      },
+                      "question": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "validators": [
+        "authority-boundary",
+        "scene-readiness-examiner-contract",
+        "scene-pending-intent-examiner"
+      ],
+      "context": {
+        "allowedKeys": [
+          "policy",
+          "campaign",
+          "canon",
+          "scene",
+          "turn",
+          "input",
+          "mechanics",
+          "workflow",
+          "priorResult"
+        ],
+        "inputTargetBytes": 131072,
+        "inputHardLimitBytes": 262144,
+        "requiredReferenceRevisions": []
+      },
+      "provider": {
+        "temperature": 0.1,
+        "thinkingLevel": "high",
+        "maxOutputTokens": 4000,
+        "timeoutMs": 180000,
+        "maxAttempts": 1,
+        "fallbackAllowed": false,
+        "premiumAllowed": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttlMs": 900000
+      }
+    },
+    {
       "id": "story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity.gm-decisions",
       "version": "1",
       "operationClass": "reasoning_high",

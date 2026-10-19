@@ -4,6 +4,10 @@ import { readScenePreparationResume, issueScenePreparationReview, type SceneReal
   type ScenePreparationResumeDocument, type ScenePreparationReviewIssue } from './sceneRealityReadinessService.js';
 import { SCENE_TEMPORAL_GM as G, createScopedTemporalAuthorityContext } from '../../shared/llm/sceneTemporalGmDecisions.js';
 import { freeformJsonDigest } from '../../shared/llm/freeformPlanBinding.js';
+import { SCENE_TEMPORAL_ANALYSIS as A, createAnalyzedTemporalAuthority, temporalAnalysisCatalog } from '../../shared/llm/sceneTemporalAnalysis.js';
+import { temporalSourceCatalog } from '../../shared/llm/sceneTemporalGmDecisions.js';
+import { SCENE_REVIEW_CAPACITY as R, sceneReviewContextBytes } from '../../shared/llm/sceneReviewCapacity.js';
+import { createSceneOwnerPremises } from '../../shared/llm/sceneIndependentOwnerPremises.js';
 beforeEach(() => { vi.stubEnv('GMC_MANUAL_READ_EFFECTS_ENABLED', '1');
   vi.stubEnv('GMC_MANUAL_READ_EFFECTS_CAMPAIGN_ALLOWLIST', 'campaign:test'); vi.stubEnv('GMC_TYPED_REFERENCE_BINDINGS', '1'); });
 afterEach(() => vi.unstubAllEnvs());
@@ -72,5 +76,54 @@ describe('owner-cached Manual timing continuation and issued-stage budget', () =
     const f = fixture(); (f.body.packet as any)[field] = { changed: true };
     await expect(issueScenePreparationReview({ ...f.scope, body: f.body }, f.stores)).rejects.toMatchObject({ code: 'SCENE_TEMPORAL_GM_REVIEW_ISSUE_INVALID' });
     expect(f.issues.rows).toEqual([]);
+  });
+});
+
+function capacityFixture() {
+  const f=fixture(2), request=f.request as any;
+  const pending:any={window:{...f.window,campaignId:f.scope.campaignId,programId:request.programRef.programId,authorityHead:{sceneRevision:1}},
+    ownerReadSet:{storyWorkspaceRevision:1}};
+  const owner:any={storyWorkspaceRef:{campaignId:f.scope.campaignId,revision:1},playableSceneContext:{sceneKitRef:{sceneKitId:'scene:test',revision:1}},
+    activeSceneContext:{state:{revision:0,lastTurnSequence:0,latestReceiptRef:null}},gameTimeContext:{gameClockRevision:0}};
+  const catalog=temporalAnalysisCatalog(temporalSourceCatalog({campaignId:f.scope.campaignId},{sceneKitId:'scene:test'},[],[]));
+  const authority=createAnalyzedTemporalAuthority({campaignId:f.scope.campaignId,sceneKitId:'scene:test'},null,catalog,[]);
+  const body:any={...f.body,schemaVersion:R.issueRequest,reviewCapacityProfile:R,packet:{...f.body.packet,preparationPolicyVersion:14,
+    pendingIntentContext:pending,temporalAuthority:authority,temporalAnalysisCatalog:catalog,
+    independentOwnerPremises:createSceneOwnerPremises(request,pending,owner,null)}};
+  f.stores.readPendingIntent=async()=>structuredClone(pending);
+  f.stores.readSceneOwnerContext=async()=>structuredClone(owner);
+  f.stores.readTemporalAuthority=async()=>({schemaVersion:A.read,authority,catalog});
+  f.stores.pointers=memory<any>().collection;
+  return {...f,body,owner,pending};
+}
+describe('protected complete-owner capacity issuance',()=>{
+  it('binds one exact profile and measured context to the same original consumed calls; identical replay is discovery',async()=>{
+    const f=capacityFixture(), first=await issueScenePreparationReview({...f.scope,body:f.body},f.stores);
+    expect(first).toMatchObject({schemaVersion:R.issueReceipt,reviewCapacityProfile:R,contextBytes:sceneReviewContextBytes(f.body.packet,R.operation),
+      consumedCalls:{depth:1,builder:2,independentReview:1},duplicate:false});
+    expect(await issueScenePreparationReview({...f.scope,body:f.body},f.stores)).toEqual({...first,duplicate:true});
+    expect(f.issues.rows).toHaveLength(1);
+  });
+  it('rejects changed profile, absent baseline, stale owner and over-capacity before reserving a review',async()=>{
+    for(const change of [(f:any)=>f.body.reviewCapacityProfile={...R,hardLimitBytes:1_048_576},
+      (f:any)=>delete f.body.packet.independentOwnerPremises,(f:any)=>f.owner.activeSceneContext.state.revision++,
+      (f:any)=>f.body.packet.unbounded='z'.repeat(262144)]){
+      const f=capacityFixture();change(f);
+      await expect(issueScenePreparationReview({...f.scope,body:f.body},f.stores)).rejects.toThrow();
+      expect(f.issues.rows).toEqual([]);
+    }
+  });
+  it('cannot change profile or return to the old writer for a free original review',async()=>{
+    const f=capacityFixture();await issueScenePreparationReview({...f.scope,body:f.body},f.stores);
+    const body={...f.body,schemaVersion:'gma.scene-preparation-review-issuance-request/1'};delete body.reviewCapacityProfile;
+    await expect(issueScenePreparationReview({...f.scope,body},f.stores)).rejects.toMatchObject({code:'SCENE_TEMPORAL_GM_REVIEW_ALREADY_ISSUED'});
+    expect(f.issues.rows).toHaveLength(1);
+  });
+  it('cannot upgrade an already-issued historical review or issue against a foreign owner',async()=>{
+    const f=capacityFixture(),old={...f.body,schemaVersion:'gma.scene-preparation-review-issuance-request/1'};delete old.reviewCapacityProfile;
+    await issueScenePreparationReview({...f.scope,body:old},f.stores);
+    await expect(issueScenePreparationReview({...f.scope,body:f.body},f.stores)).rejects.toMatchObject({code:'SCENE_TEMPORAL_GM_REVIEW_ALREADY_ISSUED'});
+    await expect(issueScenePreparationReview({...f.scope,userId:'foreign',body:f.body},f.stores)).rejects.toMatchObject({code:'SCENE_TEMPORAL_GM_RESUME_UNAVAILABLE'});
+    expect(f.issues.rows).toHaveLength(1);
   });
 });

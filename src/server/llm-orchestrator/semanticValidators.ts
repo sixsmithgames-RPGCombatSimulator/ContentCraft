@@ -9,6 +9,7 @@ import { compilePreparedBindings, PREPARED_BINDING_COMPILATION as C } from '../.
 import { SCENE_TEMPORAL_VALIDITY as T } from '../../shared/llm/sceneTemporalValidity.js';
 import { SCENE_TEMPORAL_GM as G } from '../../shared/llm/sceneTemporalGmDecisions.js';
 import { SCENE_TEMPORAL_ANALYSIS as A } from '../../shared/llm/sceneTemporalAnalysis.js';
+import { sceneReviewBaseOperation } from '../../shared/llm/sceneReviewCapacity.js';
 import { SCENE_MODEL_METADATA_BINDING, validSceneModelMetadataBinding } from './sceneModelMetadataBinding.js';
 import { scenePendingBindingContextFromOwner, scenePendingIntentBindingIssues, scenePendingIntentExaminationIssues } from '../../shared/llm/sceneReadEffectBindings.js';
 import {
@@ -77,13 +78,14 @@ registerSemanticValidator('scene-pending-intent-builder', ({ request, output }) 
 
 registerSemanticValidator('scene-pending-intent-examiner', ({ request, output }) => {
   const trusted = request.context?.input?.value as any;
+  const operation = sceneReviewBaseOperation(request.operation);
   const paths = scenePendingIntentExaminationIssues(output, trusted.pendingIntentBindings,
     { ...scenePendingBindingContextFromOwner(trusted.pendingIntentContext, trusted.proposal.operationId, trusted.proposal),
-      ...([A.operation, G.operation, T.operation, C.operation, 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises'].includes(request.operation)
+      ...([A.operation, G.operation, T.operation, C.operation, 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises'].includes(operation)
         ? { independentOwnerPremises: trusted.independentOwnerPremises } : {}),
-      ...([A.operation, G.operation, T.operation, C.operation].some((op) => op === request.operation) ? { preparedBindingCompilation: trusted.preparedBindingCompilation } : {}),
-      ...([A.operation, G.operation, T.operation].some((op) => op === request.operation) ? { temporalAuthority: trusted.temporalAuthority } : {}),
-      ...(request.operation === A.operation ? { temporalAnalysisCatalog: trusted.temporalAnalysisCatalog } : {}) }, trusted.expectedPolicyFingerprint);
+      ...([A.operation, G.operation, T.operation, C.operation].some((op) => op === operation) ? { preparedBindingCompilation: trusted.preparedBindingCompilation } : {}),
+      ...([A.operation, G.operation, T.operation].some((op) => op === operation) ? { temporalAuthority: trusted.temporalAuthority } : {}),
+      ...(operation === A.operation ? { temporalAnalysisCatalog: trusted.temporalAnalysisCatalog } : {}) }, trusted.expectedPolicyFingerprint);
   if ([11, 12, 13, 14, 15].includes(trusted.preparationPolicyVersion)) paths.push(...sceneDossierReferenceIssues(trusted.proposal).map((path) => `/proposal${path}`));
   if ([14, 15].includes(trusted.preparationPolicyVersion)) paths.push(...sceneInformationProjectionIssues(trusted.proposal, trusted.informationSelections, trusted.informationProjection));
   return result('scene-pending-intent-examiner', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', message: 'Joint examination must cover the exact prepared Scene, unfinished intent and owner evidence.', path })));
