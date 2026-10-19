@@ -5,6 +5,9 @@ import { scenePresentedTargetRefs } from '../services/scenePresentedTargetRefs.j
 import { sceneDossierReferenceIssues } from '../../shared/llm/sceneDossierReferences.js';
 import { rehydrateScenePreparationProposal } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { materializeSceneInformation, sceneInformationProjectionIssues } from '../../shared/llm/sceneInformationProjection.js';
+import { compilePreparedBindings, PREPARED_BINDING_COMPILATION as C } from '../../shared/llm/scenePreparedBindingCompilation.js';
+import { SCENE_TEMPORAL_VALIDITY as T } from '../../shared/llm/sceneTemporalValidity.js';
+import { SCENE_TEMPORAL_GM as G } from '../../shared/llm/sceneTemporalGmDecisions.js';
 import { SCENE_MODEL_METADATA_BINDING, validSceneModelMetadataBinding } from './sceneModelMetadataBinding.js';
 import { scenePendingBindingContextFromOwner, scenePendingIntentBindingIssues, scenePendingIntentExaminationIssues } from '../../shared/llm/sceneReadEffectBindings.js';
 import {
@@ -30,11 +33,14 @@ function completeInformationCandidate(output: any, trusted: any) {
 registerSemanticValidator('scene-information-projection', ({ request, output }) => {
   const trusted = request.context?.input?.value as any;
   try {
-    if (trusted?.preparationPolicyVersion !== 14) throw new Error('Profile mismatch');
+    if (![14, 15].includes(trusted?.preparationPolicyVersion)) throw new Error('Profile mismatch');
     if (output.status === 'continuation_required') return result('scene-information-projection', []);
     const proposal = completeInformationCandidate(output, trusted);
     const checked = validateOperationOutput('story.scene-reality.build.read-effects.typed-references.working-set',
-      { ...output, schemaVersion: 'gma.scene-reality-builder-result/6', proposal });
+      { ...output, schemaVersion: 'gma.scene-reality-builder-result/6', proposal,
+        // This validator checks normalized world shape. The fresh selections
+        // have their own registered shape and mandatory compiled semantic gate.
+        ...(trusted.preparationPolicyVersion === 15 ? { pendingIntentBindings: null } : {}) });
     return result('scene-information-projection', checked.valid ? [] : [{ code: 'SCENE_INFORMATION_PROJECTION_INVALID',
       message: 'The complete normalized Scene must meet every existing owner-shape limit.', path: '/proposal' }]);
   } catch (error) { return result('scene-information-projection', [{ code: 'SCENE_INFORMATION_PROJECTION_INVALID',
@@ -53,14 +59,16 @@ registerSemanticValidator('scene-pending-intent-builder', ({ request, output }) 
       const checkpoint = trusted.buildContinuation?.checkpoint;
       let proposal = checkpoint ? { ...output.proposal, ...Object.fromEntries(['zones', 'actorFrames', 'elements', 'facts']
         .map((key) => [key, [...(checkpoint[key] ?? []), ...(output.proposal[key] ?? [])]])) } : output.proposal;
-      if (trusted.preparationPolicyVersion === 14) {
+      if ([14, 15].includes(trusted.preparationPolicyVersion)) {
         try { proposal = completeInformationCandidate(output, trusted); }
         catch { return result('scene-pending-intent-builder', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_INVALID',
           message: 'The original intent window must remain exact even when projection fails.', path }))); } // Projection has its own mandatory failing check.
       } else if ([12, 13].includes(trusted.preparationPolicyVersion)) proposal = rehydrateScenePreparationProposal(proposal, trusted.priorBundle);
-      paths.push(...scenePendingIntentBindingIssues(output.pendingIntentBindings,
-        scenePendingBindingContextFromOwner(owner, trusted.buildRequest.operationId, proposal)));
-      if ([11, 12, 13, 14].includes(trusted.preparationPolicyVersion)) paths.push(...sceneDossierReferenceIssues(proposal).map((path) => `/proposal${path}`));
+      const context = scenePendingBindingContextFromOwner(owner, trusted.buildRequest.operationId, proposal);
+      const bindings = trusted.preparationPolicyVersion === 15
+        ? compilePreparedBindings(output.pendingIntentBindings, context, 'gma.scene-reality-builder-policy/15').bindings : output.pendingIntentBindings;
+      paths.push(...scenePendingIntentBindingIssues(bindings, context));
+      if ([11, 12, 13, 14, 15].includes(trusted.preparationPolicyVersion)) paths.push(...sceneDossierReferenceIssues(proposal).map((path) => `/proposal${path}`));
     }
   } catch { paths = ['/pendingIntentContext']; }
   return result('scene-pending-intent-builder', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_INVALID', message: 'The complete pending intent binding must match the supplied owner window, slots and evidence.', path })));
@@ -70,9 +78,12 @@ registerSemanticValidator('scene-pending-intent-examiner', ({ request, output })
   const trusted = request.context?.input?.value as any;
   const paths = scenePendingIntentExaminationIssues(output, trusted.pendingIntentBindings,
     { ...scenePendingBindingContextFromOwner(trusted.pendingIntentContext, trusted.proposal.operationId, trusted.proposal),
-      ...(request.operation.endsWith('.owner-premises') ? { independentOwnerPremises: trusted.independentOwnerPremises } : {}) }, trusted.expectedPolicyFingerprint);
-  if ([11, 12, 13, 14].includes(trusted.preparationPolicyVersion)) paths.push(...sceneDossierReferenceIssues(trusted.proposal).map((path) => `/proposal${path}`));
-  if (trusted.preparationPolicyVersion === 14) paths.push(...sceneInformationProjectionIssues(trusted.proposal, trusted.informationSelections, trusted.informationProjection));
+      ...([G.operation, T.operation, C.operation, 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises'].includes(request.operation)
+        ? { independentOwnerPremises: trusted.independentOwnerPremises } : {}),
+      ...([G.operation, T.operation, C.operation].some((op) => op === request.operation) ? { preparedBindingCompilation: trusted.preparedBindingCompilation } : {}),
+      ...([G.operation, T.operation].some((op) => op === request.operation) ? { temporalAuthority: trusted.temporalAuthority } : {}) }, trusted.expectedPolicyFingerprint);
+  if ([11, 12, 13, 14, 15].includes(trusted.preparationPolicyVersion)) paths.push(...sceneDossierReferenceIssues(trusted.proposal).map((path) => `/proposal${path}`));
+  if ([14, 15].includes(trusted.preparationPolicyVersion)) paths.push(...sceneInformationProjectionIssues(trusted.proposal, trusted.informationSelections, trusted.informationProjection));
   return result('scene-pending-intent-examiner', paths.map((path) => ({ code: 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', message: 'Joint examination must cover the exact prepared Scene, unfinished intent and owner evidence.', path })));
 });
 
@@ -379,8 +390,8 @@ registerSemanticValidator('scene-reality-builder-contract', ({ request, output }
         facts: [...(priorCheckpoint.facts ?? []), ...(candidate.facts ?? [])],
       }
     : candidate;
-  if (!continuation && [12, 13, 14].includes(trusted?.preparationPolicyVersion)) {
-    try { effectiveCandidate = rehydrateScenePreparationProposal(effectiveCandidate, trusted.preparationPolicyVersion === 14
+  if (!continuation && [12, 13, 14, 15].includes(trusted?.preparationPolicyVersion)) {
+    try { effectiveCandidate = rehydrateScenePreparationProposal(effectiveCandidate, [14, 15].includes(trusted.preparationPolicyVersion)
       ? { ...trusted.priorBundle, sceneKit: { ...trusted.priorBundle?.sceneKit, information: [] } } : trusted.priorBundle); }
     catch { issues.push({ code: 'SCENE_REALITY_RETAINED_RECORD_INVALID', message: 'Retained records require exact unique typed identities.', path: '/proposal' }); }
     for (const field of ['zones', 'actorFrames', 'elements', 'facts']) {

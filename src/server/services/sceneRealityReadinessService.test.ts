@@ -10,6 +10,7 @@ import {
   SCENE_REALITY_CONTRACTS,
   sceneRealityMatchesStoryHead,
   sceneRealitySupportsStorySettlement,
+  sceneRealityHealthAdvertisement,
   selectPreparedStoryFacts,
   type ActiveSceneRealityPointerDocument,
   type SceneFactSelectionDocument,
@@ -18,6 +19,7 @@ import {
   type SceneRealityOperationDocument,
 } from './sceneRealityReadinessService.js';
 import type { JsonObject } from './storyWorkspaceStore.js';
+import { SCENE_TEMPORAL_VALIDITY as T } from '../../shared/llm/sceneTemporalValidity.js';
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -224,6 +226,58 @@ async function commitReady(mem = memory()) {
   const receipt = await commitSceneReality({ userId: 'user:one', campaignId: 'campaign:one', expectedPointerRevision: 0, buildRequest: request, proposal: candidate, assessment: assessment(candidate, request) }, mem.stores);
   return { mem, request, candidate, receipt };
 }
+
+describe('ADR 030 strict readiness consumers', () => {
+  it('advertises the complete family and required capability together', () => {
+    const health = sceneRealityHealthAdvertisement();
+    expect(health.capabilities).toContain(T.capability); expect(health.temporalValidity).toEqual(T);
+  });
+  it.each(['valid', 'boundary_crossed', 'owner_changed', 'unresolved'])('shares current temporal %s across coverage, inspection and fact selection', async (decision) => {
+    const { mem } = await commitReady(), scope = { userId: 'user:one', campaignId: 'campaign:one' };
+    const bundle = mem.bundles.documents[0].bundle, certificate = bundle.readinessCertificate as JsonObject;
+    certificate.schemaVersion = T.certificate;
+    certificate.temporalValidity = { fingerprint: 'a'.repeat(64) };
+    let checks = 0;
+    mem.stores.readClockAuthority = async () => ({ gameClockRevision: 19 });
+    mem.stores.evaluateTemporalValidity = async () => { checks++; return { schemaVersion: T.evaluation,
+      manifestFingerprint: 'a'.repeat(64), decision, changedDimensions: decision === 'valid' ? [] : ['clock_condition'] }; };
+    const affordance = ((bundle.sceneStoryDesign as JsonObject).affordances as JsonObject[])[0];
+    const query = { schemaVersion: SCENE_REALITY_CONTRACTS.coverageQuery, queryId: 'query:temporal', operationId: 'operation:temporal',
+      campaignId: scope.campaignId, instructionRef: 'instruction:21', playerActionFingerprint: 'b'.repeat(64), instructionSequence: 21,
+      certificateRef: { certificateId: certificate.certificateId, revision: certificate.revision }, ownerHeads: {},
+      requirements: [{ coverageEntryId: 'requirement:temporal', zoneRef: affordance.zoneRef, targetRef: affordance.targetRef,
+        actionFamily: affordance.actionFamily, accessClass: affordance.accessClass, thresholdRef: affordance.thresholdRef, capabilityClass: affordance.capabilityClass }],
+      executionWindow: { programId: null, cursorRevision: 0, nodeRefs: ['node:talk'], stopReason: 'program_end' } };
+    expect(await decideSceneCoverage({ ...scope, query }, mem.stores)).toMatchObject({ decision: decision === 'valid' ? 'covered' : 'certificate_stale' });
+    expect(await readSceneRealityInspection(scope, mem.stores)).toMatchObject({ status: decision === 'valid' ? 'ready' : 'stale' });
+    const design = bundle.sceneStoryDesign as JsonObject;
+    const selection = { schemaVersion: SCENE_REALITY_CONTRACTS.factSelectionProposal, selectionId: 'selection:temporal', operationId: 'operation:select:temporal',
+      campaignId: scope.campaignId, instructionRef: 'instruction:21', instructionFingerprint: 'e'.repeat(64), requirementFingerprint: 'f'.repeat(64),
+      sceneStoryDesignRef: { designId: design.designId, revision: design.revision }, certificateRef: query.certificateRef,
+      selections: [{ requirementRef: affordance.coverageEntryId, affordanceRef: affordance.affordanceId, factRefs: affordance.factRefs }] };
+    if (decision === 'valid') await expect(selectPreparedStoryFacts({ ...scope, proposal: selection }, mem.stores)).resolves.toMatchObject({ mutationApplied: false });
+    else await expect(selectPreparedStoryFacts({ ...scope, proposal: selection }, mem.stores)).rejects.toMatchObject({ code: 'SCENE_READINESS_CERTIFICATE_STALE' });
+    expect(checks).toBeGreaterThanOrEqual(3);
+    expect(mem.factSelections.documents).toHaveLength(decision === 'valid' ? 1 : 0);
+    expect(sceneRealitySupportsStorySettlement(await readActiveSceneReality(scope, mem.stores), scope.campaignId, {}, undefined, undefined,
+      { schemaVersion: T.evaluation, manifestFingerprint: 'a'.repeat(64), decision })).toBe(false); // No exact Story authority, even with valid time.
+  });
+  it('does not trust a prior successful timing check at fact acceptance', async () => {
+    const { mem } = await commitReady(), scope = { userId: 'user:one', campaignId: 'campaign:one' };
+    const bundle = mem.bundles.documents[0].bundle, certificate = bundle.readinessCertificate as JsonObject;
+    certificate.schemaVersion = T.certificate;
+    let reads = 0;
+    mem.stores.evaluateTemporalValidity = async () => ({ schemaVersion: T.evaluation, decision: ++reads === 1 ? 'valid' : 'boundary_crossed',
+      changedDimensions: reads === 1 ? [] : ['clock_condition'] });
+    const design = bundle.sceneStoryDesign as JsonObject, a = (design.affordances as JsonObject[])[0];
+    await expect(selectPreparedStoryFacts({ ...scope, proposal: { schemaVersion: SCENE_REALITY_CONTRACTS.factSelectionProposal,
+      selectionId: 'selection:race', operationId: 'operation:race', campaignId: scope.campaignId, instructionRef: 'instruction:21',
+      instructionFingerprint: 'e'.repeat(64), requirementFingerprint: 'f'.repeat(64), sceneStoryDesignRef: { designId: design.designId, revision: design.revision },
+      certificateRef: { certificateId: certificate.certificateId, revision: certificate.revision },
+      selections: [{ requirementRef: a.coverageEntryId, affordanceRef: a.affordanceId, factRefs: a.factRefs }] } }, mem.stores)).rejects.toMatchObject({ code: 'SCENE_READINESS_CERTIFICATE_STALE' });
+    expect(reads).toBe(2); expect(mem.factSelections.documents).toHaveLength(0);
+  });
+});
 
 describe('read/effect surfaces at the real protected Scene save', () => {
   const input = (patch: JsonObject = {}) => {

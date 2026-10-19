@@ -1,5 +1,7 @@
 import { readScenePendingIntentContext } from '../services/scenePendingIntentService.js';
 import { readCurrentSceneOwnerContext } from '../services/currentSceneOwnerContext.js';
+import { readSceneTemporalAuthority, evaluateCurrentSceneTemporalValidity } from '../services/sceneTemporalAuthorityService.js';
+import { sceneTemporalGmDecisionService } from '../services/sceneTemporalGmDecisionStore.js';
 import { sceneMovementOutcomeService, type SceneMovementOutcomeCommit } from '../services/sceneMovementOutcomeStore.js';
 import { pendingReferenceQualificationService, type PendingReferenceQualificationCommit } from '../services/pendingReferenceQualificationStore.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
@@ -30,6 +32,9 @@ import {
 } from '../services/storyWorkspaceStore.js';
 import {
   commitSceneReality,
+  compileScenePreparedBindings,
+  readScenePreparationResume,
+  issueScenePreparationReview,
   decideSceneCoverage,
   readActiveSceneReality,
   readSceneRealityInspection,
@@ -580,6 +585,10 @@ storyWorkspaceRouter.post('/scene-turns', requireServiceIntegration, asyncRoute(
     && activeReality.bundle !== null && !Array.isArray(activeReality.bundle)
     ? activeReality.bundle
     : null;
+  const temporalEvaluation = realityBundle ? await evaluateCurrentSceneTemporalValidity({ userId, campaignId }, realityBundle) : null;
+  if (temporalEvaluation && temporalEvaluation.decision !== 'valid') throw new StoryWorkspaceStoreError(409,
+    'SCENE_TEMPORAL_VALIDITY_STALE', 'The prepared situation no longer has confirmed current timing conditions.',
+    { decision: temporalEvaluation.decision, changedDimensions: temporalEvaluation.changedDimensions });
   const certifiedSettlement = realityBundle
     && typeof realityBundle.sceneKit === 'object' && realityBundle.sceneKit !== null && !Array.isArray(realityBundle.sceneKit)
     && activeStory
@@ -589,6 +598,7 @@ storyWorkspaceRouter.post('/scene-turns', requireServiceIntegration, asyncRoute(
       activeStory.storyWorkspaceRef,
       activeStory.workspace,
       req.body,
+      temporalEvaluation,
     );
   const sceneKit = certifiedSettlement ? realityBundle.sceneKit as JsonObject : undefined;
   const sceneStoryDesign = certifiedSettlement
@@ -1006,6 +1016,48 @@ storyWorkspaceRouter.get('/scene-reality/inspection', requireServiceIntegration,
   res.json(result);
 }));
 
+storyWorkspaceRouter.get('/scene-reality/temporal-authority', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await readSceneTemporalAuthority({ userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId,
+    gmDecisions: req.query.gmDecisions === '1' }));
+}));
+
+storyWorkspaceRouter.get('/scene-reality/timing/choices', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await sceneTemporalGmDecisionService().choices({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, offset: Number(req.query.offset ?? 0),
+    catalogFingerprint: typeof req.query.catalogFingerprint === 'string' ? req.query.catalogFingerprint : undefined }));
+}));
+storyWorkspaceRouter.get('/scene-reality/timing/operations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const found = await sceneTemporalGmDecisionService().operation({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, operationId: req.params.operationId });
+  if (!found) { res.status(404).json({ error: 'SCENE_TEMPORAL_GM_OPERATION_NOT_FOUND' }); return; }
+  res.json(found.receipt);
+}));
+storyWorkspaceRouter.get('/scene-reality/timing/preparations/:operationId', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const found = await sceneTemporalGmDecisionService().preparationOperation({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, operationId: req.params.operationId });
+  if (!found) { res.status(404).json({ error: 'SCENE_TEMPORAL_GM_PREPARATION_NOT_FOUND' }); return; }
+  res.json({ decisionRef: found._id, requestFingerprint: found.requestFingerprint, expiresAt: found.expiresAt });
+}));
+storyWorkspaceRouter.post('/scene-reality/timing/prepare', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const b = req.body ?? {};
+  res.json(await sceneTemporalGmDecisionService().prepare({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, operationId: b.operationId, expectedRevision: b.expectedRevision,
+    expectedSourceHead: b.expectedSourceHead, catalogFingerprint: b.catalogFingerprint, choice: b.choice,
+    confirmationToken: b.confirmationToken }));
+}));
+storyWorkspaceRouter.post('/scene-reality/timing/confirm', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  const b = req.body ?? {};
+  res.json(await sceneTemporalGmDecisionService().confirm({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, decisionRef: b.decisionRef, confirmationToken: b.confirmationToken,
+    humanConfirmed: b.humanConfirmed }));
+}));
+
 storyWorkspaceRouter.post('/scene-reality/coverage', requireServiceIntegration, asyncRoute(async (req, res) => {
   if (!await requireCampaign(req, res)) return;
   res.json(await decideSceneCoverage({
@@ -1013,6 +1065,22 @@ storyWorkspaceRouter.post('/scene-reality/coverage', requireServiceIntegration, 
     campaignId: req.params.campaignId,
     query: req.body,
   }));
+}));
+
+storyWorkspaceRouter.post('/scene-reality/compile-prepared-bindings', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await compileScenePreparedBindings({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, body: req.body }));
+}));
+
+storyWorkspaceRouter.get('/scene-reality/preparation-resumes/:resumeRef', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await readScenePreparationResume({ userId: (req as IntegrationRequest).userId,
+    campaignId: req.params.campaignId, resumeRef: req.params.resumeRef }));
+}));
+storyWorkspaceRouter.post('/scene-reality/review-issuance', requireServiceIntegration, asyncRoute(async (req, res) => {
+  if (!await requireCampaign(req, res)) return;
+  res.json(await issueScenePreparationReview({ userId: (req as IntegrationRequest).userId, campaignId: req.params.campaignId, body: req.body }));
 }));
 
 storyWorkspaceRouter.post('/scene-reality/commit', requireServiceIntegration, asyncRoute(async (req, res) => {
@@ -1027,6 +1095,7 @@ storyWorkspaceRouter.post('/scene-reality/commit', requireServiceIntegration, as
     assessment: body.assessment,
     ...(body.pendingIntent !== undefined ? { pendingIntent: body.pendingIntent } : {}),
     ...(body.ownerPremisesReview !== undefined ? { ownerPremisesReview: body.ownerPremisesReview } : {}),
+    ...(body.preparedBindingReview !== undefined ? { preparedBindingReview: body.preparedBindingReview } : {}),
   });
   res.status(result.duplicate ? 200 : 201).json(result);
 }));

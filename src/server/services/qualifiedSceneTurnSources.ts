@@ -82,7 +82,7 @@ export function qualifiedSceneTurnIdentitySources(bundle: JsonObject, proposal: 
 export async function readQualifiedSceneTurnIdentitySources(input: { userId: string; campaignId: string; bundle: JsonObject; proposal: unknown },
   deps: { readArtifact?: typeof readActiveCompoundActionArtifact; assertWorkflowOpen?: typeof assertFreeformProgramWorkflowOpen } = {}): Promise<string[]> {
   const record = input.bundle.pendingIntentBindingRecord;
-  if (!object(record) || !['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(record.schemaVersion))) {
+  if (!object(record) || !['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5', 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8'].includes(String(record.schemaVersion))) {
     return qualifiedSceneTurnIdentitySources(input.bundle, input.proposal);
   }
   if (deps.readArtifact && !deps.assertWorkflowOpen) throw new Error('Injected Scene identity ownership requires an explicit workflow guard.');

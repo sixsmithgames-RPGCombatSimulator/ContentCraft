@@ -4,11 +4,12 @@ import { getDb } from '../config/mongo.js';
 import { freeformJsonDigest } from '../../shared/llm/freeformPlanBinding.js';
 import { projectAppliedIntentBindings } from '../../shared/llm/scenePendingIntentApplication.js';
 import { deriveQualifiedSensoryProjection, type QualifiedSensoryFact, type QualifiedSensoryOutcome } from '../../shared/llm/qualifiedObservation.js';
-import { pendingObserverEvidenceIssues, type PendingObserverEvidence } from '../../shared/llm/pendingObserverEvidence.js';
+import { pendingObserverEvidenceIssues, pendingObserverFormMatches, type PendingObserverEvidence } from '../../shared/llm/pendingObserverEvidence.js';
 import { confirmedRelocationLineageIssues, type ConfirmedRelocationLineage } from '../../shared/llm/confirmedRelocationLineage.js';
 import { actorMechanicsLinkService } from './actorMechanicsLinkStore.js';
 import { readActiveCompoundActionArtifact } from './compoundActionArtifactStore.js';
 import { readActiveSceneReality } from './sceneRealityReadinessService.js';
+import { assertCurrentSceneTemporalValidity } from './sceneTemporalAuthorityService.js';
 import { readObservationAuthority } from './observationAuthorityService.js';
 import { assertFreeformProgramWorkflowOpen } from './freeformWorkflowAuthority.js';
 import { StoryWorkspaceStoreError, type JsonObject } from './storyWorkspaceStore.js';
@@ -32,6 +33,7 @@ export interface QualifiedObservationDependencies {
   records?: Pick<Collection<QualifiedObservationActivation>, 'findOne' | 'insertOne' | 'find'>;
   readArtifact?: typeof readActiveCompoundActionArtifact;
   readReality?: typeof readActiveSceneReality;
+  assertTemporalValidity?: typeof assertCurrentSceneTemporalValidity;
   readLegacy?: typeof readObservationAuthority;
   readLinks?: ReturnType<typeof actorMechanicsLinkService>['read'];
   assertWorkflowOpen?: (scope: Scope, binding: JsonObject | undefined) => Promise<void>;
@@ -59,6 +61,7 @@ export function qualifiedObservationAuthorityService(deps: QualifiedObservationD
   const records = deps.records ?? getDb().collection<QualifiedObservationActivation>('gmc_qualified_observation_activations');
   const readArtifact = deps.readArtifact ?? readActiveCompoundActionArtifact;
   const readReality = deps.readReality ?? readActiveSceneReality;
+  const assertTemporal = deps.assertTemporalValidity ?? assertCurrentSceneTemporalValidity;
   const readLegacy = deps.readLegacy ?? readObservationAuthority;
   const readLinks = deps.readLinks ?? actorMechanicsLinkService().read;
   if (deps.readArtifact && !deps.assertWorkflowOpen) throw new Error('Injected action authority requires an explicit workflow guard.');
@@ -79,10 +82,11 @@ export function qualifiedObservationAuthorityService(deps: QualifiedObservationD
     const scope = scopeOf(input);
     const { loaded, active, legacy, identity } = owners ?? await readOwners(scope);
     if (!loaded?.artifact || !object(active?.bundle)) fail('owners');
+    await assertTemporal(scope, active.bundle);
     const artifact = loaded.artifact as unknown as JsonObject, bundle = active.bundle;
     const application = rows(artifact.intentBindingApplications).find((row) => object(row.record) && row.record.recordId === bindingRecordRef);
     const record = application?.record;
-    if (!object(record) || !['gmc.scene-pending-intent-binding-record/2', 'gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(record.schemaVersion))
+    if (!object(record) || !['gmc.scene-pending-intent-binding-record/2', 'gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5', 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8'].includes(String(record.schemaVersion))
       || !object(bundle.pendingIntentBindingRecord) || bundle.pendingIntentBindingRecord.recordId !== record.recordId
       || !object(record.bindings) || !object(bundle.activeBundle) || !object(bundle.sceneKit)
       || freeformJsonDigest(record) !== freeformJsonDigest(bundle.pendingIntentBindingRecord)) fail('binding_record');
@@ -97,9 +101,9 @@ export function qualifiedObservationAuthorityService(deps: QualifiedObservationD
       || evidence.programRef !== scope.programId || evidence.campaignId !== scope.campaignId
       || !selection || selection.ownerEvidenceRef !== evidence.evidenceRef || !id(selection.viewpointZoneRef)
       || freeformJsonDigest(selection.viewpointCondition) !== freeformJsonDigest(evidence.viewpointCondition)
-      || !node || !group || group.observerRef !== evidence.observerRef || group.methodRef !== evidence.methodRef || group.formRef !== evidence.formRef
+      || !node || !group || group.observerRef !== evidence.observerRef || group.methodRef !== evidence.methodRef || !pendingObserverFormMatches(group, evidence)
       || !['after_relocation', 'confirmed_relocation'].includes(evidence.viewpointCondition.kind)) fail('qualification');
-    const continuation = ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(record.schemaVersion));
+    const continuation = ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5', 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8'].includes(String(record.schemaVersion));
     if (evidence.schemaVersion !== (continuation ? 'gmc.pending-observer-evidence/2' : 'gmc.pending-observer-evidence/1')) fail('evidence_version');
     let lineage: ConfirmedRelocationLineage | null = null;
     if (evidence.viewpointCondition.kind === 'confirmed_relocation') {
@@ -204,6 +208,7 @@ export function qualifiedObservationAuthorityService(deps: QualifiedObservationD
       workspaceRevision: input.expectedWorkspaceRevision, preparedSceneRevision: input.expectedPreparedSceneRevision,
       vcsSubjectRevision: vcs.subjectRevision, vcsCharacterRevision: vcs.characterRevision, receipt, createdAt: new Date(),
       ...(continuation ? { relocationLineageRef: c.lineage?.lineageRef ?? null } : {}) };
+    await assertTemporal(scope, c.bundle);
     try { await records.insertOne(row); }
     catch (error) {
       if (!duplicate(error)) throw error;
@@ -219,7 +224,7 @@ export function qualifiedObservationAuthorityService(deps: QualifiedObservationD
     if (!object(active?.bundle) || !object(active.bundle.sceneKit)) fail('prepared_scene');
     const bundle = active.bundle;
     const bindingRecord = bundle.pendingIntentBindingRecord;
-    const continuation = object(bindingRecord) && ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(String(bindingRecord.schemaVersion));
+    const continuation = object(bindingRecord) && ['gmc.scene-pending-intent-binding-record/3', 'gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5', 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8'].includes(String(bindingRecord.schemaVersion));
     if (continuation !== (input.version === '3')) fail('reader_version');
     const saved = object(bindingRecord) ? await records.find({ ...scope, bindingRecordRef: String(bindingRecord.recordId) }).limit(33).toArray() : [];
     if (saved.length > 32) fail('budget');

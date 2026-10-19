@@ -3,7 +3,7 @@ import { createPendingIntentWindow } from '../pendingIntentWindow.js';
 import { conditionalViewpointRef, pendingIntentBindingSlots, scenePendingIntentExaminationIdentity, type ScenePendingBindingContext } from '../scenePendingIntentQualified.js';
 import type { PendingObserverEvidence } from '../pendingObserverEvidence.js';
 
-export function qualifiedPendingFixture() {
+export function qualifiedPendingFixture(requestedForm = true) {
   const campaignId = 'campaign:fictional', operationId = 'prepare:qualified';
   const exactText = 'Send my rat familiar inside. I remain hidden and watch through its eyes.';
   const instruction = { instructionRef: 'instruction:one', exactText, instructionFingerprint: freeformTextDigest(exactText) };
@@ -19,7 +19,7 @@ export function qualifiedPendingFixture() {
           dataRequirements: [{ kind: 'observation', observation: { outcomeId: 'outcome:interior', targetRef: 'element:tunnel',
             relationOriginRef: null, facet: 'surface_description', valueKind: 'description', requestedPrecision: 'ordinary' } }],
           observationGroups: [{ groupId: 'group:familiar', observerKind: 'familiar', observerRef: null, methodRef: null,
-            formRef: null, formTargetId: 'form:requested', outcomeIds: ['outcome:interior'], viewpointBinding: 'after:enter' }] },
+            formRef: null, formTargetId: requestedForm ? 'form:requested' : null, outcomeIds: ['outcome:interior'], viewpointBinding: 'after:enter' }] },
       ] },
     cursor: { programId: 'program:one', revision: 1, completedNodeRefs: [], skippedNodeRefs: [], readyNodeRefs: ['enter', 'cover'],
       remainingNodeRefs: ['watch'], waiting: null, authorityHead: { storyWorkspaceRevision: 2, sceneRevision: 2, vcsCharacterRevision: 0 } } };

@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { Collection } from 'mongodb';
 import { qualifiedPendingFixture } from '../../shared/llm/fixtures/qualifiedPending.js';
 import { continuationPendingFixture } from '../../shared/llm/fixtures/continuationPending.js';
-import { createPendingBindingRecord, createIntentBindingReceipt } from '../../shared/llm/scenePendingIntentApplication.js';
+import { createPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings, appliedObservationBinding } from '../../shared/llm/scenePendingIntentApplication.js';
 import { qualifiedObservationAuthorityService, type QualifiedObservationActivation, type QualifiedObservationCommit,
   type QualifiedObservationDependencies } from './qualifiedObservationAuthorityService.js';
 import type { ActorMechanicsLink } from '../../shared/llm/actorMechanicsLink.js';
 import type { JsonObject } from './storyWorkspaceStore.js';
 
-function fixture(continuation = false, typedFuture = false) {
-  const f = continuation ? continuationPendingFixture() : qualifiedPendingFixture(), scope = { userId: 'owner:one', campaignId: 'campaign:fictional', programId: 'program:one' };
+function fixture(continuation = false, typedFuture = false, requestedForm = true) {
+  const f = continuation ? continuationPendingFixture() : qualifiedPendingFixture(requestedForm), scope = { userId: 'owner:one', campaignId: 'campaign:fictional', programId: 'program:one' };
   if (typedFuture) {
     const originalAssessment = f.assessment;
     Object.assign(f.context, { instructionCoverage: continuationPendingFixture().context.instructionCoverage, confirmedRelocations: [] });
@@ -80,6 +80,26 @@ function fixture(continuation = false, typedFuture = false) {
 }
 
 describe('ADR 016 receipt-conditioned sensing activation', () => {
+  it('uses verified current form for an omitted form request at activation and applied observation without changing the plan', async () => {
+    const f = fixture(false, true, false), before = structuredClone(f.loaded.artifact);
+    await f.service.commit(f.input);
+    const projection = await f.service.read({ ...f.scope, version: '3' });
+    const program = projectAppliedIntentBindings(before.instruction, before.program, before.intentBindingApplications);
+    const group = program.nodes.find((node: JsonObject) => node.nodeId === 'watch').observationGroups[0];
+    expect(group.formRef).toBeNull(); expect(group.formTargetId).toBeNull();
+    expect(appliedObservationBinding(before.cursor.authorityHead, before.intentBindingApplications, projection,
+      { nodeId: 'watch', group, actorCandidate: { actorRef: f.f.evidence.observerRef } })?.currentForm).toBe('rat');
+    expect(f.loaded.artifact).toEqual(before); expect(f.rows).toHaveLength(1);
+    const changed = fixture(false, true, false); changed.input.vcsProjection.currentForm = 'owl';
+    await expect(changed.service.commit(changed.input)).rejects.toMatchObject({ details: { field: 'vcs_head' } });
+    expect(changed.rows).toHaveLength(0);
+  });
+  it.each([1, 2])('stops a failed temporal owner check at boundary %i without activation or movement replay', async (failureRead) => {
+    const f = fixture(false, true), before = structuredClone(f.loaded.artifact); let reads = 0;
+    f.deps.assertTemporalValidity = async () => { if (++reads === failureRead) throw Object.assign(new Error('Timing needs current owner proof.'), { code: 'SCENE_TEMPORAL_VALIDITY_STALE' }); };
+    await expect(qualifiedObservationAuthorityService(f.deps).commit(f.input)).rejects.toMatchObject({ code: 'SCENE_TEMPORAL_VALIDITY_STALE' });
+    expect(f.rows).toHaveLength(0); expect(f.loaded.artifact).toEqual(before); expect(reads).toBe(failureRead);
+  });
   it('passes the complete exact arrival identity to the protected position reader for a newly finished move', async () => {
     const f = fixture(false, true), checks: JsonObject[] = [];
     f.deps.assertPositionContinuity = async (_scope, _artifact, lineage) => {

@@ -19,6 +19,13 @@ export interface PendingObserverEvidence {
   origin: ObserverOrigin; viewpointCondition: ObserverViewpointCondition;
 }
 
+/** Omitted requested form means use the owner's verified current form. An
+ * explicit but unresolved form target is not an omission and cannot pass. */
+export function pendingObserverFormMatches(group: { formRef?: unknown; formTargetId?: unknown },
+  evidence: { formRef: string | null }): boolean {
+  return group.formRef == null && group.formTargetId == null || group.formRef != null && group.formRef === evidence.formRef;
+}
+
 /** Closed owner evidence validation. Semantic form/method correspondence is separately examined. */
 export function pendingObserverEvidenceIssues(value: unknown): string[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return ['$'];

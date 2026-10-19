@@ -8,12 +8,16 @@ import { scenePendingIntentBindingIssues, scenePendingIntentExaminationIssues,
   READ_EFFECT_BINDINGS_VERSION, READ_EFFECT_BINDING_POLICY_VERSION, READ_EFFECT_EXAMINER_POLICY_VERSION } from './sceneReadEffectBindings.js';
 import { pendingRequirementRoleIssues, projectClassifiedPendingNode, pendingRoleApplicationIssues } from './pendingRequirementRoles.js';
 import { READ_EFFECT_CONTRACTS, readEffectProgramIssues } from './readEffectContracts.js';
-import { pendingObserverEvidenceIssues, type PendingObserverEvidence } from './pendingObserverEvidence.js';
+import { pendingObserverEvidenceIssues, pendingObserverFormMatches, type PendingObserverEvidence } from './pendingObserverEvidence.js';
 import { instructionCoverageContextIssues, type InstructionWindowCoverage } from './instructionWindowCoverage.js';
 import { relocationLineageContextIssues, type ConfirmedRelocationLineage } from './confirmedRelocationLineage.js';
 import { TYPED_REFERENCE_AUTHORITY_BUNDLE as TYPED, isTypedReferenceProgram } from './typedReferenceBindings.js';
 import { pendingReferenceQualificationIssues } from './pendingReferenceQualification.js';
 import { historicalTypedPendingBinding, typedEffectSlotId } from './typedPendingReferenceProjection.js';
+import { PREPARED_BINDING_COMPILATION as C, restorePreparedBindingSource } from './scenePreparedBindingCompilation.js';
+import { createPreparedBindingReview } from './scenePreparedBindingReview.js';
+import { SCENE_TEMPORAL_VALIDITY as T, createTemporalValidityManifest } from './sceneTemporalValidity.js';
+import { SCENE_TEMPORAL_GM as G } from './sceneTemporalGmDecisions.js';
 
 type Row = Record<string, any>;
 export const PENDING_BINDING_RECORD_VERSION = 'gmc.scene-pending-intent-binding-record/1';
@@ -24,30 +28,49 @@ export const CONTINUATION_PENDING_BINDING_RECORD_VERSION = 'gmc.scene-pending-in
 export const CONTINUATION_INTENT_BINDING_RECEIPT_VERSION = 'gma.action-intent-binding-receipt/3';
 export const READ_EFFECT_PENDING_BINDING_RECORD_VERSION = 'gmc.scene-pending-intent-binding-record/4';
 export const READ_EFFECT_INTENT_BINDING_RECEIPT_VERSION = 'gma.action-intent-binding-receipt/4';
-const readEffectRecord = (record: Row) => [READ_EFFECT_PENDING_BINDING_RECORD_VERSION, TYPED.pendingRecord].includes(record?.schemaVersion);
-const bindingReceiptVersion = (record: Row) => record.schemaVersion === TYPED.pendingRecord ? TYPED.pendingReceipt : readEffectRecord(record)
+const compiledRecord = (record: Row) => [C.record, T.record, G.record].includes(record?.schemaVersion);
+const typedRecord = (record: Row) => [TYPED.pendingRecord, C.record, T.record, G.record].includes(record?.schemaVersion);
+const readEffectRecord = (record: Row) => record?.schemaVersion === READ_EFFECT_PENDING_BINDING_RECORD_VERSION || typedRecord(record);
+const bindingReceiptVersion = (record: Row) => record.schemaVersion === G.record ? G.bindingReceipt : record.schemaVersion === T.record ? T.receipt : record.schemaVersion === C.record ? C.receipt : typedRecord(record) ? TYPED.pendingReceipt : readEffectRecord(record)
   ? READ_EFFECT_INTENT_BINDING_RECEIPT_VERSION : record.schemaVersion === CONTINUATION_PENDING_BINDING_RECORD_VERSION ? CONTINUATION_INTENT_BINDING_RECEIPT_VERSION
     : record.schemaVersion === QUALIFIED_PENDING_BINDING_RECORD_VERSION ? QUALIFIED_INTENT_BINDING_RECEIPT_VERSION : INTENT_BINDING_RECEIPT_VERSION;
 export const INTENT_BINDING_APPLICATION_LIMITS = Object.freeze({ count: 8, bytes: 131_072 });
 /** Historical fingerprints are stable; qualified packets have a distinct policy identity. */
-export const pendingScenePolicyFingerprint = (depth: string, qualified: boolean | 'continuation' | 'read_effects' = false, preparationPolicyVersion: 9 | 10 | 11 | 12 | 13 | 14 = 9) => freeformJsonDigest({
+const historicalPendingScenePolicyFingerprint = (depth: string, qualified: boolean | 'continuation' | 'read_effects' = false, preparationPolicyVersion: 9 | 10 | 11 | 12 | 13 | 14 = 9) => freeformJsonDigest({
   builder: qualified === 'read_effects' ? `gma.scene-reality-builder-policy/${preparationPolicyVersion}` : qualified === 'continuation' ? 'gma.scene-reality-builder-policy/7' : qualified ? 'gma.scene-reality-builder-policy/6' : 'gma.scene-reality-builder-policy/4',
   examiner: qualified === 'read_effects' ? `gma.scene-readiness-examiner-policy/${preparationPolicyVersion}` : qualified === 'continuation' ? 'gma.scene-readiness-examiner-policy/7' : qualified ? 'gma.scene-readiness-examiner-policy/6' : 'gma.scene-readiness-examiner-policy/3', depth,
   binding: preparationPolicyVersion === 14 ? 'gma.scene-pending-intent-binding-policy/9' : preparationPolicyVersion === 13 ? 'gma.scene-pending-intent-binding-policy/8' : qualified === 'read_effects' ? READ_EFFECT_BINDING_POLICY_VERSION : qualified === 'continuation' ? CONTINUATION_BINDING_POLICY_VERSION : qualified ? QUALIFIED_BINDING_POLICY_VERSION : 'gma.scene-pending-intent-binding-policy/2',
   ...(qualified ? { qualificationExaminer: preparationPolicyVersion === 14 ? 'gma.scene-pending-intent-examiner-policy/9' : preparationPolicyVersion === 13 ? 'gma.scene-pending-intent-examiner-policy/8' : qualified === 'read_effects' ? READ_EFFECT_EXAMINER_POLICY_VERSION : qualified === 'continuation' ? CONTINUATION_EXAMINER_POLICY_VERSION : QUALIFIED_EXAMINER_POLICY_VERSION } : {}) });
+export function pendingScenePolicyFingerprint(depth: string, qualified: boolean | 'continuation' | 'read_effects' = false,
+  preparationPolicyVersion: 9 | 10 | 11 | 12 | 13 | 14 | 15 = 9): string {
+  if (preparationPolicyVersion !== 15) return historicalPendingScenePolicyFingerprint(depth, qualified, preparationPolicyVersion);
+  if (qualified !== 'read_effects') throw new Error('Compiled policies require the complete read/effect profile.');
+  return freeformJsonDigest({ builder: 'gma.scene-reality-builder-policy/15', examiner: C.examinerPolicy, depth,
+    binding: 'gma.scene-pending-intent-binding-policy/10', qualificationExaminer: 'gma.scene-pending-intent-examiner-policy/10' });
+}
 const same = (a: unknown, b: unknown) => canonicalFreeformJson(a) === canonicalFreeformJson(b);
 const requireMatch = (condition: unknown) => { if (!condition) throw new Error('Pending intent application does not match its owner evidence.'); };
 
 /** Called only after the Scene owner validates the complete dossier and heads. */
 export function createPendingBindingRecord(context: ScenePendingBindingContext & { qualifiedObservers?: PendingObserverEvidence[];
-  instructionCoverage?: InstructionWindowCoverage; confirmedRelocations?: ConfirmedRelocationLineage[]; independentOwnerPremises?: Row }, bindings: Row, assessment: Row, policyFingerprint: string): Row {
+  instructionCoverage?: InstructionWindowCoverage; confirmedRelocations?: ConfirmedRelocationLineage[]; independentOwnerPremises?: Row;
+  preparedBindingCompilation?: Row; temporalAuthority?: Row }, bindings: Row, assessment: Row, policyFingerprint: string): Row {
   requireMatch(!scenePendingIntentBindingIssues(bindings, context).length
     && !scenePendingIntentExaminationIssues(assessment, bindings, context, policyFingerprint).length && assessment.verdict === 'adequate');
+  if (context.preparedBindingCompilation) {
+    const sourcePolicy = context.preparedBindingCompilation.sourcePolicy;
+    requireMatch(['gma.scene-reality-builder-policy/14', 'gma.scene-reality-builder-policy/15'].includes(sourcePolicy)
+      && policyFingerprint === pendingScenePolicyFingerprint(String(context.proposal.requestedDepth), 'read_effects',
+        sourcePolicy === 'gma.scene-reality-builder-policy/15' ? 15 : 14));
+  }
   const typed = bindings.schemaVersion === TYPED.pendingBindings;
   const readEffects = typed || bindings.schemaVersion === READ_EFFECT_BINDINGS_VERSION;
   const continuation = readEffects || bindings.schemaVersion === CONTINUATION_BINDING_VERSION;
   const qualified = continuation || bindings.schemaVersion === QUALIFIED_BINDING_VERSION;
-  const body = { schemaVersion: typed ? TYPED.pendingRecord : readEffects ? READ_EFFECT_PENDING_BINDING_RECORD_VERSION : continuation ? CONTINUATION_PENDING_BINDING_RECORD_VERSION : qualified ? QUALIFIED_PENDING_BINDING_RECORD_VERSION : PENDING_BINDING_RECORD_VERSION, operationId: context.operationId,
+  const temporalManifest = context.temporalAuthority ? createTemporalValidityManifest(context.temporalAuthority, context.proposal, assessment) : null;
+  const body = { schemaVersion: temporalManifest ? (temporalManifest.schemaVersion === G.manifest ? G.record : T.record) : context.preparedBindingCompilation ? C.record : typed ? TYPED.pendingRecord : readEffects ? READ_EFFECT_PENDING_BINDING_RECORD_VERSION : continuation ? CONTINUATION_PENDING_BINDING_RECORD_VERSION : qualified ? QUALIFIED_PENDING_BINDING_RECORD_VERSION : PENDING_BINDING_RECORD_VERSION, operationId: context.operationId,
+    ...(temporalManifest ? { temporalValidityFingerprint: temporalManifest.fingerprint } : {}),
+    ...(context.preparedBindingCompilation ? { preparedBindingReview: createPreparedBindingReview(context.preparedBindingCompilation, assessment) } : {}),
     ...(typed ? { referenceQualification: structuredClone(context.pendingReferenceQualification) } : {}),
     window: createPendingIntentWindow(context.source), bindings: structuredClone(bindings),
     sourceCursor: structuredClone(context.source.cursor), sourceReceipts: structuredClone(context.source.receipts),
@@ -62,10 +85,11 @@ export function createPendingBindingRecord(context: ScenePendingBindingContext &
 
 export function assertPendingBindingRecord(record: Row, source: PendingIntentWindowSource): void {
   const { recordId, recordFingerprint, ...body } = record ?? {};
-  const typed = record?.schemaVersion === TYPED.pendingRecord;
+  const typed = typedRecord(record);
   const readEffects = readEffectRecord(record);
   const continuation = readEffects || record?.schemaVersion === CONTINUATION_PENDING_BINDING_RECORD_VERSION;
   const qualified = continuation || record?.schemaVersion === QUALIFIED_PENDING_BINDING_RECORD_VERSION;
+  requireMatch([T.record, G.record].includes(record?.schemaVersion) || !Object.hasOwn(record ?? {}, 'temporalValidityFingerprint'));
   requireMatch((qualified || record?.schemaVersion === PENDING_BINDING_RECORD_VERSION) && recordFingerprint === freeformJsonDigest(body)
     && recordId === `pending-binding:${recordFingerprint}` && same(record.window, createPendingIntentWindow(source))
     && same(record.sourceCursor, source.cursor) && same(record.sourceReceipts, source.receipts));
@@ -74,6 +98,24 @@ export function assertPendingBindingRecord(record: Row, source: PendingIntentWin
     && record.referenceQualification.fingerprint === record.bindings.referenceQualificationFingerprint);
   else requireMatch(!Object.hasOwn(record, 'referenceQualification'));
   if (readEffects) requireMatch(!pendingRequirementRoleIssues(record.bindings.requirementRoles, source).length);
+  if (compiledRecord(record)) {
+    const review = record.preparedBindingReview, compilation = review?.compilation;
+    const family = record.schemaVersion === G.record ? G : T;
+    const temporal = [T.record, G.record].includes(record.schemaVersion);
+    requireMatch(review?.schemaVersion === (temporal ? family.preparedReview : C.review) && review.reviewPolicy === (temporal ? family.examinerPolicy : C.examinerPolicy)
+      && (!temporal || /^[a-f0-9]{64}$/.test(record.temporalValidityFingerprint)
+        && /^[a-f0-9]{64}$/.test(review.temporalReviewFingerprint) && /^[a-f0-9]{64}$/.test(review.temporalAuthorityFingerprint))
+      && same(review.assessmentIdentity, { assessmentId: record.assessmentRef, fingerprint: record.assessmentFingerprint,
+        dossierFingerprint: record.dossierFingerprint, policyFingerprint: record.policyFingerprint })
+      && compilation?.operationId === record.operationId && compilation.campaignId === record.window.campaignId
+      && compilation.windowFingerprint === record.window.windowFingerprint
+      && compilation.ownerReadSetFingerprint === freeformJsonDigest(record.ownerReadSet)
+      && compilation.qualificationFingerprint === record.referenceQualification.fingerprint
+      && compilation.dossierFingerprint === record.dossierFingerprint);
+    const { fingerprint: _digest, ...compilationBody } = compilation;
+    requireMatch(compilation.fingerprint === freeformJsonDigest(compilationBody));
+    restorePreparedBindingSource(record.bindings, compilation);
+  } else requireMatch(!Object.hasOwn(record, 'preparedBindingReview'));
   if (continuation) requireMatch(!instructionCoverageContextIssues(record.instructionCoverage, source.instruction, source.program).length
     && Array.isArray(record.confirmedRelocations) && record.confirmedRelocations.length <= 32
     && record.confirmedRelocations.every((row: ConfirmedRelocationLineage) => !relocationLineageContextIssues(row, source).length));
@@ -110,7 +152,11 @@ export function createIntentBindingReceipt(record: Row, bundle: Row, rebase: Row
     bundleRef: { bundleId: bundle.bundleId, revision: bundle.revision },
     priorCursorRevision: rebase.priorCursorRevision, resultingCursorRevision: rebase.resultingCursorRevision,
     authorityHead: structuredClone(rebase.authorityHead), rebaseReceiptRef: rebase.receiptId,
-    ...(record.schemaVersion === TYPED.pendingRecord ? { referenceQualificationApplication: { qualificationRef: record.referenceQualification.qualificationRef,
+    ...([T.record, G.record].includes(record.schemaVersion) ? { temporalValidityApplication: { fingerprint: record.temporalValidityFingerprint,
+      reviewFingerprint: record.preparedBindingReview.temporalReviewFingerprint } } : {}),
+    ...(compiledRecord(record) ? { preparedBindingCompilationApplication: {
+      fingerprint: record.preparedBindingReview.compilation.fingerprint, reviewFingerprint: freeformJsonDigest(record.preparedBindingReview) } } : {}),
+    ...(typedRecord(record) ? { referenceQualificationApplication: { qualificationRef: record.referenceQualification.qualificationRef,
       fingerprint: record.referenceQualification.fingerprint } } : {}),
     ...(readEffectRecord(record) ? { requirementRoleApplication: {
       schemaVersion: READ_EFFECT_CONTRACTS.application, classificationFingerprint: freeformJsonDigest(record.bindings.requirementRoles),
@@ -121,7 +167,7 @@ export function createIntentBindingReceipt(record: Row, bundle: Row, rebase: Row
 
 /** One projection algorithm for application and subsequent exact-node witnesses. */
 function recordProjection(record: Row): { bindings: Row; slots: Row[] } {
-  if (record.schemaVersion !== TYPED.pendingRecord) return { bindings: record.bindings, slots: pendingIntentBindingSlotsFromWindow(record.window) };
+  if (!typedRecord(record)) return { bindings: record.bindings, slots: pendingIntentBindingSlotsFromWindow(record.window) };
   // Restore the exact immutable source from its accepted window plus completed
   // source nodes is unnecessary here: full source validation happens above.
   // Slot qualification itself is checked against that source in record assert.
@@ -179,7 +225,7 @@ export function acceptedPendingNodeCoverage(record: Row | null | undefined, node
   if (!record) return null;
   try {
     const { recordId, recordFingerprint, ...body } = record;
-    requireMatch([PENDING_BINDING_RECORD_VERSION, QUALIFIED_PENDING_BINDING_RECORD_VERSION, CONTINUATION_PENDING_BINDING_RECORD_VERSION, READ_EFFECT_PENDING_BINDING_RECORD_VERSION, TYPED.pendingRecord].includes(record.schemaVersion)
+    requireMatch([PENDING_BINDING_RECORD_VERSION, QUALIFIED_PENDING_BINDING_RECORD_VERSION, CONTINUATION_PENDING_BINDING_RECORD_VERSION, READ_EFFECT_PENDING_BINDING_RECORD_VERSION, TYPED.pendingRecord, C.record, T.record, G.record].includes(record.schemaVersion)
       && recordFingerprint === freeformJsonDigest(body) && recordId === `pending-binding:${recordFingerprint}`
       && same(record.bindings.sceneKitRef, { sceneKitId: sceneKitRef.sceneKitId, revision: sceneKitRef.revision }));
     const original = record.window.nodes.find((row: Row) => row.nodeRef === node.nodeId);
@@ -216,7 +262,13 @@ export function projectAppliedIntentBindings(instruction: Row, program: Row, app
       && receipt.priorCursorRevision >= lastAppliedRevision);
     lastAppliedRevision = receipt.resultingCursorRevision;
     if (readEffectRecord(record)) requireMatch(!pendingRoleApplicationIssues(record, receipt).length);
-    if (record.schemaVersion === TYPED.pendingRecord) requireMatch(same(receipt.referenceQualificationApplication,
+    if ([T.record, G.record].includes(record.schemaVersion)) requireMatch(same(receipt.temporalValidityApplication, {
+      fingerprint: record.temporalValidityFingerprint, reviewFingerprint: record.preparedBindingReview.temporalReviewFingerprint }));
+    else requireMatch(!Object.hasOwn(receipt, 'temporalValidityApplication'));
+    if (compiledRecord(record)) requireMatch(same(receipt.preparedBindingCompilationApplication, {
+      fingerprint: record.preparedBindingReview.compilation.fingerprint, reviewFingerprint: freeformJsonDigest(record.preparedBindingReview) }));
+    else requireMatch(!Object.hasOwn(receipt, 'preparedBindingCompilationApplication'));
+    if (typedRecord(record)) requireMatch(same(receipt.referenceQualificationApplication,
       { qualificationRef: record.referenceQualification.qualificationRef, fingerprint: record.referenceQualification.fingerprint }));
     const projection = recordProjection(record), slots = projection.slots;
     const applied = new Set<string>();
@@ -250,8 +302,8 @@ export function appliedObservationBinding(head: Row, applications: Row[], gmc: R
   const matches = applications.filter((application) => application.record.bindings.nodes.some((row: Row) => row.nodeRef === entry.nodeId));
   if (!matches.length) return null;
   const { record, receipt } = matches.at(-1)!;
-  if ([QUALIFIED_PENDING_BINDING_RECORD_VERSION, CONTINUATION_PENDING_BINDING_RECORD_VERSION, READ_EFFECT_PENDING_BINDING_RECORD_VERSION, TYPED.pendingRecord].includes(record.schemaVersion)) {
-    requireMatch(gmc.schemaVersion === ([CONTINUATION_PENDING_BINDING_RECORD_VERSION, READ_EFFECT_PENDING_BINDING_RECORD_VERSION, TYPED.pendingRecord].includes(record.schemaVersion) ? 'gmc.observation-authority-projection/3' : 'gmc.observation-authority-projection/2')
+  if ([QUALIFIED_PENDING_BINDING_RECORD_VERSION, CONTINUATION_PENDING_BINDING_RECORD_VERSION, READ_EFFECT_PENDING_BINDING_RECORD_VERSION, TYPED.pendingRecord, C.record, T.record, G.record].includes(record.schemaVersion)) {
+    requireMatch(gmc.schemaVersion === ([CONTINUATION_PENDING_BINDING_RECORD_VERSION, READ_EFFECT_PENDING_BINDING_RECORD_VERSION, TYPED.pendingRecord, C.record, T.record, G.record].includes(record.schemaVersion) ? 'gmc.observation-authority-projection/3' : 'gmc.observation-authority-projection/2')
       && record.bindings.sceneKitRef.sceneKitId === gmc.sceneKitRef.sceneKitId
       && record.bindings.sceneKitRef.revision === head.sceneRevision && gmc.sceneKitRef.revision === head.sceneRevision
       && receipt.authorityHead.sceneRevision === head.sceneRevision
@@ -261,7 +313,7 @@ export function appliedObservationBinding(head: Row, applications: Row[], gmc: R
     const activation = gmc.activations?.find((row: Row) => row.bindingRecordRef === record.recordId && row.evidenceRef === evidence?.evidenceRef
       && row.nodeRef === entry.nodeId && row.groupId === entry.group.groupId && row.disposition === 'committed');
     requireMatch(evidence && activation && evidence.observerRef === entry.actorCandidate.actorRef
-      && evidence.methodRef === entry.group.methodRef && evidence.formRef === entry.group.formRef
+      && evidence.methodRef === entry.group.methodRef && pendingObserverFormMatches(entry.group, evidence)
       && ['after_relocation', 'confirmed_relocation'].includes(evidence.viewpointCondition.kind) && selected.viewpointZoneRef === activation.viewpointRef
       && (gmc.observationAccess ?? []).some((access: Row) => access.accessId === activation.accessRef && access.candidateViewpointRef === activation.viewpointRef));
     return { ...structuredClone(evidence), accessRef: activation.accessRef, zoneRef: activation.viewpointRef,

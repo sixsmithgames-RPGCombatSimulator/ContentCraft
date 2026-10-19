@@ -10,6 +10,7 @@ import type { ActorMechanicsLink } from './actorMechanicsLink.js';
 import type { PendingObserverEvidence } from './pendingObserverEvidence.js';
 import { createPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings, pendingScenePolicyFingerprint } from './scenePendingIntentApplication.js';
 import { getOperationDefinition, validateOperationOutput } from '../../server/llm-orchestrator/operationRegistry.js';
+import { preparedReceiverSlots, remoteReceiverWitnesses } from './scenePreparedBindingCompilation.js';
 
 function fixture() {
   const f = continuationPendingFixture(), context = f.context;
@@ -75,10 +76,10 @@ function explicitEffectFixture(exactText = 'I raise my hand.') {
   return { ...f, slots, effect };
 }
 
-function remoteViewerFixture(recipientRef = 'actor:player') {
+function remoteViewerFixture(recipientRef = 'actor:player', targetRole = 'recipient') {
   const f = fixture(), oldAssessment = f.assessment(), source = f.context.source;
   const watch = source.program.nodes.find((node: { nodeId: string }) => node.nodeId === 'watch');
-  watch.dataRequirements.unshift({ dimension: 'who', kind: 'scene_presence', targetRole: 'recipient', targetRef: recipientRef });
+  watch.dataRequirements.unshift({ dimension: 'who', kind: 'scene_presence', targetRole, targetRef: recipientRef });
   const window = createPendingIntentWindow(source), slots = pendingIntentBindingSlots(source);
   const evidence = f.context.qualifiedObservers[0];
   evidence.windowRef = window.windowId; evidence.windowFingerprint = window.windowFingerprint;
@@ -90,7 +91,8 @@ function remoteViewerFixture(recipientRef = 'actor:player') {
   const context = { ...f.context, observerIdentityLinks: [link] };
   Object.assign(f.bindings, { windowId: window.windowId, windowFingerprint: window.windowFingerprint });
   const row = f.bindings.nodes.find((entry) => entry.nodeRef === 'watch')!, slot = slots.find((entry) => entry.nodeRef === 'watch')!;
-  const recipient = slot.references.find((entry: { role: string }) => entry.role === 'recipient');
+  const recipient = slot.references.find((entry: { role: string; requirementId?: string }) => entry.role === targetRole
+    && entry.requirementId === window.nodes.find((node: any) => node.nodeRef === 'watch')!.requirements[0].requirementId);
   row.references.push({ slotId: recipient.slotId, selectedRef: recipientRef });
   row.coverage = slot.coverage.map((entry: { slotId: string }) => ({ slotId: entry.slotId, coverageEntryRef: 'coverage:remote' }));
   Object.assign(f.bindings.requirementRoles, { windowFingerprint: window.windowFingerprint, programFingerprint: window.programFingerprint,
@@ -105,6 +107,17 @@ function remoteViewerFixture(recipientRef = 'actor:player') {
 }
 
 describe('independent read/effect preparation and immutable application', () => {
+  it.each(['recipient', 'actor'])('derives only the original %s receiving-controller slot from exact owner relationships', (targetRole) => {
+    const f = remoteViewerFixture('actor:player', targetRole), original = structuredClone(f.bindings);
+    const slots = preparedReceiverSlots(f.context), witnesses = remoteReceiverWitnesses(f.bindings, f.context);
+    expect(slots).toHaveLength(1); expect(witnesses).toHaveLength(1);
+    expect(witnesses[0]).toMatchObject({ nodeRef: 'watch', recipientRef: 'actor:player', linkRef: f.link.linkRef,
+      evidenceRef: f.context.qualifiedObservers[0].evidenceRef, referenceSlotId: f.recipient.slotId });
+    expect(f.bindings).toEqual(original);
+    f.link.parentActorRef = 'actor:other';
+    if (targetRole === 'recipient') expect(() => remoteReceiverWitnesses(f.bindings, f.context)).toThrow();
+    else expect(preparedReceiverSlots(f.context)).toEqual([]);
+  });
   it.each(['scene_presence', 'canonical_reference'])('checks present %s identity separately from the requested destination, without weakening destination or effect closure', (kind) => {
     const f = explicitEffectFixture('I enter the tunnel.'), source = f.context.source, node = source.program.nodes[0];
     node.kind = 'move';

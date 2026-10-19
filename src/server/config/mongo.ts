@@ -378,6 +378,11 @@ async function createIndexes(database: Db): Promise<void> {
     { unique: true });
   await database.collection('gma_actor_mechanics_links').createIndex({ userId: 1, campaignId: 1, revision: 1 },
     { unique: true, name: 'unique_actor_link_revision' });
+  await database.collection('gmc_scene_temporal_gm_decisions').createIndex({ userId: 1, campaignId: 1, revision: 1 }, { unique: true });
+  await database.collection('gmc_scene_temporal_gm_decisions').createIndex({ userId: 1, campaignId: 1, operationId: 1 }, { unique: true });
+  await database.collection('gmc_scene_temporal_gm_preparations').createIndex({ userId: 1, campaignId: 1, operationId: 1 }, { unique: true });
+  await database.collection('gmc_scene_temporal_gm_preparations').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await database.collection('gmc_scene_preparation_review_issuances').createIndex({ userId: 1, campaignId: 1, operationId: 1 }, { unique: true });
   await database.collection('gma_actor_mechanics_links').createIndex({ userId: 1, campaignId: 1, operationId: 1 },
     { unique: true, name: 'unique_actor_link_operation' });
   await database.collection('gma_actor_mechanics_links').createIndex({ userId: 1, campaignId: 1, decisionRef: 1 });

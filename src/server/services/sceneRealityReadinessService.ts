@@ -11,12 +11,22 @@ import { createPendingBindingRecord } from '../../shared/llm/scenePendingIntentA
 import { readEffectWritesEnabled } from './readEffectRollout.js';
 import { READ_EFFECT_AUTHORITY_BUNDLE } from '../../shared/llm/readEffectContracts.js';
 import { TYPED_REFERENCE_AUTHORITY_BUNDLE as TYPED } from '../../shared/llm/typedReferenceBindings.js';
-import { SCENE_INFORMATION_PROJECTION } from '../../shared/llm/sceneInformationProjection.js';
+import { SCENE_INFORMATION_PROJECTION, materializeSceneInformation } from '../../shared/llm/sceneInformationProjection.js';
 import { typedReferenceWritesEnabled } from './readEffectRollout.js';
 import { SCENE_WORKING_SET } from '../../shared/llm/scenePreparationWorkingSet.js';
 import { readEffectSurfaceIssues } from '../../shared/llm/readEffectSurfaces.js';
 import { readCurrentSceneOwnerContext } from './currentSceneOwnerContext.js';
 import { SCENE_OWNER_PREMISES, createSceneOwnerPremises, assertSceneOwnerPremises, assertSceneOwnerReviewBinding } from '../../shared/llm/sceneIndependentOwnerPremises.js';
+import { PREPARED_BINDING_COMPILATION as C, compilePreparedBindings, assertPreparedBindingCompilation,
+  preparedWorldMeaningFingerprint } from '../../shared/llm/scenePreparedBindingCompilation.js';
+import { assertPreparedBindingReview, assertPreparedOwnerReviewBinding } from '../../shared/llm/scenePreparedBindingReview.js';
+import { SCENE_TEMPORAL_VALIDITY as T, createTemporalValidityManifest } from '../../shared/llm/sceneTemporalValidity.js';
+import { SCENE_TEMPORAL_GM as G } from '../../shared/llm/sceneTemporalGmDecisions.js';
+import { readSceneTemporalAuthority, evaluateCurrentSceneTemporalValidity } from './sceneTemporalAuthorityService.js';
+import { decodeScenePreparationWorkingSet } from '../../shared/llm/scenePreparationWorkingSet.js';
+import { getOperationDefinition, getSemanticValidator, validateOperationOutput } from '../llm-orchestrator/operationRegistry.js';
+import type { LlmRequestEnvelope } from '../../shared/llm/orchestratorContracts.js';
+import '../llm-orchestrator/semanticValidators.js';
 
 export const SCENE_REALITY_CONTRACTS = Object.freeze({
   buildRequest: 'gma.scene-reality-build-request/1',
@@ -45,6 +55,8 @@ export const SCENE_REALITY_CONTRACTS = Object.freeze({
 } as const);
 
 export const SCENE_REALITY_CAPABILITIES = Object.freeze([
+  T.capability,
+  G.capability,
   SCENE_OWNER_PREMISES.capability,
   'scene-reality-read/1',
   'scene-reality-write/1',
@@ -175,6 +187,21 @@ export interface SceneRealityCollections {
   readClockAuthority?: (input: { userId: string; campaignId: string }) => Promise<JsonObject | null>;
   readPendingIntent?: typeof readScenePendingIntentContext;
   readSceneOwnerContext?: (input: { userId: string; campaignId: string }) => Promise<JsonObject | null>;
+  readTemporalAuthority?: typeof readSceneTemporalAuthority;
+  evaluateTemporalValidity?: typeof evaluateCurrentSceneTemporalValidity;
+  preparationResumes?: Collection<ScenePreparationResumeDocument>;
+  reviewIssues?: Collection<ScenePreparationReviewIssue>;
+}
+
+export interface ScenePreparationResumeDocument {
+  _id: string; userId: string; campaignId: string; schemaVersion: string; request: JsonObject;
+  sourceValidation: JsonObject; sourceWindowFingerprint: string; builderCallCount: number;
+  result: JsonObject; createdAt: Date;
+}
+export interface ScenePreparationReviewIssue {
+  _id: string; userId: string; campaignId: string; schemaVersion: string; operationId: string;
+  resumeRef: string; packetFingerprint: string; temporalAuthorityFingerprint: string; sourceWindowFingerprint: string;
+  consumedCalls: { depth: number; builder: number; independentReview: number }; createdAt: Date;
 }
 
 function collections(): SceneRealityCollections {
@@ -188,6 +215,10 @@ function collections(): SceneRealityCollections {
     readStoryAuthority: async (input) => clone(await readActiveStoryWorkspace(input) as unknown as JsonObject | null),
     readPendingIntent: readScenePendingIntentContext,
     readSceneOwnerContext: readCurrentSceneOwnerContext,
+    readTemporalAuthority: readSceneTemporalAuthority,
+    evaluateTemporalValidity: evaluateCurrentSceneTemporalValidity,
+    preparationResumes: getDb().collection<ScenePreparationResumeDocument>('gmc_scene_preparation_resumes'),
+    reviewIssues: getDb().collection<ScenePreparationReviewIssue>('gmc_scene_preparation_review_issuances'),
     readClockAuthority: async (input) => clone(await getDb().collection<JsonObject>('gmc_campaign_state').findOne({
       userId: input.userId,
       campaignId: input.campaignId,
@@ -217,6 +248,17 @@ async function currentClockAuthority(
   const revision = Number(current?.gameClockRevision ?? 0);
   if (!Number.isSafeInteger(revision) || revision < 0) throw new StoryWorkspaceStoreError(503, 'SCENE_REALITY_CLOCK_AUTHORITY_INVALID', 'The current saved campaign clock head could not be verified.', { field: 'gameTimeContext.gameClockRevision' });
   return { ref: `gmc:campaign-clock:${input.campaignId}`, revision };
+}
+
+async function temporalReadinessChanges(input: { userId: string; campaignId: string }, bundle: JsonObject,
+  stores: SceneRealityCollections): Promise<string[] | null> {
+  if (![T.certificate, G.certificate].some((v) => v === (bundle.readinessCertificate as JsonObject)?.schemaVersion)) return null;
+  if (!stores.evaluateTemporalValidity) throw new StoryWorkspaceStoreError(503, 'SCENE_TEMPORAL_VALIDITY_UNAVAILABLE',
+    'The complete current timing check is not available.', {});
+  const result = await stores.evaluateTemporalValidity(input, bundle);
+  if (!result || result.schemaVersion !== T.evaluation) throw new StoryWorkspaceStoreError(503, 'SCENE_TEMPORAL_VALIDITY_UNAVAILABLE',
+    'The current timing check did not return a usable decision.', {});
+  return result.decision === 'valid' ? [] : (result.changedDimensions as string[]);
 }
 
 async function validateCurrentGmcReadSet(
@@ -765,9 +807,9 @@ function validateSuccessorContinuity(
   }
 }
 
-function validateAssessment(value: unknown, proposal: JsonObject, request: JsonObject, pending: false | 'legacy' | 'qualified' | 'continuation' | 'read_effects' | 'typed_references' = false, ownerPremises = false): JsonObject {
+function validateAssessment(value: unknown, proposal: JsonObject, request: JsonObject, pending: false | 'legacy' | 'qualified' | 'continuation' | 'read_effects' | 'typed_references' = false, ownerPremises = false, compiled = false, temporal = false): JsonObject {
   if (!object(value)) throw new StoryWorkspaceStoreError(422, 'SCENE_READINESS_ASSESSMENT_REQUIRED', 'The Scene was not independently examined for playability.', {});
-  version(value, ownerPremises ? SCENE_OWNER_PREMISES.assessment : pending === 'typed_references' ? TYPED.assessment : pending === 'read_effects' ? 'gma.scene-readiness-assessment/5' : pending === 'continuation' ? 'gma.scene-readiness-assessment/4' : pending === 'qualified' ? 'gma.scene-readiness-assessment/3' : pending ? 'gma.scene-readiness-assessment/2' : SCENE_REALITY_CONTRACTS.assessment, 'assessment');
+  version(value, temporal ? (value.schemaVersion === G.assessment ? G.assessment : T.assessment) : compiled ? C.assessment : ownerPremises ? SCENE_OWNER_PREMISES.assessment : pending === 'typed_references' ? TYPED.assessment : pending === 'read_effects' ? 'gma.scene-readiness-assessment/5' : pending === 'continuation' ? 'gma.scene-readiness-assessment/4' : pending === 'qualified' ? 'gma.scene-readiness-assessment/3' : pending ? 'gma.scene-readiness-assessment/2' : SCENE_REALITY_CONTRACTS.assessment, 'assessment');
   assertByteBound(value, 32_768, 'SCENE_READINESS_ASSESSMENT_TOO_LARGE', 'assessment');
   exactKeys(value, 'assessment', ['schemaVersion', 'assessmentId', 'operationId', 'campaignId', 'dossierFingerprint', 'policyFingerprint', 'selectedDepth', 'verdict', 'confidence', 'counterfactualProbes', 'debt', 'rationale', 'evidenceRefs',
     ...(pending ? ['intentWindowFingerprint', 'bindingFingerprint', 'ownerReadSetFingerprint', 'pendingIntentPolicyFingerprint', 'bindingReviews'] : []),
@@ -775,7 +817,9 @@ function validateAssessment(value: unknown, proposal: JsonObject, request: JsonO
     ...(['continuation', 'read_effects', 'typed_references'].includes(String(pending)) ? ['instructionCoverageFingerprint', 'confirmedRelocationFingerprint'] : []),
     ...(['read_effects', 'typed_references'].includes(String(pending)) ? ['requirementRoleFingerprint', 'requirementRoleReviews'] : []),
     ...(pending === 'typed_references' ? ['referenceQualificationFingerprint', 'effectTargetFingerprint', 'referenceReview'] : []),
-    ...(ownerPremises ? ['ownerPremisesFingerprint', 'ownerPremiseReview'] : [])]);
+    ...(ownerPremises ? ['ownerPremisesFingerprint', 'ownerPremiseReview'] : []),
+    ...(compiled ? ['preparedBindingCompilationFingerprint', 'preparedBindingReview'] : []),
+    ...(temporal ? ['temporalCoverageReview'] : [])]);
   stableId(value.assessmentId, 'assessment.assessmentId');
   if (value.operationId !== request.operationId || value.campaignId !== request.campaignId) throw new StoryWorkspaceStoreError(409, 'SCENE_READINESS_ASSESSMENT_CONFLICT', 'The readiness assessment does not belong to this Scene build.', {});
   if (value.dossierFingerprint !== hash(proposal)) throw new StoryWorkspaceStoreError(422, 'SCENE_READINESS_DOSSIER_MISMATCH', 'The readiness assessment examined a different Scene dossier.', {});
@@ -943,15 +987,18 @@ export async function readSceneRealityInspection(
   const bundle = active.bundle as JsonObject;
   const certificate = bundle.readinessCertificate as JsonObject;
   const sceneKit = bundle.sceneKit as JsonObject;
-  const [story, clock, activeState] = await Promise.all([
+  const [story, clock, activeState, temporalChanges] = await Promise.all([
     currentStoryAuthority(input, stores),
     currentClockAuthority(input, stores),
     stores.activeSceneStates.findOne({ userId: input.userId, campaignId: input.campaignId, sceneKitId: String(sceneKit.sceneKitId) }),
+    temporalReadinessChanges(input, bundle, stores),
   ]);
   const changedDimensions: string[] = [];
+  if (temporalChanges) changedDimensions.push(...temporalChanges);
   for (const dependency of certificate.dependencySet as JsonObject[]) {
     const current = story?.ref === dependency.ref ? story : clock?.ref === dependency.ref ? clock : null;
-    if (current && current.revision !== Number(dependency.revision)) changedDimensions.push(...dependency.invalidateOn as string[]);
+    if (current && current.revision !== Number(dependency.revision)
+      && !(temporalChanges !== null && clock?.ref === dependency.ref)) changedDimensions.push(...dependency.invalidateOn as string[]);
   }
   const minimumStateRevision = Number((certificate.activeStateCompatibility as JsonObject).minimumRevision ?? 0);
   const currentStateRevision = Number(activeState?.revision ?? minimumStateRevision);
@@ -1078,7 +1125,14 @@ export function sceneRealitySupportsStorySettlement(
   storyWorkspaceRef: unknown,
   storyWorkspace: unknown,
   sceneTurnProposal: unknown,
+  temporalEvaluation?: unknown,
 ): boolean {
+  if (object(sceneReality) && object(sceneReality.bundle) && object(sceneReality.bundle.readinessCertificate)
+    && (sceneReality.bundle.readinessCertificate.schemaVersion === T.certificate || sceneReality.bundle.readinessCertificate.schemaVersion === G.certificate)) {
+    const manifest = sceneReality.bundle.readinessCertificate.temporalValidity;
+    if (!object(manifest) || !object(temporalEvaluation) || temporalEvaluation.schemaVersion !== T.evaluation
+      || temporalEvaluation.manifestFingerprint !== manifest.fingerprint || temporalEvaluation.decision !== 'valid') return false;
+  }
   if (sceneRealityMatchesStoryHead(sceneReality, campaignId, storyWorkspaceRef)) return true;
   if (!object(sceneReality) || !object(sceneReality.bundle) || !object(storyWorkspaceRef)
     || !object(storyWorkspace) || !object(sceneTurnProposal)) return false;
@@ -1153,6 +1207,167 @@ async function insertOperation(document: SceneRealityOperationDocument, stores: 
   }
 }
 
+/** Deterministic, read-only admission of exact Manual choices. Historical
+ * validation outcomes remain untouched; only this negotiated compiler may map
+ * their typed metadata before the still-required independent examination. */
+export async function compileScenePreparedBindings(input: { userId: string; campaignId: string; body: unknown },
+  stores: SceneRealityCollections = collections()): Promise<JsonObject> {
+  if (!typedReferenceWritesEnabled(input.campaignId) || !readEffectWritesEnabled(input.campaignId)) {
+    throw new StoryWorkspaceStoreError(503, 'SCENE_TYPED_REFERENCE_WRITES_PAUSED', 'Preparation of this saved action is paused for this campaign.', {});
+  }
+  const body = input.body;
+  if (!object(body)) throw new StoryWorkspaceStoreError(422, 'SCENE_PREPARED_BINDING_COMPILATION_INVALID', 'The complete saved preparation is required.', {});
+  exactKeys(body, 'compiledPreparation', ['schemaVersion', 'request', 'output', 'proposal']);
+  const cacheForTiming = body.schemaVersion === G.compileRequest;
+  version(body, cacheForTiming ? G.compileRequest : C.request, 'compiledPreparation');
+  assertByteBound(body, 1_048_576, 'SCENE_PREPARED_BINDING_COMPILATION_TOO_LARGE', 'compiledPreparation');
+  if (!object(body.request) || !object(body.output) || body.output.status !== 'complete') {
+    throw new StoryWorkspaceStoreError(422, 'SCENE_PREPARED_BINDING_COMPILATION_INVALID', 'Only a complete original preparation reply can be compiled.', {});
+  }
+  const llmRequest = body.request as unknown as LlmRequestEnvelope;
+  const operation = getOperationDefinition(llmRequest.operation);
+  const accepted = ['story.scene-reality.build.read-effects.typed-references.working-set.information-projection',
+    'story.scene-reality.build.read-effects.typed-references.working-set.information-projection.binding-compilation'];
+  if (!accepted.includes(operation.id) || llmRequest.operationClass !== operation.operationClass
+    || llmRequest.authority?.commit !== 'proposal_only' || llmRequest.outputSchema?.id !== operation.outputSchema.id
+    || llmRequest.outputSchema.version !== operation.outputSchema.version) {
+    throw new StoryWorkspaceStoreError(422, 'SCENE_PREPARED_BINDING_COMPILATION_INVALID', 'This preparation does not use a supported original Manual contract.', {});
+  }
+  const packet = decodeScenePreparationWorkingSet(llmRequest.context?.input?.value as any, operation.id);
+  const sourcePolicy = packet.preparationPolicyVersion === 15 ? 'gma.scene-reality-builder-policy/15' : 'gma.scene-reality-builder-policy/14';
+  if (operation.prompt.version !== sourcePolicy) throw new StoryWorkspaceStoreError(422, 'SCENE_PREPARED_BINDING_COMPILATION_INVALID', 'The saved prompt and preparation profile differ.', {});
+  const request = validateBuildRequest(packet.buildRequest, input.campaignId);
+  await validateCurrentGmcReadSet(request, { userId: input.userId, campaignId: input.campaignId }, stores);
+  if (!stores.readPendingIntent) throw new StoryWorkspaceStoreError(503, 'SCENE_PENDING_INTENT_TRANSPORT_INVALID', 'The saved action cannot currently be checked.', {});
+  const current = await stores.readPendingIntent({ userId: input.userId, campaignId: input.campaignId,
+    programId: String((request.programRef as JsonObject).programId), qualified: true, continuation: true, readEffects: true, typedReferences: true });
+  assertPendingIntentContextCurrent(packet.pendingIntentContext, current);
+  const shape = validateOperationOutput(operation.id, body.output);
+  if (!shape.valid) throw new StoryWorkspaceStoreError(422, 'SCENE_PREPARED_BINDING_COMPILATION_INVALID', 'The original preparation reply is incomplete.', { paths: shape.issues.map((row) => row.path) });
+  for (const validatorId of operation.validators) {
+    // Only exact choice wiring has a newly approved admission path. Its complete
+    // canonical semantics are checked below; all other registered checks stay.
+    if (validatorId === 'scene-pending-intent-builder') continue;
+    const validator = getSemanticValidator(validatorId);
+    if (!validator) throw new Error('A mandatory preparation validator is unavailable.');
+    const result = await validator({ request: llmRequest, output: body.output });
+    if (!result.valid) throw new StoryWorkspaceStoreError(422, 'SCENE_PREPARED_BINDING_COMPILATION_INVALID', 'The original prepared world could not be verified.', {
+      validatorId, paths: result.issues.map((row) => row.path) });
+  }
+  const pointer = await stores.pointers.findOne({ userId: input.userId, campaignId: input.campaignId });
+  const prior = pointer ? (await readBundleForPointer(pointer, stores)).bundle : null;
+  const checkpoint = packet.buildContinuation?.checkpoint;
+  const model = checkpoint ? { ...body.output.proposal as JsonObject, ...Object.fromEntries(['zones', 'actorFrames', 'elements', 'facts']
+    .map((key) => [key, [...(checkpoint[key] ?? []), ...((body.output as JsonObject).proposal as JsonObject)[key] as JsonObject[]]])) } : body.output.proposal;
+  const materialized = materializeSceneInformation(model as JsonObject, prior);
+  const proposal = validateProposal(body.proposal, request, input.campaignId);
+  if (preparedWorldMeaningFingerprint(materialized) !== preparedWorldMeaningFingerprint(proposal)
+    || sceneDossierReferenceIssues(proposal).length) throw new StoryWorkspaceStoreError(422, 'SCENE_PREPARED_BINDING_COMPILATION_INVALID', 'Application bookkeeping cannot change the prepared world or its references.', {});
+  const context = pendingBindingContext(current, String(request.operationId), proposal);
+  let result: ReturnType<typeof compilePreparedBindings>;
+  try {
+    result = compilePreparedBindings(body.output.pendingIntentBindings as JsonObject, context, sourcePolicy);
+  } catch (error) {
+    if ((error as { code?: string })?.code !== 'SCENE_PREPARED_BINDING_COMPILATION_INVALID') throw error;
+    throw new StoryWorkspaceStoreError(422, 'SCENE_PREPARED_BINDING_COMPILATION_INVALID',
+      'The prepared choices do not match the saved action and owner evidence.', {
+        field: (error as { details?: { field?: string } }).details?.field ?? 'preparedBindings',
+      });
+  }
+  const { scenePendingIntentBindingIssues } = await import('../../shared/llm/sceneReadEffectBindings.js');
+  const issues = scenePendingIntentBindingIssues(result.bindings, context);
+  if (issues.length) throw new StoryWorkspaceStoreError(422, 'SCENE_PREPARED_BINDING_COMPILATION_INVALID', 'The prepared choices do not match the saved action and owner evidence.', { paths: issues });
+  const response = { schemaVersion: cacheForTiming ? G.compileResponse : C.response,
+    requestFingerprint: hash(llmRequest), outputFingerprint: hash(body.output),
+    proposal, bindings: result.bindings, compilation: result.compilation } as JsonObject;
+  if (!cacheForTiming) return response;
+  if (!stores.preparationResumes) throw new StoryWorkspaceStoreError(503, 'SCENE_TEMPORAL_GM_RESUME_UNAVAILABLE', 'The original preparation cannot currently be retained for a GM decision.', {});
+  const resumeRef = `scene-preparation-resume:${hash({ userId: input.userId, campaignId: input.campaignId, response })}`;
+  const document: ScenePreparationResumeDocument = { _id: resumeRef, userId: input.userId, campaignId: input.campaignId,
+    schemaVersion: G.resume, request, sourceValidation: Object.fromEntries(['operation', 'taskId', 'correlationId', 'idempotencyKey']
+      .map((key) => [key, llmRequest[key as keyof LlmRequestEnvelope]])) as JsonObject,
+    sourceWindowFingerprint: String((current.window as JsonObject).windowFingerprint), builderCallCount: checkpoint ? 2 : 1,
+    result: response, createdAt: new Date() };
+  assertByteBound(document, 1_048_576, 'SCENE_TEMPORAL_GM_RESUME_TOO_LARGE', 'preparationResume');
+  try { await stores.preparationResumes.insertOne(document); }
+  catch (error) {
+    if ((error as { code?: number })?.code !== 11000) throw error;
+    const saved = await stores.preparationResumes.findOne({ _id: resumeRef, userId: input.userId, campaignId: input.campaignId });
+    if (!saved || hash(saved.result) !== hash(response) || hash(saved.request) !== hash(request)) throw new StoryWorkspaceStoreError(409,
+      'SCENE_TEMPORAL_GM_RESUME_CONFLICT', 'The original preparation could not be matched to its saved result.', {});
+  }
+  return { ...response, resumeRef, sourceValidation: document.sourceValidation,
+    sourceWindowFingerprint: document.sourceWindowFingerprint, builderCallCount: document.builderCallCount };
+}
+
+/** Immutable construction cache, not a world or gameplay authority. */
+export async function readScenePreparationResume(input: { userId: string; campaignId: string; resumeRef: string },
+  stores: SceneRealityCollections = collections()): Promise<JsonObject> {
+  if (!/^scene-preparation-resume:[a-f0-9]{64}$/.test(input.resumeRef) || !stores.preparationResumes || !stores.readPendingIntent)
+    throw new StoryWorkspaceStoreError(422, 'SCENE_TEMPORAL_GM_RESUME_INVALID', 'The saved preparation reference could not be verified.', {});
+  const saved = await stores.preparationResumes.findOne({ _id: input.resumeRef, userId: input.userId, campaignId: input.campaignId });
+  if (!saved) throw new StoryWorkspaceStoreError(404, 'SCENE_TEMPORAL_GM_RESUME_UNAVAILABLE', 'The original preparation is not available for continuation.', {});
+  if (saved.schemaVersion !== G.resume || saved.result.schemaVersion !== G.compileResponse
+    || saved._id !== `scene-preparation-resume:${hash({ userId: input.userId, campaignId: input.campaignId, response: saved.result })}`
+    || ![1, 2].includes(saved.builderCallCount)) throw new StoryWorkspaceStoreError(409,
+    'SCENE_TEMPORAL_GM_RESUME_CONFLICT', 'The original preparation record could not be verified.', {});
+  await validateCurrentGmcReadSet(saved.request, { userId: input.userId, campaignId: input.campaignId }, stores);
+  const pending = await stores.readPendingIntent({ userId: input.userId, campaignId: input.campaignId,
+    programId: String((saved.request.programRef as JsonObject).programId), qualified: true, continuation: true, readEffects: true, typedReferences: true });
+  if ((pending.window as JsonObject).windowFingerprint !== saved.sourceWindowFingerprint) throw new StoryWorkspaceStoreError(409,
+    'SCENE_TEMPORAL_GM_RESUME_CONFLICT', 'The unfinished actions changed after their original preparation.', {});
+  return { ...clone(saved.result), resumeRef: saved._id, sourceValidation: clone(saved.sourceValidation),
+    sourceWindowFingerprint: saved.sourceWindowFingerprint, builderCallCount: saved.builderCallCount,
+    buildRequest: clone(saved.request) };
+}
+
+/** Reserve the one original independent review before returning its prompt.
+ * Replaying the identical stage is discovery, not another call allowance.
+ * A changed GM ruling cannot turn an already issued review into a fresh one. */
+export async function issueScenePreparationReview(input: { userId: string; campaignId: string; body: unknown },
+  stores: SceneRealityCollections = collections()): Promise<JsonObject> {
+  const body = input.body;
+  if (!object(body)) throw new StoryWorkspaceStoreError(422, 'SCENE_TEMPORAL_GM_REVIEW_ISSUE_INVALID', 'The original review could not be matched to its preparation.', {});
+  exactKeys(body, 'reviewIssue', ['schemaVersion', 'resumeRef', 'packet']);
+  version(body, 'gma.scene-preparation-review-issuance-request/1', 'reviewIssue');
+  assertByteBound(body, 1_048_576, 'SCENE_TEMPORAL_GM_REVIEW_ISSUE_TOO_LARGE', 'reviewIssue');
+  if (!stores.reviewIssues || !stores.readTemporalAuthority || !object(body.packet)) throw new StoryWorkspaceStoreError(503,
+    'SCENE_TEMPORAL_GM_REVIEW_ISSUE_UNAVAILABLE', 'The original independent review cannot currently be retained.', {});
+  const packet = body.packet, operationId = String((packet.buildRequest as JsonObject)?.operationId ?? '');
+  const _id = `scene-review-issue:${hash({ userId: input.userId, campaignId: input.campaignId, operationId })}`;
+  const packetFingerprint = hash(packet), prior = await stores.reviewIssues.findOne({ _id, userId: input.userId, campaignId: input.campaignId });
+  const publicIssue = (row: ScenePreparationReviewIssue, duplicate: boolean) => ({ schemaVersion: G.reviewIssue, issueRef: row._id,
+    operationId: row.operationId, resumeRef: row.resumeRef, packetFingerprint: row.packetFingerprint,
+    temporalAuthorityFingerprint: row.temporalAuthorityFingerprint, sourceWindowFingerprint: row.sourceWindowFingerprint,
+    consumedCalls: row.consumedCalls, duplicate } as unknown as JsonObject);
+  if (prior) {
+    if (prior.packetFingerprint !== packetFingerprint || prior.resumeRef !== body.resumeRef) throw new StoryWorkspaceStoreError(409,
+      'SCENE_TEMPORAL_GM_REVIEW_ALREADY_ISSUED', 'The original independent review was already issued; changing timing cannot grant another review.', {});
+    return publicIssue(prior, true);
+  }
+  if (!typedReferenceWritesEnabled(input.campaignId) || !readEffectWritesEnabled(input.campaignId)) throw new StoryWorkspaceStoreError(503,
+    'SCENE_TEMPORAL_GM_REVIEW_ISSUE_PAUSED', 'New independent review issuance is paused for this campaign.', {});
+  const saved = await readScenePreparationResume({ userId: input.userId, campaignId: input.campaignId, resumeRef: String(body.resumeRef) }, stores);
+  const authority = await stores.readTemporalAuthority({ userId: input.userId, campaignId: input.campaignId, gmDecisions: true });
+  if (hash(packet.proposal) !== hash(saved.proposal) || hash(packet.pendingIntentBindings) !== hash(saved.bindings)
+    || hash(packet.buildRequest) !== hash(saved.buildRequest) || hash(packet.preparedBindingCompilation) !== hash(saved.compilation)
+    || hash(packet.temporalAuthority) !== hash(authority) || authority.schemaVersion !== G.context
+    || (packet.pendingIntentContext as any)?.window?.windowFingerprint !== saved.sourceWindowFingerprint) throw new StoryWorkspaceStoreError(409,
+    'SCENE_TEMPORAL_GM_REVIEW_ISSUE_INVALID', 'The review changed the saved preparation or current timing evidence.', {});
+  const document: ScenePreparationReviewIssue = { _id, userId: input.userId, campaignId: input.campaignId, schemaVersion: G.reviewIssue,
+    operationId, resumeRef: String(body.resumeRef), packetFingerprint, temporalAuthorityFingerprint: String(authority.fingerprint),
+    sourceWindowFingerprint: String(saved.sourceWindowFingerprint), consumedCalls: { depth: 1, builder: Number(saved.builderCallCount), independentReview: 1 }, createdAt: new Date() };
+  try { await stores.reviewIssues.insertOne(document); }
+  catch (error) {
+    if ((error as { code?: number })?.code !== 11000) throw error;
+    const raced = await stores.reviewIssues.findOne({ _id, userId: input.userId, campaignId: input.campaignId });
+    if (!raced || raced.packetFingerprint !== packetFingerprint || raced.resumeRef !== body.resumeRef) throw new StoryWorkspaceStoreError(409,
+      'SCENE_TEMPORAL_GM_REVIEW_ALREADY_ISSUED', 'A different original review was already issued for this preparation.', {});
+    return publicIssue(raced, true);
+  }
+  return publicIssue(document, false);
+}
+
 export async function commitSceneReality(
   input: {
     userId: string;
@@ -1163,6 +1378,7 @@ export async function commitSceneReality(
     assessment: unknown;
     pendingIntent?: JsonObject;
     ownerPremisesReview?: JsonObject;
+    preparedBindingReview?: JsonObject;
   },
   stores: SceneRealityCollections = collections(),
 ): Promise<JsonObject> {
@@ -1170,7 +1386,8 @@ export async function commitSceneReality(
   const request = validateBuildRequest(input.buildRequest, input.campaignId);
   const requestHash = hash({ buildRequest: request, proposal: input.proposal, assessment: input.assessment,
     ...(input.pendingIntent !== undefined ? { pendingIntent: input.pendingIntent } : {}),
-    ...(input.ownerPremisesReview !== undefined ? { ownerPremisesReview: input.ownerPremisesReview } : {}) });
+    ...(input.ownerPremisesReview !== undefined ? { ownerPremisesReview: input.ownerPremisesReview } : {}),
+    ...(input.preparedBindingReview !== undefined ? { preparedBindingReview: input.preparedBindingReview } : {}) });
   const existing = await stores.operations.findOne({ userId: input.userId, campaignId: input.campaignId, operationId: String(request.operationId) });
   if (existing) {
     if (existing.idempotencyKey !== request.idempotencyKey || existing.requestHash !== requestHash) throw new StoryWorkspaceStoreError(409, 'SCENE_REALITY_IDEMPOTENCY_CONFLICT', 'This Scene preparation operation was already used for different material.', {});
@@ -1223,7 +1440,26 @@ export async function commitSceneReality(
   }
   validateSuccessorContinuity(proposal, priorDocument?.bundle ?? null, request.trigger, greatestReceiptSceneRevision);
   let pendingBindingRecord: JsonObject | null = null;
-  const premisesAware = (input.assessment as JsonObject)?.schemaVersion === SCENE_OWNER_PREMISES.assessment;
+  const gmTimingAware = (input.assessment as JsonObject)?.schemaVersion === G.assessment;
+  const temporalAware = gmTimingAware || (input.assessment as JsonObject)?.schemaVersion === T.assessment;
+  const compilationAware = temporalAware || (input.assessment as JsonObject)?.schemaVersion === C.assessment;
+  let temporalAuthority: JsonObject | undefined;
+  if (temporalAware) {
+    if (!typedReferenceWritesEnabled(input.campaignId) || !stores.readTemporalAuthority) throw new StoryWorkspaceStoreError(503,
+      'SCENE_TEMPORAL_VALIDITY_UNAVAILABLE', 'The complete current timing review is not enabled for this campaign.', {});
+    temporalAuthority = await stores.readTemporalAuthority({ userId: input.userId, campaignId: input.campaignId, gmDecisions: gmTimingAware });
+    if ((input.assessment as any).temporalCoverageReview?.authorityFingerprint !== temporalAuthority.fingerprint) throw new StoryWorkspaceStoreError(409,
+      'SCENE_TEMPORAL_AUTHORITY_CHANGED', 'The current timing conditions changed after their independent review.', {});
+    if (gmTimingAware) {
+      const issue = await stores.reviewIssues?.findOne({ userId: input.userId, campaignId: input.campaignId, operationId: String(request.operationId) });
+      if (!issue || issue.temporalAuthorityFingerprint !== temporalAuthority.fingerprint
+        || ![1, 2].includes(issue.consumedCalls.builder) || issue.consumedCalls.independentReview !== 1) throw new StoryWorkspaceStoreError(409,
+        'SCENE_TEMPORAL_GM_REVIEW_ISSUE_INVALID', 'The original independent review and timing decision cannot be confirmed together.', {});
+    }
+  }
+  if (compilationAware !== (input.preparedBindingReview !== undefined)) throw new StoryWorkspaceStoreError(422,
+    'SCENE_PREPARED_BINDING_COMPILATION_INVALID', 'The preparation and its independent review must use the complete matching contract.', {});
+  const premisesAware = compilationAware || (input.assessment as JsonObject)?.schemaVersion === SCENE_OWNER_PREMISES.assessment;
   if (premisesAware !== (input.ownerPremisesReview !== undefined) || premisesAware && input.pendingIntent?.schemaVersion !== 'gma.scene-pending-intent-commit/5') {
     throw new StoryWorkspaceStoreError(422, 'SCENE_OWNER_PREMISES_INVALID', 'The starting-condition review and saved action must use the same complete contract.', {});
   }
@@ -1253,7 +1489,8 @@ export async function commitSceneReality(
         if (!ownerContext) throw new Error('Owner context required.');
         independentOwnerPremises = createSceneOwnerPremises(request, current, ownerContext, priorDocument?.bundle ?? null) as JsonObject;
         assertSceneOwnerPremises(input.ownerPremisesReview!.premises as JsonObject, request, current, ownerContext, priorDocument?.bundle ?? null);
-        assertSceneOwnerReviewBinding(input.ownerPremisesReview!, independentOwnerPremises, input.assessment as JsonObject);
+        if (compilationAware) assertPreparedOwnerReviewBinding(input.ownerPremisesReview!, independentOwnerPremises, input.assessment as JsonObject);
+        else assertSceneOwnerReviewBinding(input.ownerPremisesReview!, independentOwnerPremises, input.assessment as JsonObject);
       } catch (error) {
         const field = (error as { details?: { field?: string } })?.details?.field ?? 'ownerPremises';
         throw new StoryWorkspaceStoreError(409, 'SCENE_OWNER_PREMISES_CONFLICT', 'The saved starting conditions no longer match the independently reviewed Scene.', { field });
@@ -1266,22 +1503,36 @@ export async function commitSceneReality(
       // Only registered historical/new policies are readable. The sidecar is
       // never accepted here as mechanics authority or copied into world facts.
       const policyKind = readEffects ? 'read_effects' : continuation ? 'continuation' : qualified;
-      const policyVersion = (readEffects ? (typed ? [13, 14] as const : [10, 11, 12] as const).find((version) => (input.assessment as JsonObject).policyFingerprint
+      const policyVersion = (readEffects ? (typed ? [13, 14, 15] as const : [10, 11, 12] as const).find((version) => (input.assessment as JsonObject).policyFingerprint
         === pendingScenePolicyFingerprint(String(proposal.requestedDepth), 'read_effects', version)) : undefined) ?? 9;
-      if ([11, 12, 13, 14].includes(policyVersion) && sceneDossierReferenceIssues(proposal).length) throw new Error('Incomplete typed dossier reference closure.');
-      pendingBindingRecord = createPendingBindingRecord({ ...pendingBindingContext(current, String(request.operationId), proposal),
-        ...(independentOwnerPremises ? { independentOwnerPremises } : {}) },
+      if ([11, 12, 13, 14, 15].includes(policyVersion) && sceneDossierReferenceIssues(proposal).length) throw new Error('Incomplete typed dossier reference closure.');
+      const context = pendingBindingContext(current, String(request.operationId), proposal);
+      let preparedBindingCompilation: JsonObject | undefined;
+      if (compilationAware) {
+        preparedBindingCompilation = input.preparedBindingReview!.compilation as JsonObject;
+        if (![14, 15].includes(policyVersion) || preparedBindingCompilation.sourcePolicy !== `gma.scene-reality-builder-policy/${policyVersion}`) throw new Error('Mixed source compilation policy.');
+        assertPreparedBindingCompilation(supplement.bindings, preparedBindingCompilation, context);
+        assertPreparedBindingReview(input.preparedBindingReview!, preparedBindingCompilation, input.assessment as JsonObject);
+      }
+      pendingBindingRecord = createPendingBindingRecord({ ...context,
+        ...(temporalAuthority ? { temporalAuthority } : {}),
+        ...(independentOwnerPremises ? { independentOwnerPremises } : {}), ...(preparedBindingCompilation ? { preparedBindingCompilation } : {}) },
         supplement.bindings, input.assessment as JsonObject, pendingScenePolicyFingerprint(String(proposal.requestedDepth), policyKind, policyVersion)) as JsonObject;
     } catch {
-      throw new StoryWorkspaceStoreError(422, 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', 'The complete Scene and unfinished-action binding examination could not be verified.', {});
+      throw new StoryWorkspaceStoreError(422, compilationAware ? 'SCENE_PREPARED_BINDING_REVIEW_INVALID' : 'SCENE_PENDING_INTENT_EXAMINATION_INVALID', 'The complete Scene and unfinished-action binding examination could not be verified.', {});
     }
   }
-  if ((proposal.sceneStoryDesign as JsonObject).schemaVersion === 'gmc.scene-story-design/4' && !['gmc.scene-pending-intent-binding-record/4', TYPED.pendingRecord].includes(String(pendingBindingRecord?.schemaVersion))) throw new StoryWorkspaceStoreError(422, 'SCENE_READ_EFFECT_EXAMINATION_REQUIRED', 'New action surfaces require their exact independently reviewed pending roles.', {});
+  if ((proposal.sceneStoryDesign as JsonObject).schemaVersion === 'gmc.scene-story-design/4' && !['gmc.scene-pending-intent-binding-record/4', TYPED.pendingRecord, C.record, T.record, G.record].includes(String(pendingBindingRecord?.schemaVersion))) throw new StoryWorkspaceStoreError(422, 'SCENE_READ_EFFECT_EXAMINATION_REQUIRED', 'New action surfaces require their exact independently reviewed pending roles.', {});
   const assessment = validateAssessment(input.assessment, proposal, request, pendingBindingRecord
-    ? pendingBindingRecord.schemaVersion === TYPED.pendingRecord ? 'typed_references' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' ? 'read_effects' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/3' ? 'continuation'
-      : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/2' ? 'qualified' : 'legacy' : false, premisesAware);
+    ? [TYPED.pendingRecord, C.record, T.record, G.record].some((v) => v === pendingBindingRecord!.schemaVersion) ? 'typed_references' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/4' ? 'read_effects' : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/3' ? 'continuation'
+      : pendingBindingRecord.schemaVersion === 'gmc.scene-pending-intent-binding-record/2' ? 'qualified' : 'legacy' : false, premisesAware, compilationAware, temporalAware);
   const pointerRevision = actualPointerRevision + 1;
   const certificate = certificateFrom(proposal, request, assessment, pointerRevision);
+  if (temporalAuthority) {
+    certificate.schemaVersion = gmTimingAware ? G.certificate : T.certificate;
+    certificate.temporalValidity = createTemporalValidityManifest(temporalAuthority, proposal, assessment);
+    assertByteBound(certificate, SCENE_REALITY_LIMITS.certificateBytes, 'SCENE_READINESS_CERTIFICATE_TOO_LARGE', 'certificate');
+  }
   const manifestCertificate = ref(((proposal.openingFrame as JsonObject).presentedTargetManifest as JsonObject).certificateRef, 'certificateId', 'proposal.openingFrame.presentedTargetManifest.certificateRef');
   if (manifestCertificate.id !== certificate.certificateId || manifestCertificate.revision !== certificate.revision) throw new StoryWorkspaceStoreError(422, 'SCENE_REALITY_MANIFEST_CERTIFICATE_MISMATCH', 'The prepared opening is not bound to the exact readiness certificate being issued.', { field: 'proposal.openingFrame.presentedTargetManifest.certificateRef.revision', expectedRevision: certificate.revision, actualRevision: manifestCertificate.revision });
   const priorBundle = priorDocument ? priorDocument.bundle.activeBundle as JsonObject : null;
@@ -1330,6 +1581,14 @@ export async function commitSceneReality(
     bundleId: String(activeBundle.bundleId), bundleRevision: pointerRevision, operationId: String(request.operationId),
     idempotencyKey: String(request.idempotencyKey), requestHash, status: 'staged', bundle, receipt, createdAt: now,
   };
+  // A reusable certificate never rescues a raced initial save. Recheck the
+  // actual owners at the existing acceptance boundary, after all compilation.
+  if (temporalAuthority) {
+    await validateCurrentGmcReadSet(request, { userId: input.userId, campaignId: input.campaignId }, stores);
+    const currentTemporal = await stores.readTemporalAuthority!({ userId: input.userId, campaignId: input.campaignId, gmDecisions: gmTimingAware });
+    if (hash(currentTemporal) !== hash(temporalAuthority)) throw new StoryWorkspaceStoreError(409,
+      'SCENE_TEMPORAL_AUTHORITY_CHANGED', 'Campaign timing changed before the prepared Scene could be saved.', {});
+  }
   try {
     await stores.bundles.insertOne(bundleDocument);
   } catch (error: unknown) {
@@ -1443,10 +1702,12 @@ export async function decideSceneCoverage(
     return { ...decisionBase, decision: 'certificate_stale', changedDimensions: ['certificate'] } as JsonObject;
   }
   const changedDimensions: string[] = [];
-  const [currentStory, currentClock] = await Promise.all([
+  const [currentStory, currentClock, temporalChanges] = await Promise.all([
     currentStoryAuthority({ userId: input.userId, campaignId: input.campaignId }, stores),
     currentClockAuthority({ userId: input.userId, campaignId: input.campaignId }, stores),
+    temporalReadinessChanges({ userId: input.userId, campaignId: input.campaignId }, bundle, stores),
   ]);
+  if (temporalChanges) changedDimensions.push(...temporalChanges);
   for (const dependency of certificate.dependencySet as JsonObject[]) {
     const dependencyRef = String(dependency.ref);
     const supplied = currentStory?.ref === dependencyRef
@@ -1454,7 +1715,7 @@ export async function decideSceneCoverage(
       : currentClock?.ref === dependencyRef
         ? currentClock.revision
       : (query.ownerHeads as JsonObject)[dependencyRef];
-    if (supplied !== dependency.revision) changedDimensions.push(...(dependency.invalidateOn as string[]));
+    if (supplied !== dependency.revision && !(temporalChanges !== null && currentClock?.ref === dependencyRef)) changedDimensions.push(...(dependency.invalidateOn as string[]));
   }
   const chainQuery = { ...query, userId: input.userId } as JsonObject;
   const chain = await activeReceiptChainStatus(certificate, chainQuery, String((bundle.sceneKit as JsonObject).sceneKitId), stores);
@@ -1511,17 +1772,20 @@ export async function selectPreparedStoryFacts(
   const designRef = ref(proposal.sceneStoryDesignRef, 'designId', 'proposal.sceneStoryDesignRef');
   if (certificateRef.id !== certificate.certificateId || certificateRef.revision !== certificate.revision || certificate.status !== 'certified') throw new StoryWorkspaceStoreError(409, 'SCENE_READINESS_CERTIFICATE_STALE', 'The Scene readiness certificate changed before prepared facts were selected.', { field: 'proposal.certificateRef.revision', expectedRevision: certificateRef.revision, actualRevision: certificate.revision });
   const changedDimensions: string[] = [];
-  const [currentStory, currentClock] = await Promise.all([
+  const [currentStory, currentClock, temporalChanges] = await Promise.all([
     currentStoryAuthority({ userId: input.userId, campaignId: input.campaignId }, stores),
     currentClockAuthority({ userId: input.userId, campaignId: input.campaignId }, stores),
+    temporalReadinessChanges({ userId: input.userId, campaignId: input.campaignId }, bundle, stores),
   ]);
+  if (temporalChanges) changedDimensions.push(...temporalChanges);
   for (const dependency of certificate.dependencySet as JsonObject[]) {
     const ownerRevision = currentStory?.ref === dependency.ref
       ? currentStory.revision
       : currentClock?.ref === dependency.ref
         ? currentClock.revision
         : null;
-    if (ownerRevision !== null && ownerRevision !== Number(dependency.revision)) {
+    if (ownerRevision !== null && ownerRevision !== Number(dependency.revision)
+      && !(temporalChanges !== null && currentClock?.ref === dependency.ref)) {
       changedDimensions.push(...dependency.invalidateOn as string[]);
     }
   }
@@ -1578,6 +1842,10 @@ export async function selectPreparedStoryFacts(
     ownerHeads: { activeSceneBundle: active.pointerRevision as JsonValue }, mutationApplied: false, createdAt: now.toISOString(), duplicate: false,
   };
   assertByteBound(receipt, SCENE_REALITY_LIMITS.receiptBytes, 'SCENE_FACT_SELECTION_RECEIPT_TOO_LARGE', 'receipt');
+  const acceptanceTemporalChanges = await temporalReadinessChanges({ userId: input.userId, campaignId: input.campaignId }, bundle, stores);
+  if (acceptanceTemporalChanges?.length) throw new StoryWorkspaceStoreError(409,
+    'SCENE_READINESS_CERTIFICATE_STALE', 'The prepared timing changed before its facts could be selected.',
+    { changedDimensions: acceptanceTemporalChanges });
   try {
     await stores.factSelections.insertOne({ userId: input.userId, campaignId: input.campaignId, operationId: String(proposal.operationId), requestHash, receipt, createdAt: now });
   } catch (error: unknown) {
@@ -1591,12 +1859,15 @@ export async function selectPreparedStoryFacts(
 
 export function sceneRealityHealthAdvertisement(): JsonObject {
   return {
-    capabilities: [...SCENE_REALITY_CAPABILITIES, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, SCENE_WORKING_SET.capability, TYPED.capability, SCENE_INFORMATION_PROJECTION.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
+    capabilities: [...SCENE_REALITY_CAPABILITIES, C.capability, T.capability, 'scene-pending-observer-qualification/1', 'scene-pending-intent-continuation/1', SCENE_MOVEMENT_OUTCOME_AUTHORITY.capability, READ_EFFECT_AUTHORITY_BUNDLE.capability, SCENE_WORKING_SET.capability, TYPED.capability, SCENE_INFORMATION_PROJECTION.capability, ...(PENDING_INTENT_WRITES_ENABLED ? ['scene-pending-intent-bindings/1'] : [])],
     readEffects: READ_EFFECT_AUTHORITY_BUNDLE,
     typedReferences: TYPED,
     workingSet: SCENE_WORKING_SET,
     informationProjection: SCENE_INFORMATION_PROJECTION,
     independentOwnerPremises: SCENE_OWNER_PREMISES,
+    preparedBindingCompilation: C,
+    temporalValidity: T,
+    temporalGmDecisions: G,
     movementOutcome: { ...SCENE_MOVEMENT_OUTCOME_AUTHORITY, routeEnabled: true, writesEnabled: process.env.GMC_PENDING_OBSERVER_QUALIFICATION === '1' },
     preparedCheckCompletion: { ...PREPARED_CHECK_COMPLETION_AUTHORITY, routeEnabled: true },
     contracts: clone(SCENE_REALITY_CONTRACTS as unknown as JsonObject),

@@ -16,6 +16,21 @@ const exact = (value: Row, keys: string[]) => value && !Array.isArray(value)
   && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
 const stages = new Set(['depth', 'build', 'build_continuation', 'examine', 'repair']);
 const operationStageMatches = (operation: string, stage: string) => {
+  if (operation.endsWith('.gm-decisions')) {
+    if (operation !== 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity.gm-decisions' || stage !== 'examine') return false;
+    operation = operation.slice(0, -'.gm-decisions'.length);
+  }
+  if (operation.endsWith('.temporal-validity')) {
+    if (operation !== 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity' || stage !== 'examine') return false;
+    operation = operation.slice(0, -'.temporal-validity'.length);
+  }
+  if (operation.endsWith('.binding-compilation')) {
+    const allowed = ['story.scene-reality.build', 'story.scene-reality.build.checkpoint', 'story.scene-reality.repair']
+      .map((base) => `${base}.read-effects.typed-references.working-set.information-projection.binding-compilation`);
+    const examiner = 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation';
+    if (![...allowed, examiner].includes(operation)) return false;
+    operation = operation.slice(0, -'.binding-compilation'.length);
+  }
   if (operation.endsWith('.owner-premises') && operation !== 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises') return false;
   const name = operation.replace(/\.read-effects(?:\.typed-references)?\.working-set(?:\.information-projection(?:\.owner-premises)?)?$/, '');
   return name === 'story.scene-reality.build' ? ['build', 'build_continuation'].includes(stage)
@@ -76,9 +91,10 @@ export function compileScenePreparationWorkingSet(logicalInput: Row, operation: 
   }
   const counts = new Map<string, number>();
   const typedReferences = operation.includes('.typed-references.working-set');
+  const compiledReview = /\.owner-premises\.binding-compilation(?:\.temporal-validity(?:\.gm-decisions)?)?$/.test(operation) && stage === 'examine';
   // Only the not-yet-issued final construction chunk uses short exact sources.
   // Preserve every previously issued first-chunk and historical wire identity.
-  const minimumSharedBytes = typedReferences && logical.preparationPolicyVersion === 14
+  const minimumSharedBytes = compiledReview ? 16 : typedReferences && logical.preparationPolicyVersion === 14
     && stage === 'build_continuation' ? 24 : typedReferences ? 32 : 40;
   visitJson(logical, (value) => {
     const text = canonicalFreeformJson(value);
@@ -108,7 +124,12 @@ export function compileScenePreparationWorkingSet(logicalInput: Row, operation: 
       else if (value && typeof value === 'object') Object.values(value).forEach(visitReferences);
     };
     visitReferences(input); sources.forEach(visitReferences);
-    const retained = sources.map((_, index) => index).filter((index) => uses[index] > 1);
+    // The GM review has not shipped: measure its actual maximum reference cost
+    // instead of the older conservative 12-byte estimate. The representation,
+    // expanded evidence and every historical operation remain unchanged.
+    const referenceBytes = operation.endsWith('.gm-decisions') ? bytes({ $s: Math.max(0, sources.length - 1) }) : 12;
+    const retained = sources.map((_, index) => index).filter((index) => uses[index] > 1
+      && (!compiledReview || bytes(sources[index]) * (uses[index] - 1) > referenceBytes * uses[index] + 2));
     const remap = new Map(retained.map((index, next) => [index, next]));
     const inline = (value: Json): Json => value && !Array.isArray(value) && typeof value === 'object' && Object.keys(value).join() === '$s'
       ? remap.has(Number(value.$s)) ? { $s: remap.get(Number(value.$s))! } : inline(sources[Number(value.$s)])

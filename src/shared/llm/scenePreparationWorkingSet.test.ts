@@ -84,6 +84,20 @@ describe('accepted ADR 024 lossless preparation source compiler', () => {
     expect(compileScenePreparationWorkingSet(reordered, typed, 'build_continuation')).toEqual(continuation);
     expect(continuation.manifest.deferred).toEqual([]);
   });
+  it('measures real reference costs only for the new GM review without dropping any expanded evidence or changing older packets', () => {
+    const older = 'story.scene-readiness.examine.read-effects.typed-references.working-set.information-projection.owner-premises.binding-compilation.temporal-validity';
+    const fresh = `${older}.gm-decisions`;
+    const input: any = { ...fixture(), preparationPolicyVersion: 15,
+      rows: Array.from({ length: 80 }, (_, ordinal) => ({ ordinal, value: `exact-value-${String(Math.floor(ordinal / 2)).padStart(10, '0')}` })) };
+    const original = structuredClone(input);
+    const oldPacket = compileScenePreparationWorkingSet(input, older, 'examine');
+    const newPacket = compileScenePreparationWorkingSet(input, fresh, 'examine');
+    expect(decodeScenePreparationWorkingSet(newPacket, fresh)).toEqual(decodeScenePreparationWorkingSet(oldPacket, older));
+    expect(input).toEqual(original);
+    expect(Buffer.byteLength(JSON.stringify(newPacket))).toBeLessThan(Buffer.byteLength(JSON.stringify(oldPacket)) - 100);
+    expect(compileScenePreparationWorkingSet(input, older, 'examine')).toEqual(oldPacket);
+    expect(compileScenePreparationWorkingSet(Object.fromEntries(Object.entries(input).reverse()), fresh, 'examine')).toEqual(newPacket);
+  });
   for (const kind of ['dangling', 'cycle', 'extra_ref_key', 'foreign_operation', 'stage', 'duplicate_retained', 'window', 'bytes', 'body', 'hash', 'unknown_key', 'unclassified_retained']) {
     it(`rejects ${kind} instead of guessing or dropping evidence`, () => {
       const packed = compileScenePreparationWorkingSet(fixture(), operation, 'build');

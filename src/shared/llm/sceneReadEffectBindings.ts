@@ -1,5 +1,9 @@
 import { freeformJsonDigest } from './freeformPlanBinding.js';
 import { SCENE_OWNER_PREMISES, ownerPremiseExaminationIssues, historicalOwnerPremiseAssessment } from './sceneIndependentOwnerPremises.js';
+import { PREPARED_BINDING_COMPILATION as C, remoteReceiverWitnesses } from './scenePreparedBindingCompilation.js';
+import { SCENE_TEMPORAL_VALIDITY as T, assertTemporalCoverageReview, historicalTemporalAssessment } from './sceneTemporalValidity.js';
+import { SCENE_TEMPORAL_GM as G } from './sceneTemporalGmDecisions.js';
+import { preparedBindingReviewIssues, historicalPreparedBindingAssessment } from './scenePreparedBindingReview.js';
 import { createPendingIntentWindow } from './pendingIntentWindow.js';
 import { pendingRequirementRoleIssues } from './pendingRequirementRoles.js';
 import { readEffectSurfaceIssues } from './readEffectSurfaces.js';
@@ -25,7 +29,7 @@ const identityLink = (value: unknown): ActorMechanicsLink => {
   // The closed canonical validator above checks every ActorMechanicsLink field.
   return value as ActorMechanicsLink;
 };
-type Context = Parameters<typeof historicalBindingIssues>[1] & { independentOwnerPremises?: Row };
+type Context = Parameters<typeof historicalBindingIssues>[1] & { independentOwnerPremises?: Row; preparedBindingCompilation?: Row; temporalAuthority?: Row };
 export const READ_EFFECT_BINDINGS_VERSION = 'gma.scene-pending-intent-bindings/4';
 export const READ_EFFECT_BINDING_POLICY_VERSION = 'gma.scene-pending-intent-binding-policy/7';
 export const READ_EFFECT_EXAMINER_POLICY_VERSION = 'gma.scene-pending-intent-examiner-policy/7';
@@ -68,40 +72,8 @@ function typedProjection(binding: Row, context: Context): { binding: Row; contex
  * witness from the exact immutable owner link, never model rationale or names.
  * Existing qualification checks still gate method, origin and future access. */
 function remoteViewerContext(bindings: Row, context: Context): Context {
-  const witnesses: NonNullable<Context['remoteViewerCoverage']>[number][] = [];
-  const window = createPendingIntentWindow(context.source);
-  for (const slot of pendingIntentBindingSlots(context.source)) {
-    const row = rows(bindings.nodes).find((entry) => entry.nodeRef === slot.nodeRef);
-    if (row?.disposition !== 'bound') continue;
-    const original = window.nodes.find((entry: { nodeRef: string }) => entry.nodeRef === slot.nodeRef)!;
-    if ((original.node.actionFamily ?? original.node.kind) !== 'observe') continue;
-    for (const reference of slot.references.filter((entry: Row) => entry.role === 'recipient')) {
-      const requirement = original.requirements.find((entry: { requirementId: string }) => entry.requirementId === reference.requirementId)?.value;
-      requireMatch(requirement?.kind === 'scene_presence' && requirement.dimension === 'who' && slot.observationGroups.length);
-      const recipientRef = rows(row.references).find((entry) => entry.slotId === reference.slotId)?.selectedRef;
-      const frames = context.proposal.actorFrames.filter((frame: Row) => [frame.actorRef, frame.actorFrameId].includes(recipientRef));
-      requireMatch(frames.length === 1);
-      for (const group of slot.observationGroups) {
-        const selection = rows(row.observations).find((entry) => entry.groupId === group.groupId);
-        const qualified = context.qualifiedObservers?.filter((entry) => entry.evidenceRef === selection?.ownerEvidenceRef
-          && entry.nodeRef === slot.nodeRef && entry.groupId === group.groupId);
-        requireMatch(group.observerKind === 'familiar' && qualified?.length === 1);
-        const evidence = qualified![0];
-        // Link heads describe the original identity decision. Fresh capability
-        // heads are independently checked by qualification and execution; a
-        // later character/form revision must not invalidate a stable pairing.
-        const links = context.observerIdentityLinks?.filter((link) => !actorMechanicsLinkIssues(link).length
-          && link.state === 'active' && link.campaignRef === window.campaignId && link.linkRef === evidence.actorLinkRef
-          && link.subjectKind === 'familiar' && link.actorRef === evidence.observerRef
-          && link.parentActorRef === frames[0].actorRef && link.vcsOwnerRef === evidence.vcsOwnerRef
-          && link.mechanicsSubjectRef === evidence.mechanicsSubjectRef);
-        requireMatch(links?.length === 1);
-      }
-      // Preserve original slot identity; the shape checks above reject a missing
-      // selection rather than manufacturing a fallback receiver.
-      witnesses.push({ nodeRef: slot.nodeRef, slotId: referenceText(reference.slotId), recipientRef: referenceText(recipientRef) });
-    }
-  }
+  const witnesses = remoteReceiverWitnesses(bindings, context).map((row) => ({ nodeRef: referenceText(row.nodeRef),
+    slotId: referenceText(row.referenceSlotId), recipientRef: referenceText(row.recipientRef) }));
   return { ...context, remoteViewerCoverage: witnesses };
 }
 
@@ -214,6 +186,24 @@ export function readEffectAssessmentEvidenceRefs(bindings: Row, context: Context
 
 /** Metadata integrity supplements actual semantic review; it is not its substitute. */
 export function scenePendingIntentExaminationIssues(value: unknown, bindings: Row, context: Context, policyFingerprint: string): string[] {
+  if (object(value) && [T.assessment, G.assessment].some((v) => v === value.schemaVersion) || context.temporalAuthority) {
+    try {
+      if (!object(value) || !context.temporalAuthority
+        || value.schemaVersion !== (context.temporalAuthority.schemaVersion === G.context ? G.assessment : T.assessment)) return ['/temporalCoverageReview'];
+      const review = record(value.temporalCoverageReview);
+      assertTemporalCoverageReview(review, context.temporalAuthority, context.proposal, value.verdict === 'adequate');
+      if (review.verdict === 'unsupported' && !(value.verdict === 'repair_required'
+        && rows(value.debt).some((row) => row.domain === 'timeline' && row.blocking))) return ['/temporalCoverageReview'];
+      const { temporalAuthority: _authority, ...rest } = context;
+      return scenePendingIntentExaminationIssues(historicalTemporalAssessment(value), bindings, rest, policyFingerprint);
+    } catch { return ['/temporalCoverageReview']; }
+  }
+  if (context.preparedBindingCompilation || object(value) && value.schemaVersion === C.assessment) {
+    if (!context.preparedBindingCompilation || !context.independentOwnerPremises || !object(value)) return ['/preparedBindingReview'];
+    const issues = preparedBindingReviewIssues(value, bindings, context.preparedBindingCompilation, context);
+    const { preparedBindingCompilation: _compilation, ...historicalContext } = context;
+    return [...issues, ...scenePendingIntentExaminationIssues(historicalPreparedBindingAssessment(value), bindings, historicalContext, policyFingerprint)];
+  }
   const premises = (context as Context & { independentOwnerPremises?: Row }).independentOwnerPremises;
   if (premises || object(value) && value.schemaVersion === SCENE_OWNER_PREMISES.assessment) {
     if (!premises || !object(value) || bindings.schemaVersion !== TYPED.pendingBindings) return ['/ownerPremiseReview'];

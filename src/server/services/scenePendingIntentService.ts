@@ -145,10 +145,10 @@ export function preparedPendingRequirementProjection(input: Row, loaded: Row, ac
     const actor = bundle.actorFrames.find((a: Row) => a.actorRef === row.targetRef || a.actorFrameId === row.targetRef);
     const target = actor ?? [...bundle.elements, ...bundle.zones].find((r: Row) => (r.elementId ?? r.zoneId) === row.targetRef);
     const facts = (affordance?.factRefs ?? []).map((ref: string) => bundle.facts.find((fact: Row) => fact.factId === ref));
-    const present = ['gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(application.record.schemaVersion)
+    const present = ['gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5', 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8'].includes(application.record.schemaVersion)
       ? preparedReadEffectActorIsPresent(actor, sceneContext.playableSceneContext)
       : actor && (sceneContext.playableSceneContext?.presentActors ?? []).some((ref: unknown) => ref === actor.actorRef);
-    const readEffectEvidence = ['gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5'].includes(application.record.schemaVersion)
+    const readEffectEvidence = ['gmc.scene-pending-intent-binding-record/4', 'gmc.scene-pending-intent-binding-record/5', 'gmc.scene-pending-intent-binding-record/6', 'gmc.scene-pending-intent-binding-record/7', 'gmc.scene-pending-intent-binding-record/8'].includes(application.record.schemaVersion)
       ? preparedReadEffectReadEvidence(row, affordance, bundle, Boolean(present)) : null;
     const available = readEffectEvidence ? readEffectEvidence.available : row.kind === 'scene_presence' ? present : row.kind === 'story_fact'
       ? facts.length > 0 && facts.every((fact: Row) => fact && !['missing_preparation', 'deliberate_unknown'].includes(fact.epistemicState)) : target;

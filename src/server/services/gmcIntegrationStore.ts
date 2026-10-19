@@ -745,7 +745,7 @@ function questDeadlineState(quest: any, gameClock: any) {
   return 'none';
 }
 
-function questWithTimeState(quest: any, gameClock: any) {
+export function questWithTimeState(quest: any, gameClock: any) {
   return {
     ...quest,
     deadlineState: ['completed', 'failed', 'abandoned'].includes(String(quest?.status))

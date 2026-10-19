@@ -9,6 +9,10 @@ import { createProgramReferenceLedger } from './typedReferenceBindings.js';
 import { freeformJsonDigest, freeformTextDigest } from './freeformPlanBinding.js';
 import { scenePendingIntentBindingIssues, scenePendingIntentExaminationIdentity, scenePendingIntentExaminationIssues } from './sceneReadEffectBindings.js';
 import { createPendingBindingRecord, createIntentBindingReceipt, projectAppliedIntentBindings, acceptedPendingNodeCoverage, pendingScenePolicyFingerprint } from './scenePendingIntentApplication.js';
+import { PREPARED_BINDING_COMPILATION as COMPILED, compilePreparedBindings, restorePreparedBindingSource, assertPreparedBindingCompilation } from './scenePreparedBindingCompilation.js';
+import { preparedBindingEvidenceRef, createPreparedBindingReview, assertPreparedBindingReview, createPreparedOwnerReviewBinding,
+  SCENE_PREPARED_SELECTION_POLICY, SCENE_PREPARED_REVIEW_POLICY } from './scenePreparedBindingReview.js';
+import { SCENE_TEMPORAL_VALIDITY as TEMPORAL, createTemporalAuthorityContext, temporalRecordRefs } from './sceneTemporalValidity.js';
 
 function movementFixture(fresh = false) {
   const f = typedReferenceFixture();
@@ -67,6 +71,122 @@ function movementFixture(fresh = false) {
     referenceReview: { verdict: 'supported', rationale: 'The lip is the crossed area; the separate drain is the destination. The original ledger proves only which refs were unresolved.', evidenceRefs: [q.qualificationRef] } });
   return { f, q, context, binding, policy, assessment };
 }
+
+describe('exact prepared binding compilation, ADR 029', () => {
+  function compilerFixture(fresh = false) {
+    const f = movementFixture(true);
+    for (const row of f.context.proposal.sceneStoryDesign.affordances) row.affordanceId = row.coverageEntryId.replace('coverage:', 'affordance:');
+    const source = structuredClone(f.binding);
+    for (const node of source.nodes) for (const collection of ['coverage', 'effectCoverage']) for (const row of node[collection]) {
+      const literal = row.coverageEntryRef.replace('coverage:', 'affordance:');
+      if (fresh) { row.affordanceRef = literal; delete row.coverageEntryRef; } else row.coverageEntryRef = literal;
+    }
+    if (fresh) source.schemaVersion = COMPILED.selections;
+    return { ...f, source, sourcePolicy: `gma.scene-reality-builder-policy/${fresh ? 15 : 14}` };
+  }
+  it.each([false, true])('compiles the exact %s source without changing world or semantic choices', (fresh) => {
+    const f = compilerFixture(fresh), original = structuredClone(f.source), world = structuredClone(f.context.proposal);
+    const result = compilePreparedBindings(f.source, f.context, f.sourcePolicy);
+    expect(result.bindings).toEqual(f.binding);
+    expect(scenePendingIntentBindingIssues(result.bindings, f.context)).toEqual([]);
+    expect(restorePreparedBindingSource(result.bindings, result.compilation)).toEqual(original);
+    assertPreparedBindingCompilation(result.bindings, result.compilation, f.context);
+    expect(f.source).toEqual(original); expect(f.context.proposal).toEqual(world);
+    expect(result.compilation.derivations.every((row: any) => row.rule === 'affordance_to_coverage')).toBe(true);
+  });
+  it('retains an already canonical historical choice without a fake derivation', () => {
+    const f = compilerFixture();
+    const result = compilePreparedBindings(f.binding, f.context, f.sourcePolicy);
+    expect(result.bindings).toEqual(f.binding); expect(result.compilation.derivations).toEqual([]);
+  });
+  it.each(['unknown', 'display_name', 'foreign', 'duplicate_id', 'namespace_collision', 'profile', 'field', 'window'])('rejects %s without searching for an alternative', (kind) => {
+    const f = compilerFixture(), row = f.source.nodes[0].coverage[0];
+    if (kind === 'unknown') row.coverageEntryRef = 'affordance:unknown';
+    if (kind === 'display_name') row.coverageEntryRef = 'drain';
+    if (kind === 'foreign') f.source.campaignId = 'campaign:other';
+    if (kind === 'duplicate_id') f.context.proposal.sceneStoryDesign.affordances[1].affordanceId = f.context.proposal.sceneStoryDesign.affordances[0].affordanceId;
+    if (kind === 'namespace_collision') f.context.proposal.sceneStoryDesign.affordances[1].affordanceId = f.context.proposal.sceneStoryDesign.affordances[0].coverageEntryId;
+    if (kind === 'profile') f.sourcePolicy = 'gma.scene-reality-builder-policy/13';
+    if (kind === 'field') row.extra = 'not accepted';
+    if (kind === 'window') f.source.windowFingerprint = '0'.repeat(64);
+    expect(() => compilePreparedBindings(f.source, f.context, f.sourcePolicy)).toThrow();
+  });
+  it.each(['proof', 'source', 'owner', 'dossier', 'qualification', 'link', 'result'])('independently rejects changed %s bodies even when a client rehashes metadata', (kind) => {
+    const f = compilerFixture(), result = compilePreparedBindings(f.source, f.context, f.sourcePolicy);
+    if (kind === 'proof') result.compilation.derivations[0].evidenceRefs = ['invented:source'];
+    if (kind === 'source') result.compilation.derivations[0].originalValue = 'affordance:drain';
+    if (kind === 'owner') f.context.ownerReadSet.storyWorkspaceRevision++;
+    if (kind === 'dossier') f.context.proposal.elements[0].zoneRef = 'zone:drain';
+    if (kind === 'qualification') f.context.pendingReferenceQualification.fingerprint = 'e'.repeat(64);
+    if (kind === 'link') f.context.observerIdentityLinks = [{ linkRef: 'invented:link' }];
+    if (kind === 'result') result.bindings.nodes[0].references[0].selectedRef = 'element:drain';
+    const { fingerprint: _old, ...body } = result.compilation; result.compilation.fingerprint = freeformJsonDigest(body);
+    expect(() => assertPreparedBindingCompilation(result.bindings, result.compilation, f.context)).toThrow();
+  });
+  it('does not repair a legal but semantically wrong target selection', () => {
+    const f = compilerFixture(); f.source.nodes[0].effectCoverage[0].coverageEntryRef = 'affordance:drain';
+    // Pick the opposite area/destination, without changing any original target.
+    f.source.nodes[0].effectCoverage.find((row: any) => row.role === 'area').coverageEntryRef = 'affordance:drain';
+    const result = compilePreparedBindings(f.source, f.context, f.sourcePolicy);
+    expect(scenePendingIntentBindingIssues(result.bindings, f.context).length).toBeGreaterThan(0);
+  });
+  it.each([false, true])('binds the actual independent review and new record/receipt while preserving the original program (temporal %s)', (temporal) => {
+    const f = compilerFixture(), original = structuredClone(f.context.source.program);
+    if (temporal) {
+      f.context.proposal.sceneReality = { realityId: 'reality:temporal' };
+      f.context.proposal.sceneStoryDesign.designId = 'design:temporal';
+      f.context.proposal.preparedBoundaries = [];
+    }
+    f.policy = pendingScenePolicyFingerprint('investigative', 'read_effects', 14);
+    const compiled = compilePreparedBindings(f.source, f.context, f.sourcePolicy);
+    const premises = { fingerprint: 'd'.repeat(64) };
+    const authority = temporal ? createTemporalAuthorityContext({ campaignId: f.context.proposal.campaignId, sceneKitId: 'scene:typed' }, null, []) : null;
+    const context = { ...f.context, independentOwnerPremises: premises, preparedBindingCompilation: compiled.compilation,
+      ...(authority ? { temporalAuthority: authority } : {}) };
+    const assessment: any = { ...f.assessment(), ...scenePendingIntentExaminationIdentity(compiled.bindings, context, f.policy), schemaVersion: temporal ? TEMPORAL.assessment : COMPILED.assessment,
+      ...(authority ? { temporalCoverageReview: { schemaVersion: TEMPORAL.review, authorityFingerprint: authority.fingerprint,
+        verdict: 'supported', rationale: 'Structural world records are independent of elapsed campaign time.',
+        clockIndependentRecordRefs: temporalRecordRefs(f.context.proposal), conditions: [], unresolvedRecordRefs: [] } } : {}),
+      ownerPremisesFingerprint: premises.fingerprint, ownerPremiseReview: { verdict: 'supported',
+        rationale: 'The original current position is distinct from pending movement.', evidenceRefs: [ownerPremisesEvidenceRef(premises)] },
+      preparedBindingCompilationFingerprint: compiled.compilation.fingerprint,
+      preparedBindingReview: { verdict: 'supported', rationale: 'Each literal ID selects its own exact row; no target or world change occurs.',
+        evidenceRefs: [preparedBindingEvidenceRef(compiled.compilation)] } };
+    expect(scenePendingIntentExaminationIssues(assessment, compiled.bindings, context, f.policy)).toEqual([]);
+    const review = createPreparedBindingReview(compiled.compilation, assessment);
+    assertPreparedBindingReview(review, compiled.compilation, assessment);
+    expect(createPreparedOwnerReviewBinding(premises, assessment).assessmentIdentity.fingerprint).toBe(freeformJsonDigest(assessment));
+    expect(scenePendingIntentExaminationIssues(assessment, compiled.bindings, f.context, f.policy).length).toBeGreaterThan(0);
+    const record = createPendingBindingRecord(context, compiled.bindings, assessment, f.policy);
+    expect(record.schemaVersion).toBe(temporal ? TEMPORAL.record : COMPILED.record); expect(record.preparedBindingReview).toEqual(review);
+    const receipt = createIntentBindingReceipt(record, { bundleId: 'bundle:compiled', revision: 2, sceneKitRef: compiled.bindings.sceneKitRef }, {
+      schemaVersion: 'gma.action-program-rebase-receipt/2', programRef: record.window.programId,
+      priorCursorRevision: record.window.cursorRevision, resultingCursorRevision: record.window.cursorRevision + 1,
+      authorityHead: record.ownerReadSet, receiptId: 'rebase:compiled' });
+    expect(receipt.schemaVersion).toBe(temporal ? TEMPORAL.receipt : COMPILED.receipt);
+    if (temporal) expect(receipt.temporalValidityApplication.fingerprint).toBe(record.temporalValidityFingerprint);
+    const applied = projectAppliedIntentBindings(f.context.source.instruction, original, [{ record, receipt }]);
+    expect(applied.nodes[0].semanticLocationBindings.bindings.map((row: any) => row.authorityRef)).toEqual(['element:lip', 'element:drain']);
+    expect(f.context.source.program).toEqual(original);
+    const tampered = structuredClone(assessment); tampered.preparedBindingReview.verdict = 'unsupported';
+    expect(scenePendingIntentExaminationIssues(tampered, compiled.bindings, context, f.policy).length).toBeGreaterThan(0);
+    tampered.verdict = 'repair_required'; tampered.debt = [{ debtId: 'debt:compiled', domain: 'pending_intent',
+      description: 'The mechanical derivation changes the intended choice.', blocking: true, affectedRefs: [compiled.bindings.nodes[0].nodeRef] }];
+    expect(scenePendingIntentExaminationIssues(tampered, compiled.bindings, context, f.policy)).toEqual([]);
+  });
+  it('teaches exact selectors and independent derivation review on the original first pass', () => {
+    const builder = getOperationDefinition('story.scene-reality.build.read-effects.typed-references.working-set.information-projection.binding-compilation');
+    const examiner = getOperationDefinition(COMPILED.operation);
+    expect(builder.prompt.systemInstruction).toContain(SCENE_PREPARED_SELECTION_POLICY);
+    expect(builder.prompt.systemInstruction).not.toContain("Reuse that group's original sensory affordance for its identity coverage");
+    expect(builder.prompt.systemInstruction).toContain('affordanceId');
+    expect(builder.prompt.version).toBe('gma.scene-reality-builder-policy/15');
+    expect(examiner.prompt.systemInstruction).toContain(SCENE_PREPARED_REVIEW_POLICY);
+    expect(examiner.prompt.version).toBe(COMPILED.examinerPolicy); expect(examiner.context.inputHardLimitBytes).toBe(131072);
+    expect(getOperationDefinition('story.scene-reality.build.read-effects.typed-references.working-set.information-projection').prompt.version)
+      .toBe('gma.scene-reality-builder-policy/14');
+  });
+});
 
 describe('typed pending projection, without rewriting an accepted source', () => {
   it('retains every existing review for /7, requires the separate bound baseline, and saves the actual assessment fingerprint', () => {

@@ -2,6 +2,7 @@ import { SCENE_PENDING_INTENT_BINDINGS_SCHEMA } from '../../shared/llm/scenePend
 import { QUALIFIED_BINDINGS_SCHEMA, QUALIFICATION_REVIEW_SCHEMA, CONTINUATION_BINDINGS_SCHEMA, CONTINUATION_QUALIFICATION_REVIEW_SCHEMA } from '../../shared/llm/scenePendingIntentQualified.js';
 import { SCENE_READ_EFFECT_BINDINGS_SCHEMA } from '../../shared/llm/sceneReadEffectPolicy.js';
 import { SCENE_TYPED_REFERENCE_BINDINGS_SCHEMA } from '../../shared/llm/sceneTypedReferencePolicy.js';
+import { PREPARED_BINDING_COMPILATION as C } from '../../shared/llm/scenePreparedBindingCompilation.js';
 
 const identifier = { type: 'string', minLength: 1, maxLength: 240, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' } as const;
 const revision = { type: 'integer', minimum: 1 } as const;
@@ -456,3 +457,46 @@ export const sceneInformationRepairOutput = { ...sceneTypedReferenceRepairOutput
   schemaVersion: { const: 'gma.scene-pending-intent-repair/5' },
   informationReplacements: { type: 'array', maxItems: 24,
     items: strictObject(['selectionIndex', 'replacement'], { selectionIndex: { type: 'integer', minimum: 0, maximum: 23 }, replacement: informationSelection }) } };
+
+export const scenePreparedSelectionsSchema = (() => {
+  const schema: any = structuredClone(SCENE_TYPED_REFERENCE_BINDINGS_SCHEMA);
+  schema.properties.schemaVersion = { const: C.selections };
+  for (const name of ['coverage', 'effectCoverage']) {
+    const row = schema.properties.nodes.items.properties[name].items;
+    row.required = row.required.map((key: string) => key === 'coverageEntryRef' ? 'affordanceRef' : key);
+    row.properties.affordanceRef = row.properties.coverageEntryRef; delete row.properties.coverageEntryRef;
+  }
+  return schema;
+})();
+export const scenePreparedBindingBuilderOutput = { ...sceneRealityInformationBuilderOutput,
+  schemaVersion: { const: C.builder }, pendingIntentBindings: { anyOf: [scenePreparedSelectionsSchema, { type: 'null' }] } };
+export const scenePreparedBindingRepairOutput = { ...sceneInformationRepairOutput,
+  schemaVersion: { const: 'gma.scene-pending-intent-repair/6' },
+  bindingReplacements: { type: 'array', maxItems: 8, items: scenePreparedSelectionsSchema.properties.nodes.items } };
+export const scenePreparedBindingAssessmentOutput = strictObject(
+  [...sceneReadinessOwnerPremisesAssessmentOutput.required, 'preparedBindingCompilationFingerprint', 'preparedBindingReview'],
+  { ...sceneReadinessOwnerPremisesAssessmentOutput.properties, schemaVersion: { const: C.assessment },
+    preparedBindingCompilationFingerprint: sha256,
+    preparedBindingReview: strictObject(['verdict', 'rationale', 'evidenceRefs'], {
+      verdict: { enum: ['supported', 'unsupported'] }, rationale: text(2000), evidenceRefs: idList(32, 1),
+    }) });
+
+export const sceneTemporalAssessmentOutput = strictObject(
+  [...scenePreparedBindingAssessmentOutput.required, 'temporalCoverageReview'],
+  { ...scenePreparedBindingAssessmentOutput.properties, schemaVersion: { const: 'gma.scene-readiness-assessment/9' },
+    temporalCoverageReview: strictObject(['schemaVersion', 'authorityFingerprint', 'verdict', 'rationale',
+      'clockIndependentRecordRefs', 'conditions', 'unresolvedRecordRefs'], {
+      schemaVersion: { const: 'gma.scene-temporal-coverage-review/1' }, authorityFingerprint: sha256,
+      verdict: { enum: ['supported', 'unsupported'] }, rationale: text(2000),
+      clockIndependentRecordRefs: idList(512), unresolvedRecordRefs: idList(512),
+      conditions: { type: 'array', maxItems: 64, items: strictObject(['predicateRefs', 'recordRefs'], {
+        predicateRefs: idList(64, 1), recordRefs: idList(512, 1),
+      }) },
+    }) });
+
+/** Additive GM-owned timing family; old issued output schemas stay unchanged. */
+export const sceneTemporalGmAssessmentOutput = strictObject(sceneTemporalAssessmentOutput.required,
+  { ...sceneTemporalAssessmentOutput.properties, schemaVersion: { const: 'gma.scene-readiness-assessment/10' },
+    temporalCoverageReview: { ...(sceneTemporalAssessmentOutput.properties.temporalCoverageReview as Record<string, unknown>),
+      properties: { ...(sceneTemporalAssessmentOutput.properties.temporalCoverageReview as { properties: Record<string, unknown> }).properties,
+        schemaVersion: { const: 'gma.scene-temporal-coverage-review/2' } } } });
