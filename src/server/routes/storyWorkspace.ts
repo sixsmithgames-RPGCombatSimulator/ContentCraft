@@ -6,6 +6,7 @@ import { sceneMovementOutcomeService, type SceneMovementOutcomeCommit } from '..
 import { pendingReferenceQualificationService, type PendingReferenceQualificationCommit } from '../services/pendingReferenceQualificationStore.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { randomUUID } from 'node:crypto';
+import { OrchestratorError } from '../llm-orchestrator/errors.js';
 import { readQualifiedSceneTurnIdentitySources } from '../services/qualifiedSceneTurnSources.js';
 import { ProjectModel } from '../models/index.js';
 import { requireServiceIntegration, type IntegrationRequest } from '../middleware/integrationAuth.js';
@@ -146,6 +147,14 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
     try {
       await handler(req, res);
     } catch (error: unknown) {
+      if (error instanceof OrchestratorError && error.code === 'FREEFORM_WORKFLOW_CLOSED') {
+        res.status(error.status).json({ error: {
+          code: error.code,
+          message: 'Studio could not continue this saved action because it is no longer open in this game. This request applied nothing; your saved game and earlier completed steps are safe. Return to Story to review the saved game before sending a new action.',
+          correlationId: correlationId(req), details: {},
+        } });
+        return;
+      }
       if (error instanceof StoryWorkspaceStoreError) {
         res.status(error.status).json({
           error: {
