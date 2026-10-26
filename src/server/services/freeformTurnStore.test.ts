@@ -64,6 +64,29 @@ function fixture() {
 }
 
 describe('protected Manual freeform workflow (not gameplay proof)', () => {
+  it('gives a suffix the accepted prefix context without replaying it or changing its root causal anchor', async () => {
+    vi.stubEnv('GMC_MANUAL_READ_EFFECTS_ENABLED', '1'); vi.stubEnv('GMC_MANUAL_READ_EFFECTS_CAMPAIGN_ALLOWLIST', 'fictional-campaign'); vi.stubEnv('GMC_TYPED_REFERENCE_BINDINGS', '1');
+    try {
+      const f = fixture(), context: any = await f.deps.readScene();
+      context.activeSceneContext = { sceneKitRef: context.playableSceneContext.sceneKitRef, state: { revision: 0, lastTurnSequence: 0, actorStates: [], continuityStates: [] } };
+      const sources: any = { context, history: { campaignId: f.scope.campaignId, interactions: [] }, reality: null };
+      const service = freeformTurnService({ ...f.deps, readSituationSources: async () => structuredClone(sources) });
+      const first = (await service.prepare({ ...f.input, includeSituation: true }))!;
+      expect(f.tickets.rows[0].policyVersion).toBe('gma.freeform-intake-policy/11');
+      f.finish(first, '  Describe what I see.');
+      context.activeSceneContext.state.revision = 1; context.activeSceneContext.state.lastTurnSequence = 1;
+      sources.history.interactions.push({ receiptRef: 'receipt:prefix', timelineSequence: 1, stateRevisionAfter: 1,
+        sceneKitRef: context.playableSceneContext.sceneKitRef, phase: 'completed', playerMessage: 'I open it.', assistantNarration: 'The lid opens.' });
+      const next = (await service.prepare({ ...f.scope, turnId: first.turn.turnId, advance: true, expectedParentProgramRef: `program:${first.instruction.interactionId}` }))!;
+      expect(next.instruction.exactText).toBe('  Describe what I see.'); expect(next.originCheckpoint!.timelineSequence).toBe(1);
+      const ticket = f.tickets.rows[1];
+      expect(ticket.policyVersion).toBe('gma.freeform-intake-policy/11');
+      expect(ticket.request.context.input.value.situation.lastExchange.gm.text).toBe('The lid opens.');
+      expect(ticket.situationBinding.sourceHeads.conversationBoundary).toBe(2);
+      expect(await service.prepare({ ...f.scope, turnId: first.turn.turnId })).toEqual(next);
+      expect(f.artifacts.size).toBe(1); expect(f.tickets.rows).toHaveLength(2);
+    } finally { vi.unstubAllEnvs(); }
+  });
   it.each(['failed', 'review_required'])('discovers confirmed %s rejection and its sole replacement after response loss without retaining reply data', async (status) => {
     const f = fixture(), first = await f.start(), ticket = f.tickets.rows[0];
     ticket.status = 'retired'; ticket.failureSignature = 'f'.repeat(64);

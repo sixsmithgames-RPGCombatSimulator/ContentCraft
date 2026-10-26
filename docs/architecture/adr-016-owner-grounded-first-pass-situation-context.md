@@ -14,3 +14,8 @@ rollback, tests and release gates. GMC remains the sole campaign/world owner;
 VCS and provider activation are unchanged. No production state is rewritten or
 support-closed action reopened by this adoption. Material departures require
 review before runtime implementation.
+
+Derived suffixes keep their root causal timeline anchor. Their interpretation
+snapshot includes the completed prefix through the current accepted owner head,
+as specified by ADR 033. Only the protected workflow service can request that
+boundary after checking completed parent progress; HTTP ticket callers cannot.

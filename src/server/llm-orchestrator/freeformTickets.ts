@@ -109,6 +109,7 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
   readInstruction?: typeof readStagedCompoundActionInstruction;
   readSceneContext?: typeof readCurrentSceneContexts;
   readSituationSources?: SituationReader;
+  situationIncludesCompletedPrefix?: boolean;
   now?: Date;
 } = {}) {
   validateFreeformTicketInput(input);
@@ -176,7 +177,10 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
       if (binding?.kind === 'actor') row.label = labels.get(binding.ref) ?? 'Unnamed participant';
     }
   }
-  const situation = situationSources && sceneCatalog ? buildFreeformSituation(situationSources, sceneCatalog.catalog, sceneCatalog.catalogBindings, Number(staged.originCheckpoint?.timelineSequence)) : null;
+  const originBoundary = Number(staged.originCheckpoint?.timelineSequence);
+  const situationBoundary = options.situationIncludesCompletedPrefix === true && situationSources
+    ? Math.max(originBoundary, Number(situationSources.context.activeSceneContext?.state?.lastTurnSequence) + 1) : originBoundary;
+  const situation = situationSources && sceneCatalog ? buildFreeformSituation(situationSources, sceneCatalog.catalog, sceneCatalog.catalogBindings, situationBoundary) : null;
   if (situation) assertSituationCurrent(situation.binding, situation.situation, await situationReader(scope));
   const request: LlmRequestEnvelope = {
     schemaVersion: LLM_REQUEST_SCHEMA_VERSION,

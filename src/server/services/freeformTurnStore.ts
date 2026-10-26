@@ -311,7 +311,8 @@ export function freeformTurnService(deps: FreeformTurnDependencies = {}): Freefo
       workflowRef: { turnId: document._id, windowId: window.windowId },
       ...(input.renewTicket ? { renewedTicket: input.renewTicket } : {}),
       ...(clarifications.length ? { clarifications } : {}), ...(input.previousTicket ? { previousTicket: input.previousTicket } : {}) },
-    { records: tickets, readInstruction, readSceneContext: readScene, readSituationSources: deps.readSituationSources });
+    { records: tickets, readInstruction, readSceneContext: readScene, readSituationSources: deps.readSituationSources,
+      situationIncludesCompletedPrefix: window.ordinal > 1 && window.parentProgramRef !== null });
     if (window.ticketRef !== issued.ticket) {
       const next = structuredClone(document); activeWindow(next).ticketRef = issued.ticket;
       next.pendingRenewal = null;
