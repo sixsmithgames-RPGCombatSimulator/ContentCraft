@@ -39,9 +39,10 @@ llmOrchestratorRouter.get('/freeform-turns', requireServiceIntegration, async (r
 llmOrchestratorRouter.post('/freeform-turns/prepare', requireServiceIntegration, async (req, res, next) => {
   try {
     const body = req.body ?? {};
-    const allowed = ['campaignId', 'interactionId', 'turnId', 'selectedMechanicsSubjectRef', 'selectedMechanicsOwnerRef', 'previousTicket', 'renewTicket', 'answer', 'advance', 'expectedParentProgramRef'];
+    const allowed = ['campaignId', 'interactionId', 'turnId', 'selectedMechanicsSubjectRef', 'selectedMechanicsOwnerRef', 'previousTicket', 'renewTicket', 'answer', 'advance', 'expectedParentProgramRef', 'includeSituation'];
     if (Object.keys(body).some((key) => !allowed.includes(key)) || typeof body.campaignId !== 'string'
       || body.advance !== undefined && typeof body.advance !== 'boolean'
+      || body.includeSituation !== undefined && typeof body.includeSituation !== 'boolean'
       || body.answer !== undefined && (!body.answer || typeof body.answer !== 'object' || Array.isArray(body.answer)
         || Object.keys(body.answer).sort().join(',') !== 'expectedRevision,text,ticket')) freeformTicketError('FREEFORM_TURN_INPUT_INVALID', 422);
     if (!await ProjectModel.findById(userId(req), body.campaignId)) freeformTicketError('FREEFORM_CAMPAIGN_NOT_OWNED', 404);
@@ -64,7 +65,7 @@ llmOrchestratorRouter.post('/freeform-turns/:turnId/retire', requireServiceInteg
 llmOrchestratorRouter.post('/freeform-tickets', requireServiceIntegration, async (req, res, next) => {
   try {
     const body = req.body ?? {};
-    const allowed = ['campaignId', 'interactionId', 'issuanceKey', 'mode', 'transport', 'selectedActorRef', 'previousTicket', 'includeSceneCatalog'];
+    const allowed = ['campaignId', 'interactionId', 'issuanceKey', 'mode', 'transport', 'selectedActorRef', 'previousTicket', 'includeSceneCatalog', 'includeSituation'];
     if (Object.keys(body).some((key) => !allowed.includes(key))) freeformTicketError('FREEFORM_TICKET_INPUT_INVALID', 422);
     const authenticatedUser = (req as IntegrationRequest).userId;
     validateFreeformTicketInput({ ...body, userId: authenticatedUser });

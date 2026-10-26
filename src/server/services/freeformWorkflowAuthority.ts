@@ -34,7 +34,7 @@ export async function readAcceptedFreeformProgramWorkflow(scope: { userId: strin
   // Artifact callers validate the entire binding; this boundary still narrows
   // the fields it uses rather than accepting transport data as typed authority.
   const binding = value as Record<string, unknown>;
-  if (typeof binding.policyVersion !== 'string' || !['gma.freeform-intake-policy/3', 'gma.freeform-intake-policy/4', 'gma.freeform-intake-policy/5', 'gma.freeform-intake-policy/6', 'gma.freeform-intake-policy/7', 'gma.freeform-intake-policy/8', 'gma.freeform-intake-policy/9', 'gma.freeform-intake-policy/10'].includes(binding.policyVersion)) return null;
+  if (typeof binding.policyVersion !== 'string' || !['gma.freeform-intake-policy/3', 'gma.freeform-intake-policy/4', 'gma.freeform-intake-policy/5', 'gma.freeform-intake-policy/6', 'gma.freeform-intake-policy/7', 'gma.freeform-intake-policy/8', 'gma.freeform-intake-policy/9', 'gma.freeform-intake-policy/10', 'gma.freeform-intake-policy/11', 'gma.freeform-intake-policy/12'].includes(binding.policyVersion)) return null;
   if (typeof binding?.ticket !== 'string' || typeof binding.interactionId !== 'string'
     || binding.instructionRef !== `gma:instruction:${binding.interactionId}` || binding.ticketDisposition !== 'owner_accepted') freeformTicketError('FREEFORM_PARENT_BINDING_INVALID');
   const membership = { userId: scope.userId, campaignId: scope.campaignId, ticketRef: binding.ticket,

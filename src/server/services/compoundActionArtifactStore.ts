@@ -50,6 +50,7 @@ export const GMC_COMPOUND_ACTION_CAPABILITIES = Object.freeze([
   'freeform-intent-compiler-reader/1',
   'freeform-plan-binding/1',
   'freeform-scene-catalog/1',
+  'freeform-situation-context/1',
   'freeform-protected-packet-reader/1',
   'freeform-turn-workflow/1',
   'freeform-program-workflow-reader/1',
@@ -790,7 +791,8 @@ export async function createCompoundActionArtifact(input: {
   freeformBinding?: JsonObject;
   originCheckpoint?: CompoundActionInstructionDocument['originCheckpoint'] | null;
   timelineAnchor?: { messageId: string; sequence: number; replayLineageId?: string } | null;
-}, records: CompoundActionArtifactCollection = artifactCollection(), stagedInstructions?: CompoundActionInstructionCollection, freeformTickets?: FreeformTicketCollection, readSceneContext = readCurrentSceneContexts, workflowReader?: import('./freeformWorkflowAuthority.js').FreeformWorkflowReader) {
+}, records: CompoundActionArtifactCollection = artifactCollection(), stagedInstructions?: CompoundActionInstructionCollection, freeformTickets?: FreeformTicketCollection, readSceneContext = readCurrentSceneContexts, workflowReader?: import('./freeformWorkflowAuthority.js').FreeformWorkflowReader,
+readSituation?: import('../llm-orchestrator/freeformSituationContext.js').SituationReader) {
   requiredString(input.userId, 'userId');
   requiredString(input.campaignId, 'campaignId');
   requiredString(input.idempotencyKey, 'idempotencyKey');
@@ -832,7 +834,7 @@ export async function createCompoundActionArtifact(input: {
   if (input.freeformBinding) {
     if (!input.originCheckpoint) throw new StoryWorkspaceStoreError(409, 'FREEFORM_PLAN_ACCEPTANCE_MISMATCH', 'Intake persistence requires the verified instruction origin.', {});
     const staged = await (stagedInstructions ?? instructionCollection()).findOne({ userId: input.userId, campaignId: input.campaignId, interactionId: String(input.instruction.interactionId) });
-    await verifyFreeformBindingAcceptance({ ...input, binding: input.freeformBinding, staged }, freeformTickets, new Date(), readSceneContext, workflowReader);
+    await verifyFreeformBindingAcceptance({ ...input, binding: input.freeformBinding, staged }, freeformTickets, new Date(), readSceneContext, workflowReader, readSituation);
   }
   const document: CompoundActionArtifactRevisionDocument = {
     userId: input.userId, campaignId: input.campaignId,

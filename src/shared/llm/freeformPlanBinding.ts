@@ -35,7 +35,7 @@ export function freeformPlanBindingIssues(value: unknown, instruction: Record<st
   const binding = value as Record<string, any>;
   const issues: string[] = [];
   if (binding.schemaVersion !== (typed ? TYPED.binding : readEffects ? READ_EFFECT_CONTRACTS.binding : FREEFORM_PLAN_BINDING_VERSION) || binding.ticketDisposition !== 'owner_accepted'
-    || !(typed ? ['gma.freeform-intake-policy/9', 'gma.freeform-intake-policy/10'] : readEffects ? ['gma.freeform-intake-policy/5', 'gma.freeform-intake-policy/6', 'gma.freeform-intake-policy/7', 'gma.freeform-intake-policy/8'] : ['gma.freeform-intake-policy/1', 'gma.freeform-intake-policy/2', 'gma.freeform-intake-policy/3', 'gma.freeform-intake-policy/4']).includes(binding.policyVersion) || !FREEFORM_PLAN_BINDING_REGISTRY_VERSIONS.includes(binding.registryVersion)
+    || !(typed ? ['gma.freeform-intake-policy/9', 'gma.freeform-intake-policy/10', 'gma.freeform-intake-policy/11', 'gma.freeform-intake-policy/12'] : readEffects ? ['gma.freeform-intake-policy/5', 'gma.freeform-intake-policy/6', 'gma.freeform-intake-policy/7', 'gma.freeform-intake-policy/8'] : ['gma.freeform-intake-policy/1', 'gma.freeform-intake-policy/2', 'gma.freeform-intake-policy/3', 'gma.freeform-intake-policy/4']).includes(binding.policyVersion) || !FREEFORM_PLAN_BINDING_REGISTRY_VERSIONS.includes(binding.registryVersion)
     || typeof binding.ticket !== 'string' || !binding.ticket.length || binding.ticket.length > 80
     || !hash(binding.proposalDigest) || !hash(binding.requestDigest)) issues.push('/ticket');
   if (['instructionRef', 'interactionId', 'instructionFingerprint'].some((key) => binding[key] !== instruction[key])) issues.push('/instruction');

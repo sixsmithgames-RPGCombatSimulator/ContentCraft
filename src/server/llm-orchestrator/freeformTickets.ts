@@ -15,6 +15,8 @@ import { getOperationDefinition, OPERATION_REGISTRY_VERSION } from './operationR
 import { resolveOperationContext } from './contextResolver.js';
 import { readCurrentSceneContexts } from '../services/actionDirectedStoryStore.js';
 import { buildFreeformSceneCatalog, type FreeformCatalogBinding, type FreeformCatalogContextRef } from './freeformSceneCatalog.js';
+import { FREEFORM_SITUATION, freeformSituationIssues, isSituationPolicy } from '../../shared/llm/freeformSituation.js';
+import { readFreeformSituationSources, buildFreeformSituation, assertSituationCurrent, situationPublicLabels, situationError, type SituationReader } from './freeformSituationContext.js';
 
 export const FREEFORM_TICKET_LIFETIME_MS = 86_400_000;
 export const freeformDigest = freeformJsonDigest;
@@ -39,6 +41,8 @@ export interface FreeformTicketRecord {
   selectedActorRef: string | null;
   catalogBindings?: FreeformCatalogBinding[];
   catalogContextRef?: FreeformCatalogContextRef;
+  situationBinding?: Record<string, any>;
+  situationBindingDigest?: string;
   attempt: 1 | 2;
   previousTicket: string | null;
   status: 'active' | 'running' | 'accepted' | 'retired';
@@ -67,6 +71,7 @@ export interface IssueFreeformTicketInput {
   selectedActorRef: string | null;
   previousTicket?: string | null;
   includeSceneCatalog?: boolean;
+  includeSituation?: boolean;
   /** Protected workflow service only; never accepted by the raw issuance route. */
   clarifications?: { question: string; answer: string }[];
   workflowRef?: { turnId: string; windowId: string };
@@ -87,6 +92,8 @@ export function validateFreeformTicketInput(input: IssueFreeformTicketInput) {
     if (typeof input[key] !== 'string' || !input[key].trim() || input[key].length > 240) freeformTicketError('FREEFORM_TICKET_INPUT_INVALID', 422);
   }
   if (input.mode !== 'action' || !['manual', 'integrated'].includes(input.transport)
+    || input.includeSituation !== undefined && typeof input.includeSituation !== 'boolean'
+    || input.includeSituation === true && (input.includeSceneCatalog !== true || input.transport !== 'manual')
     || input.includeSceneCatalog !== undefined && typeof input.includeSceneCatalog !== 'boolean'
     || input.includeSceneCatalog === true && input.transport !== 'manual'
     || input.selectedActorRef !== null && (typeof input.selectedActorRef !== 'string' || !input.selectedActorRef.length
@@ -101,6 +108,7 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
   records?: FreeformTicketCollection;
   readInstruction?: typeof readStagedCompoundActionInstruction;
   readSceneContext?: typeof readCurrentSceneContexts;
+  readSituationSources?: SituationReader;
   now?: Date;
 } = {}) {
   validateFreeformTicketInput(input);
@@ -121,7 +129,10 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
   const remoteWorkflow = Boolean(input.workflowRef)
     || [FREEFORM_REMOTE_POLICY_VERSION, FREEFORM_REMOTE_ANSWER_POLICY_VERSION].includes(originalContract?.policyVersion ?? '');
   const historicalReadEffects = [FREEFORM_READ_EFFECT_POLICY_VERSION, FREEFORM_READ_EFFECT_ANSWER_POLICY_VERSION].includes(originalContract?.policyVersion ?? '');
-  const policyVersion = typedReferences ? input.clarifications?.length ? FREEFORM_TYPED_REFERENCE_ANSWER_POLICY_VERSION : FREEFORM_TYPED_REFERENCE_POLICY_VERSION
+  const withSituation = originalContract ? isSituationPolicy(originalContract.policyVersion) : input.includeSituation === true;
+  if (withSituation && !typedReferences) freeformTicketError('FREEFORM_SITUATION_READER_UNAVAILABLE');
+  const policyVersion = withSituation ? input.clarifications?.length ? FREEFORM_SITUATION.answerPolicy : FREEFORM_SITUATION.policy
+    : typedReferences ? input.clarifications?.length ? FREEFORM_TYPED_REFERENCE_ANSWER_POLICY_VERSION : FREEFORM_TYPED_REFERENCE_POLICY_VERSION
     : readEffects ? historicalReadEffects
     ? input.clarifications?.length ? FREEFORM_READ_EFFECT_ANSWER_POLICY_VERSION : FREEFORM_READ_EFFECT_POLICY_VERSION
     : input.clarifications?.length ? FREEFORM_MOVER_ANSWER_POLICY_VERSION : FREEFORM_MOVER_POLICY_VERSION
@@ -153,9 +164,20 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
   }
   const ticket = randomUUID();
   const operation = getOperationDefinition(typedReferences ? FREEFORM_TYPED_REFERENCE_OPERATION : readEffects ? FREEFORM_READ_EFFECT_OPERATION : FREEFORM_INTAKE_OPERATION);
+  const situationReader = options.readSituationSources ?? readFreeformSituationSources;
+  const situationSources = withSituation ? await situationReader(scope) : null;
   const sceneCatalog = input.includeSceneCatalog === true ? buildFreeformSceneCatalog(
-    await (options.readSceneContext ?? readCurrentSceneContexts)(input), input.selectedActorRef, staged.originCheckpoint?.storyWorkspaceRef,
+    situationSources?.context ?? await (options.readSceneContext ?? readCurrentSceneContexts)(input), input.selectedActorRef, staged.originCheckpoint?.storyWorkspaceRef,
   ) : null;
+  if (situationSources && sceneCatalog) {
+    const labels = situationPublicLabels(situationSources);
+    for (const row of sceneCatalog.catalog) {
+      const binding = sceneCatalog.catalogBindings.find(b => b.key === row.key);
+      if (binding?.kind === 'actor') row.label = labels.get(binding.ref) ?? 'Unnamed participant';
+    }
+  }
+  const situation = situationSources && sceneCatalog ? buildFreeformSituation(situationSources, sceneCatalog.catalog, sceneCatalog.catalogBindings, Number(staged.originCheckpoint?.timelineSequence)) : null;
+  if (situation) assertSituationCurrent(situation.binding, situation.situation, await situationReader(scope));
   const request: LlmRequestEnvelope = {
     schemaVersion: LLM_REQUEST_SCHEMA_VERSION,
     taskId: `freeform:${ticket}`, correlationId: `freeform:${ticket}`, idempotencyKey: `freeform:${ticket}`,
@@ -164,6 +186,7 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
     context: { input: { label: 'user_text', value: {
       ticket, instruction: instruction.exactText, mode: input.mode, selectedActorRef: input.selectedActorRef,
       catalog: sceneCatalog?.catalog ?? (input.selectedActorRef ? [{ key: 'selected_actor', kind: 'actor' }] : []),
+      ...(situation ? { situation: situation.situation } : {}),
       ...(input.clarifications?.length ? { clarifications: structuredClone(input.clarifications) } : {}),
     } } },
     constraints: { registryVersion: OPERATION_REGISTRY_VERSION, policyVersion,
@@ -171,7 +194,11 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
     outputSchema: { id: operation.outputSchema.id, version: operation.outputSchema.version },
   };
   // Reject over-budget indivisible input before issuing an unusable packet.
-  resolveOperationContext(request, operation);
+  try { resolveOperationContext(request, operation); }
+  catch (error: any) {
+    if (withSituation && error?.code === 'LLM_CONTEXT_HARD_LIMIT_EXCEEDED') situationError('FREEFORM_SITUATION_OVER_BUDGET', 413);
+    throw error;
+  }
   const record: FreeformTicketRecord = {
     _id: ticket, ...scope, interactionId: input.interactionId, issuanceKey: input.issuanceKey, issuanceDigest,
     instructionFingerprint: String(instruction.instructionFingerprint), policyVersion,
@@ -180,6 +207,7 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
     ...(input.workflowRef ? { workflowRef: structuredClone(input.workflowRef) } : {}),
     ...(input.renewedTicket ? { renewedTicket: input.renewedTicket } : {}),
     ...(sceneCatalog ? { catalogBindings: sceneCatalog.catalogBindings, catalogContextRef: sceneCatalog.catalogContextRef } : {}),
+    ...(situation ? { situationBinding: situation.binding, situationBindingDigest: freeformDigest(situation.binding) } : {}),
     status: 'active', request, requestDigest: freeformDigest(request), createdAt: now,
     expiresAt: new Date(now.getTime() + FREEFORM_TICKET_LIFETIME_MS),
   };
@@ -194,10 +222,17 @@ export async function issueFreeformTicket(input: IssueFreeformTicketInput, optio
 }
 
 function issuedTicket(record: FreeformTicketRecord, duplicate: boolean) {
+  if (isSituationPolicy(record.policyVersion)) {
+    const input = record.request.context.input?.value as any;
+    if (!record.situationBinding || record.situationBindingDigest !== freeformDigest(record.situationBinding) || record.requestDigest !== freeformDigest(record.request)
+      || record.situationBinding.snapshotDigest !== freeformDigest(input?.situation)
+      || freeformSituationIssues(input?.situation, input?.catalog ?? [], Object.keys(record.situationBinding.sourceBindings ?? {})).length) situationError();
+  }
   return { ticket: record._id, request: structuredClone(record.request), expiresAt: record.expiresAt, duplicate,
     instructionBinding: { schemaVersion: 'gmc.freeform-ticket-binding/1', interactionId: record.interactionId,
       instructionFingerprint: record.instructionFingerprint, attempt: record.attempt, transport: record.transport },
-    ...(record.catalogContextRef ? { schemaVersion: 'gmc.freeform-scene-catalog/1', catalogBindings: structuredClone(record.catalogBindings), catalogContextRef: structuredClone(record.catalogContextRef) } : {}) };
+    ...(record.catalogContextRef ? { schemaVersion: 'gmc.freeform-scene-catalog/1', catalogBindings: structuredClone(record.catalogBindings), catalogContextRef: structuredClone(record.catalogContextRef) } : {}),
+    ...(record.situationBinding ? { situationBinding: structuredClone(record.situationBinding) } : {}) };
 }
 
 /** Service-scoped read of the immutable compiler map; never accept a caller map. */

@@ -57,6 +57,11 @@ export function validateFreeformIntake(request: LlmRequestEnvelope, output: any)
     (Array.isArray(step.targets) ? step.targets : []).forEach((target: any, j: number) => {
       ref(target?.ref, `${p}/targets/${j}/ref`, ['actor', 'subject', 'place', 'object']);
     });
+    if (['gma.freeform-intake-policy/11', 'gma.freeform-intake-policy/12'].includes(String(request.constraints?.policyVersion))
+      && step.purpose === 'relocate_actor' && output?.clarification === null
+      && (step.targets ?? []).filter((target: any) => target.role === 'destination').length !== 1) {
+      add(`${p}/targets`, 'FREEFORM_MOVEMENT_DESTINATION_REQUIRED');
+    }
     for (const index of Array.isArray(step.after) ? step.after : []) {
       if (!Number.isInteger(index) || index < 0 || index >= i) add(`${p}/after`, 'FREEFORM_DEPENDENCY_INVALID');
       else deps[i].add(index);

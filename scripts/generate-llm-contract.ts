@@ -57,6 +57,8 @@ const openApi = {
             mode: { const: 'action' }, transport: { enum: ['manual', 'integrated'] },
             selectedActorRef: { type: ['string', 'null'], maxLength: 240 },
             previousTicket: { type: ['string', 'null'], maxLength: 80 },
+            includeSceneCatalog: { type: 'boolean' },
+            includeSituation: { type: 'boolean', description: 'Negotiated public situation from owner sources; Manual typed-reference canary only.' },
           },
         } } } },
         responses: { 200: { description: 'Exact issuance replay' }, 201: { description: 'Protected ticket, immutable request and expiry' },

@@ -62,6 +62,13 @@
                       "null"
                     ],
                     "maxLength": 80
+                  },
+                  "includeSceneCatalog": {
+                    "type": "boolean"
+                  },
+                  "includeSituation": {
+                    "type": "boolean",
+                    "description": "Negotiated public situation from owner sources; Manual typed-reference canary only."
                   }
                 }
               }

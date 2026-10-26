@@ -1,6 +1,7 @@
 import type { Collection } from 'mongodb';
 import { getDb } from '../config/mongo.js';
 import { freeformJsonDigest, freeformTextDigest } from '../../shared/llm/freeformPlanBinding.js';
+import type { SituationReader } from '../llm-orchestrator/freeformSituationContext.js';
 import { FREEFORM_TURN_VERSION, FREEFORM_DECISION_VERSION, FREEFORM_WINDOW_MAXIMUM, FREEFORM_DECISION_MAXIMUM,
   FREEFORM_ANSWER_MAXIMUM_BYTES, freeformTurnIssues, type FreeformTurn, type FreeformWindow } from '../../shared/llm/freeformTurn.js';
 import { issueFreeformTicket, retireFreeformTicket, freeformTicketCollection, freeformTicketError,
@@ -18,6 +19,7 @@ type Scope = { userId: string; campaignId: string };
 type AnswerBinding = { windowId: string; question: string; questionDigest: string; ticketRef: string; answerInstructionRef: string };
 /** Protected orchestration lineage; gameplay truth stays in owner receipts. */
 export interface FreeformTurnDocument extends Scope {
+  situationRequired?: boolean;
   _id: string; rootInteractionId: string; selectedMechanicsSubjectRef: string; selectedMechanicsOwnerRef: string; selectedActorRef: string;
   turn: FreeformTurn; answers: AnswerBinding[]; timelineSequence: number; updatedAt: Date;
   retirementRequestedAt?: Date; supportCode?: string;
@@ -33,6 +35,7 @@ export interface FreeformTurnDependencies {
   stageInstruction?: typeof stageCompoundActionInstruction;
   readArtifact?: typeof readActiveCompoundActionArtifact;
   readScene?: typeof readCurrentSceneContexts;
+  readSituationSources?: SituationReader;
   readActors?: typeof readObservationAuthority;
   readActorLinks?: ReturnType<typeof actorMechanicsLinkService>['read'];
   tombstoneArtifact?: typeof tombstoneCompoundActionArtifact;
@@ -47,6 +50,7 @@ export interface FreeformTurnState {
 }
 /** Human answer and exact-parent advancement are distinct protected transitions. */
 export interface FreeformTurnPrepareInput extends Scope {
+  includeSituation?: boolean;
   interactionId?: string; turnId?: string; selectedMechanicsSubjectRef?: string; selectedMechanicsOwnerRef?: string;
   previousTicket?: string; renewTicket?: string; answer?: { ticket: string; text: string; expectedRevision: number };
   advance?: boolean; expectedParentProgramRef?: string;
@@ -169,7 +173,7 @@ export function freeformTurnService(deps: FreeformTurnDependencies = {}): Freefo
       const first = windowRow(input.interactionId, 1, null);
       document = { ...scoped(input), _id: turnId, rootInteractionId: input.interactionId,
         selectedMechanicsSubjectRef: input.selectedMechanicsSubjectRef, selectedMechanicsOwnerRef: input.selectedMechanicsOwnerRef,
-        selectedActorRef: String(actors[0]), answers: [],
+        selectedActorRef: String(actors[0]), answers: [], ...(input.includeSituation === true ? { situationRequired: true } : {}),
         timelineSequence: staged.originCheckpoint.timelineSequence, updatedAt: new Date(),
         turn: { schemaVersion: FREEFORM_TURN_VERSION, turnId, campaignId: input.campaignId,
           rootInstructionRef: String(staged.instruction.instructionRef), revision: 1, status: 'active', activeWindowRef: first.windowId, windows: [first] } };
@@ -303,10 +307,11 @@ export function freeformTurnService(deps: FreeformTurnDependencies = {}): Freefo
     const issued = await issueFreeformTicket({ ...scoped(input), interactionId: interactionOf(window.instructionRef),
       issuanceKey: `freeform:${freeformTextDigest(window.instructionRef).slice(0, 40)}:${input.previousTicket ? 2 : 1}`,
       mode: 'action', transport: 'manual', selectedActorRef: document.selectedActorRef, includeSceneCatalog: true,
+      ...(input.includeSituation === true || document.situationRequired === true ? { includeSituation: true } : {}),
       workflowRef: { turnId: document._id, windowId: window.windowId },
       ...(input.renewTicket ? { renewedTicket: input.renewTicket } : {}),
       ...(clarifications.length ? { clarifications } : {}), ...(input.previousTicket ? { previousTicket: input.previousTicket } : {}) },
-    { records: tickets, readInstruction, readSceneContext: readScene });
+    { records: tickets, readInstruction, readSceneContext: readScene, readSituationSources: deps.readSituationSources });
     if (window.ticketRef !== issued.ticket) {
       const next = structuredClone(document); activeWindow(next).ticketRef = issued.ticket;
       next.pendingRenewal = null;

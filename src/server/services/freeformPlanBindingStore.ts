@@ -5,6 +5,8 @@ import { StoryWorkspaceStoreError, type JsonObject } from './storyWorkspaceStore
 import type { CompoundActionInstructionDocument } from './compoundActionArtifactStore.js';
 import { readCurrentSceneContexts } from './actionDirectedStoryStore.js';
 import { assertFreeformCatalogCurrent } from '../llm-orchestrator/freeformSceneCatalog.js';
+import { isSituationPolicy } from '../../shared/llm/freeformSituation.js';
+import { assertSituationCurrent, readFreeformSituationSources, situationError, type SituationReader } from '../llm-orchestrator/freeformSituationContext.js';
 import { assertFreeformWorkflowOpen, type FreeformWorkflowReader } from './freeformWorkflowAuthority.js';
 import { READ_EFFECT_CONTRACTS } from '../../shared/llm/readEffectContracts.js';
 import { createProgramReferenceLedger, TYPED_REFERENCE_AUTHORITY_BUNDLE as TYPED } from '../../shared/llm/typedReferenceBindings.js';
@@ -19,7 +21,7 @@ export function validateFreeformBinding(binding: JsonObject, instruction: JsonOb
 export async function verifyFreeformBindingAcceptance(input: {
   userId: string; campaignId: string; binding: JsonObject; instruction: JsonObject; program: JsonObject;
   staged: CompoundActionInstructionDocument | null;
-}, tickets: FreeformTicketCollection = getDb().collection<FreeformTicketRecord>('llm_freeform_tickets'), now = new Date(), readSceneContext = readCurrentSceneContexts, workflowReader?: FreeformWorkflowReader) {
+}, tickets: FreeformTicketCollection = getDb().collection<FreeformTicketRecord>('llm_freeform_tickets'), now = new Date(), readSceneContext = readCurrentSceneContexts, workflowReader?: FreeformWorkflowReader, readSituation: SituationReader = readFreeformSituationSources) {
   const { binding, instruction, program, staged } = input;
   const ticket = await tickets.findOne({ _id: String(binding.ticket), userId: input.userId, campaignId: input.campaignId });
   const proposal = ticket?.response?.output as JsonObject | undefined;
@@ -76,4 +78,12 @@ export async function verifyFreeformBindingAcceptance(input: {
     assertFreeformCatalogCurrent(ticket.catalogContextRef, await readSceneContext(input));
   }
   await assertFreeformWorkflowOpen(ticket, workflowReader);
+  if (isSituationPolicy(ticket.policyVersion)) {
+    if (!ticket.situationBinding || ticket.situationBindingDigest !== freeformJsonDigest(ticket.situationBinding)) situationError();
+    try { assertSituationCurrent(ticket.situationBinding, requestInput?.situation, await readSituation(input)); }
+    catch (error) {
+      if (error instanceof StoryWorkspaceStoreError) Object.assign(error.details, { stage: 'situation_acceptance' });
+      throw error;
+    }
+  }
 }
